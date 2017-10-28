@@ -1,0 +1,6 @@
+# vim swap files
+.*.swp
+
+# don't commit things with credentials
+mqtt/config/pwfile
+harmony-api/config/config.json
