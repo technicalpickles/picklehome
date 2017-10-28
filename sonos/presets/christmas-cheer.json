@@ -1,0 +1,27 @@
+{
+  "players": [
+    {
+      "roomName": "Living Room",
+      "volume": 15
+    },
+    {
+      "roomName": "Kitchen",
+      "volume": 15
+    },
+    {
+      "roomName": "Bedroom",
+      "volume": 15
+    },
+    {
+      "roomName": "Sun Room",
+      "volume": 15
+    }
+  ],
+  "playMode": {
+    "shuffle": true,
+    "repeat": "all",
+    "crossfade": false
+  },
+  "pauseOthers": false,
+  "favorite": "Christmas Party"
+}

@@ -1,0 +1,22 @@
+{
+  "players": [
+    {
+      "roomName": "Living Room",
+      "volume": 7
+    },
+    {
+      "roomName": "Kitchen",
+      "volume": 7
+    },
+    {
+      "roomName": "Bedroom",
+      "volume": 7
+    },
+    {
+      "roomName": "Sun Room",
+      "volume": 7
+    }
+  ],
+  "state": "stopped"
+}
+

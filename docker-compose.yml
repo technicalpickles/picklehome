@@ -29,10 +29,18 @@ services:
        - ./homeassistant/config:/config
      network_mode: "host"
 
-   #sonos:
-   #  image: chrisns/docker-node-sonos-http-api
-   #  network_mode: "host"
+   sonos:
+     image: chrisns/docker-node-sonos-http-api
+     ports:
+       - 5005:5005
+     volumes:
+       - ./sonos/settings:/app/settings
+       - ./sonos/clips:/app/static/clips
+       - sonos-cache:/app/cache
+       - ./sonos/presets:/app/presets
+     network_mode: "host"
 
 
 volumes:
     mqtt-data:
+    sonos-cache:
