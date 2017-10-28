@@ -1,0 +1,36 @@
+version: '3'
+
+services:
+   mqtt:
+     image: eclipse-mosquitto
+     ports:
+       - "1883:1883"
+       - "9001:9001"
+     volumes:
+       - mqtt-data:/mosquitto/data
+       - ./mqtt/config:/mosquitto/config
+#   harmony-api:
+#     image: jonmaddox/harmony-api
+#     depends_on:
+#       - mqtt
+#     volumes:
+#        - ./harmony-api/config:/config
+#     networks:
+#        hostnet: {}
+
+#   home-assistant:
+#     image: homeassistant/home-assistant
+#     ports:
+#       - 8123:8123
+#      volumes:
+#        - homeassistant/config:/config
+#    sonos:
+#      image: chrisns/docker-node-sonos-http-api 
+
+volumes:
+    mqtt-data:
+
+networks:
+  hostnet:
+    external:
+      name: host
