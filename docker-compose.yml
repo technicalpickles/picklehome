@@ -9,6 +9,7 @@ services:
      volumes:
        - mqtt-data:/mosquitto/data
        - ./mqtt/config:/mosquitto/config
+
    harmony-api:
      image: jonmaddox/harmony-api
      depends_on:

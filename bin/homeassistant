@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec docker-compose exec home-assistant python -m homeassistant --config /config "$@"
