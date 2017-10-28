@@ -19,14 +19,20 @@ services:
         - ./harmony-api/config:/config
      network_mode: "host"
 
-#   home-assistant:
-#     image: homeassistant/home-assistant
-#     ports:
-#       - 8123:8123
-#      volumes:
-#        - homeassistant/config:/config
-#    sonos:
-#      image: chrisns/docker-node-sonos-http-api 
+   home-assistant:
+     image: homeassistant/home-assistant
+     depends_on:
+       - mqtt
+     ports:
+       - 8123:8123
+     volumes:
+       - ./homeassistant/config:/config
+     network_mode: "host"
+
+   #sonos:
+   #  image: chrisns/docker-node-sonos-http-api
+   #  network_mode: "host"
+
 
 volumes:
     mqtt-data:
