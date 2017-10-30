@@ -3,6 +3,7 @@ version: '3'
 services:
    mqtt:
      image: eclipse-mosquitto
+     restart: always
      ports:
        - "1883:1883"
        - "9001:9001"
@@ -12,6 +13,7 @@ services:
 
    harmony-api:
      image: jonmaddox/harmony-api
+     restart: always
      depends_on:
        - mqtt
      ports:
@@ -22,6 +24,7 @@ services:
 
    home-assistant:
      image: homeassistant/home-assistant
+     restart: always
      depends_on:
        - mqtt
      ports:
@@ -32,6 +35,7 @@ services:
 
    sonos:
      image: chrisns/docker-node-sonos-http-api
+     restart: always
      ports:
        - 5005:5005
      volumes:
@@ -40,7 +44,6 @@ services:
        - sonos-cache:/app/cache
        - ./sonos/presets:/app/presets
      network_mode: "host"
-
 
 volumes:
     mqtt-data:
