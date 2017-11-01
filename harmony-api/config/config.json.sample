@@ -1,0 +1,11 @@
+{
+  "enableHTTPserver": true,
+  "mqtt_host": "mqtt://localhost",
+  "topic_namespace": "harmony-api",
+  "mqtt_options": {
+      "port": 1883,
+      "username": "harmony-api",
+      "password": "sosecret",
+      "rejectUnauthorized": false
+  }
+}
