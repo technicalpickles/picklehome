@@ -1,0 +1,7 @@
+#/bin/bash
+
+set -e
+set -x
+
+docker run -it --rm -v $(pwd):/workdir boiyaa/yamllint --strict --config-data '{extends: relaxed, rules: {line-length: disable}}' .
+docker-compose config --quiet
