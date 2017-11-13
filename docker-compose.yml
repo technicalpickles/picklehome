@@ -1,50 +1,50 @@
 version: '3'
 
 services:
-   mqtt:
-     image: eclipse-mosquitto
-     restart: always
-     ports:
-       - "1883:1883"
-       - "9001:9001"
-     volumes:
-       - mqtt-data:/mosquitto/data
-       - ./mqtt/config:/mosquitto/config
+  mqtt:
+    image: eclipse-mosquitto
+    restart: always
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mqtt-data:/mosquitto/data
+      - ./mqtt/config:/mosquitto/config
 
-   harmony-api:
-     image: jonmaddox/harmony-api
-     restart: always
-     depends_on:
-       - mqtt
-     ports:
-       - 8282:8282
-     volumes:
-        - ./harmony-api/config:/config
-     network_mode: "host"
+  harmony-api:
+    image: jonmaddox/harmony-api
+    restart: always
+    depends_on:
+      - mqtt
+    ports:
+      - 8282:8282
+    volumes:
+      - ./harmony-api/config:/config
+    network_mode: "host"
 
-   home-assistant:
-     image: homeassistant/home-assistant
-     restart: always
-     depends_on:
-       - mqtt
-     ports:
-       - 8123:8123
-     volumes:
-       - ./homeassistant/config:/config
-     network_mode: "host"
+  home-assistant:
+    image: homeassistant/home-assistant
+    restart: always
+    depends_on:
+      - mqtt
+    ports:
+      - 8123:8123
+    volumes:
+      - ./homeassistant/config:/config
+    network_mode: "host"
 
-   sonos:
-     image: chrisns/docker-node-sonos-http-api
-     restart: always
-     ports:
-       - 5005:5005
-     volumes:
-       - ./sonos/settings:/app/settings
-       - ./sonos/clips:/app/static/clips
-       - sonos-cache:/app/cache
-       - ./sonos/presets:/app/presets
-     network_mode: "host"
+  sonos:
+    image: chrisns/docker-node-sonos-http-api
+    restart: always
+    ports:
+      - 5005:5005
+    volumes:
+      - ./sonos/settings:/app/settings
+      - ./sonos/clips:/app/static/clips
+      - sonos-cache:/app/cache
+      - ./sonos/presets:/app/presets
+    network_mode: "host"
 
 volumes:
-    mqtt-data:
-    sonos-cache:
+  mqtt-data:
+  sonos-cache:
