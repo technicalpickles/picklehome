@@ -1,0 +1,12 @@
+language: c # not actually c, but this has less dependencies than default ruby language
+
+sudo: required
+
+services:
+  - docker
+
+before_install:
+  - docker pull boiyaa/yamllint
+
+script:
+  - "docker run -it --rm -v $(pwd):/workdir boiyaa/yamllint -d '{extends: relaxed, rules: {line-length: disable}}' ."
