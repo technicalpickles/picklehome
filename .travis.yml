@@ -9,5 +9,4 @@ before_install:
   - docker pull boiyaa/yamllint
 
 script:
-  - "docker run -it --rm -v $(pwd):/workdir boiyaa/yamllint --strict --config-data '{extends: relaxed, rules: {line-length: disable}}' ."
-  - "docker-compose config --quiet"
+  - "script/test"
