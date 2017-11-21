@@ -54,6 +54,12 @@ services:
     devices:
       - /dev/usb/hiddev0:/dev/usb/hiddev0
 
+  duply:
+    image: kurthuwig/duply:latest
+    volumes:
+      - ./duply/:/root
+      - /:/backup:ro
+
 volumes:
   mqtt-data:
   sonos-cache:
