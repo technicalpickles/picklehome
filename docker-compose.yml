@@ -27,6 +27,7 @@ services:
     restart: always
     depends_on:
       - mqtt
+      - apcupsd
     ports:
       - 8123:8123
     volumes:
@@ -44,6 +45,14 @@ services:
       - sonos-cache:/app/cache
       - ./sonos/presets:/app/presets
     network_mode: "host"
+
+  apcupsd:
+    image: retrohunter/apcupsd-cgi
+    restart: always
+    ports:
+      - 3551:3551
+    devices:
+      - /dev/usb/hiddev0:/dev/usb/hiddev0
 
 volumes:
   mqtt-data:
