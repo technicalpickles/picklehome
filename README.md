@@ -2,7 +2,7 @@
 
 ## Overview
 
-PickleHome runs on a [Intel NUC](https://www.intel.com/content/www/us/en/products/boards-kits/nuc.html) living in my media cabinet, running [Ubuntu Server](https://www.intel.com/content/www/us/en/products/boards-kits/nuc.html). Services are managed by [Docker](https://docker.com/) and [docker-compose](https://docs.docker.com/compose/) (ie the heart of this repo is its `docker-compose.yml`).
+PickleHome runs on a [Intel NUC](https://www.intel.com/content/www/us/en/products/boards-kits/nuc.html) living in my media cabinet, running [Ubuntu Server](https://www.ubuntu.com/server). Services are managed by [Docker](https://docker.com/) and [docker-compose](https://docs.docker.com/compose/) (ie the heart of this repo is its `docker-compose.yml`).
 
 [Home Assistant](https://home-assistant.io) is the (other) heart. [picklehome-homeassistant-config](https://github.com/technicalpickles/picklehome-homeassistant-config) contains all the configuration for it (less [secrets](https://home-assistant.io/docs/configuration/secrets/)). The services are either in support of Home Assistant configuration, or provide Home Assistant integration to other platforms.
 
