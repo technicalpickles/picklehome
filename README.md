@@ -33,7 +33,7 @@ These are some ideas I try to keep in mind while designing and automating. I jus
 
 ## Documentation
 
-Check out the [wiki](https://github.com/Vasiley/Home-Assistant-Main/wiki).
+Check out the [wiki](https://github.com/technicalpickles/picklehome/wiki).
 
 ## Testing
 
@@ -41,4 +41,4 @@ Check out the [wiki](https://github.com/Vasiley/Home-Assistant-Main/wiki).
 
 ## Development & Deployment
 
-Run `screen` on the NUC and do stuff with `docker-compose` :sweat_smile: 
+Run `screen` on the NUC and do stuff with `docker-compose` :sweat_smile:
