@@ -19,17 +19,17 @@ These are some ideas I try to keep in mind while designing and automating. I jus
 - Prefer devices that have open APIs
 - Prefer APIs over HTTP or MQTT, and in their absence, build wrappers that expose it that way
 
-## Components
+## Hardware Components
 
-- Ecobee 3
 - Amazon Echo and Echo Dot
-- Sonos
-- Hue 
-- Broadlink RM3
-- Schlage Connect Touch
-- Nest Cam
+- [Hue](http://www2.meethue.com/en-us)
+- [Sonos](http://sonos.com/)
+- [Vera](http://getvera.com/)
+- [Schlage Connect Touch](https://www.schlage.com/en/home/keyless-deadbolt-locks/connect.html)
+- [Ecobee 3](https://www.ecobee.com/)
+- [Broadlink RM Pro](http://www.ibroadlink.com/rm/)
+- [Nest Cam](https://store.nest.com/product/camera/)
 - [Etekcity outlets](https://www.amazon.com/Etekcity-Wireless-Electrical-Household-Appliances/dp/B00DQELHBS/ref=sr_1_3?ie=UTF8&qid=1510796065&sr=8-3&keywords=etekcity)
-
 
 ## Documentation
 
