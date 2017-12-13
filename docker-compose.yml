@@ -54,6 +54,16 @@ services:
     devices:
       - /dev/usb/hiddev0:/dev/usb/hiddev0
 
+  broadlinky:
+    build: ../broadlinky
+    depends_on:
+      - mqtt
+    env_file: broadlinky.env
+    environment:
+      BROADLINKY_MQTT_HOST: localhost
+      BROADLINKY_MQTT_PORT: 1883
+    network_mode: "host"
+
 volumes:
   mqtt-data:
   sonos-cache:
