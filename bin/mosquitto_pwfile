@@ -1,2 +1,2 @@
 #!/bin/bash
-exec docker-compose exec mqtt mosquitto_passwd
+exec docker-compose exec mqtt mosquitto_passwd "$@"
