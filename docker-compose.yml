@@ -54,6 +54,15 @@ services:
     devices:
       - /dev/usb/hiddev0:/dev/usb/hiddev0
 
+  samba:
+    image: dperson/samba
+    command: -n -s videos;/mount/videos -u kodi;${SAMBA_KODI_PASSWORD}
+    ports:
+      - 139:139
+      - 445:445
+    volumes:
+      - ./data:/mount:ro
+
 volumes:
   mqtt-data:
   sonos-cache:

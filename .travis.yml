@@ -9,4 +9,5 @@ before_install:
   - docker pull boiyaa/yamllint
 
 script:
+  - cp .env.sample .env
   - "script/test"
