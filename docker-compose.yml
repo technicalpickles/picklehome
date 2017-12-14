@@ -56,7 +56,7 @@ services:
 
   samba:
     image: dperson/samba
-    command: -n -s videos;/mount/videos -u kodi;kodi
+    command: -n -s videos;/mount/videos -u kodi;${SAMBA_KODI_PASSWORD}
     ports:
       - 139:139
       - 445:445
