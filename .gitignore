@@ -4,3 +4,6 @@
 # don't commit things with credentials
 mqtt/config/pwfile
 harmony-api/config/config.json
+
+# don't save anything from data volume
+data
