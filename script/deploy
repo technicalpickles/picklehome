@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -x
+set -e
+
+container=$(docker-compose ps -q home-assistant)
+
+if [[ -n "${container}" ]]; then
+  bin/homeassistant --script check_config
+fi
+
+docker-compose stop home-assistant
+docker-compose up -d home-assistant
+
+container=$(docker-compose ps -q home-assistant)
+docker attach --sig-proxy=false "${container}"
