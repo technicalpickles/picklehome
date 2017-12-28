@@ -26,8 +26,11 @@ services:
     image: homeassistant/home-assistant
     restart: always
     depends_on:
-      - mqtt
       - apcupsd
+      - harmony-api
+      - mqtt
+      - samba
+      - sonos
     ports:
       - 8123:8123
     volumes:
