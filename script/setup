@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# TODO check for root
+
+# avahi for whatever.local
+apt-get install -y avahi-daemon
+
+# docker
+snap install docker
+
+# docker-compose
+curl -L https://github.com/docker/compose/releases/download/1.16.1/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+# TODO move to using docker image for duply instead
+
+# duplicity
+if [[ ! -f /etc/apt/sources.list.d/duplicity-team-ubuntu-ppa-xenial.list ]]; then
+  apt-add-repository ppa:duplicity-team/ppa
+  apt-get update
+fi
+
+apt-get install -y duplicity python-boto
+
+# download duply, copy to /usr/local/bin
+#wget http://duply.net/projects/ftplicity/files/latest/download > duply.tgz
+# create duply user
+# enable duply to run sudo duply
+# populate ~/.duply
+ 
+
+docker-compose up -d
