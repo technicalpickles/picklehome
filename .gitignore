@@ -6,5 +6,8 @@
 mqtt/config/pwfile
 harmony-api/config/config.json
 
+# don't commit anything tracked in other repos
+homeassistant/config
+
 # don't save anything from data volume
 data
