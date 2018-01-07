@@ -26,8 +26,11 @@ services:
     image: homeassistant/home-assistant
     restart: always
     depends_on:
-      - mqtt
       - apcupsd
+      - harmony-api
+      - mqtt
+      - samba
+      - sonos
     ports:
       - 8123:8123
     volumes:
@@ -54,12 +57,36 @@ services:
     devices:
       - /dev/usb/hiddev0:/dev/usb/hiddev0
 
+<<<<<<< HEAD
   duply:
     image: kurthuwig/duply:latest
     volumes:
       - ./duply/:/root
       - /:/backup:ro
+=======
+  samba:
+    image: dperson/samba
+    command: -n -s videos;/mount/videos -g "netbios name = picklehome" -u kodi;${SAMBA_KODI_PASSWORD}
+    ports:
+      - 137:137/udp
+      - 138:138/udp
+      - 139:139
+      - 445:445
+    volumes:
+      - ./data:/mount:ro
+    network_mode: "host"
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus-data
+    network_mode: "host"
+>>>>>>> master
 
 volumes:
   mqtt-data:
   sonos-cache:
+  prometheus-data:
