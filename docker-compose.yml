@@ -57,13 +57,11 @@ services:
     devices:
       - /dev/usb/hiddev0:/dev/usb/hiddev0
 
-<<<<<<< HEAD
   duply:
     image: kurthuwig/duply:latest
     volumes:
-      - ./duply/:/root
+      - ./duply/root:/root
       - /:/backup:ro
-=======
   samba:
     image: dperson/samba
     command: -n -s videos;/mount/videos -g "netbios name = picklehome" -u kodi;${SAMBA_KODI_PASSWORD}
@@ -84,7 +82,6 @@ services:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus-data
     network_mode: "host"
->>>>>>> master
 
 volumes:
   mqtt-data:
