@@ -69,6 +69,16 @@ services:
       - ./data:/mount:ro
     network_mode: "host"
 
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus-data
+    network_mode: "host"
+
 volumes:
   mqtt-data:
   sonos-cache:
+  prometheus-data:
