@@ -29,7 +29,6 @@ services:
       - apcupsd
       - harmony-api
       - mqtt
-      - apcupsd
       - samba
       - sonos
     ports:
