@@ -78,6 +78,24 @@ services:
       - prometheus-data:/prometheus-data
     network_mode: "host"
 
+
+  airconnect:
+    restart: always
+    build: airconnect
+    network_mode: host
+    command:
+     - "-d"
+     - all=info
+     - "-m"
+     - "AVR-920W,webOS"
+     - "-b"
+     - ":49152"
+     - "-x"
+     - /config/airconnect.xml
+     - "-Z"
+    volumes:
+     - ./airconnect/config:/config
+
 volumes:
   mqtt-data:
   sonos-cache:
