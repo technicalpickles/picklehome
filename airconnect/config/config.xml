@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<airupnp>
+<common>
+<enabled>1</enabled>
+<max_volume>100</max_volume>
+<codec>flac</codec>
+<latency>0:200</latency>
+<remove_count>3</remove_count>
+</common>
+<main_log>info</main_log>
+<upnp_log>info</upnp_log>
+<util_log>warn</util_log>
+<raop_log>info</raop_log>
+<scan_interval>30</scan_interval>
+<scan_timeout>15</scan_timeout>
+<log_limit>-1</log_limit>
+<device>
+<udn>uuid:1d5edf9f-b09b-a360-603e-9252dd907448</udn>
+<name>[LG] webOS TV OLED55B6P+</name>
+<mac>bb:bb:a1:25:8f:73</mac>
+<enabled>0</enabled>
+</device>
+<device>
+<udn>uuid:RINCON_7828CA06735801400</udn>
+<name>Kitchen+</name>
+<mac>bb:bb:8d:a0:9c:f5</mac>
+<enabled>1</enabled>
+</device>
+<device>
+<udn>uuid:RINCON_949F3E1A683A01400</udn>
+<name>Living Room+</name>
+<mac>bb:bb:cb:6e:77:c2</mac>
+<enabled>1</enabled>
+</device>
+<device>
+<udn>uuid:RINCON_949F3E1A666201400</udn>
+<name>Attic+</name>
+<mac>bb:bb:dd:19:e5:ad</mac>
+<enabled>1</enabled>
+</device>
+<device>
+<udn>uuid:RINCON_949F3E1DA3F201400</udn>
+<name>Sun Room+</name>
+<mac>bb:bb:b8:f5:3b:c6</mac>
+<enabled>1</enabled>
+</device>
+<device>
+<udn>uuid:RINCON_7828CA06736E01400</udn>
+<name>Nursery+</name>
+<mac>bb:bb:7b:ed:e9:60</mac>
+<enabled>1</enabled>
+</device>
+<device>
+<udn>uuid:RINCON_949F3E1A584C01400</udn>
+<name>Master Bedroom+</name>
+<mac>bb:bb:cd:8b:9f:9f</mac>
+<enabled>1</enabled>
+</device>
+<device>
+<udn>uuid:5f9ec1b3-ff59-19bb-8530-0005cda0738e</udn>
+<name>Denon AVR-S920W+</name>
+<mac>bb:bb:c8:7f:36:96</mac>
+<enabled>0</enabled>
+</device>
+<device>
+<udn>uuid:29bbe0e1-1a6e-47f6-8f8d-28be9b1b4012</udn>
+<name>DIRECTV Mediashare Renderer+</name>
+<mac>bb:bb:b8:0f:fb:3e</mac>
+<enabled>0</enabled>
+</device>
+</airupnp>

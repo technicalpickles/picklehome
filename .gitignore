@@ -5,7 +5,6 @@
 .env
 mqtt/config/pwfile
 harmony-api/config/config.json
-airconnect/config
 
 # don't commit anything tracked in other repos
 homeassistant/config
