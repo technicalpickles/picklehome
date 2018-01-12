@@ -8,6 +8,8 @@ RUN \
     && rm -f -r \
         /tmp/* \
         /var/lib/apt/lists/*
+RUN mkdir /app
+WORKDIR /app
 RUN wget https://raw.githubusercontent.com/philippe44/AirConnect/master/bin/airupnp-x86-64 \
     && chmod 755 airupnp-x86-64
-ENTRYPOINT [ “./airupnp-x86-64” ]
+ENTRYPOINT [ "/app/airupnp-x86-64" ]
