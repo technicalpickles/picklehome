@@ -85,10 +85,7 @@ services:
     network_mode: host
     command:
       - "-d"
-      #- all=debug
       - all=info
-      - "-m"
-      - "DIRECTV,Denon"
       - "-b"
       - ":49152"
       - "-x"
