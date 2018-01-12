@@ -84,18 +84,18 @@ services:
     image: technicalpickles/airupnp
     network_mode: host
     command:
-     - "-d"
-     #- all=debug
-     - all=info
-     - "-m"
-     - "DIRECTV,Denon"
-     - "-b"
-     - ":49152"
-     - "-x"
-     - /config/config.xml
-     - "-Z"
+      - "-d"
+      #- all=debug
+      - all=info
+      - "-m"
+      - "DIRECTV,Denon"
+      - "-b"
+      - ":49152"
+      - "-x"
+      - /config/config.xml
+      - "-Z"
     volumes:
-     - ./airconnect/config:/config
+      - ./airconnect/config:/config
 
 volumes:
   mqtt-data:
