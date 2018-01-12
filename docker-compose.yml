@@ -81,7 +81,7 @@ services:
 
   airconnect:
     restart: always
-    image: technicalpickles/airupnp
+    build: airconnect
     network_mode: host
     command:
       - "-d"
