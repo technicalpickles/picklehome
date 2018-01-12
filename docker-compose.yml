@@ -59,6 +59,7 @@ services:
 
   samba:
     image: dperson/samba
+    restart: always
     command: -n -s videos;/mount/videos -g "netbios name = picklehome" -u kodi;${SAMBA_KODI_PASSWORD}
     ports:
       - 137:137/udp
@@ -71,6 +72,7 @@ services:
 
   prometheus:
     image: prom/prometheus
+    restart: always
     ports:
       - 9090:9090
     volumes:
