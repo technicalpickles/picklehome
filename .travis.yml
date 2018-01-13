@@ -12,6 +12,7 @@ services:
 
 before_install:
   - docker pull boiyaa/yamllint
+  - docker pull nginx
 
 script:
   - cp .env.sample .env
