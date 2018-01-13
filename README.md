@@ -41,4 +41,4 @@ Check out the [wiki](https://github.com/technicalpickles/picklehome/wiki).
 
 ## Development & Deployment
 
-Run `screen` on the NUC and do stuff with `docker-compose` :sweat_smile:
+Run `screen` on the NUC, edit stuff, and run `script/deploy` to apply home-assistant changes or or do stuff with `docker-compose` :sweat_smile:
