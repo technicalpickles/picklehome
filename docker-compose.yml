@@ -37,6 +37,17 @@ services:
       - ./homeassistant/config:/config
     network_mode: "host"
 
+  nginx:
+    image: nginx
+    restart: always
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - home-assistant
+    network_mode: "host"
+
   sonos:
     image: chrisns/docker-node-sonos-http-api
     restart: always

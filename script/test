@@ -4,4 +4,5 @@ set -e
 set -x
 
 docker run -it --rm -v $(pwd):/workdir boiyaa/yamllint --strict --config-data '{extends: relaxed, rules: {line-length: disable}}' .
+docker run -it --rm -v $(pwd)/nginx/nginx.conf:/etc/nginx/nginx.conf:ro nginx nginx -t
 docker-compose config --quiet
