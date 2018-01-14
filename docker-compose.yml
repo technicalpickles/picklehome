@@ -49,6 +49,7 @@ services:
     network_mode: "host"
 
   avahi-alias:
+    privileged: true # required for dbus access
     image: flqw/avahi-alias:latest
     volumes:
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
