@@ -1,0 +1,4 @@
+
+git branch --merged | grep -v master | xargs git branch -D
+sudo apt-get update
+sudo apt-get upgrade -y
