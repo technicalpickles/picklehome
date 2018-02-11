@@ -1,0 +1,9 @@
+#/bin/bash
+pushd homeassistant/config
+git branch --merged | grep -v -e master -e '*' | xargs git branch -D
+popd
+
+git branch --merged | grep -v -e master -e '*' | xargs git branch -D
+
+sudo apt-get update
+sudo apt-get upgrade -y
