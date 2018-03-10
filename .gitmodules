@@ -1,3 +1,3 @@
 [submodule "homeassistant/src"]
 	path = homeassistant/src
-	url = git@github.com:technicalpickles/home-assistant.git
+	url = https://github.com/technicalpickles/home-assistant.git
