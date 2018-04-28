@@ -30,7 +30,6 @@ services:
       - apcupsd
       - harmony-api
       - mqtt
-      - samba
       - sonos
     ports:
       - 8123:8123
