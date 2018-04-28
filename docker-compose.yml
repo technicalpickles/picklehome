@@ -30,7 +30,6 @@ services:
       - apcupsd
       - harmony-api
       - mqtt
-      - samba
       - sonos
     ports:
       - 8123:8123
@@ -100,7 +99,6 @@ services:
       - prometheus-data:/prometheus-data
     network_mode: "host"
 
-
   airconnect:
     restart: always
     build: airconnect
@@ -116,7 +114,22 @@ services:
     volumes:
       - ./airconnect/config:/config
 
+  plex:
+    container_name: plex
+    image: plexinc/pms-docker
+    restart: unless-stopped
+    environment:
+      - TZ
+      - PLEX_CLAIM
+    network_mode: host
+    volumes:
+      - plex-config:/config
+      - plex-transcode:/transcode
+      - ./data:/data
+
 volumes:
   mqtt-data:
   sonos-cache:
   prometheus-data:
+  plex-transcode:
+  plex-config:
