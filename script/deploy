@@ -12,5 +12,4 @@ fi
 docker-compose stop home-assistant
 docker-compose up -d home-assistant
 
-container=$(docker-compose ps -q home-assistant)
-docker attach --sig-proxy=false "${container}"
+script/logs
