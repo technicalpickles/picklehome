@@ -35,6 +35,7 @@ services:
       - 8123:8123
     volumes:
       - ./homeassistant/config:/config
+    tty: true # so we get colors
     network_mode: "host"
 
   nginx:
