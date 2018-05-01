@@ -31,6 +31,7 @@ services:
       - harmony-api
       - mqtt
       - sonos
+      - influxdb
     ports:
       - 8123:8123
     volumes:
@@ -100,6 +101,32 @@ services:
       - prometheus-data:/prometheus-data
     network_mode: "host"
 
+  influxdb:
+    image: influxdb:1.4
+    container_name: influxdb
+    ports:
+      - 8086:8086
+      - 8083:8083
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+      # NOTE if you don't have one, you can use:
+      #   docker run --rm influxdb influxd config > influxdb.conf
+      - ./influxdb/influxdb.conf:/etc/influxdb/influxdb.conf:ro
+    command: -config /etc/influxdb/influxdb.conf
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+    command: --config /etc/grafana/grafana.ini
+    depends_on:
+      - influxdb
+    restart: always
+
   airconnect:
     restart: always
     build: airconnect
@@ -134,3 +161,5 @@ volumes:
   prometheus-data:
   plex-transcode:
   plex-config:
+  influxdb-data:
+  grafana-data:
