@@ -125,6 +125,7 @@ services:
     command: --config /etc/grafana/grafana.ini
     depends_on:
       - influxdb
+      - prometheus
     restart: always
 
   airconnect:
