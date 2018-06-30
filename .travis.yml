@@ -13,9 +13,9 @@ services:
 before_install:
   - docker pull boiyaa/yamllint
   - docker pull nginx
+  - git submodule init
+  - git submodule update
 
 script:
   - cp .env.sample .env
-  - git submodule init
-  - git submodule update
   - "script/test"
