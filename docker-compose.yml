@@ -155,7 +155,13 @@ services:
       - plex-config:/config
       - plex-transcode:/transcode
       - ./data:/data
-
+  duckdns:
+    restart: unless-stopped
+    image: linuxserver/duckdns
+    env_file:
+      - .env.duckdns
+    environment:
+      - TZ
 volumes:
   mqtt-data:
   sonos-cache:
