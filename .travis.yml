@@ -18,4 +18,5 @@ before_install:
 
 script:
   - cp .env.sample .env
+  - touch .env.duckdns
   - "script/test"

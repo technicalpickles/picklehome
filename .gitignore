@@ -3,6 +3,7 @@
 
 # don't commit things with credentials
 .env
+.env.*
 mqtt/config/pwfile
 harmony-api/config/config.json
 
