@@ -162,6 +162,7 @@ services:
       - .env.duckdns
     environment:
       - TZ
+
 volumes:
   mqtt-data:
   sonos-cache:
