@@ -1,15 +1,14 @@
 #!/bin/bash
 
 set -x
-set -e
 
-container=$(docker-compose ps -q home-assistant)
+container=$(docker-compose ps -q homeassistant 2>/dev/null)
 
 if [[ -n "${container}" ]]; then
   bin/homeassistant --script check_config
+  docker-compose stop homeassistant
 fi
 
-docker-compose stop home-assistant
-docker-compose up -d home-assistant
+docker-compose up -d homeassistant
 
 script/logs

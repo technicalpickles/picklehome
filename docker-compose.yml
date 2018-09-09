@@ -22,7 +22,7 @@ services:
       - ./harmony-api/config:/config
     network_mode: "host"
 
-  home-assistant:
+  homeassistant:
     image: homeassistant/home-assistant:0.77.3
     #build: ./homeassistant/src
     restart: always
