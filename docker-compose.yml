@@ -46,6 +46,7 @@ services:
       - 80:80
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot-etc:/etc/letsencrypt
     depends_on:
       - home-assistant
     network_mode: "host"
