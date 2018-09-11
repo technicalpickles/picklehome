@@ -4,12 +4,17 @@
 # don't commit things with credentials
 .env
 .env.*
-mqtt/config/pwfile
-harmony-api/config/config.json
+
 certbot/dnsimple.ini
+
+# don't save anything from data volume
+data
+
+harmony-api/config/config.json
 
 # don't commit anything tracked in other repos
 homeassistant/config
 
-# don't save anything from data volume
-data
+mqtt/config/pwfile
+
+nginx/dhparam.pem
