@@ -26,12 +26,12 @@ services:
     image: homeassistant/home-assistant:0.77.3
     #build: ./homeassistant/src
     restart: always
-    depends_on:
-      #- apcupsd
-      #- harmony-api
-      #- mqtt
-      #- sonos
-      #- influxdb
+    #depends_on:
+    #  - apcupsd
+    #  - harmony-api
+    #  - mqtt
+    #  - sonos
+    #  - influxdb
     ports:
       - 8123:8123
     volumes:
