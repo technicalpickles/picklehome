@@ -27,7 +27,7 @@ services:
     #build: ./homeassistant/src
     restart: always
     depends_on:
-      - apcupsd
+      #- apcupsd
       - harmony-api
       - mqtt
       - sonos
