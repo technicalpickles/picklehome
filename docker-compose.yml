@@ -28,10 +28,10 @@ services:
     restart: always
     depends_on:
       #- apcupsd
-      - harmony-api
-      - mqtt
-      - sonos
-      - influxdb
+      #- harmony-api
+      #- mqtt
+      #- sonos
+      #- influxdb
     ports:
       - 8123:8123
     volumes:
