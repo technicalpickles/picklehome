@@ -23,7 +23,7 @@ services:
     network_mode: "host"
 
   homeassistant:
-    image: homeassistant/home-assistant:0.79.3
+    image: homeassistant/home-assistant:0.81.6
     #build: ./homeassistant/src
     restart: always
     #depends_on:
