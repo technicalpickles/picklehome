@@ -22,16 +22,16 @@ services:
       - ./harmony-api/config:/config
     network_mode: "host"
 
-  home-assistant:
+  homeassistant:
     image: homeassistant/home-assistant:0.77.3
     #build: ./homeassistant/src
     restart: always
-    depends_on:
-      - apcupsd
-      - harmony-api
-      - mqtt
-      - sonos
-      - influxdb
+    #depends_on:
+    #  - apcupsd
+    #  - harmony-api
+    #  - mqtt
+    #  - sonos
+    #  - influxdb
     ports:
       - 8123:8123
     volumes:
@@ -40,15 +40,24 @@ services:
     network_mode: "host"
 
   nginx:
-    image: nginx
+    #image: nginx
+    build:
+      context: ./nginx/
+      args:
+        - external_hostname=$EXTERNAL_HOSTNAME
+        - internal_hostname=$INTERNAL_HOSTNAME
     restart: always
     ports:
       - 80:80
+      - 443:443
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+#      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/dhparam.pem:/etc/nginx/dhparam.pem:ro
+      - certbot-etc:/etc/letsencrypt
     depends_on:
-      - home-assistant
-    network_mode: "host"
+      - homeassistant
+    extra_hosts:
+      - "homeassistant:${DOCKER_IP}"
 
   avahi-alias:
     privileged: true # required for dbus access
@@ -162,6 +171,14 @@ services:
       - .env.duckdns
     environment:
       - TZ
+  certbot:
+    image: certbot/dns-dnsimple
+    network_mode: "none"
+    volumes:
+      - ./certbot/dnsimple.ini:/etc/dnsimple.ini
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - certbot-log:/var/logs/letsencrypt
 
 volumes:
   mqtt-data:
@@ -171,3 +188,6 @@ volumes:
   plex-config:
   influxdb-data:
   grafana-data:
+  certbot-etc:
+  certbot-log:
+  certbot-var:

@@ -1,0 +1,11 @@
+#!/bin/bash
+. .env
+
+bin/certbot certonly \
+  -m ${DNSIMPLE_EMAIL} \
+  --agree-tos \
+  --no-eff-email \
+  --dns-dnsimple \
+  --dns-dnsimple-credentials /etc/dnsimple.ini \
+  --domains ${EXTERNAL_HOSTNAME} \
+  "$@"

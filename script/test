@@ -3,6 +3,7 @@
 set -e
 set -x
 
-docker run -it --rm -v $(pwd):/workdir boiyaa/yamllint --strict --config-data '{extends: relaxed, rules: {line-length: disable}}' docker-compose.yml
-docker run -it --rm -v $(pwd)/nginx/nginx.conf:/etc/nginx/nginx.conf:ro nginx nginx -t
+bin/yamllint --strict --config-data '{extends: relaxed, rules: {line-length: disable}}' docker-compose.yml
 docker-compose config --quiet
+# FIXME need to figure out how to populate certbot-etc volume during CI
+#bin/nginx -t
