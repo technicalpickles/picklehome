@@ -23,7 +23,7 @@ services:
     network_mode: "host"
 
   homeassistant:
-    image: homeassistant/home-assistant:0.77.3
+    image: homeassistant/home-assistant:0.78.3
     #build: ./homeassistant/src
     restart: always
     #depends_on:
@@ -101,12 +101,17 @@ services:
     network_mode: "host"
 
   prometheus:
-    image: prom/prometheus
+    #image: prom/prometheus
+    build:
+      context: ./prometheus/
+      args:
+        - bearer_token=$HOMEASSISTANT_PROMETHEUS_BEARER_TOKEN
     restart: always
+    env_file:
+      - .env.prometheus
     ports:
       - 9090:9090
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus-data
     network_mode: "host"
 

@@ -22,8 +22,7 @@ scrape_configs:
   - job_name: 'hass'
     scrape_interval: 60s
     metrics_path: /api/prometheus
-    #params:
-    #  api_password: ['PASSWORD']
+    bearer_token: "%%bearer_token%%"
     scheme: http
     static_configs:
       - targets: ['localhost:8123']
