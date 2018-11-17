@@ -107,8 +107,6 @@ services:
       args:
         - bearer_token=$HOMEASSISTANT_PROMETHEUS_BEARER_TOKEN
     restart: always
-    env_file:
-      - .env.prometheus
     ports:
       - 9090:9090
     volumes:
