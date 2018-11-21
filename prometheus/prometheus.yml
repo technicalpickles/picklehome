@@ -26,3 +26,7 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets: ['localhost:8123']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['localhost:9100']
