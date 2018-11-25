@@ -112,6 +112,8 @@ services:
     volumes:
       - prometheus-data:/prometheus-data
     network_mode: "host"
+    #entrypoint: "/bin/sh"
+    
     depends_on:
       - node-exporter
 
@@ -132,6 +134,19 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+
+  cadvisor:
+    image: google/cadvisor:latest
+    restart: always
+    privileged: true
+    ports:
+      - "8080:8080"
+    network_mode: "host"
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:rw"
+      - "/sys:/sys:ro"
+      - "/var/snap/docker/current/run/docker:/var/lib/docker:ro"
 
   influxdb:
     image: influxdb:1.4
