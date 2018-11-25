@@ -1,0 +1,6 @@
+groups:
+  - name: default
+    rules:
+      - alert: RootMountFull
+        expr: node_filesystem_avail_bytes{mountpoint="/"} > 5*1024*1024*1024
+        #for: 1m

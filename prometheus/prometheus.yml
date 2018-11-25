@@ -7,6 +7,9 @@ global:
   external_labels:
     monitor: 'codelab-monitor'
 
+rule_files:
+  - "/etc/prometheus/alert.rules"
+
 # A scrape configuration containing exactly one endpoint to scrape:
 # Here it's Prometheus itself.
 scrape_configs:
