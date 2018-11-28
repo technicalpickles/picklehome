@@ -112,10 +112,6 @@ services:
     volumes:
       - prometheus-data:/prometheus-data
     network_mode: "host"
-    #entrypoint: "/bin/sh"
-    
-    depends_on:
-      - node-exporter
 
   node-exporter:
     image: prom/node-exporter
