@@ -113,6 +113,39 @@ services:
       - prometheus-data:/prometheus-data
     network_mode: "host"
 
+  # For reference in case? Use host os instead
+  #node-exporter:
+  #  image: prom/node-exporter
+  #  restart: always
+  #  user: root
+  #  privileged: true
+  #  ports:
+  #    - "9100:9100"
+  #  volumes:
+  #    - "/proc:/host/proc:ro"
+  #    - "/sys:/host/sys:ro"
+  #    - "/:/host:ro,rslave"
+  #  network_mode: "host"
+  #  pid: "host"
+  #  command:
+  #    - "--path.procfs=/host/proc"
+  #    - "--path.sysfs=/host/sys"
+  #    #- '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host/var/lib/snapd/hostfs/var/lib/lxcfs|host/var/lib/snapd)($$|/)'
+  #    #- '--collector.filesystem.ignored-fs-types=^(aufs|autofs|binfmt_misc|cgroup|configfs|debugfs|devpts|devtmpfs|efivarfs|fusectl|hugetlbfs|lxcfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|squashfs|sysfs|tmpfs|tracefs)$$'
+
+  cadvisor:
+    image: google/cadvisor:latest
+    restart: always
+    privileged: true
+    ports:
+      - "8080:8080"
+    network_mode: "host"
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:rw"
+      - "/sys:/sys:ro"
+      - "/var/snap/docker/current/run/docker:/var/lib/docker:ro"
+
   influxdb:
     image: influxdb:1.4
     container_name: influxdb
@@ -134,11 +167,37 @@ services:
       - 3000:3000
     volumes:
       - grafana-data:/var/lib/grafana
-    command: --config /etc/grafana/grafana.ini
+      - ./grafana/datasources:/etc/grafana/datasources
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - ./grafana/setup.sh:/setup.sh
+    entrypoint: /setup.sh
+    environment:
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - influxdb
       - prometheus
     restart: always
+    network_mode: host
+
+  alertmanager:
+    #image: prom/alertmanager
+    build:
+      context: ./alertmanager/
+      args:
+        - slack_channel=$ALERTMANAGER_SLACK_CHANNEL
+        - slack_webhook_url=$ALERTMANAGER_SLACK_WEBHOOK_URL
+    network_mode: host
+    #entrypoint: /bin/sh
+    #volumes:
+    #  - ./alertmanager/:/etc/alertmanager/
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    restart: always
+    expose:
+      - 9093
 
   airconnect:
     restart: always
