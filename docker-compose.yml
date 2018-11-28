@@ -113,23 +113,25 @@ services:
       - prometheus-data:/prometheus-data
     network_mode: "host"
 
-  node-exporter:
-    image: prom/node-exporter
-    restart: always
-    user: root
-    privileged: true
-    ports:
-      - "9100:9100"
-    volumes:
-      - "/proc:/host/proc:ro"
-      - "/sys:/host/sys:ro"
-      - "/:/host:ro,rslave" 
-    network_mode: "host"
-    pid: "host"
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+  # For reference in case? Use host os instead
+  #node-exporter:
+  #  image: prom/node-exporter
+  #  restart: always
+  #  user: root
+  #  privileged: true
+  #  ports:
+  #    - "9100:9100"
+  #  volumes:
+  #    - "/proc:/host/proc:ro"
+  #    - "/sys:/host/sys:ro"
+  #    - "/:/host:ro,rslave"
+  #  network_mode: "host"
+  #  pid: "host"
+  #  command:
+  #    - "--path.procfs=/host/proc"
+  #    - "--path.sysfs=/host/sys"
+  #    #- '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host/var/lib/snapd/hostfs/var/lib/lxcfs|host/var/lib/snapd)($$|/)'
+  #    #- '--collector.filesystem.ignored-fs-types=^(aufs|autofs|binfmt_misc|cgroup|configfs|debugfs|devpts|devtmpfs|efivarfs|fusectl|hugetlbfs|lxcfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|squashfs|sysfs|tmpfs|tracefs)$$'
 
   cadvisor:
     image: google/cadvisor:latest
