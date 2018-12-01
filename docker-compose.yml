@@ -237,7 +237,6 @@ services:
 
   certbot:
     image: certbot/dns-dnsimple
-    network_mode: "none"
     volumes:
       - ./certbot/dnsimple.ini:/etc/dnsimple.ini
       - certbot-etc:/etc/letsencrypt
