@@ -180,25 +180,17 @@ services:
       - influxdb
       - prometheus
     restart: always
-    network_mode: host
 
   alertmanager:
-    #image: prom/alertmanager
     build:
       context: ./alertmanager/
       args:
         - slack_channel=$ALERTMANAGER_SLACK_CHANNEL
         - slack_webhook_url=$ALERTMANAGER_SLACK_WEBHOOK_URL
-    network_mode: host
-    #entrypoint: /bin/sh
-    #volumes:
-    #  - ./alertmanager/:/etc/alertmanager/
     command:
       - '--config.file=/etc/alertmanager/config.yml'
       - '--storage.path=/alertmanager'
     restart: always
-    expose:
-      - 9093
 
   #airconnect:
   #  restart: always
