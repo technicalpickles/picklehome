@@ -28,16 +28,16 @@ scrape_configs:
     bearer_token: "%%bearer_token%%"
     scheme: http
     static_configs:
-      - targets: ['localhost:8123']
+      - targets: ['homeassistant:8123']
 
   - job_name: 'node-exporter'
     static_configs:
-      - targets: ['localhost:9100']
+      - targets: ['docker:9100']
 
   - job_name: 'cadvisor'
     scrape_interval: 5s
     static_configs:
-      - targets: ['localhost:8080']
+      - targets: ['cadvisor:8080']
 
 alerting:
   alertmanagers:

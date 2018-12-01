@@ -234,6 +234,7 @@ services:
       - .env.duckdns
     environment:
       - TZ
+
   certbot:
     image: certbot/dns-dnsimple
     network_mode: "none"
