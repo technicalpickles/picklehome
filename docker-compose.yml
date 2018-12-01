@@ -111,7 +111,9 @@ services:
       - 9090:9090
     volumes:
       - prometheus-data:/prometheus-data
-    network_mode: "host"
+    extra_hosts:
+      - "homeassistant:${DOCKER_IP}"
+      - "docker:${DOCKER_IP}"
 
   # For reference in case? Use host os instead
   #node-exporter:
