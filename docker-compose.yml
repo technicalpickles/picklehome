@@ -140,8 +140,7 @@ services:
     restart: always
     privileged: true
     ports:
-      - "8080:8080"
-    network_mode: "host"
+      - "18080:8080"
     volumes:
       - "/:/rootfs:ro"
       - "/var/run:/var/run:rw"
