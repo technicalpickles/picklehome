@@ -11,16 +11,16 @@ services:
       - mqtt-data:/mosquitto/data
       - ./mqtt/config:/mosquitto/config
 
-  harmony-api:
-    image: jonmaddox/harmony-api
-    restart: always
-    depends_on:
-      - mqtt
-    ports:
-      - 8282:8282
-    volumes:
-      - ./harmony-api/config:/config
-    network_mode: "host"
+  #harmony-api:
+  #  image: jonmaddox/harmony-api
+  #  restart: always
+  #  depends_on:
+  #    - mqtt
+  #  ports:
+  #    - 8282:8282
+  #  volumes:
+  #    - ./harmony-api/config:/config
+  #  network_mode: "host"
 
   homeassistant:
     image: homeassistant/home-assistant:0.82.1
@@ -227,6 +227,7 @@ services:
       - plex-config:/config
       - plex-transcode:/transcode
       - ./data:/data
+
   duckdns:
     restart: unless-stopped
     image: linuxserver/duckdns
