@@ -11,17 +11,6 @@ services:
       - mqtt-data:/mosquitto/data
       - ./mqtt/config:/mosquitto/config
 
-  #harmony-api:
-  #  image: jonmaddox/harmony-api
-  #  restart: always
-  #  depends_on:
-  #    - mqtt
-  #  ports:
-  #    - 8282:8282
-  #  volumes:
-  #    - ./harmony-api/config:/config
-  #  network_mode: "host"
-
   homeassistant:
     image: homeassistant/home-assistant:0.82.1
     #build: ./homeassistant/src
@@ -38,7 +27,6 @@ services:
     network_mode: "host"
 
   nginx:
-    #image: nginx
     build:
       context: ./nginx/
       args:
@@ -49,7 +37,6 @@ services:
       - 80:80
       - 443:443
     volumes:
-#      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/dhparam.pem:/etc/nginx/dhparam.pem:ro
       - certbot-etc:/etc/letsencrypt
     depends_on:
@@ -99,7 +86,6 @@ services:
     network_mode: "host"
 
   prometheus:
-    #image: prom/prometheus
     build:
       context: ./prometheus/
       args:
@@ -112,26 +98,6 @@ services:
     extra_hosts:
       - "homeassistant:${DOCKER_IP}"
       - "docker:${DOCKER_IP}"
-
-  # For reference in case? Use host os instead
-  #node-exporter:
-  #  image: prom/node-exporter
-  #  restart: always
-  #  user: root
-  #  privileged: true
-  #  ports:
-  #    - "9100:9100"
-  #  volumes:
-  #    - "/proc:/host/proc:ro"
-  #    - "/sys:/host/sys:ro"
-  #    - "/:/host:ro,rslave"
-  #  network_mode: "host"
-  #  pid: "host"
-  #  command:
-  #    - "--path.procfs=/host/proc"
-  #    - "--path.sysfs=/host/sys"
-  #    #- '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host/var/lib/snapd/hostfs/var/lib/lxcfs|host/var/lib/snapd)($$|/)'
-  #    #- '--collector.filesystem.ignored-fs-types=^(aufs|autofs|binfmt_misc|cgroup|configfs|debugfs|devpts|devtmpfs|efivarfs|fusectl|hugetlbfs|lxcfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|squashfs|sysfs|tmpfs|tracefs)$$'
 
   cadvisor:
     image: google/cadvisor:latest
@@ -189,21 +155,6 @@ services:
       - '--config.file=/etc/alertmanager/config.yml'
       - '--storage.path=/alertmanager'
     restart: always
-
-  #airconnect:
-  #  restart: always
-  #  build: airconnect
-  #  network_mode: host
-  #  command:
-  #    - "-d"
-  #    - all=info
-  #    - "-b"
-  #    - ":49152"
-  #    - "-x"
-  #    - /config/config.xml
-  #    - "-Z"
-  #  volumes:
-  #    - ./airconnect/config:/config
 
   plex:
     container_name: plex
