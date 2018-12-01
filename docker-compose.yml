@@ -32,8 +32,6 @@ services:
     #  - mqtt
     #  - sonos
     #  - influxdb
-    ports:
-      - 8123:8123
     volumes:
       - ./homeassistant/config:/config
     tty: true # so we get colors
