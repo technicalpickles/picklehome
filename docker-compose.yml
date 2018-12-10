@@ -185,16 +185,16 @@ services:
       - certbot-var:/var/lib/letsencrypt
       - certbot-log:/var/logs/letsencrypt
 
-  unifi:
-    image: jacobalberty/unifi:stable
-    restart: always
-    ports:
-      - "8080:8080"
-      - "8443:8443"
-      - "6789:6789"
-      - "3478:3478/udp"
-      - "10001:10001/udp"
-      - "1900:1900/udp"
+ #unifi:
+ #  image: jacobalberty/unifi:stable
+ #  restart: always
+ #  ports:
+ #    - "8080:8080"
+ #    - "8443:8443"
+ #    - "6789:6789"
+ #    - "3478:3478/udp"
+ #    - "10001:10001/udp"
+ #    - "1900:1900/udp"
 
 volumes:
   mqtt-data:
