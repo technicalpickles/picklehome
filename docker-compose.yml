@@ -11,17 +11,6 @@ services:
       - mqtt-data:/mosquitto/data
       - ./mqtt/config:/mosquitto/config
 
-  harmony-api:
-    image: jonmaddox/harmony-api
-    restart: always
-    depends_on:
-      - mqtt
-    ports:
-      - 8282:8282
-    volumes:
-      - ./harmony-api/config:/config
-    network_mode: "host"
-
   homeassistant:
     image: homeassistant/home-assistant:0.82.1
     #build: ./homeassistant/src
@@ -32,15 +21,12 @@ services:
     #  - mqtt
     #  - sonos
     #  - influxdb
-    ports:
-      - 8123:8123
     volumes:
       - ./homeassistant/config:/config
     tty: true # so we get colors
     network_mode: "host"
 
   nginx:
-    #image: nginx
     build:
       context: ./nginx/
       args:
@@ -51,7 +37,6 @@ services:
       - 80:80
       - 443:443
     volumes:
-#      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/dhparam.pem:/etc/nginx/dhparam.pem:ro
       - certbot-etc:/etc/letsencrypt
     depends_on:
@@ -101,7 +86,6 @@ services:
     network_mode: "host"
 
   prometheus:
-    #image: prom/prometheus
     build:
       context: ./prometheus/
       args:
@@ -111,35 +95,16 @@ services:
       - 9090:9090
     volumes:
       - prometheus-data:/prometheus-data
-    network_mode: "host"
-
-  # For reference in case? Use host os instead
-  #node-exporter:
-  #  image: prom/node-exporter
-  #  restart: always
-  #  user: root
-  #  privileged: true
-  #  ports:
-  #    - "9100:9100"
-  #  volumes:
-  #    - "/proc:/host/proc:ro"
-  #    - "/sys:/host/sys:ro"
-  #    - "/:/host:ro,rslave"
-  #  network_mode: "host"
-  #  pid: "host"
-  #  command:
-  #    - "--path.procfs=/host/proc"
-  #    - "--path.sysfs=/host/sys"
-  #    #- '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host/var/lib/snapd/hostfs/var/lib/lxcfs|host/var/lib/snapd)($$|/)'
-  #    #- '--collector.filesystem.ignored-fs-types=^(aufs|autofs|binfmt_misc|cgroup|configfs|debugfs|devpts|devtmpfs|efivarfs|fusectl|hugetlbfs|lxcfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|squashfs|sysfs|tmpfs|tracefs)$$'
+    extra_hosts:
+      - "homeassistant:${DOCKER_IP}"
+      - "docker:${DOCKER_IP}"
 
   cadvisor:
     image: google/cadvisor:latest
     restart: always
     privileged: true
     ports:
-      - "8080:8080"
-    network_mode: "host"
+      - "18080:8080"
     volumes:
       - "/:/rootfs:ro"
       - "/var/run:/var/run:rw"
@@ -179,40 +144,17 @@ services:
       - influxdb
       - prometheus
     restart: always
-    network_mode: host
 
   alertmanager:
-    #image: prom/alertmanager
     build:
       context: ./alertmanager/
       args:
         - slack_channel=$ALERTMANAGER_SLACK_CHANNEL
         - slack_webhook_url=$ALERTMANAGER_SLACK_WEBHOOK_URL
-    network_mode: host
-    #entrypoint: /bin/sh
-    #volumes:
-    #  - ./alertmanager/:/etc/alertmanager/
     command:
       - '--config.file=/etc/alertmanager/config.yml'
       - '--storage.path=/alertmanager'
     restart: always
-    expose:
-      - 9093
-
-  airconnect:
-    restart: always
-    build: airconnect
-    network_mode: host
-    command:
-      - "-d"
-      - all=info
-      - "-b"
-      - ":49152"
-      - "-x"
-      - /config/config.xml
-      - "-Z"
-    volumes:
-      - ./airconnect/config:/config
 
   plex:
     container_name: plex
@@ -226,6 +168,7 @@ services:
       - plex-config:/config
       - plex-transcode:/transcode
       - ./data:/data
+
   duckdns:
     restart: unless-stopped
     image: linuxserver/duckdns
@@ -233,14 +176,25 @@ services:
       - .env.duckdns
     environment:
       - TZ
+
   certbot:
     image: certbot/dns-dnsimple
-    network_mode: "none"
     volumes:
       - ./certbot/dnsimple.ini:/etc/dnsimple.ini
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
       - certbot-log:/var/logs/letsencrypt
+
+ #unifi:
+ #  image: jacobalberty/unifi:stable
+ #  restart: always
+ #  ports:
+ #    - "8080:8080"
+ #    - "8443:8443"
+ #    - "6789:6789"
+ #    - "3478:3478/udp"
+ #    - "10001:10001/udp"
+ #    - "1900:1900/udp"
 
 volumes:
   mqtt-data:
