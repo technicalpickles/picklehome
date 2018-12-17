@@ -169,14 +169,6 @@ services:
       - plex-transcode:/transcode
       - ./data:/data
 
-  duckdns:
-    restart: unless-stopped
-    image: linuxserver/duckdns
-    env_file:
-      - .env.duckdns
-    environment:
-      - TZ
-
   certbot:
     image: certbot/dns-dnsimple
     volumes:
