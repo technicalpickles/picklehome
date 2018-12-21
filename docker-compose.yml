@@ -44,14 +44,6 @@ services:
     extra_hosts:
       - "homeassistant:${DOCKER_IP}"
 
-  avahi-alias:
-    privileged: true # required for dbus access
-    image: flqw/avahi-alias:latest
-    volumes:
-      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
-    command:
-      - homeassistant.local
-
   sonos:
     image: chrisns/docker-node-sonos-http-api
     restart: always
