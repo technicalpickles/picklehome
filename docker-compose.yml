@@ -156,19 +156,6 @@ services:
       - '--storage.path=/alertmanager'
     restart: always
 
-  plex:
-    container_name: plex
-    image: plexinc/pms-docker
-    restart: unless-stopped
-    environment:
-      - TZ
-      - PLEX_CLAIM
-    network_mode: host
-    volumes:
-      - plex-config:/config
-      - plex-transcode:/transcode
-      - ./data:/data
-
   certbot:
     image: certbot/dns-dnsimple
     volumes:
@@ -192,8 +179,6 @@ volumes:
   mqtt-data:
   sonos-cache:
   prometheus-data:
-  plex-transcode:
-  plex-config:
   influxdb-data:
   grafana-data:
   certbot-etc:
