@@ -4,8 +4,8 @@
 # don't commit things with credentials
 .env
 .env.*
-
 certbot/dnsimple.ini
+duply/root
 
 # don't save anything from data volume
 data
