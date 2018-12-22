@@ -12,7 +12,7 @@ services:
       - ./mqtt/config:/mosquitto/config
 
   homeassistant:
-    image: homeassistant/home-assistant:0.83.3
+    image: homeassistant/home-assistant:0.84.3
     #build: ./homeassistant/src
     restart: always
     #depends_on:
