@@ -1,20 +1,14 @@
 # vim swap files
 .*.swp
 
-# don't commit things with credentials
+# don't commit things with credentials or other sensitive stuff
 .env
 .env.*
-
 certbot/dnsimple.ini
-
-# don't save anything from data volume
-data
-
+duply/root
 harmony-api/config/config.json
-
-# don't commit anything tracked in other repos
-homeassistant/config
-
 mqtt/config/pwfile
-
 nginx/dhparam.pem
+
+# tracked in other repos
+homeassistant/config

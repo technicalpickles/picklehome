@@ -1,0 +1,8 @@
+sudo apt-get install prometheus-node-exporter
+# download latest from https://github.com/prometheus/node_exporter/releases
+# extract
+cp prometheus-node-exporter /etc/default
+
+sudo update-rc.d prometheus-node-exporter defaults
+sudo update-rc.d prometheus-node-exporter enable
+sudo /etc/init.d/prometheus-node-exporter start

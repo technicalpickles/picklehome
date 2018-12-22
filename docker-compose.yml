@@ -44,14 +44,6 @@ services:
     extra_hosts:
       - "homeassistant:${DOCKER_IP}"
 
-  avahi-alias:
-    privileged: true # required for dbus access
-    image: flqw/avahi-alias:latest
-    volumes:
-      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
-    command:
-      - homeassistant.local
-
   sonos:
     image: chrisns/docker-node-sonos-http-api
     restart: always
@@ -71,19 +63,6 @@ services:
       - 3551:3551
     devices:
       - /dev/usb/hiddev0:/dev/usb/hiddev0
-
-  samba:
-    image: dperson/samba
-    restart: always
-    command: -n -s videos;/mount/videos -g "netbios name = picklehome" -u kodi;${SAMBA_KODI_PASSWORD}
-    ports:
-      - 137:137/udp
-      - 138:138/udp
-      - 139:139
-      - 445:445
-    volumes:
-      - ./data:/mount:ro
-    network_mode: "host"
 
   prometheus:
     build:
@@ -156,19 +135,6 @@ services:
       - '--storage.path=/alertmanager'
     restart: always
 
-  plex:
-    container_name: plex
-    image: plexinc/pms-docker
-    restart: unless-stopped
-    environment:
-      - TZ
-      - PLEX_CLAIM
-    network_mode: host
-    volumes:
-      - plex-config:/config
-      - plex-transcode:/transcode
-      - ./data:/data
-
   certbot:
     image: certbot/dns-dnsimple
     volumes:
@@ -177,23 +143,10 @@ services:
       - certbot-var:/var/lib/letsencrypt
       - certbot-log:/var/logs/letsencrypt
 
- #unifi:
- #  image: jacobalberty/unifi:stable
- #  restart: always
- #  ports:
- #    - "8080:8080"
- #    - "8443:8443"
- #    - "6789:6789"
- #    - "3478:3478/udp"
- #    - "10001:10001/udp"
- #    - "1900:1900/udp"
-
 volumes:
   mqtt-data:
   sonos-cache:
   prometheus-data:
-  plex-transcode:
-  plex-config:
   influxdb-data:
   grafana-data:
   certbot-etc:
