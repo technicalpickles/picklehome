@@ -1,0 +1,38 @@
+# ecobee/schedule.yaml
+# Climate values must be climateRef strings from your Ecobee thermostat.
+# Defaults: home, away, sleep. Custom climates shown by 'just ecobee-auth'.
+# All times must be on 30-minute boundaries (:00 or :30).
+# Every day must start with time: "00:00". All 7 days are required.
+
+schedule:
+  _weekday: &weekday
+    - time: "00:00"
+      climate: sleep
+    - time: "06:30"
+      climate: home
+    - time: "08:30"
+      climate: away
+    - time: "17:00"
+      climate: home
+    - time: "22:00"
+      climate: sleep
+
+  sunday:
+    - time: "00:00"
+      climate: sleep
+    - time: "08:00"
+      climate: home
+    - time: "23:00"
+      climate: sleep
+  monday: *weekday
+  tuesday: *weekday
+  wednesday: *weekday
+  thursday: *weekday
+  friday: *weekday
+  saturday:
+    - time: "00:00"
+      climate: sleep
+    - time: "08:00"
+      climate: home
+    - time: "23:00"
+      climate: sleep
