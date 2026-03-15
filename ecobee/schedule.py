@@ -52,10 +52,26 @@ def load_schedule(path: str | Path) -> dict:
     if data is None or not isinstance(data, dict):
         print("schedule.yaml is empty or invalid")
         sys.exit(1)
-    if "schedule" not in data:
-        print("schedule.yaml must have a top-level 'schedule' key")
+    if "thermostats" not in data:
+        print("schedule.yaml must have a top-level 'thermostats' key")
         sys.exit(1)
     return data
+
+
+def iter_thermostat_entries(data: dict, name_filter: str | None = None):
+    """Yield (name, thermostat_id, schedule_dict) for each configured thermostat."""
+    for name, entry in data["thermostats"].items():
+        if name_filter and name != name_filter:
+            continue
+        if not isinstance(entry, dict):
+            raise ValueError(f"Thermostat '{name}' entry must be a mapping")
+        thermostat_id = entry.get("thermostat_id")
+        if not thermostat_id:
+            raise ValueError(f"Thermostat '{name}' is missing 'thermostat_id'")
+        schedule_dict = entry.get("schedule")
+        if not isinstance(schedule_dict, dict):
+            raise ValueError(f"Thermostat '{name}' is missing 'schedule'")
+        yield name, thermostat_id, schedule_dict
 
 
 def time_to_slot(time_str: str) -> int:
@@ -140,11 +156,12 @@ def validate_climate_refs(schedule_dict: dict, program: dict) -> None:
         )
 
 
-def print_schedule_grid(schedule_array: list, program: dict) -> None:
+def print_schedule_grid(schedule_array: list, program: dict, name: str = "") -> None:
     day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     ref_to_name = {c["climateRef"]: c.get("name", c["climateRef"]) for c in program["climates"]}
 
-    print("Schedule preview (transitions only):\n")
+    header = f"Schedule preview — {name}" if name else "Schedule preview"
+    print(f"{header} (transitions only):\n")
     for day_idx, day_slots in enumerate(schedule_array):
         print(day_names[day_idx])
         prev = None

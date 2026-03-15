@@ -38,9 +38,6 @@ def get_api_key() -> str:
     return require_credential("api_key", "Ecobee API key not found. See docs/ecobee-setup.md.")
 
 
-def get_thermostat_id() -> str:
-    return require_credential("thermostat_id", "Thermostat ID not found. Run 'just ecobee-auth' first.")
-
 
 def make_ecobee() -> KeychainEcobee:
     api_key = get_api_key()
@@ -56,40 +53,25 @@ def make_ecobee() -> KeychainEcobee:
     })
 
 
-def _discover_and_save_thermostat(ecobee: KeychainEcobee) -> str:
+def _print_thermostat_info(ecobee: KeychainEcobee) -> None:
     success = ecobee.get_thermostats()
     if not success or not ecobee.thermostats:
         print("Failed to fetch thermostat list from Ecobee.")
         sys.exit(2)
 
-    thermostats = ecobee.thermostats
-    if len(thermostats) == 1:
-        index = 0
-    else:
-        for i, t in enumerate(thermostats, 1):
-            print(f"  {i}. {t['name']} (ID: {t['identifier']})")
-        while True:
-            try:
-                choice = int(input("Select [1-{}]: ".format(len(thermostats))))
-                if 1 <= choice <= len(thermostats):
-                    index = choice - 1
-                    break
-                print("Invalid selection, try again.")
-            except ValueError:
-                print("Invalid selection, try again.")
+    print("\nThermostats on this account (add these to schedule.yaml):")
+    for thermostat in ecobee.thermostats:
+        identifier = thermostat["identifier"]
+        name = thermostat["name"]
+        climates = thermostat.get("program", {}).get("climates", [])
+        print(f"\n  {name}")
+        print(f"    thermostat_id: \"{identifier}\"")
+        print(f"    Available climates: {', '.join(c['climateRef'] for c in climates)}")
 
-    thermostat = thermostats[index]
-    identifier = thermostat["identifier"]
-    name = thermostat["name"]
-    save_credential("thermostat_id", identifier)
 
-    climates = thermostat.get("program", {}).get("climates", [])
-    print(f"Thermostat: {name} (ID: {identifier})")
-    print("Available climates (use these in schedule.yaml):")
-    for climate in climates:
-        print(f"  - {climate['climateRef']}")
-
-    return identifier
+def list_thermostats() -> None:
+    ecobee = make_ecobee()
+    _print_thermostat_info(ecobee)
 
 
 def pin_auth_flow(api_key: str) -> None:
@@ -121,5 +103,5 @@ Waiting for authorization (Ctrl-C to cancel)...""")
         print("\nCancelled. Re-run 'just ecobee-auth'.")
         sys.exit(0)
 
-    _discover_and_save_thermostat(ecobee)
-    print("\nSetup complete! Tokens and thermostat saved to Keychain.")
+    _print_thermostat_info(ecobee)
+    print("\nSetup complete! Tokens saved to Keychain. Add thermostat IDs to schedule.yaml.")

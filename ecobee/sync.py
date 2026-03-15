@@ -14,58 +14,84 @@ def cmd_auth(args) -> None:
     auth.pin_auth_flow(api_key)
 
 
+def cmd_list(args) -> None:
+    auth.list_thermostats()
+
+
 def cmd_sync(args) -> None:
     ecobee = auth.make_ecobee()
-    thermostat_id = auth.get_thermostat_id()
 
     schedule_data = schedule.load_schedule(args.schedule)
-    schedule_dict = schedule_data["schedule"]
 
     try:
-        schedule_array = schedule.build_schedule_array(schedule_dict)
+        entries = list(schedule.iter_thermostat_entries(schedule_data, args.thermostat))
     except ValueError as e:
         print(f"Error in schedule.yaml: {e}")
         sys.exit(1)
 
-    # GET current program (needed for climate validation + preserving temperatures)
-    # Note: climate validation is intentionally deferred until after GET,
-    # because validate_climate_refs requires the live climates list from the thermostat.
-    # Time/format validation (build_schedule_array) runs offline first.
-    try:
-        program = schedule.get_current_program(ecobee, thermostat_id)
-    except InvalidTokenError:
-        print("Tokens invalid. Re-run 'just ecobee-auth'.")
-        sys.exit(1)
-    except LookupError as e:
-        # Thermostat ID in Keychain not found on account — config error
-        print(f"Error: {e}")
-        sys.exit(1)
-    except RuntimeError as e:
-        # Network / transport / unexpected API failure
-        print(f"Error: {e}")
-        sys.exit(2)
-
-    try:
-        schedule.validate_climate_refs(schedule_dict, program)
-    except ValueError as e:
-        print(f"Error in schedule.yaml: {e}")
+    if not entries:
+        if args.thermostat:
+            print(f"No thermostat named '{args.thermostat}' found in schedule.yaml.")
+        else:
+            print("No thermostats configured in schedule.yaml.")
         sys.exit(1)
 
-    if args.dry_run:
-        schedule.print_schedule_grid(schedule_array, program)
-        print("Dry run complete. No changes pushed.")
-        return
+    any_error = False
 
-    try:
-        schedule.push_schedule(ecobee, thermostat_id, schedule_array, program["climates"])
-    except InvalidTokenError:
-        print("Tokens invalid. Re-run 'just ecobee-auth'.")
+    for name, thermostat_id, schedule_dict in entries:
+        print(f"\n[{name}]")
+
+        # Offline validation first (no API call needed)
+        try:
+            schedule_array = schedule.build_schedule_array(schedule_dict)
+        except ValueError as e:
+            print(f"  Error: {e}")
+            any_error = True
+            continue
+
+        # GET current program (needed for climate validation + preserving temperatures)
+        # Note: climate validation is intentionally deferred until after GET,
+        # because validate_climate_refs requires the live climates list from the thermostat.
+        try:
+            program = schedule.get_current_program(ecobee, thermostat_id)
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just ecobee-auth'.")
+            sys.exit(1)
+        except LookupError as e:
+            print(f"  Error: {e}")
+            any_error = True
+            continue
+        except RuntimeError as e:
+            print(f"  Error: {e}")
+            any_error = True
+            continue
+
+        try:
+            schedule.validate_climate_refs(schedule_dict, program)
+        except ValueError as e:
+            print(f"  Error: {e}")
+            any_error = True
+            continue
+
+        if args.dry_run:
+            schedule.print_schedule_grid(schedule_array, program, name=name)
+            print(f"  Dry run complete. No changes pushed.")
+            continue
+
+        try:
+            schedule.push_schedule(ecobee, thermostat_id, schedule_array, program["climates"])
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just ecobee-auth'.")
+            sys.exit(1)
+        except RuntimeError as e:
+            print(f"  Error: {e}")
+            any_error = True
+            continue
+
+        print(f"  Schedule pushed successfully.")
+
+    if any_error:
         sys.exit(1)
-    except RuntimeError as e:
-        print(f"Error: {e}")
-        sys.exit(2)
-
-    print("Schedule pushed successfully.")
 
 
 def main() -> None:
@@ -73,6 +99,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("auth", help="First-time PIN auth flow + thermostat discovery")
+    subparsers.add_parser("list", help="List thermostats and climate refs on this account")
 
     sync_parser = subparsers.add_parser("sync", help="Push schedule.yaml to Ecobee")
     sync_parser.add_argument(
@@ -87,9 +114,15 @@ def main() -> None:
         metavar="PATH",
         help="Path to schedule YAML (default: ecobee/schedule.yaml)",
     )
+    sync_parser.add_argument(
+        "--thermostat",
+        metavar="NAME",
+        default=None,
+        help="Only sync the named thermostat (default: all)",
+    )
 
-    # Wire up subcommand functions
     subparsers.choices["auth"].set_defaults(func=cmd_auth)
+    subparsers.choices["list"].set_defaults(func=cmd_list)
     subparsers.choices["sync"].set_defaults(func=cmd_sync)
 
     args = parser.parse_args()

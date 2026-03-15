@@ -3,36 +3,75 @@
 # Defaults: home, away, sleep. Custom climates shown by 'just ecobee-auth'.
 # All times must be on 30-minute boundaries (:00 or :30).
 # Every day must start with time: "00:00". All 7 days are required.
+# Run 'just ecobee-auth' to see thermostat IDs and available climate refs.
 
-schedule:
-  _weekday: &weekday
-    - time: "00:00"
-      climate: sleep
-    - time: "06:30"
-      climate: home
-    - time: "08:30"
-      climate: away
-    - time: "17:00"
-      climate: home
-    - time: "22:00"
-      climate: sleep
+thermostats:
+  downstairs:
+    thermostat_id: "532572869586"
+    schedule:
+      _weekday: &downstairs_weekday
+        - time: "00:00"
+          climate: sleep
+        - time: "06:30"
+          climate: home
+        - time: "08:30"
+          climate: away
+        - time: "17:00"
+          climate: home
+        - time: "22:00"
+          climate: sleep
 
-  sunday:
-    - time: "00:00"
-      climate: sleep
-    - time: "08:00"
-      climate: home
-    - time: "23:00"
-      climate: sleep
-  monday: *weekday
-  tuesday: *weekday
-  wednesday: *weekday
-  thursday: *weekday
-  friday: *weekday
-  saturday:
-    - time: "00:00"
-      climate: sleep
-    - time: "08:00"
-      climate: home
-    - time: "23:00"
-      climate: sleep
+      sunday:
+        - time: "00:00"
+          climate: sleep
+        - time: "08:00"
+          climate: home
+        - time: "23:00"
+          climate: sleep
+      monday: *downstairs_weekday
+      tuesday: *downstairs_weekday
+      wednesday: *downstairs_weekday
+      thursday: *downstairs_weekday
+      friday: *downstairs_weekday
+      saturday:
+        - time: "00:00"
+          climate: sleep
+        - time: "08:00"
+          climate: home
+        - time: "23:00"
+          climate: sleep
+
+  upstairs:
+    thermostat_id: "532537308613"
+    schedule:
+      _weekday: &upstairs_weekday
+        - time: "00:00"
+          climate: sleep
+        - time: "06:30"
+          climate: home
+        - time: "08:30"
+          climate: away
+        - time: "17:00"
+          climate: home
+        - time: "22:00"
+          climate: sleep
+
+      sunday:
+        - time: "00:00"
+          climate: sleep
+        - time: "08:00"
+          climate: home
+        - time: "23:00"
+          climate: sleep
+      monday: *upstairs_weekday
+      tuesday: *upstairs_weekday
+      wednesday: *upstairs_weekday
+      thursday: *upstairs_weekday
+      friday: *upstairs_weekday
+      saturday:
+        - time: "00:00"
+          climate: sleep
+        - time: "08:00"
+          climate: home
+        - time: "23:00"
+          climate: sleep

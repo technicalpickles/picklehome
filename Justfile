@@ -4,6 +4,10 @@ set dotenv-load
 ecobee-auth:
     uv run python -m ecobee.sync auth
 
+# List thermostats and climate refs on this account
+ecobee-list:
+    uv run python -m ecobee.sync list
+
 # Push schedule.yaml to Ecobee (pass --schedule PATH to override default)
 ecobee-sync *ARGS:
     uv run python -m ecobee.sync sync {{ARGS}}
