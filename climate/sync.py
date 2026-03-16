@@ -6,9 +6,11 @@ import yaml
 from pyecobee.errors import InvalidTokenError
 
 from climate.ecobee import auth, comforts, schedule
+from climate.ecobee.thermostats import load_thermostats
 
 DEFAULT_SCHEDULE_PATH = Path(__file__).parent / "config" / "schedule.yaml"
 DEFAULT_COMFORTS_PATH = Path(__file__).parent / "config" / "comforts.yaml"
+DEFAULT_THERMOSTATS_PATH = Path(__file__).parent / "config" / "thermostats.yaml"
 
 
 def cmd_auth(args) -> None:
@@ -24,9 +26,10 @@ def cmd_sync(args) -> None:
     ecobee = auth.make_ecobee()
 
     schedule_data = schedule.load_schedule(args.schedule)
+    registry = load_thermostats(args.thermostats)
 
     try:
-        entries = list(schedule.iter_thermostat_entries(schedule_data, args.thermostat))
+        entries = list(schedule.iter_thermostat_entries(schedule_data, registry, args.thermostat))
     except ValueError as e:
         print(f"Error in schedule.yaml: {e}")
         sys.exit(1)
@@ -100,9 +103,10 @@ def cmd_validate(args) -> None:
     ecobee = auth.make_ecobee()
 
     schedule_data = schedule.load_schedule(args.schedule)
+    registry = load_thermostats(args.thermostats)
 
     try:
-        entries = list(schedule.iter_thermostat_entries(schedule_data, args.thermostat))
+        entries = list(schedule.iter_thermostat_entries(schedule_data, registry, args.thermostat))
     except ValueError as e:
         print(f"Error in schedule.yaml: {e}")
         sys.exit(1)
@@ -277,6 +281,13 @@ def main() -> None:
         help="Path to schedule YAML (default: climate/config/schedule.yaml)",
     )
     sync_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+    sync_parser.add_argument(
         "--thermostat",
         metavar="NAME",
         default=None,
@@ -292,6 +303,13 @@ def main() -> None:
         default=DEFAULT_SCHEDULE_PATH,
         metavar="PATH",
         help="Path to schedule YAML (default: climate/config/schedule.yaml)",
+    )
+    validate_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
     )
     validate_parser.add_argument(
         "--thermostat",

@@ -4,6 +4,8 @@ from pathlib import Path
 import yaml
 from pyecobee.const import ECOBEE_ENDPOINT_THERMOSTAT
 
+from climate.ecobee.thermostats import get_thermostat_id
+
 
 def get_current_program(ecobee, thermostat_id: str) -> dict:
     success = ecobee.get_thermostats()
@@ -58,16 +60,19 @@ def load_schedule(path: str | Path) -> dict:
     return data
 
 
-def iter_thermostat_entries(data: dict, name_filter: str | None = None):
+def iter_thermostat_entries(data: dict, registry: dict, name_filter: str | None = None):
     """Yield (name, thermostat_id, schedule_dict) for each configured thermostat."""
     for name, entry in data["thermostats"].items():
         if name_filter and name != name_filter:
             continue
         if not isinstance(entry, dict):
             raise ValueError(f"Thermostat '{name}' entry must be a mapping")
-        thermostat_id = entry.get("thermostat_id")
-        if not thermostat_id:
-            raise ValueError(f"Thermostat '{name}' is missing 'thermostat_id'")
+        try:
+            thermostat_id = get_thermostat_id(registry, name)
+        except KeyError:
+            raise ValueError(
+                f"Thermostat '{name}' in schedule.yaml not found in thermostats.yaml"
+            )
         schedule_dict = entry.get("schedule")
         if not isinstance(schedule_dict, dict):
             raise ValueError(f"Thermostat '{name}' is missing 'schedule'")
