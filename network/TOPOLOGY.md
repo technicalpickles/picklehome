@@ -26,6 +26,31 @@ UniFi CloudKey G2 Plus (network controller)
     UniFi Network: 10.1.85
 ```
 
+## Access Points
+
+Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from a US 8 PoE 150W switch.
+
+| Location | Model | IP | 2.4GHz ch | 5GHz ch | Notes |
+|---|---|---|---|---|---|
+| Living Room | U7LR (AC LR) | 192.168.1.42 | 6 / 20MHz | 157 / 40MHz | Central AP, most clients |
+| Upstairs | U7HD (AC HD) | 192.168.1.103 | 6 / 20MHz | 157 / 40MHz | Shares ch 6 and ch 157 with Living Room |
+| Porch | U7LR (AC LR) | 192.168.1.16 | 11 / 20MHz | 44 / 40MHz | Outdoor/front porch |
+| Office (main) | U7PG2 (AC Pro) | 192.168.1.22 | 1 / 20MHz | 40 / 40MHz | |
+| Office (far side) | U7PG2 (AC Pro) | 192.168.1.194 | 11 / 20MHz | 44 / 40MHz | Separated from living room by brick wall; wired uplink confirmed clean |
+
+### Channel Plan Notes
+
+2.4GHz uses only the three non-overlapping channels (1 / 6 / 11) — correct. However:
+- Living Room and Upstairs both on **ch 6** — they compete with each other
+- Porch and Office (far side) both on **ch 11** — same issue
+
+5GHz:
+- Living Room and Upstairs share **ch 157**
+- Porch and Office (far side) share **ch 44**
+- Office (main) is on **ch 40** (unique)
+
+Channel utilization as observed (2026-03-16): Living Room 2.4G at 51% (highest), all 5GHz radios under 10%.
+
 ## Key IPs
 
 | Device                  | IP               | Notes                        |
@@ -119,6 +144,11 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 # Client WiFi and connectivity diagnostic (run on any Mac in the house)
 just wifi-diag
 just wifi-diag --no-trace --no-speed   # quick version
+
+# UniFi WiFi diagnostics — AP radio stats and per-client signal from the AP side
+just unifi-wifi aps                         # all APs: channel, utilization, client count, retries
+just unifi-wifi clients                     # all WiFi clients: AP, signal, SNR, rates, satisfaction
+just unifi-wifi client <hostname|ip>        # detail for one client
 
 # ISP and CDN status (Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP)
 just network-status
