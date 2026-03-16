@@ -1,4 +1,12 @@
-# Network Investigation Notes
+# Investigation: AT&T → Cloudflare Peering Loss (2026-03)
+
+**Status:** Resolved ~2026-03-16 — cause of resolution unclear.
+**Period:** 2026-03-12 to ~2026-03-16.
+**Finding:** ~47% packet loss at `108.162.235.59` (AT&T AS7018 → Cloudflare AS13335 peering, Atlanta), affecting all Cloudflare-hosted sites and `1.1.1.1` DNS.
+**Resolution ambiguity:** Two things happened around the same time — AT&T may have fixed the peering session, and USG DNS was switched from `1.1.1.1` to `8.8.8.8`. Since `1.1.1.1` is Cloudflare-hosted and was also affected, the DNS switch may have masked the issue rather than the peering actually being fixed.
+**Outcome:** USG DNS permanently switched from `1.1.1.1` to `8.8.8.8` regardless.
+
+---
 
 ## Environment
 

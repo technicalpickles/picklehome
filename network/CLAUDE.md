@@ -28,6 +28,17 @@ uv run --with playwright network/profile.py https://example.com
 uv run --with playwright network/profile.py https://example.com --slow-ms 1000 --timeout 15
 ```
 
+### `isp_status.py` — ISP and CDN status checker
+
+Checks Cloudflare's status API (overall + nearby colos + active incidents), the
+Cloudflare trace endpoint (which colo your traffic routes through), and optionally
+AT&T outage status by ZIP code (via Playwright). Prints manual-check URLs for BGP tools.
+
+```bash
+uv run --with requests network/isp_status.py                          # Cloudflare only
+uv run --with requests --with playwright network/isp_status.py --zip 30318  # + AT&T check
+```
+
 ### `diag.sh` — curl-based per-host diagnostics
 
 Shell script for curl-based TCP connect timing to a list of hosts. No dependencies.
@@ -36,13 +47,7 @@ Shell script for curl-based TCP connect timing to a list of hosts. No dependenci
 
 Runs mtr to multiple targets and saves results to `network-diag-results/mtr/`.
 
-## Known Issue: AT&T → Cloudflare Peering
+## Reference
 
-~47% packet loss at `108.162.235.x` (AT&T AS7018 → Cloudflare AS13335 peering, Atlanta).
-All Cloudflare-hosted sites are affected; non-Cloudflare CDNs work normally.
-See `notes.md` for full investigation details and evidence.
-
-Key test IPs:
-- `104.16.99.29` — Cloudflare (cfl.dropboxstatic.com) — **affected**
-- `3.161.193.123` — CloudFront (fjord.dropboxstatic.com) — working (control)
-- `8.8.8.8` — Google DNS — baseline
+See `TOPOLOGY.md` for network layout, key IPs, DNS configuration, and issue history.
+Past investigations are in `investigations/`.
