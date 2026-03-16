@@ -52,6 +52,30 @@ uv run --with requests --with python-dotenv --with playwright network/isp_status
 traffic — the 24h normalization means overnight lows will always look like drops. The
 threshold logic needs further calibration before it's reliable as an alert.
 
+### `wifi-diag.py` — Client-side WiFi and connectivity diagnostic
+
+Run on any Mac in the home network to diagnose local WiFi issues. Collects:
+- WiFi association: SSID, BSSID (which physical AP), RSSI, noise, SNR, channel, link rate
+- Nearby visible APs (roaming candidates, relative signal strengths)
+- IP / gateway / DNS configuration
+- Latency to LAN gateway (USG) and internet (8.8.8.8)
+- Traceroute to 8.8.8.8 with known-hop annotations (USG, BGW, etc.)
+- Internet download speed via Cloudflare (~25 MB)
+
+The BSSID field identifies exactly which physical AP the device is on — cross-reference
+with UniFi UI → Clients → `<device>` → AP, or the AP's radio MAC in UniFi → Devices.
+
+```bash
+just wifi-diag
+just wifi-diag --no-trace --no-speed   # quick run (skip traceroute + speed test)
+
+# or directly:
+uv run --with requests network/wifi-diag.py
+uv run --with requests network/wifi-diag.py --no-trace
+```
+
+No `.env` or API keys required — runs standalone on any Mac with `uv` installed.
+
 ### `diag.sh` — curl-based per-host diagnostics
 
 Shell script for curl-based TCP connect timing to a list of hosts. No dependencies.

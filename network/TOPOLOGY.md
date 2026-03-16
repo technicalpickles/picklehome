@@ -116,6 +116,10 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 ## Diagnostic Tools
 
 ```bash
+# Client WiFi and connectivity diagnostic (run on any Mac in the house)
+just wifi-diag
+just wifi-diag --no-trace --no-speed   # quick version
+
 # ISP and CDN status (Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP)
 just network-status
 just network-status 30318

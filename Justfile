@@ -40,6 +40,10 @@ climate-comforts-sync-dry *ARGS:
 network-status zip="":
     uv run --with requests --with python-dotenv --with playwright network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
 
+# Client WiFi and connectivity diagnostic (run on any Mac in the house)
+wifi-diag *ARGS:
+    uv run --with requests network/wifi-diag.py {{ARGS}}
+
 # Install dependencies (run once after clone)
 install:
     uv sync
