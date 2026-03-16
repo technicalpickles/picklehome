@@ -238,6 +238,37 @@ def cmd_dns():
         print(f"    {line}")
 
 
+def cmd_resolve(host: str):
+    """Resolve a hostname via both USG forwarders and compare the IPs returned."""
+    nameservers = {
+        "1.1.1.1       (Cloudflare)": f"host {host} 1.1.1.1",
+        "192.168.8.254 (BGW)       ": f"host {host} 192.168.8.254",
+        "127.0.0.1     (USG local) ": f"host {host} 127.0.0.1",
+    }
+    results = ssh_run(list(nameservers.values()))
+
+    def parse_ips(output):
+        ips = []
+        for line in output.splitlines():
+            if "has address" in line:
+                ips.append(line.split("has address")[-1].strip())
+        return ips
+
+    print(f"DNS resolution comparison: {host}")
+    print("─" * 50)
+    all_ips = {}
+    for label, cmd in nameservers.items():
+        ips = parse_ips(results[cmd])
+        all_ips[label] = ips
+        print(f"  {label}  {', '.join(ips) or '(no answer)'}")
+
+    ip_sets = [frozenset(v) for v in all_ips.values() if v]
+    if len(set(ip_sets)) > 1:
+        print("\n  *** IPs DIFFER across nameservers ***")
+    else:
+        print("\n  IPs consistent across all nameservers")
+
+
 def main():
     parser = argparse.ArgumentParser(description="UniFi USG diagnostic tool")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -246,11 +277,16 @@ def main():
     sub.add_parser("wan", help="WAN interface definitions")
     sub.add_parser("wan-detail", help="Rich WAN details: IP, gateway, DNS, port counters (legacy API)")
     sub.add_parser("dns", help="USG dnsmasq config: upstream forwarders and fallback resolvers (SSH)")
+    p = sub.add_parser("resolve", help="Resolve hostname via 1.1.1.1 vs BGW DNS and compare (SSH)")
+    p.add_argument("host", help="Hostname to resolve")
 
     args = parser.parse_args()
 
     if args.cmd == "dns":
         cmd_dns()
+        return
+    elif args.cmd == "resolve":
+        cmd_resolve(args.host)
         return
 
     s = session()
