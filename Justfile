@@ -34,7 +34,7 @@ install:
 
 # Generate .env from 1Password (run after clone or when secrets change)
 dotenv:
-    op inject -i .env.template -o .env
+    op inject -f -i .env.template -o .env
 
 # ISP and CDN status: Cloudflare status + Radar BGP/traffic + AT&T outage (ZIP from HOME_ZIP_CODE)
 isp-status:
