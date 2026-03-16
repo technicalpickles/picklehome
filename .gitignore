@@ -6,5 +6,15 @@ __pycache__/
 # Credentials — never commit
 .env
 
+# Network diagnostic results contain public IPs, internal IPs, device names
+network/diag-results/
+network-diag-results/
+
+# Claude Code local state — personal memory and machine-specific settings
+.claude/projects/
+.claude/settings.local.json
+# BMAD skills are sourced from _bmad/ — leave other local skills committable
+.claude/skills/bmad-*/
+
 # OS
 .DS_Store
