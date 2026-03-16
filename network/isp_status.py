@@ -9,7 +9,7 @@ Checks:
   - Cloudflare Radar NetFlows traffic trend for AT&T (AS7018)
   - RIPE BGP state: your IP's current ASN + Cloudflare/Google prefix health
   - AT&T outage lookup by ZIP code (requires --zip, uses Playwright)
-  - DownDetector AT&T report status (uses Playwright)
+  - DownDetector AT&T report status (manual URL — bot-protected)
 
 Usage:
     uv run --with requests --with python-dotenv network/isp_status.py
@@ -38,6 +38,7 @@ INTERESTING_COLOS = ["ATL", "Atlanta", "IAH", "Houston", "DFW", "Dallas"]
 
 MANUAL_URLS = [
     # BGP.he.net and PeeringDB omitted — HTML-only, no useful API; RIPE Stat covers the same signals
+    ("DownDetector — AT&T", "https://downdetector.com/status/att/"),
 ]
 
 RIPE_STAT = "https://stat.ripe.net/data"
@@ -172,38 +173,6 @@ def check_att_outages(zip_code: str):
             browser.close()
     print()
 
-
-def check_downdetector_att():
-    """Check DownDetector AT&T crowdsourced outage status using Playwright."""
-    from playwright.sync_api import sync_playwright
-
-    print("DownDetector — AT&T")
-    print(SEP)
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        try:
-            page.goto("https://downdetector.com/status/att/", timeout=20000)
-            page.wait_for_selector("h1", timeout=10000)
-
-            import json
-            config = page.evaluate("JSON.stringify(window.PogoConfig)")
-            cfg = json.loads(config) if config else {}
-            outage = cfg.get("outage")
-
-            if outage is None:
-                print("  [?] Could not read PogoConfig (bot detection?)")
-                print("      https://downdetector.com/status/att/")
-            elif outage:
-                print("  [!] AT&T outage detected by DownDetector crowdsourced reports")
-            else:
-                print("  [✓] No current AT&T outage reported on DownDetector")
-        except Exception as e:
-            print(f"  [error] {e}")
-        finally:
-            browser.close()
-    print()
 
 
 def _sparkline(values: list[float]) -> str:
@@ -380,12 +349,10 @@ def main():
 
     if use_playwright:
         check_att_outages(zip_code)
-        check_downdetector_att()
     else:
-        print("AT&T / DownDetector  (pass --zip XXXXX to check with Playwright)")
+        print("AT&T Outage  (pass --zip XXXXX to check with Playwright)")
         print(SEP)
         print("  https://www.att.com/outages/")
-        print("  https://downdetector.com/status/att/")
         print()
 
     check_ripe_routing()
