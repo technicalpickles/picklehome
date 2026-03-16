@@ -1,0 +1,47 @@
+# ecobee/schedule.yaml
+# Climate values must be climateRef strings from your Ecobee thermostat.
+# Defaults: home, away, sleep. Custom climates shown by 'just ecobee-list'.
+# All times must be on 30-minute boundaries (:00 or :30).
+# Every day must start with time: "00:00". All 7 days are required.
+# Run 'just ecobee-auth' to see thermostat IDs and available climate refs.
+
+thermostats:
+  downstairs:
+    thermostat_id: "532572869586"
+    schedule:
+      _everyday: &downstairs_everyday
+        - time: "00:00"
+          climate: sleep
+        - time: "06:00"
+          climate: smart1  # Comfort Cool
+
+      sunday: *downstairs_everyday
+      monday: *downstairs_everyday
+      tuesday: *downstairs_everyday
+      wednesday: *downstairs_everyday
+      thursday: *downstairs_everyday
+      friday: *downstairs_everyday
+      saturday: *downstairs_everyday
+
+  upstairs:
+    thermostat_id: "532537308613"
+    schedule:
+      _weekday: &upstairs_weekday
+        - time: "00:00"
+          climate: smart1  # Comfort Cool
+        - time: "10:00"
+          climate: away    # Eco
+        - time: "14:30"
+          climate: smart1  # Comfort Cool
+
+      _weekend: &upstairs_weekend
+        - time: "00:00"
+          climate: smart1  # Comfort Cool
+
+      sunday: *upstairs_weekend
+      monday: *upstairs_weekday
+      tuesday: *upstairs_weekday
+      wednesday: *upstairs_weekday
+      thursday: *upstairs_weekday
+      friday: *upstairs_weekday
+      saturday: *upstairs_weekend
