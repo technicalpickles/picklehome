@@ -15,9 +15,10 @@ Client → USG (192.168.1.1) → AT&T BGW (192.168.8.254) → AT&T Fiber → Int
 
 This repo uses [uv](https://github.com/astral-sh/uv) for Python dependency management.
 
-- Run scripts with `uv run --with <deps> <script>`
 - Project deps defined in `pyproject.toml` / `uv.lock`
-- Install project deps once: `uv sync`
+- Install project deps once: `uv sync` (or `just install`)
+- Run scripts via `just` (preferred) or `uv run <script>` directly
+- For one-off scripts with no project deps, use `uv run --with <dep1>,<dep2> <script>`
 
 ## Task Runner
 

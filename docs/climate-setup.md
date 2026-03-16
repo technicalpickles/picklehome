@@ -1,6 +1,6 @@
-# Ecobee Schedule Sync — Setup Guide
+# Climate Automation — Setup Guide
 
-This guide walks through first-time setup of the Ecobee schedule sync tool.
+This guide walks through first-time setup of the climate automation tools (Ecobee schedule sync, comfort setpoints, and status).
 
 ---
 
@@ -153,11 +153,34 @@ Verify in the Ecobee app or web UI that your weekly schedule has been updated. C
 
 ---
 
+## Checking live status
+
+Once authorized, you can check current thermostat state at any time:
+
+```bash
+just climate-status
+```
+
+Expected output:
+
+```
+Downstairs   70.4°F  58% humidity  idle        Comfort Cool  heat mode
+Upstairs     70.1°F  62% humidity  idle        hold until 10:00am tomorrow
+Outdoor      61.4°F  Rain · 13mph SW  (station NCQ)
+
+Air quality — Downstairs: AQ 51  VOC 520ppm  CO2 508ppm
+              Upstairs:   AQ 50  VOC 506ppm  CO2 502ppm
+```
+
+Use `just climate-status --json` for machine-readable output.
+
+---
+
 ## Troubleshooting
 
 | Error message | Cause | Fix |
 |---|---|---|
-| `Ecobee API key not found. See docs/ecobee-setup.md.` | API key not in Keychain | Re-run step 3 |
+| `Ecobee API key not found. See docs/climate-setup.md.` | API key not in Keychain | Re-run step 3 |
 | `Ecobee tokens not found. Run 'just climate-auth' to authorize.` | Tokens missing from Keychain | Re-run `just climate-auth` |
 | `Tokens invalid. Re-run 'just climate-auth'.` | Tokens revoked or expired beyond refresh | Re-run `just climate-auth` |
 | `Thermostat ID not found. Run 'just climate-auth' first.` | `thermostat_id` not in Keychain | Re-run `just climate-auth` |

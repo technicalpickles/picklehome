@@ -35,7 +35,7 @@ def require_credential(key: str, missing_message: str) -> str:
 
 
 def get_api_key() -> str:
-    return require_credential("api_key", "Ecobee API key not found. See docs/ecobee-setup.md.")
+    return require_credential("api_key", "Ecobee API key not found. See docs/climate-setup.md.")
 
 
 
