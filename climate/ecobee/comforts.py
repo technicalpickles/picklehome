@@ -4,6 +4,8 @@ from pathlib import Path
 import yaml
 from pyecobee.const import ECOBEE_ENDPOINT_THERMOSTAT
 
+from climate.ecobee.thermostats import get_thermostat_id
+
 
 def capture_all_thermostats(ecobee) -> list[tuple[str, str, list]]:
     """Fetch all thermostats from API. Returns list of (name, thermostat_id, climates)."""
@@ -51,16 +53,19 @@ def load_comforts(path: str | Path) -> dict:
     return data
 
 
-def iter_thermostat_entries(data: dict, name_filter: str | None = None):
+def iter_thermostat_entries(data: dict, registry: dict, name_filter: str | None = None):
     """Yield (name, thermostat_id, climates_dict) for each configured thermostat."""
     for name, entry in data["thermostats"].items():
         if name_filter and name != name_filter:
             continue
         if not isinstance(entry, dict):
             raise ValueError(f"Thermostat '{name}' entry must be a mapping")
-        thermostat_id = entry.get("thermostat_id")
-        if not thermostat_id:
-            raise ValueError(f"Thermostat '{name}' is missing 'thermostat_id'")
+        try:
+            thermostat_id = get_thermostat_id(registry, name)
+        except KeyError:
+            raise ValueError(
+                f"Thermostat '{name}' in comforts.yaml not found in thermostats.yaml"
+            )
         climates_dict = entry.get("climates")
         if not isinstance(climates_dict, dict):
             raise ValueError(f"Thermostat '{name}' is missing 'climates'")
