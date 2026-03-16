@@ -12,6 +12,22 @@ ecobee-list:
 ecobee-sync *ARGS:
     uv run python -m ecobee.sync sync {{ARGS}}
 
+# Validate schedule.yaml matches the live schedule on Ecobee
+ecobee-validate *ARGS:
+    uv run python -m ecobee.sync validate {{ARGS}}
+
+# Snapshot current comfort mode temps from Ecobee into comforts.yaml
+ecobee-comforts-capture *ARGS:
+    uv run python -m ecobee.sync capture-comforts {{ARGS}}
+
+# Push comforts.yaml setpoints to Ecobee
+ecobee-comforts-sync *ARGS:
+    uv run python -m ecobee.sync sync-comforts {{ARGS}}
+
+# Preview comfort changes without pushing
+ecobee-comforts-sync-dry *ARGS:
+    uv run python -m ecobee.sync sync-comforts --dry-run {{ARGS}}
+
 # Install dependencies (run once after clone)
 install:
     uv sync
