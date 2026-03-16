@@ -36,7 +36,6 @@ CLOUDFLARE_TRACE_URL = "https://one.one.one.one/cdn-cgi/trace"
 INTERESTING_COLOS = ["ATL", "Atlanta", "IAH", "Houston", "DFW", "Dallas"]
 
 MANUAL_URLS = [
-    ("Cloudflare Radar",    "https://radar.cloudflare.com/"),
     ("BGP.he.net AS7018",   "https://bgp.he.net/AS7018#_peers"),
     ("BGP.he.net AS13335",  "https://bgp.he.net/AS13335#_peers"),
     ("PeeringDB AS7018",    "https://www.peeringdb.com/asn/7018"),

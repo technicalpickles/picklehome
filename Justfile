@@ -32,6 +32,14 @@ ecobee-comforts-sync-dry *ARGS:
 install:
     uv sync
 
+# Generate .env from 1Password (run after clone or when secrets change)
+dotenv:
+    op inject -i .env.template -o .env
+
+# ISP and CDN status: Cloudflare status + Radar BGP/traffic + AT&T outage by ZIP
+isp-status zip="":
+    uv run --with requests --with python-dotenv --with playwright network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
+
 # Preview expanded schedule without pushing (pass --schedule PATH to override default)
 ecobee-sync-dry *ARGS:
     uv run python -m ecobee.sync sync --dry-run {{ARGS}}
