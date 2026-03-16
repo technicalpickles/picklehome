@@ -36,6 +36,10 @@ climate-comforts-sync *ARGS:
 climate-comforts-sync-dry *ARGS:
     uv run python -m climate.sync sync-comforts --dry-run {{ARGS}}
 
+# ISP and CDN status: Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP
+network-status zip="":
+    uv run --with requests --with python-dotenv --with playwright network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
+
 # Install dependencies (run once after clone)
 install:
     uv sync

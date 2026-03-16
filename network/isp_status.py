@@ -3,10 +3,11 @@
 ISP and CDN status checker — surfaces outages relevant to this network.
 
 Checks:
-  - Cloudflare status (overall + ATL colo + active incidents)
+  - Cloudflare status (overall + nearby colos + active incidents)
   - Cloudflare trace (which colo your traffic is routing through)
   - Cloudflare Radar BGP events (hijacks + leaks for AS7018/AT&T)
   - Cloudflare Radar NetFlows traffic trend for AT&T (AS7018)
+  - RIPE BGP state: your IP's current ASN + Cloudflare/Google prefix health
   - AT&T outage lookup by ZIP code (requires --zip, uses Playwright)
   - DownDetector AT&T report status (uses Playwright)
 
@@ -36,9 +37,15 @@ CLOUDFLARE_TRACE_URL = "https://one.one.one.one/cdn-cgi/trace"
 INTERESTING_COLOS = ["ATL", "Atlanta", "IAH", "Houston", "DFW", "Dallas"]
 
 MANUAL_URLS = [
-    ("BGP.he.net AS7018",   "https://bgp.he.net/AS7018#_peers"),
-    ("BGP.he.net AS13335",  "https://bgp.he.net/AS13335#_peers"),
-    ("PeeringDB AS7018",    "https://www.peeringdb.com/asn/7018"),
+    # BGP.he.net and PeeringDB omitted — HTML-only, no useful API; RIPE Stat covers the same signals
+]
+
+RIPE_STAT = "https://stat.ripe.net/data"
+
+# Prefixes to watch for origin/visibility changes
+WATCH_PREFIXES = [
+    ("Cloudflare", "1.1.1.0/24",  13335),
+    ("Google DNS", "8.8.8.0/24",  15169),
 ]
 
 SEP = "─" * 60
@@ -129,11 +136,6 @@ def check_cloudflare_trace():
 
     print(f"  Colo:     {colo}")
     print(f"  Your IP:  {ip}  ({loc})")
-
-    if colo != "ATL":
-        print(f"  [!] Not routing through ATL — currently via {colo}")
-    else:
-        print(f"  [✓] Routing through ATL as expected")
     print()
 
 
@@ -306,6 +308,46 @@ def check_radar_traffic(token: str):
     print()
 
 
+def check_ripe_routing():
+    print("RIPE — BGP Routing State")
+    print(SEP)
+
+    # Look up your public IP's ASN — dynamic, not hardcoded
+    your_ip = None
+    trace = get_text(CLOUDFLARE_TRACE_URL)
+    if trace:
+        fields = dict(line.split("=", 1) for line in trace.strip().splitlines() if "=" in line)
+        your_ip = fields.get("ip")
+
+    if your_ip:
+        data = get_json(f"{RIPE_STAT}/prefix-overview/data.json?resource={your_ip}")
+        if data:
+            asns = data.get("data", {}).get("asns", [])
+            if asns:
+                a = asns[0]
+                flag = "✓" if a["asn"] == ATT_ASN else "?"
+                print(f"  [{flag}] Your IP {your_ip} → AS{a['asn']} ({a['holder']})")
+            else:
+                print(f"  [?] Your IP {your_ip} → ASN unknown")
+
+    # Prefix visibility + origin for watched prefixes
+    for name, prefix, expected_origin in WATCH_PREFIXES:
+        data = get_json(f"{RIPE_STAT}/routing-status/data.json?resource={prefix}")
+        if not data:
+            continue
+        d = data.get("data", {})
+        vis = d.get("visibility", {}).get("v4", {})
+        seeing = vis.get("ris_peers_seeing", 0)
+        total = vis.get("total_ris_peers", 1)
+        origins = [o["origin"] for o in d.get("origins", [])]
+        pct = int(seeing / total * 100)
+        origin_str = ", ".join(f"AS{o}" for o in origins)
+        flag = "✓" if pct >= 90 and expected_origin in origins else "!"
+        print(f"  [{flag}] {name} ({prefix}): origin {origin_str}, {seeing}/{total} peers ({pct}%)")
+
+    print()
+
+
 def print_manual_urls():
     print("Manual Check URLs")
     print(SEP)
@@ -319,8 +361,8 @@ def main():
     parser.add_argument("--zip", metavar="ZIP", help="ZIP code for AT&T outage lookup (falls back to HOME_ZIP_CODE env var)")
     args = parser.parse_args()
 
-    zip_code = args.zip or os.environ.get("HOME_ZIP_CODE")
-    use_playwright = zip_code is not None
+    zip_code = args.zip or os.environ.get("HOME_ZIP_CODE") or None
+    use_playwright = bool(zip_code)
     radar_token = os.environ.get("CLOUDFLARE_RADAR_API_TOKEN")
 
     print()
@@ -346,7 +388,9 @@ def main():
         print("  https://downdetector.com/status/att/")
         print()
 
-    print_manual_urls()
+    check_ripe_routing()
+    if MANUAL_URLS:
+        print_manual_urls()
 
 
 if __name__ == "__main__":

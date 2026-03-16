@@ -32,8 +32,13 @@ uv run --with playwright network/profile.py https://example.com --slow-ms 1000 -
 
 Checks Cloudflare's status API (overall + nearby colos + active incidents), the
 Cloudflare trace endpoint (which colo your traffic routes through), Cloudflare Radar
-BGP hijack/leak events and NetFlows traffic trend for AT&T (AS7018), and optionally
-AT&T outage status by ZIP code (via Playwright). Prints manual-check URLs for BGP tools.
+BGP hijack/leak events and NetFlows traffic trend for AT&T (AS7018), RIPE BGP state
+(your IP's current ASN + Cloudflare/Google prefix health), and optionally AT&T outage
+status by ZIP code (via Playwright). Prints manual-check URLs for BGP tools.
+
+The RIPE section uses `stat.ripe.net` (no token needed) and reports dynamically — your
+IP's ASN (confirms AT&T / flags if different), and prefix visibility + origin ASN for
+key destinations. Useful for detecting hijacks or unexpected origin changes.
 
 Requires `CLOUDFLARE_RADAR_API_TOKEN` in `.env` (Cloudflare dashboard → My Profile →
 API Tokens → create token with `Account > Radar: Read` scope; free tier is fine).

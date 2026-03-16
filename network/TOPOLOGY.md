@@ -103,9 +103,8 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 
 | Tool | URL | What to check |
 |---|---|---|
-| BGP.he.net | https://bgp.he.net/ | AS info, prefix routes, peering for AS7018 / AS13335 |
-| BGPview | https://bgpview.io/ | Peering relationships, prefix announcements |
-| PeeringDB | https://www.peeringdb.com/ | Formal peering agreements between ASNs |
+| RIPE Stat | https://stat.ripe.net/ | BGP state, prefix visibility, origin ASN — **automated via `just network-status`** |
+| BGPview | https://bgpview.io/ | Peering relationships, prefix announcements (manual deep-dive only) |
 
 ### Looking glass / traceroute
 
@@ -117,7 +116,11 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 ## Diagnostic Tools
 
 ```bash
-# ISP and CDN status (Cloudflare status API + Radar BGP/traffic + AT&T outage by ZIP)
+# ISP and CDN status (Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP)
+just network-status
+just network-status 30318
+
+# or directly:
 uv run --with requests --with python-dotenv network/isp_status.py
 uv run --with requests --with python-dotenv --with playwright network/isp_status.py --zip 30318
 
