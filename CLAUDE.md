@@ -44,5 +44,8 @@ Scripts load `.env` automatically via `python-dotenv` (or `just`'s `set dotenv-l
 
 ## Directories
 
-- `ecobee/` — Ecobee thermostat automation (schedule + comfort setpoints)
+- `climate/` — HVAC/climate automation (Ecobee schedule, comfort setpoints, status)
+  - `climate/ecobee/` — Python package (auth, schedule, comforts, status)
+  - `climate/config/` — YAML config (thermostats, schedule, comforts)
+  - `climate/spec/` — specs and docs (hvac-spec.md)
 - `network/` — Network diagnostic and profiling scripts; see `network/CLAUDE.md`

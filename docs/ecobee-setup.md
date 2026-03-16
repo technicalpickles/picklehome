@@ -61,14 +61,14 @@ Replace `YOUR_KEY_HERE` with the API key from step 2.
 
 **Expected:** macOS Keychain dialog appears requesting permission — click **Allow**.
 
-You can verify the key was stored correctly by running `just ecobee-auth`; it will fail immediately with a clear message if the key is missing.
+You can verify the key was stored correctly by running `just climate-auth`; it will fail immediately with a clear message if the key is missing.
 
 ---
 
 ## Step 4: Authorize with PIN flow
 
 ```bash
-just ecobee-auth
+just climate-auth
 ```
 
 Expected output:
@@ -98,7 +98,7 @@ Follow the PIN instructions in the terminal output. After authorizing in the Eco
 
 ## Step 5: Edit your schedule
 
-Open `ecobee/schedule.yaml` and update the climate values using the `climateRef` strings shown in step 4 output (e.g., `home`, `away`, `sleep`).
+Open `climate/config/schedule.yaml` and update the climate values using the `climateRef` strings shown in step 4 output (e.g., `home`, `away`, `sleep`).
 
 Rules:
 - All 7 days required: `sunday` through `saturday`
@@ -111,7 +111,7 @@ Rules:
 ## Step 6: Preview the schedule
 
 ```bash
-just ecobee-sync-dry
+just climate-sync-dry
 ```
 
 Expected output:
@@ -140,7 +140,7 @@ Inspect the output and confirm the transitions match your intent. No changes are
 ## Step 7: Push the schedule
 
 ```bash
-just ecobee-sync
+just climate-sync
 ```
 
 Expected output:
@@ -158,13 +158,13 @@ Verify in the Ecobee app or web UI that your weekly schedule has been updated. C
 | Error message | Cause | Fix |
 |---|---|---|
 | `Ecobee API key not found. See docs/ecobee-setup.md.` | API key not in Keychain | Re-run step 3 |
-| `Ecobee tokens not found. Run 'just ecobee-auth' to authorize.` | Tokens missing from Keychain | Re-run `just ecobee-auth` |
-| `Tokens invalid. Re-run 'just ecobee-auth'.` | Tokens revoked or expired beyond refresh | Re-run `just ecobee-auth` |
-| `Thermostat ID not found. Run 'just ecobee-auth' first.` | `thermostat_id` not in Keychain | Re-run `just ecobee-auth` |
-| `Error in schedule.yaml: Missing days in schedule: [...]` | One or more day keys missing | Add missing days to `schedule.yaml` |
+| `Ecobee tokens not found. Run 'just climate-auth' to authorize.` | Tokens missing from Keychain | Re-run `just climate-auth` |
+| `Tokens invalid. Re-run 'just climate-auth'.` | Tokens revoked or expired beyond refresh | Re-run `just climate-auth` |
+| `Thermostat ID not found. Run 'just climate-auth' first.` | `thermostat_id` not in Keychain | Re-run `just climate-auth` |
+| `Error in schedule.yaml: Missing days in schedule: [...]` | One or more day keys missing | Add missing days to `climate/config/schedule.yaml` |
 | `Error in schedule.yaml: Day 'X': first transition must be time '00:00'` | Day doesn't start at midnight | Add `time: "00:00"` as first entry for that day |
 | `Error in schedule.yaml: Time X not 30-minute aligned` | Time like `06:45` used | Change to `:00` or `:30` boundary |
-| `Error in schedule.yaml: Unknown climate(s): [...]` | Climate name not on thermostat | Use climate refs shown by `just ecobee-auth` |
+| `Error in schedule.yaml: Unknown climate(s): [...]` | Climate name not on thermostat | Use climate refs shown by `just climate-auth` |
 | `Failed to fetch thermostat data from Ecobee.` | Network error | Check internet connection and retry |
 | macOS Keychain dialog appears | First access to Keychain service | Click **Allow** |
 
