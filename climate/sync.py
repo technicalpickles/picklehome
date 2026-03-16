@@ -157,8 +157,7 @@ def cmd_validate(args) -> None:
 def cmd_status(args) -> None:
     ecobee = auth.make_ecobee()
 
-    registry_path = Path(__file__).parent / "config" / "thermostats.yaml"
-    registry = load_thermostats(registry_path)
+    registry = load_thermostats(args.thermostats)
     managed = get_managed_thermostats(registry)
     managed_ids = {thermostat_id for _, thermostat_id in managed}
 
@@ -391,12 +390,19 @@ def main() -> None:
         action="store_true",
         help="Output as JSON",
     )
-    subparsers.choices["status"].set_defaults(func=cmd_status)
+    status_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
 
-    subparsers.choices["validate"].set_defaults(func=cmd_validate)
     subparsers.choices["auth"].set_defaults(func=cmd_auth)
     subparsers.choices["list"].set_defaults(func=cmd_list)
     subparsers.choices["sync"].set_defaults(func=cmd_sync)
+    subparsers.choices["validate"].set_defaults(func=cmd_validate)
+    subparsers.choices["status"].set_defaults(func=cmd_status)
     subparsers.choices["capture-comforts"].set_defaults(func=cmd_comforts_capture)
     subparsers.choices["sync-comforts"].set_defaults(func=cmd_comforts_sync)
 
