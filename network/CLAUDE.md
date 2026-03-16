@@ -31,13 +31,21 @@ uv run --with playwright network/profile.py https://example.com --slow-ms 1000 -
 ### `isp_status.py` — ISP and CDN status checker
 
 Checks Cloudflare's status API (overall + nearby colos + active incidents), the
-Cloudflare trace endpoint (which colo your traffic routes through), and optionally
+Cloudflare trace endpoint (which colo your traffic routes through), Cloudflare Radar
+BGP hijack/leak events and NetFlows traffic trend for AT&T (AS7018), and optionally
 AT&T outage status by ZIP code (via Playwright). Prints manual-check URLs for BGP tools.
 
+Requires `CLOUDFLARE_RADAR_API_TOKEN` in `.env` (Cloudflare dashboard → My Profile →
+API Tokens → create token with `Account > Radar: Read` scope; free tier is fine).
+
 ```bash
-uv run --with requests network/isp_status.py                          # Cloudflare only
-uv run --with requests --with playwright network/isp_status.py --zip 30318  # + AT&T check
+uv run --with requests --with python-dotenv network/isp_status.py                         # Cloudflare + Radar
+uv run --with requests --with python-dotenv --with playwright network/isp_status.py --zip 30318  # + AT&T check
 ```
+
+**Traffic trend note:** The NetFlows sparkline uses `[?]` rather than `[!]` for low recent
+traffic — the 24h normalization means overnight lows will always look like drops. The
+threshold logic needs further calibration before it's reliable as an alert.
 
 ### `diag.sh` — curl-based per-host diagnostics
 

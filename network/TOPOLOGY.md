@@ -117,6 +117,10 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 ## Diagnostic Tools
 
 ```bash
+# ISP and CDN status (Cloudflare status API + Radar BGP/traffic + AT&T outage by ZIP)
+uv run --with requests --with python-dotenv network/isp_status.py
+uv run --with requests --with python-dotenv --with playwright network/isp_status.py --zip 30318
+
 # Full network snapshot (BGW + USG + DNS + peering trace)
 uv run --with requests --with python-dotenv --with paramiko --with dnspython --with playwright network/snapshot.py
 uv run --with requests --with python-dotenv --with paramiko --with dnspython --with playwright network/snapshot.py --no-trace

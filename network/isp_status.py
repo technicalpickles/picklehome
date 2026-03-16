@@ -5,17 +5,29 @@ ISP and CDN status checker — surfaces outages relevant to this network.
 Checks:
   - Cloudflare status (overall + ATL colo + active incidents)
   - Cloudflare trace (which colo your traffic is routing through)
+  - Cloudflare Radar BGP events (hijacks + leaks for AS7018/AT&T)
+  - Cloudflare Radar NetFlows traffic trend for AT&T (AS7018)
   - AT&T outage lookup by ZIP code (requires --zip, uses Playwright)
   - DownDetector AT&T report status (uses Playwright)
 
 Usage:
-    uv run --with requests network/isp_status.py
-    uv run --with requests --with playwright network/isp_status.py --zip 30318
+    uv run --with requests --with python-dotenv network/isp_status.py
+    uv run --with requests --with python-dotenv --with playwright network/isp_status.py --zip 30318
+
+Requires CLOUDFLARE_RADAR_API_TOKEN in .env (Account > Radar: Read scope).
 """
 
 import argparse
+import os
 import sys
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+RADAR_BASE = "https://api.cloudflare.com/client/v4/radar"
+ATT_ASN = 7018
+BGP_HIJACK_MIN_CONFIDENCE = 4  # 1-3=low, 4-7=medium, 8+=high
 
 CLOUDFLARE_STATUS_API = "https://www.cloudflarestatus.com/api/v2"
 CLOUDFLARE_TRACE_URL = "https://one.one.one.one/cdn-cgi/trace"
@@ -193,6 +205,108 @@ def check_downdetector_att():
     print()
 
 
+def _sparkline(values: list[float]) -> str:
+    """
+    Render a list of 0.0–1.0 normalized floats as a Unicode block sparkline.
+
+    Values come from Cloudflare's MIN0_MAX normalization — 0.0 is the window
+    minimum, 1.0 is the window maximum. Maps each float to one of 9 block
+    characters: ' ' (0.0) through '█' (1.0).
+    """
+    BLOCKS = " ▁▂▃▄▅▆▇█"
+    return "".join(BLOCKS[min(8, int(v * 9))] for v in values)
+
+
+def _radar_get(token: str, path: str, params: dict = None) -> dict | None:
+    try:
+        r = requests.get(
+            f"{RADAR_BASE}{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            params={**(params or {}), "format": "json"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json().get("result", {})
+    except Exception as e:
+        print(f"  [error] Radar {path}: {e}")
+        return None
+
+
+def check_radar_bgp(token: str):
+    print("Cloudflare Radar — BGP Events (AT&T AS7018)")
+    print(SEP)
+
+    # Hijacks
+    result = _radar_get(token, "/bgp/hijacks/events", {"involvedAsn": ATT_ASN, "per_page": 20})
+    if result is not None:
+        active = [
+            e for e in result.get("events", [])
+            if not e.get("is_stale") and e.get("tags") and
+            any(t.get("score", 0) >= BGP_HIJACK_MIN_CONFIDENCE for t in e.get("tags", []))
+        ]
+        if active:
+            for e in active[:3]:
+                prefixes = ", ".join(e.get("prefixes", []))
+                hijacker = e.get("hijacker_asn")
+                ts = e.get("min_hijack_ts", "")[:16]
+                print(f"  [!] Hijack: AS{hijacker} → {prefixes}  ({ts})")
+        else:
+            print("  [✓] No active BGP hijacks")
+
+    # Leaks
+    result = _radar_get(token, "/bgp/leaks/events", {"involvedAsn": ATT_ASN, "per_page": 20})
+    if result is not None:
+        active = [e for e in result.get("events", []) if not e.get("finished")]
+        if active:
+            for e in active[:3]:
+                seg = " → ".join(f"AS{a}" for a in e.get("leak_seg", []))
+                ts = e.get("detected_ts", "")[:16]
+                print(f"  [!] Leak: {seg}  ({ts})")
+        else:
+            print("  [✓] No active BGP route leaks")
+
+    print()
+
+
+def check_radar_traffic(token: str):
+    print("Cloudflare Radar — AT&T (AS7018) Traffic Trend  (last 24h)")
+    print(SEP)
+
+    result = _radar_get(token, "/netflows/timeseries", {
+        "asn": ATT_ASN, "product": "ALL",
+        "dateRange": "1d", "aggInterval": "1h",
+    })
+    if not result:
+        return
+
+    serie = result.get("serie_0", {})
+    timestamps = serie.get("timestamps", [])
+    raw_values = [float(v) for v in serie.get("values", [])]
+
+    if not raw_values:
+        print("  (no data)")
+        print()
+        return
+
+    spark = _sparkline(raw_values)
+
+    # Last 3 hours vs peak — flag a sustained drop
+    recent_avg = sum(raw_values[-3:]) / 3
+    peak = max(raw_values)
+    pct = int(recent_avg / peak * 100) if peak else 0
+
+    start_ts = timestamps[0][11:16] if timestamps else "?"
+    end_ts = timestamps[-1][11:16] if timestamps else "?"
+    updated = result.get("meta", {}).get("lastUpdated", "")[:16].replace("T", " ")
+    print(f"  {start_ts}Z ┤{spark}├ {end_ts}Z  (data as of {updated}Z)")
+    print(f"  Recent avg (last 3h): {pct}% of 24h peak", end="")
+    if pct < 40:
+        print("  [?] Low vs peak — may just be overnight hours (threshold needs tuning)")
+    else:
+        print()
+    print()
+
+
 def print_manual_urls():
     print("Manual Check URLs")
     print(SEP)
@@ -207,11 +321,20 @@ def main():
     args = parser.parse_args()
 
     use_playwright = args.zip is not None
+    radar_token = os.environ.get("CLOUDFLARE_RADAR_API_TOKEN")
 
     print()
     check_cloudflare_status()
     check_cloudflare_incidents()
     check_cloudflare_trace()
+
+    if radar_token:
+        check_radar_bgp(radar_token)
+        check_radar_traffic(radar_token)
+    else:
+        print("Cloudflare Radar  (set CLOUDFLARE_RADAR_API_TOKEN in .env to enable)")
+        print(SEP)
+        print()
 
     if use_playwright:
         check_att_outages(args.zip)
