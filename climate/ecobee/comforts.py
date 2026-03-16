@@ -99,7 +99,7 @@ def apply_comforts_to_climates(comforts_dict: dict, current_climates: list) -> l
                 print(
                     f"  Warning: {ref} name mismatch — "
                     f"YAML has '{yaml_name}', thermostat has '{climate.get('name')}'. "
-                    f"Re-run 'just ecobee-comforts-capture' to refresh."
+                    f"Re-run 'just climate-comforts-capture' to refresh."
                 )
             if "cool_temp" in overrides:
                 c["coolTemp"] = overrides["cool_temp"] * 10

@@ -43,7 +43,7 @@ def make_ecobee() -> KeychainEcobee:
     api_key = get_api_key()
     refresh_token = get_credential("refresh_token")
     if not refresh_token:
-        print("Ecobee tokens not found. Run 'just ecobee-auth' to authorize.")
+        print("Ecobee tokens not found. Run 'just climate-auth' to authorize.")
         sys.exit(1)
     access_token = get_credential("access_token")
     return KeychainEcobee(config={
@@ -97,10 +97,10 @@ Waiting for authorization (Ctrl-C to cancel)...""")
                 break
             print(".", end="", flush=True)
             if time.time() >= deadline:
-                print("\nTimed out waiting for authorization. Re-run 'just ecobee-auth'.")
+                print("\nTimed out waiting for authorization. Re-run 'just climate-auth'.")
                 sys.exit(1)
     except KeyboardInterrupt:
-        print("\nCancelled. Re-run 'just ecobee-auth'.")
+        print("\nCancelled. Re-run 'just climate-auth'.")
         sys.exit(0)
 
     _print_thermostat_info(ecobee)

@@ -287,7 +287,7 @@ def cmd_comforts_sync(args) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ecobee schedule sync")
+    parser = argparse.ArgumentParser(description="Climate automation — Ecobee schedule, comfort, and status sync")
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("auth", help="First-time PIN auth flow + thermostat discovery")

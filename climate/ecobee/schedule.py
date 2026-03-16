@@ -16,7 +16,7 @@ def get_current_program(ecobee, thermostat_id: str) -> dict:
     )
     if thermostat is None:
         raise LookupError(
-            f"Thermostat {thermostat_id} not found. Re-run 'just ecobee-auth'."
+            f"Thermostat {thermostat_id} not found. Re-run 'just climate-auth'."
         )
     program = thermostat.get("program")
     if program is None:
