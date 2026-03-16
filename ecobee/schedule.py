@@ -156,6 +156,28 @@ def validate_climate_refs(schedule_dict: dict, program: dict) -> None:
         )
 
 
+def diff_schedules(local: list, remote: list, program: dict) -> list[str]:
+    """Return human-readable lines describing slots where local and remote differ.
+
+    Both arrays are 7×48 lists of climateRef strings.
+    Returns an empty list if they are identical.
+    """
+    day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    ref_to_name = {c["climateRef"]: c.get("name", c["climateRef"]) for c in program["climates"]}
+    lines = []
+    for day_idx, (local_day, remote_day) in enumerate(zip(local, remote)):
+        for slot, (l, r) in enumerate(zip(local_day, remote_day)):
+            if l != r:
+                hour = slot // 2
+                minute = (slot % 2) * 30
+                ln = ref_to_name.get(l, l)
+                rn = ref_to_name.get(r, r)
+                lines.append(
+                    f"  {day_names[day_idx]} {hour:02d}:{minute:02d}  local={ln}  remote={rn}"
+                )
+    return lines
+
+
 def print_schedule_grid(schedule_array: list, program: dict, name: str = "") -> None:
     day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     ref_to_name = {c["climateRef"]: c.get("name", c["climateRef"]) for c in program["climates"]}
