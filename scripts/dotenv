@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# scripts/dotenv — generate .env from 1Password via op inject
+# Usage: scripts/dotenv [--template <path>] [--output <path>] [--force]
+#
+# Snapshots keys from the existing .env (if any) and verifies the newly
+# generated .env contains at least all of them, catching accidental omissions.
+# Use --force to skip the key check and reset from the template unconditionally.
+
+set -euo pipefail
+
+TEMPLATE=".env.template"
+OUTPUT=".env"
+FORCE=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --template) TEMPLATE="$2"; shift 2 ;;
+        --output)   OUTPUT="$2";   shift 2 ;;
+        --force)    FORCE=1;       shift   ;;
+        *) echo "Unknown argument: $1" >&2; exit 1 ;;
+    esac
+done
+
+# Snapshot keys from existing .env before we touch it (skipped with --force)
+old_keys=""
+if [[ "$FORCE" -eq 0 && -f "$OUTPUT" ]]; then
+    old_keys=$(grep -v '^#' "$OUTPUT" | grep -v '^[[:space:]]*$' | cut -d= -f1 | sort)
+fi
+
+# Inject into a temp file so the original is untouched until we verify
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+
+op inject -f -i "$TEMPLATE" -o "$tmp"
+
+# Verify no keys disappeared before clobbering the real file
+if [[ -n "$old_keys" ]]; then
+    new_keys=$(grep -v '^#' "$tmp" | grep -v '^[[:space:]]*$' | cut -d= -f1 | sort)
+    missing=$(comm -23 <(echo "$old_keys") <(echo "$new_keys"))
+    if [[ -n "$missing" ]]; then
+        echo "ERROR: these keys were in $OUTPUT but are missing from the new one:" >&2
+        echo "$missing" >&2
+        echo "Add them to $TEMPLATE and re-run." >&2
+        exit 1
+    fi
+fi
+
+mv "$tmp" "$OUTPUT"
+echo "Generated $OUTPUT from $TEMPLATE"

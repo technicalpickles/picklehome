@@ -41,21 +41,5 @@ install:
     uv sync
 
 # Generate .env from 1Password (run after clone or when secrets change)
-# Verifies the new .env has at least every key the old .env had (guards against accidental omissions).
-dotenv:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -f .env ]; then
-        old_keys=$(grep -v '^#' .env | grep -v '^[[:space:]]*$' | cut -d= -f1 | sort)
-    fi
-    op inject -f -i .env.template -o .env
-    if [ -n "${old_keys:-}" ]; then
-        new_keys=$(grep -v '^#' .env | grep -v '^[[:space:]]*$' | cut -d= -f1 | sort)
-        missing=$(comm -23 <(echo "$old_keys") <(echo "$new_keys"))
-        if [ -n "$missing" ]; then
-            echo "ERROR: these keys were in .env but are missing from the new .env:"
-            echo "$missing"
-            echo "Add them to .env.template if they should be kept, then re-run just dotenv."
-            exit 1
-        fi
-    fi
+dotenv *ARGS:
+    scripts/dotenv {{ARGS}}

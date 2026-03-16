@@ -38,7 +38,11 @@ Secrets are stored in 1Password and injected into `.env` via `op inject`. Most s
 3. Add the `{{ op://picklehome/Item/field }}` reference to `.env.template`
 4. Run `just dotenv` to regenerate `.env`
 
-**If `just dotenv` fails:** ensure you're signed into 1Password (`op whoami`). Field names in `op://` references must match exactly — use the `jq` command above to verify.
+**If `just dotenv` fails with missing keys:** keys present in the old `.env` are absent from the template — add them to `.env.template` then re-run. To skip the check and reset from the template unconditionally, use `just dotenv --force`.
+
+**If `just dotenv` fails with a 1Password error:** ensure you're signed in (`op whoami`). Field names in `op://` references must match exactly — use the `jq` command above to verify.
+
+The logic lives in `scripts/dotenv` (supports `--template`, `--output`, `--force`).
 
 Scripts load `.env` automatically via `python-dotenv` (or `just`'s `set dotenv-load`).
 
