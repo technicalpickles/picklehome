@@ -5,8 +5,8 @@ from pathlib import Path
 import yaml
 from pyecobee.errors import InvalidTokenError
 
-from climate.ecobee import auth, comforts, schedule
-from climate.ecobee.thermostats import load_thermostats
+from climate.ecobee import auth, comforts, schedule, status
+from climate.ecobee.thermostats import load_thermostats, get_managed_thermostats
 
 DEFAULT_SCHEDULE_PATH = Path(__file__).parent / "config" / "schedule.yaml"
 DEFAULT_COMFORTS_PATH = Path(__file__).parent / "config" / "comforts.yaml"
@@ -152,6 +152,32 @@ def cmd_validate(args) -> None:
 
     if any_mismatch:
         sys.exit(1)
+
+
+def cmd_status(args) -> None:
+    ecobee = auth.make_ecobee()
+
+    registry_path = Path(__file__).parent / "config" / "thermostats.yaml"
+    registry = load_thermostats(registry_path)
+    managed = get_managed_thermostats(registry)
+    managed_ids = {thermostat_id for _, thermostat_id in managed}
+
+    success = ecobee.get_thermostats()
+    if not success or not ecobee.thermostats:
+        print("Failed to fetch thermostat data from Ecobee.")
+        sys.exit(1)
+
+    statuses = [
+        status.extract_thermostat_status(t)
+        for t in ecobee.thermostats
+        if t["identifier"] in managed_ids
+    ]
+
+    if args.json:
+        import json
+        print(json.dumps({"thermostats": statuses}, indent=2, default=str))
+    else:
+        print(status.format_status(statuses))
 
 
 def cmd_comforts_capture(args) -> None:
@@ -358,6 +384,14 @@ def main() -> None:
         default=None,
         help="Only sync the named thermostat (default: all)",
     )
+
+    status_parser = subparsers.add_parser("status", help="Show current thermostat state")
+    status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON",
+    )
+    subparsers.choices["status"].set_defaults(func=cmd_status)
 
     subparsers.choices["validate"].set_defaults(func=cmd_validate)
     subparsers.choices["auth"].set_defaults(func=cmd_auth)
