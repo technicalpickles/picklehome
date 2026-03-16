@@ -14,3 +14,8 @@ dependencies = [
     "keyring>=24",
     "pyyaml>=6",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
