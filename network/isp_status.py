@@ -316,10 +316,11 @@ def print_manual_urls():
 
 def main():
     parser = argparse.ArgumentParser(description="ISP and CDN status checker")
-    parser.add_argument("--zip", metavar="ZIP", help="ZIP code for AT&T outage lookup (requires playwright)")
+    parser.add_argument("--zip", metavar="ZIP", help="ZIP code for AT&T outage lookup (falls back to HOME_ZIP_CODE env var)")
     args = parser.parse_args()
 
-    use_playwright = args.zip is not None
+    zip_code = args.zip or os.environ.get("HOME_ZIP_CODE")
+    use_playwright = zip_code is not None
     radar_token = os.environ.get("CLOUDFLARE_RADAR_API_TOKEN")
 
     print()
@@ -336,7 +337,7 @@ def main():
         print()
 
     if use_playwright:
-        check_att_outages(args.zip)
+        check_att_outages(zip_code)
         check_downdetector_att()
     else:
         print("AT&T / DownDetector  (pass --zip XXXXX to check with Playwright)")

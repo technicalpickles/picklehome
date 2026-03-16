@@ -36,9 +36,9 @@ install:
 dotenv:
     op inject -i .env.template -o .env
 
-# ISP and CDN status: Cloudflare status + Radar BGP/traffic + AT&T outage by ZIP
-isp-status zip="":
-    uv run --with requests --with python-dotenv --with playwright network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
+# ISP and CDN status: Cloudflare status + Radar BGP/traffic + AT&T outage (ZIP from HOME_ZIP_CODE)
+isp-status:
+    uv run --with requests --with python-dotenv --with playwright network/isp_status.py
 
 # Preview expanded schedule without pushing (pass --schedule PATH to override default)
 ecobee-sync-dry *ARGS:
