@@ -1,0 +1,15 @@
+# climate/config/thermostats.yaml
+# Canonical thermostat registry for this home.
+# managed: true  — included in all home automation (status, sync, etc.)
+# managed: false — registered but excluded (e.g. separate property)
+
+thermostats:
+  downstairs:
+    thermostat_id: "532572869586"
+    managed: true
+  upstairs:
+    thermostat_id: "532537308613"
+    managed: true
+  cottage:
+    thermostat_id: "272457106318"
+    managed: false  # separate property — excluded from home automation
