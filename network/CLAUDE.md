@@ -52,6 +52,26 @@ uv run --with requests --with python-dotenv --with playwright network/isp_status
 traffic — the 24h normalization means overnight lows will always look like drops. The
 threshold logic needs further calibration before it's reliable as an alert.
 
+### `unifi-wifi.py` — UniFi WiFi diagnostics (AP perspective)
+
+Queries the CloudKey legacy API for per-AP radio stats and per-client WiFi metrics.
+Requires `UNIFI_API_KEY` in `.env`.
+
+```bash
+just unifi-wifi aps                    # all APs: channel, utilization, client count, retries
+just unifi-wifi clients                # all WiFi clients: AP, signal, SNR, rates, satisfaction
+just unifi-wifi client <hostname|ip>   # detail for one client (partial hostname OK)
+
+# or directly:
+uv run --with requests --with python-dotenv network/unifi-wifi.py aps
+uv run --with requests --with python-dotenv network/unifi-wifi.py client <hostname>
+```
+
+Key fields: `signal` (dBm from AP), `noise`, `SNR`, `tx_rate`, `wifi_tx_retries_percentage`,
+`satisfaction` (UniFi composite score 0–100), `cu_total` (channel utilization %).
+
+Note: UniFi's `rssi` field is a normalized 0–95 scale, NOT dBm. Use `signal` for real diagnostics.
+
 ### `wifi-diag.py` — Client-side WiFi and connectivity diagnostic
 
 Run on any Mac in the home network to diagnose local WiFi issues. Collects:

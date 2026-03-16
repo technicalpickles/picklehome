@@ -44,6 +44,10 @@ network-status zip="":
 wifi-diag *ARGS:
     uv run --with requests network/wifi-diag.py {{ARGS}}
 
+# UniFi WiFi diagnostics: AP radio stats and per-client signal/retries from the AP side
+unifi-wifi *ARGS:
+    uv run --with requests --with python-dotenv network/unifi-wifi.py {{ARGS}}
+
 # Install dependencies (run once after clone)
 install:
     uv sync
