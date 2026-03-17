@@ -18,29 +18,8 @@ SSH commands (dns) require UNIFI_ADMIN_USERNAME and UNIFI_ADMIN_PASSWORD in .env
 import argparse
 import os
 import sys
-import warnings
 
-import requests
-from dotenv import load_dotenv
-
-load_dotenv()
-
-CLOUDKEY = "https://192.168.1.57"
-BASE = f"{CLOUDKEY}/proxy/network/integration/v1"
-LEGACY = f"{CLOUDKEY}/proxy/network/api/s/default"
-
-# Suppress InsecureRequestWarning for self-signed cert
-warnings.filterwarnings("ignore", message="Unverified HTTPS request")
-
-
-def session():
-    api_key = os.environ.get("UNIFI_API_KEY")
-    if not api_key:
-        sys.exit("UNIFI_API_KEY not set — add it to .env")
-    s = requests.Session()
-    s.headers.update({"X-API-Key": api_key, "Accept": "application/json"})
-    s.verify = False
-    return s
+from network.unifi import BASE, LEGACY, session
 
 
 def get(s, path, **kwargs):

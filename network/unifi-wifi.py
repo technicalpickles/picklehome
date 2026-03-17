@@ -27,30 +27,12 @@ Notes on UniFi signal fields:
 """
 
 import argparse
-import os
 import sys
-import warnings
 from datetime import datetime, timezone
 
-import requests
-from dotenv import load_dotenv
+from network.unifi import LEGACY, session
 
-load_dotenv()
-warnings.filterwarnings("ignore", message="Unverified HTTPS request")
-
-CLOUDKEY = "https://192.168.1.57"
-LEGACY = f"{CLOUDKEY}/proxy/network/api/s/default"
 SEP = "─" * 70
-
-
-def session():
-    api_key = os.environ.get("UNIFI_API_KEY")
-    if not api_key:
-        sys.exit("UNIFI_API_KEY not set — add it to .env")
-    s = requests.Session()
-    s.headers.update({"X-API-Key": api_key, "Accept": "application/json"})
-    s.verify = False
-    return s
 
 
 def get(s, path):
