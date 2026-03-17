@@ -38,19 +38,19 @@ climate-comforts-sync-dry *ARGS:
 
 # ISP and CDN status: Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP
 network-status zip="":
-    uv run --with requests --with python-dotenv --with playwright network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
+    uv run network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
 
 # Client WiFi and connectivity diagnostic (run on any Mac in the house)
 wifi-diag *ARGS:
-    uv run --with requests network/wifi-diag.py {{ARGS}}
+    uv run network/wifi-diag.py {{ARGS}}
 
 # UniFi WiFi diagnostics: AP radio stats and per-client signal/retries from the AP side
 unifi-wifi *ARGS:
-    uv run --with requests --with python-dotenv network/unifi-wifi.py {{ARGS}}
+    uv run network/unifi-wifi.py {{ARGS}}
 
 # Raw UniFi API wrapper for debugging: just unifi-api get /stat/device
 unifi-api *ARGS:
-    uv run --with requests --with python-dotenv network/unifi-api.py {{ARGS}}
+    uv run network/unifi-api.py {{ARGS}}
 
 # Install dependencies (run once after clone)
 install:
