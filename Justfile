@@ -40,6 +40,26 @@ climate-comforts-sync-dry *ARGS:
 network-status zip="":
     uv run network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
 
+# Full point-in-time network snapshot: BGW fiber + broadband, USG WAN, DNS, traceroute
+network-snapshot *ARGS:
+    uv run network/snapshot.py {{ARGS}}
+
+# DNS resolution comparison across Cloudflare, Google, BGW, and USG resolvers
+network-resolve *ARGS:
+    uv run network/resolve.py {{ARGS}}
+
+# Profile a URL with a headless browser: per-hostname latency and errors
+network-profile *ARGS:
+    uv run network/profile.py {{ARGS}}
+
+# AT&T BGW gateway diagnostics: just bgw fiber | broadband | trace <ip> | ping <ip> | nslookup <host>
+bgw *ARGS:
+    uv run network/bgw.py {{ARGS}}
+
+# UniFi USG diagnostics: just usg wan | wan-detail | devices | stats | dns
+usg *ARGS:
+    uv run network/usg.py {{ARGS}}
+
 # Client WiFi and connectivity diagnostic (run on any Mac in the house)
 wifi-diag *ARGS:
     uv run network/wifi-diag.py {{ARGS}}
