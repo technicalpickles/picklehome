@@ -44,8 +44,8 @@ Requires `CLOUDFLARE_RADAR_API_TOKEN` in `.env` (Cloudflare dashboard → My Pro
 API Tokens → create token with `Account > Radar: Read` scope; free tier is fine).
 
 ```bash
-uv run --with requests --with python-dotenv network/isp_status.py                         # Cloudflare + Radar
-uv run --with requests --with python-dotenv --with playwright network/isp_status.py --zip 30318  # + AT&T check
+just network-status              # Cloudflare + Radar
+just network-status 30318        # + AT&T check by ZIP
 ```
 
 **Traffic trend note:** The NetFlows sparkline uses `[?]` rather than `[!]` for low recent
@@ -61,10 +61,6 @@ Requires `UNIFI_API_KEY` in `.env`.
 just unifi-wifi aps                    # all APs: channel, utilization, client count, retries
 just unifi-wifi clients                # all WiFi clients: AP, signal, SNR, rates, satisfaction
 just unifi-wifi client <hostname|ip>   # detail for one client (partial hostname OK)
-
-# or directly:
-uv run --with requests --with python-dotenv network/unifi-wifi.py aps
-uv run --with requests --with python-dotenv network/unifi-wifi.py client <hostname>
 ```
 
 Key fields: `signal` (dBm from AP), `noise`, `SNR`, `tx_rate`, `wifi_tx_retries_percentage`,
@@ -88,13 +84,22 @@ with UniFi UI → Clients → `<device>` → AP, or the AP's radio MAC in UniFi 
 ```bash
 just wifi-diag
 just wifi-diag --no-trace --no-speed   # quick run (skip traceroute + speed test)
-
-# or directly:
-uv run --with requests network/wifi-diag.py
-uv run --with requests network/wifi-diag.py --no-trace
 ```
 
 No `.env` or API keys required — runs standalone on any Mac with `uv` installed.
+
+### `unifi-api.py` — Raw UniFi CloudKey API wrapper
+
+Thin wrapper around the CloudKey legacy API that handles auth and TLS, letting you
+explore endpoints without manually managing headers in curl. Requires `UNIFI_API_KEY` in `.env`.
+
+```bash
+just unifi-api get /stat/device
+just unifi-api get /stat/sta
+just unifi-api put /rest/device/<id> '{"radio_table": [...]}'
+```
+
+Paths are relative to `/proxy/network/api/s/default` — omit that prefix.
 
 ### `diag.sh` — curl-based per-host diagnostics
 

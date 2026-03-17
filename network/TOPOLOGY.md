@@ -44,12 +44,51 @@ Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from a
 - Living Room and Upstairs both on **ch 6** — they compete with each other
 - Porch and Office (far side) both on **ch 11** — same issue
 
-5GHz:
+5GHz (as of 2026-03-16 after optimization):
 - Living Room and Upstairs share **ch 157**
-- Porch and Office (far side) share **ch 44**
-- Office (main) is on **ch 40** (unique)
+- Porch on **ch 48** (moved from 44)
+- Office (far side / Tracy) still on **ch 44** — pending move, see below
+- Office (main / Josh) is on **ch 40** (unique)
 
 Channel utilization as observed (2026-03-16): Living Room 2.4G at 51% (highest), all 5GHz radios under 10%.
+
+**RF scan summary (2026-03-16):** 2.4GHz is heavily congested on all three channels (130–178 neighbors each) — dense neighborhood, nothing actionable. 5GHz neighbor counts:
+- ch 40: 13 neighbors, all ≤ −82 dBm (cleanest)
+- ch 44: 76 neighbors, strongest −74 dBm (busiest — Porch and Tracy Office were both here)
+- ch 48: not scanned by neighbors (no external APs seen) — likely clean
+- ch 157: 16 neighbors, strongest −75 dBm (reasonable)
+
+**Pending channel change:** Tracy Office (192.168.1.194) 5GHz should move from ch 44 → ch 40. Josh Office (far side of house) is also on ch 40 but they're physically well-separated so co-channel is not a concern. Do this during low-traffic time — the radio restarts briefly and disconnects clients for ~5–15s. Warn Tracy before executing.
+
+```bash
+just unifi-wifi set-channel "tracy" 5 40 --yes
+```
+
+### Changing Channels
+
+```bash
+# See current channels and RF environment
+just unifi-wifi aps
+just unifi-wifi rfscan
+
+# Change a channel (prompts for confirmation unless --yes)
+just unifi-wifi set-channel "tracy" 5 36
+just unifi-wifi set-channel "porch" 5 48 --yes
+
+# Validate the change took (config vs. live stats may lag by ~30s)
+just unifi-api get /stat/device | python3 -c "
+import json, sys
+for d in json.load(sys.stdin)['data']:
+    if d.get('type') == 'uap':
+        cfg  = {r['radio']: r.get('channel') for r in d.get('radio_table', [])}
+        live = {r['radio']: r.get('channel') for r in d.get('radio_table_stats', [])}
+        print(d['name'], '| config:', cfg, '| live:', live)
+"
+```
+
+**Important:** `just unifi-wifi aps` reads `radio_table_stats` (live observed), which lags after a change. Use `just unifi-api get /stat/device` and compare `radio_table` (config) vs `radio_table_stats` (live) to confirm the change was accepted before the radio fully transitions.
+
+**Confirmed valid 5GHz channels** (tested via API): 40, 44, 48, 157. Channels 36 and 149 are untested with the current AP models (U7LR, U7PG2, U7HD).
 
 ## Key IPs
 
@@ -149,35 +188,15 @@ just wifi-diag --no-trace --no-speed   # quick version
 just unifi-wifi aps                         # all APs: channel, utilization, client count, retries
 just unifi-wifi clients                     # all WiFi clients: AP, signal, SNR, rates, satisfaction
 just unifi-wifi client <hostname|ip>        # detail for one client
+just unifi-wifi rfscan                      # neighboring APs by channel — congestion summary
+just unifi-wifi set-channel <ap> <band> <ch> [--yes]  # change AP radio channel
+
+# Raw UniFi API — for debugging/exploration
+just unifi-api get /stat/device
+just unifi-api get /stat/sta
+just unifi-api put /rest/device/<id> '{"radio_table": [...]}'
 
 # ISP and CDN status (Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP)
 just network-status
 just network-status 30318
-
-# or directly:
-uv run --with requests --with python-dotenv network/isp_status.py
-uv run --with requests --with python-dotenv --with playwright network/isp_status.py --zip 30318
-
-# Full network snapshot (BGW + USG + DNS + peering trace)
-uv run --with requests --with python-dotenv --with paramiko --with dnspython --with playwright network/snapshot.py
-uv run --with requests --with python-dotenv --with paramiko --with dnspython --with playwright network/snapshot.py --no-trace
-
-# BGW diagnostics
-uv run --with requests --with playwright network/bgw.py fiber
-uv run --with requests --with playwright network/bgw.py broadband
-uv run --with requests --with playwright network/bgw.py trace <ip>
-uv run --with requests --with playwright network/bgw.py ping <ip>
-
-# USG diagnostics
-uv run --with requests --with python-dotenv network/usg.py devices
-uv run --with requests --with python-dotenv network/usg.py wan-detail
-uv run --with requests --with python-dotenv --with paramiko network/usg.py dns
-
-# DNS comparison across resolvers
-uv run --with dnspython network/resolve.py <hostname> [<hostname> ...]
-
-# Profile all requests a browser makes to load a URL — per-hostname latency, errors, pending
-# Useful for spotting which CDN/host is slow or failing when a site feels broken
-uv run --with playwright network/profile.py <url>
-uv run --with playwright network/profile.py <url> --slow-ms 1000 --timeout 15
 ```

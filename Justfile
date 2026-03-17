@@ -48,6 +48,10 @@ wifi-diag *ARGS:
 unifi-wifi *ARGS:
     uv run --with requests --with python-dotenv network/unifi-wifi.py {{ARGS}}
 
+# Raw UniFi API wrapper for debugging: just unifi-api get /stat/device
+unifi-api *ARGS:
+    uv run --with requests --with python-dotenv network/unifi-api.py {{ARGS}}
+
 # Install dependencies (run once after clone)
 install:
     uv sync

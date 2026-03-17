@@ -3,11 +3,11 @@
 Network profiler: visit a URL and report hostnames by speed/errors.
 
 Usage:
-    uv run --with playwright network-profile.py <url> [--slow-ms 500] [--timeout 10]
+    uv run --with playwright network/profile.py <url> [--slow-ms 500] [--timeout 10]
 
 Examples:
-    uv run --with playwright network-profile.py https://example.com
-    uv run --with playwright network-profile.py https://example.com --slow-ms 1000 --timeout 15
+    uv run --with playwright network/profile.py https://example.com
+    uv run --with playwright network/profile.py https://example.com --slow-ms 1000 --timeout 15
 """
 
 import argparse

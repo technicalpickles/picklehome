@@ -14,6 +14,8 @@ Usage:
     uv run --with requests --with python-dotenv network/unifi-wifi.py aps
     uv run --with requests --with python-dotenv network/unifi-wifi.py clients
     uv run --with requests --with python-dotenv network/unifi-wifi.py client <hostname|ip|mac>
+    uv run --with requests --with python-dotenv network/unifi-wifi.py rfscan
+    uv run --with requests --with python-dotenv network/unifi-wifi.py set-channel "tracy" 5 36
 
 Notes on UniFi signal fields:
   signal  — actual RSSI in dBm (negative)       e.g. -62
@@ -273,6 +275,120 @@ def cmd_client(s, query):
         print(f"  TX:            {tx_bytes/1_000_000:.1f} MB   RX: {rx_bytes/1_000_000:.1f} MB")
 
 
+# ── RF Scan command ───────────────────────────────────────────────────────────
+
+def cmd_rfscan(s, include_own=False):
+    section("RF Scan — Neighboring APs (passive scan results)")
+
+    neighbors = get(s, "/stat/rogueap")
+    if not neighbors:
+        print("  No scan data available (APs may not have run a scan yet)")
+        return
+
+    # Collect our own AP MACs so we can exclude them from the neighbor view
+    own_macs = set()
+    if not include_own:
+        devices = get(s, "/stat/device")
+        for d in devices:
+            if d.get("type") == "uap":
+                own_macs.add(d.get("mac", "").lower())
+                for vap in d.get("vap_table", []):
+                    own_macs.add(vap.get("bssid", "").lower())
+        neighbors = [n for n in neighbors if n.get("bssid", "").lower() not in own_macs]
+
+    # Separate 2.4 GHz (ch 1-14) from 5 GHz (ch 36+)
+    ghz24 = [n for n in neighbors if n.get("channel", 0) <= 14]
+    ghz5  = [n for n in neighbors if n.get("channel", 0) > 14]
+
+    for label, band_aps in (("2.4 GHz", ghz24), ("5 GHz", ghz5)):
+        if not band_aps:
+            continue
+
+        # Channel congestion summary
+        by_channel = {}
+        for n in band_aps:
+            ch = n.get("channel", "?")
+            by_channel.setdefault(ch, []).append(n.get("signal", -100))
+
+        print(f"\n  {label} — channel congestion summary:")
+        for ch in sorted(by_channel, key=lambda x: (x == "?", x)):
+            sigs = by_channel[ch]
+            strongest = max(sigs)
+            print(f"    ch {str(ch):<5}  {len(sigs):>3} neighbor(s)   strongest: {strongest} dBm")
+
+        # Full neighbor table
+        print()
+        print(f"  {label} — all neighbors:")
+        print(f"  {'SSID':<32} {'BSSID':<18} {'Ch':>4}  {'Sig':>5}  {'Heard by'}")
+        print(f"  {'─'*32} {'─'*18} {'─'*4}  {'─'*5}  {'─'*24}")
+
+        band_aps.sort(key=lambda n: (n.get("channel", 0), -(n.get("signal") or -100)))
+        for n in band_aps:
+            ssid     = (n.get("essid") or "<hidden>")[:32]
+            bssid    = n.get("bssid", "?")
+            ch       = n.get("channel", "?")
+            sig      = n.get("signal", None)
+            sig_str  = f"{sig}" if sig is not None else "?"
+            # reported_by is a list of AP MACs that heard this neighbor
+            heard    = ", ".join(n.get("ap_mac", [n.get("ap_mac", "?")])) if isinstance(n.get("ap_mac"), list) else (n.get("ap_mac") or "?")
+            print(f"  {ssid:<32} {bssid:<18} {str(ch):>4}  {sig_str:>5}  {heard}")
+
+
+# ── Set-channel command ───────────────────────────────────────────────────────
+
+def cmd_set_channel(s, ap_query, band, channel, yes=False):
+    radio_key = "na" if band == "5" else "ng"
+
+    devices = get(s, "/stat/device")
+    aps = [d for d in devices if d.get("type") == "uap"]
+    q = ap_query.lower()
+    matches = [d for d in aps if q in d.get("name", "").lower()]
+
+    if not matches:
+        print(f"  No AP matching '{ap_query}'")
+        print(f"  Known APs: {', '.join(d.get('name', '?') for d in aps)}")
+        return
+    if len(matches) > 1:
+        print(f"  Ambiguous — '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
+        return
+
+    ap = matches[0]
+    name  = ap.get("name", "?")
+    ap_id = ap["_id"]
+
+    # Find current channel for display
+    rt = {r["radio"]: r for r in ap.get("radio_table", [])}
+    current = rt.get(radio_key, {}).get("channel", "?")
+
+    band_label = "5 GHz" if band == "5" else "2.4 GHz"
+    print(f"\n  AP:      {name}")
+    print(f"  Band:    {band_label}")
+    print(f"  Current: ch {current}")
+    print(f"  New:     ch {channel}")
+    print()
+
+    if not yes:
+        confirm = input("  This will briefly disconnect clients on this radio. Proceed? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("  Aborted.")
+            return
+
+    radio_entry = rt.get(radio_key, {})
+    radio_name = radio_entry.get("name", "wifi1" if radio_key == "na" else "wifi0")
+    r = s.put(
+        f"{LEGACY}/rest/device/{ap_id}",
+        json={"radio_table": [{"radio": radio_key, "name": radio_name, "channel": channel}]},
+        timeout=10,
+    )
+    result = r.json()
+    meta = result.get("meta", {})
+    if meta.get("rc") == "ok":
+        print(f"  Done — {name} {band_label} set to ch {channel}")
+        print("  (AP radio restarting; clients will reconnect in ~5–15s)")
+    else:
+        print(f"  Error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -284,6 +400,13 @@ def main():
     sub.add_parser("clients", help="All WiFi clients: AP, signal, SNR, rates, satisfaction")
     p = sub.add_parser("client",  help="Detail for one client (hostname, IP, or MAC)")
     p.add_argument("query", help="Hostname, IP, or MAC address (partial hostname match OK)")
+    p2 = sub.add_parser("rfscan", help="Neighboring APs from passive RF scan — channel congestion summary")
+    p2.add_argument("--own", action="store_true", help="Include your own APs in results")
+    p3 = sub.add_parser("set-channel", help="Set radio channel on an AP (disconnects clients briefly)")
+    p3.add_argument("ap",      help="AP name (partial match OK)")
+    p3.add_argument("band",    choices=["2.4", "5"], help="Radio band to change")
+    p3.add_argument("channel", help="Channel number, or 'auto'")
+    p3.add_argument("--yes",   action="store_true", help="Skip confirmation prompt")
 
     args = parser.parse_args()
     s = session()
@@ -294,6 +417,11 @@ def main():
         cmd_clients(s)
     elif args.cmd == "client":
         cmd_client(s, args.query)
+    elif args.cmd == "rfscan":
+        cmd_rfscan(s, include_own=args.own)
+    elif args.cmd == "set-channel":
+        ch = args.channel if args.channel == "auto" else int(args.channel)
+        cmd_set_channel(s, args.ap, args.band, ch, yes=args.yes)
 
 
 if __name__ == "__main__":
