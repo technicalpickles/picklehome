@@ -113,3 +113,11 @@ Runs mtr to multiple targets and saves results to `network-diag-results/mtr/`.
 
 See `TOPOLOGY.md` for network layout, key IPs, DNS configuration, and issue history.
 Past investigations are in `investigations/`.
+
+## Deep Reference Docs (`network/docs/`)
+
+Read these when working on a specific tool — do not load by default.
+
+| File | When to read |
+|---|---|
+| `docs/bgw-reference.md` | Working on `bgw.py` or BGW WiFi config — CGI endpoints, auth model, `home.ha` scraping |
