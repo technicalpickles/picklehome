@@ -116,3 +116,13 @@ def test_get_configured_macs():
 
 def test_get_configured_macs_empty():
     assert get_configured_macs({}) == []
+
+def test_get_configured_macs_env_overrides_yaml(monkeypatch):
+    monkeypatch.setenv("AMBIENT_STATION_MACS", "EE:FF,GG:HH")
+    config = {"stations": [{"mac": "AA:BB"}]}
+    assert get_configured_macs(config) == ["EE:FF", "GG:HH"]
+
+def test_get_configured_macs_env_empty_falls_back_to_yaml(monkeypatch):
+    monkeypatch.setenv("AMBIENT_STATION_MACS", "")
+    config = {"stations": [{"mac": "AA:BB"}]}
+    assert get_configured_macs(config) == ["AA:BB"]

@@ -311,8 +311,12 @@ def cmd_weather_discover(args) -> None:
         sys.exit(1)
 
     if not stations:
-        print("No outdoor stations found. Try --radius 2 or larger.")
+        print("No outdoor stations found. Try --radius 1 or larger.")
         sys.exit(1)
+
+    from climate.ambient.client import is_temp_plausible
+    temps = [s.get("lastData", {}).get("tempf") for s in stations if s.get("lastData", {}).get("tempf") is not None]
+    median_temp = sorted(temps)[len(temps) // 2] if temps else None
 
     print(f"\nFound {len(stations)} outdoor station(s):\n")
     for s in stations:
@@ -320,9 +324,14 @@ def cmd_weather_discover(args) -> None:
         name = (s.get("info", {}).get("name")
                 or s.get("info", {}).get("coords", {}).get("location", "unnamed"))
         temp = s.get("lastData", {}).get("tempf")
-        temp_str = f"{temp}°F" if temp is not None else "no temp"
+        if temp is None:
+            temp_str = "no temp"
+        elif median_temp is not None and abs(temp - median_temp) > 15:
+            temp_str = f"{temp}°F  ⚠ outlier"
+        else:
+            temp_str = f"{temp}°F"
         print(f"  {mac}  {name}  ({temp_str})")
-    print("\nAdd desired MACs to climate/config/weather.yaml under 'stations:'.")
+    print("\nStore chosen MACs in 1Password → AMBIENT_STATION_MACS in .env (see .env.template).")
 
 
 def cmd_weather(args) -> None:
@@ -332,7 +341,7 @@ def cmd_weather(args) -> None:
     macs = get_configured_macs(config)
 
     if not macs:
-        print("No stations configured. Run 'just climate-weather-discover' and add MACs to weather.yaml.")
+        print("No stations configured. Run 'just climate-weather-discover', then set AMBIENT_STATION_MACS in .env.")
         sys.exit(1)
 
     result = get_outdoor_temp_from_stations(macs)
@@ -381,7 +390,7 @@ def cmd_comfort_switch(args) -> None:
         config = load_weather_config(args.weather)
         macs = get_configured_macs(config)
         if not macs:
-            print("No stations configured in weather.yaml. Run 'just climate-weather-discover'.")
+            print("No stations configured. Run 'just climate-weather-discover', then set AMBIENT_STATION_MACS in .env.")
             sys.exit(1)
         result = get_outdoor_temp_from_stations(macs)
         if result is None:
@@ -551,9 +560,9 @@ def main() -> None:
     discover_parser.add_argument(
         "--radius",
         type=float,
-        default=1.0,
+        default=0.5,
         metavar="N",
-        help="Search radius in miles (default: 1.0)",
+        help="Search radius in miles (default: 0.5)",
     )
 
     weather_parser = subparsers.add_parser(

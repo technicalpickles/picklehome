@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -100,4 +101,7 @@ def load_weather_config(path: Path = DEFAULT_WEATHER_PATH) -> dict:
 
 
 def get_configured_macs(config: dict) -> list[str]:
+    env_macs = os.environ.get("AMBIENT_STATION_MACS", "")
+    if env_macs:
+        return [m.strip() for m in env_macs.split(",") if m.strip()]
     return [s["mac"] for s in config.get("stations", []) if "mac" in s]

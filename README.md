@@ -18,11 +18,15 @@ Syncs thermostat schedules and comfort setpoints to Ecobee via their API. Config
 
 The source of truth is [`climate/spec/hvac-spec.md`](climate/spec/hvac-spec.md) — a human-readable document describing the intended HVAC behavior for the home. The workflow: talk through what you want with the agent, let it capture that into the spec, then have it transcribe the spec into the YAML files and push them up.
 
+Comfort mode (heat vs. cool) is driven by outdoor temperature, read from nearby [Ambient Weather Network](https://ambientweather.net) stations. The schedule automatically switches between Comfort Heat and Comfort Cool based on a configurable threshold band.
+
 ```bash
-just climate-sync          # push schedule.yaml to Ecobee
-just climate-validate      # verify live schedule matches schedule.yaml
-just climate-comforts-sync # push comfort setpoint temps
-just climate-status        # show current thermostat state
+just climate-sync               # push schedule.yaml to Ecobee
+just climate-validate           # verify live schedule matches schedule.yaml
+just climate-comforts-sync      # push comfort setpoint temps
+just climate-status             # show current thermostat state
+just climate-weather            # show current outdoor temp + comfort recommendation
+just climate-comfort-switch auto  # auto-switch comfort mode based on outdoor temp
 ```
 
 ### `network/` — Network diagnostics

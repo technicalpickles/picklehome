@@ -28,7 +28,7 @@ The general goal is to hold ~70°F whenever anyone is in a space, regardless of 
 
 ### Seasonal switching
 
-Run `just climate-comfort-switch auto` to read the current outdoor temp from configured Ambient Weather Network stations and switch the schedule automatically. The command uses a hysteresis band (60–65°F) to avoid unnecessary switching near the threshold. Station MACs and thresholds are configured in `climate/config/weather.yaml`.
+Run `just climate-comfort-switch auto` to read the current outdoor temp from configured Ambient Weather Network stations and switch the schedule automatically. The command uses a hysteresis band (60–65°F) to avoid unnecessary switching near the threshold. Thresholds are configured in `climate/config/weather.yaml`; station MACs are stored in 1Password and injected via `AMBIENT_STATION_MACS` in `.env`.
 
 ---
 

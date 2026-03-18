@@ -1,6 +1,6 @@
 # Story 1.1: Outdoor Temperature Comfort Mode
 
-Status: review
+Status: done
 
 ## Story
 
@@ -52,13 +52,13 @@ so that I don't have to manually change the comfort mode when the seasons transi
   - [x] 5.2 Wire `discover-stations` subparser in `main()` with `--radius` arg
   - [x] 5.3 Add `climate-weather-discover *ARGS` task to `Justfile`
   - [x] 5.4 Run `just --list | grep weather` — task appears
-  - [ ] 5.5 Run `just climate-weather-discover --radius 2` — makes live network call, lists stations (note: requires network + `just dotenv` for HOME_LAT/HOME_LON)
+  - [x] 5.5 Run `just climate-weather-discover --radius 2` — makes live network call, lists stations (note: requires network + `just dotenv` for HOME_LAT/HOME_LON)
 
 - [x] Task 6: weather CLI command (AC: 5)
   - [x] 6.1 Add `cmd_weather` to `climate/sync.py` — output includes temp, reading age in minutes, source MAC, and heat/cool/neutral recommendation (see Dev Notes)
   - [x] 6.2 Wire `weather` subparser; import `DEFAULT_WEATHER_PATH` from `climate.ambient.client` at top of `sync.py`
   - [x] 6.3 Add `climate-weather *ARGS` task to `Justfile`
-  - [ ] 6.4 Run `just climate-weather` — output shows e.g. `Outdoor temp: 45.2°F (4 min old, AA:BB:CC:DD:EE:FF)` (requires stations in weather.yaml)
+  - [x] 6.4 Run `just climate-weather` — output shows e.g. `Outdoor temp: 45.2°F (4 min old, AA:BB:CC:DD:EE:FF)` (requires stations in weather.yaml)
 
 - [x] Task 7: comfort-switch CLI command (AC: 6, 7, 8)
   - [x] 7.1 Write failing tests for `_apply_comfort_mode` (see Dev Notes for correct regex — comment-safe)
@@ -69,7 +69,7 @@ so that I don't have to manually change the comfort mode when the seasons transi
   - [x] 7.6 Add `climate-comfort-switch MODE *ARGS` and `climate-comfort-switch-dry MODE *ARGS` to `Justfile`
   - [x] 7.7 Write tests for `cmd_comfort_switch` covering: heat, cool, auto-heat, auto-cool, hysteresis band, sync failure rollback
   - [x] 7.8 Run full test suite — all pass
-  - [ ] 7.9 Run `just climate-comfort-switch-dry auto` — dry-run output shows changed lines (requires weather.yaml populated)
+  - [x] 7.9 Run `just climate-comfort-switch-dry auto` — dry-run output shows changed lines (requires weather.yaml populated)
 
 - [x] Task 8: hvac-spec.md update (AC: 10)
   - [x] 8.1 Update Comfort mode semantics section with exact replacement text (see Dev Notes) — schedule tables already show Comfort Heat correctly from current session, no table changes needed
@@ -630,3 +630,4 @@ claude-sonnet-4-6
 - 2026-03-17: Party mode review — added `is_temp_plausible` + `is_data_fresh` guards, dropped bare `Exception` catch, changed return type of `get_outdoor_temp_from_stations` to include mac+age, `cmd_weather` now shows reading age and source MAC, AC 3 now requires real station population, Task 8 clarified (schedule tables already correct from session)
 - 2026-03-17: Implementation complete — 43 tests passing, all tasks checked except live network verification steps (5.5, 6.4, 7.9)
 - 2026-03-17: Code review follow-ups resolved — hvac-spec.md schedule tables updated to Comfort Heat; `get_data_age_minutes` tests added; 46 tests passing
+- 2026-03-17: Live verification complete — station MACs stored in 1Password (picklehome/Ambient Weather Stations/station_macs), injected via AMBIENT_STATION_MACS env var; weather.yaml stays clean (stations: []); `get_configured_macs` updated to prefer env var over yaml; 48 tests passing
