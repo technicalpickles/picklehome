@@ -58,15 +58,25 @@ Queries the CloudKey legacy API for per-AP radio stats and per-client WiFi metri
 Requires `UNIFI_API_KEY` in `.env`.
 
 ```bash
-just unifi-wifi aps                    # all APs: channel, utilization, client count, retries
-just unifi-wifi clients                # all WiFi clients: AP, signal, SNR, rates, satisfaction
-just unifi-wifi client <hostname|ip>   # detail for one client (partial hostname OK)
+just unifi-wifi aps                          # all APs: channel, utilization, client count, retries
+just unifi-wifi clients                      # all WiFi clients: AP, signal, SNR, rates, satisfaction
+just unifi-wifi client <hostname|ip>         # detail for one client (partial hostname OK)
+just unifi-wifi roaming <hostname|ip>        # roaming history: which APs, when, duration, satisfaction
+just unifi-wifi roaming <hostname|ip> --sessions 3  # show last N sessions
+just unifi-wifi locate <ap-name>             # flash AP LED to physically identify it (Enter to stop)
+just unifi-wifi locate <ap-name> --duration 30  # auto-stop after 30s
 ```
 
 Key fields: `signal` (dBm from AP), `noise`, `SNR`, `tx_rate`, `wifi_tx_retries_percentage`,
 `satisfaction` (UniFi composite score 0–100), `cu_total` (channel utilization %).
 
 Note: UniFi's `rssi` field is a normalized 0–95 scale, NOT dBm. Use `signal` for real diagnostics.
+
+**Roaming history** comes from `/stat/session` → `roaming_sessions` array. Each segment has
+`start_time`, `duration`, `ap_mac`, and `satisfaction`. AP MACs are resolved to names via
+`/stat/device`. Works for offline clients too (falls back to `/stat/alluser`). Satisfaction
+scores < 90 are flagged with `←`. Use this to confirm which AP a client was on before
+roaming, diagnose sticky-client behavior, or correlate a complaint with a specific transition.
 
 ### `wifi-diag.py` — Client-side WiFi and connectivity diagnostic
 
@@ -112,6 +122,7 @@ Runs mtr to multiple targets and saves results to `network-diag-results/mtr/`.
 ## Reference
 
 See `TOPOLOGY.md` for network layout, key IPs, DNS configuration, and issue history.
+See `CHANGELOG.md` for configuration changes, rationale, and pending follow-up checks.
 Past investigations are in `investigations/`.
 
 ## Deep Reference Docs (`network/docs/`)
@@ -121,3 +132,5 @@ Read these when working on a specific tool — do not load by default.
 | File | When to read |
 |---|---|
 | `docs/bgw-reference.md` | Working on `bgw.py` or BGW WiFi config — CGI endpoints, auth model, `home.ha` scraping |
+| `docs/wifi-ios-unifi.md` | Diagnosing iPhone WiFi issues — iOS PSM/roaming behavior, UniFi settings that affect it, diagnostic workflow, current network config snapshot |
+| `docs/outdoor-wifi-research.md` | Outdoor backyard coverage — hardware comparison (U7LR vs U7 Outdoor), mounting orientation, TX power/channel starting config, decision gate criteria, measurement protocol |

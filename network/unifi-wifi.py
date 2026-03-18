@@ -527,6 +527,52 @@ def cmd_set_channel(s, ap_query, band, channel, yes=False):
         print(f"  Error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
 
 
+# ── Locate command ────────────────────────────────────────────────────────────
+
+def cmd_locate(s, ap_query, duration=None):
+    devices = get(s, "/stat/device")
+    aps = [d for d in devices if d.get("type") == "uap"]
+    q = ap_query.lower()
+    matches = [d for d in aps if q in d.get("name", "").lower()]
+
+    if not matches:
+        print(f"  No AP matching '{ap_query}'")
+        print(f"  Known APs: {', '.join(d.get('name', '?') for d in aps)}")
+        return
+    if len(matches) > 1:
+        print(f"  Ambiguous — '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
+        return
+
+    ap = matches[0]
+    name = ap.get("name", "?")
+    mac  = ap["mac"]
+
+    def locate_cmd(cmd):
+        r = s.post(f"{LEGACY}/cmd/devmgr", json={"cmd": cmd, "mac": mac}, timeout=10)
+        r.raise_for_status()
+        return r.json().get("meta", {})
+
+    meta = locate_cmd("set-locate")
+    if meta.get("rc") != "ok":
+        print(f"  Error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
+        return
+
+    print(f"  {name} LED is now flashing")
+
+    try:
+        if duration:
+            import time
+            print(f"  Auto-stopping in {duration}s... (Ctrl-C to stop early)")
+            time.sleep(duration)
+        else:
+            input("  Press Enter to stop locating...")
+    except KeyboardInterrupt:
+        print()
+    finally:
+        locate_cmd("unset-locate")
+        print(f"  {name} LED locate stopped")
+
+
 # ── Set-power command ─────────────────────────────────────────────────────────
 
 def cmd_set_power(s, ap_query, band, mode, tx_power=None, yes=False):
@@ -620,6 +666,9 @@ def main():
     p3.add_argument("band",    choices=["2.4", "5"], help="Radio band to change")
     p3.add_argument("channel", help="Channel number, or 'auto'")
     p3.add_argument("--yes",   action="store_true", help="Skip confirmation prompt")
+    p5 = sub.add_parser("locate", help="Flash an AP's LED to physically identify it")
+    p5.add_argument("ap", help="AP name (partial match OK)")
+    p5.add_argument("--duration", type=int, default=None, metavar="SECONDS", help="Auto-stop after N seconds (default: wait for Enter)")
 
     args = parser.parse_args()
     s = session()
@@ -643,6 +692,8 @@ def main():
     elif args.cmd == "set-channel":
         ch = args.channel if args.channel == "auto" else int(args.channel)
         cmd_set_channel(s, args.ap, args.band, ch, yes=args.yes)
+    elif args.cmd == "locate":
+        cmd_locate(s, args.ap, duration=args.duration)
 
 
 if __name__ == "__main__":
