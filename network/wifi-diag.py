@@ -188,12 +188,18 @@ def wifi_info(sp_data):
 def visible_networks(profiler_data):
     """Show nearby networks from already-fetched system_profiler data."""
     section("WiFi — Visible Networks (roaming candidates)")
-    print("  (RSSI in dBm — higher is stronger; BSSID identifies the AP)")
+    print("  (RSSI in dBm — higher/less negative is stronger)")
     print()
 
     try:
         iface = profiler_data["SPAirPortDataType"][0]["spairport_airport_interfaces"][0]
-        others = iface.get("spairport_network_information_other_local_wireless_networks", [])
+        # Key was renamed in macOS 15: spairport_network_information_other_local_wireless_networks
+        # → spairport_airport_other_local_wireless_networks. Try both for compatibility.
+        others = (
+            iface.get("spairport_network_information_other_local_wireless_networks")
+            or iface.get("spairport_airport_other_local_wireless_networks")
+            or []
+        )
     except (KeyError, IndexError):
         others = []
 
@@ -201,16 +207,35 @@ def visible_networks(profiler_data):
         print("  No other networks visible (or not on Wi-Fi)")
         return
 
-    # Header
-    print(f"  {'SSID':<32} {'BSSID':<20} {'RSSI':>6}  {'Channel':<10}  PHY")
-    print(f"  {'─'*32} {'─'*20} {'─'*6}  {'─'*10}  {'─'*10}")
-    for net in others:
+    def parse_rssi(net):
+        """Extract RSSI int from 'spairport_signal_noise' ('-56 dBm / -95 dBm') or plain int."""
+        raw = net.get("spairport_signal_noise", net.get("spairport_network_signal_strength"))
+        if raw is None:
+            return None, None
+        if isinstance(raw, str) and "/" in raw:
+            parts = raw.split("/")
+            try:
+                rssi  = int(parts[0].strip().split()[0])
+                noise = int(parts[1].strip().split()[0])
+                return rssi, noise
+            except (ValueError, IndexError):
+                pass
+        try:
+            return int(raw), None
+        except (ValueError, TypeError):
+            return None, None
+
+    # Header — omit BSSID (macOS redacts it for neighboring networks)
+    print(f"  {'SSID':<32} {'RSSI':>5}  {'Noise':>6}  {'Channel':<16}  PHY")
+    print(f"  {'─'*32} {'─'*5}  {'─'*6}  {'─'*16}  {'─'*16}")
+    for net in sorted(others, key=lambda n: parse_rssi(n)[0] or -100, reverse=True):
         ssid    = net.get("_name", "?")[:32]
-        bssid   = net.get("spairport_network_bssid", "?")
-        rssi    = net.get("spairport_signal_noise", net.get("spairport_network_signal_strength", "?"))
+        rssi, noise = parse_rssi(net)
+        rssi_str  = f"{rssi}" if rssi is not None else "?"
+        noise_str = f"{noise}" if noise is not None else "?"
         channel = net.get("spairport_network_channel", "?")
         phy     = net.get("spairport_network_phymode", "?")
-        print(f"  {ssid:<32} {bssid:<20} {str(rssi):>6}  {str(channel):<10}  {phy}")
+        print(f"  {ssid:<32} {rssi_str:>5}  {noise_str:>6}  {str(channel):<16}  {phy}")
 
 
 # ── IP / Gateway / DNS ────────────────────────────────────────────────────────

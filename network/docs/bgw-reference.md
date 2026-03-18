@@ -2,6 +2,31 @@
 
 AT&T fiber gateway at `http://192.168.8.254`. Double-NAT — not in IP passthrough mode. USG gets `192.168.8.65` via DHCP.
 
+## Hardware
+
+Captured 2026-03-18 via `http://192.168.8.254/cgi-bin/sysinfo.ha`.
+
+| Field | Value |
+|---|---|
+| Manufacturer | HUMAX |
+| Model | BGW320-500 |
+| Hardware Version | 02001F00460050 |
+| Software Version | 6.34.7 |
+| Serial Number | D93LD4GJ303300 |
+| WAN MAC | `bc:9a:8e:ed:fe:e0` |
+| First Use Date | 2024-11-19 |
+
+WiFi BSSIDs follow base MAC pattern: `e0` → `e4` (2.4GHz home), `e8`/`ec` (5GHz home/guest).
+
+**SFP / Fiber module** (from `just bgw fiber`):
+
+| Field | Value |
+|---|---|
+| Vendor | NOKIA |
+| Part Number | 3FE46899AB |
+| Serial Number | ALCLEC158B58 |
+| Date Code | 240530 (May 2024) |
+
 ## Access Model
 
 Two tiers of access:
@@ -92,10 +117,10 @@ def get(path, **kwargs):
     return SESSION.get(f"{BGW}/cgi-bin/{path}", timeout=10, **kwargs)
 ```
 
-## WiFi State (as of 2026-03-17, before disabling)
+## WiFi State
 
-- **2.4 GHz:** Enabled — SSID `ATTt6kgiKH`, WPA-2
-- **5 GHz:** Enabled — SSID `ATTt6kgiKH`, WPA-2
-- Guest network: Disabled on both bands
+**2026-03-17: Both bands disabled** via `wconfig_unified.ha` in browser. Confirmed off with `just bgw wifi`.
 
-The BGW WiFi is redundant — all home devices connect via UniFi APs. The BGW radio was broadcasting at -11 dBm on 2.4GHz ch 1, directly interfering with Josh Office and Tracy Office APs. Plan: disable via `wconfig_unified.ha` in browser, confirm via `bgw.py wifi` (pending implementation).
+Was broadcasting `ATTt6kgiKH` on 2.4GHz ch 11 (-32 dBm at nearest AP) and 5GHz ch 48 (-13 dBm) — directly interfering with our APs. All home devices connect via UniFi APs; BGW WiFi was redundant.
+
+Check `just bgw wifi` to confirm still disabled. Check `just unifi-wifi rfscan` to confirm gone from neighbor scan (rfscan data is passive/cached — allow ~15 min after change for APs to rescan).

@@ -1,6 +1,6 @@
 # Network Topology
 
-Last updated: 2026-03-16
+Last updated: 2026-03-18
 
 ## Physical Layout
 
@@ -89,6 +89,20 @@ for d in json.load(sys.stdin)['data']:
 **Important:** `just unifi-wifi aps` reads `radio_table_stats` (live observed), which lags after a change. Use `just unifi-api get /stat/device` and compare `radio_table` (config) vs `radio_table_stats` (live) to confirm the change was accepted before the radio fully transitions.
 
 **Confirmed valid 5GHz channels** (tested via API): 40, 44, 48, 157. Channels 36 and 149 are untested with the current AP models (U7LR, U7PG2, U7HD).
+
+## BGW320
+
+Hardware details and CGI endpoint reference: [`docs/bgw-reference.md`](docs/bgw-reference.md).
+
+### Known Issue: WiFi "Disabled" but still beaconing (2026-03-18)
+
+Both radios set to Disabled via `wconfig_unified.ha`. UI and `just bgw wifi` confirm
+Disabled, but `ATTt6kgiKH` (BSSID `bc:9a:8e:ed:fe:ec`) continued beaconing on 5GHz
+ch 149 at -50 dBm after a full restart — confirmed via `just unifi-wifi rfscan --fresh 5`.
+Channel also shifted from ch 48 → ch 149 while "disabled," indicating the radio is still
+active. Likely a firmware bug or AT&T remote management (TR-069/CWMP) overriding the
+setting. Next step if this matters: factory reset the BGW and re-disable WiFi before
+changing any other settings.
 
 ## Key IPs
 

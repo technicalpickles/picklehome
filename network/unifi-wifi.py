@@ -257,9 +257,144 @@ def cmd_client(s, query):
         print(f"  TX:            {tx_bytes/1_000_000:.1f} MB   RX: {rx_bytes/1_000_000:.1f} MB")
 
 
+# ── Config command ────────────────────────────────────────────────────────────
+
+def cmd_config(s):
+    section("WiFi Configuration — Roaming & Power-Save Settings")
+
+    # SSID settings
+    wlans = get(s, "/rest/wlanconf")
+    wlans = [w for w in wlans if w.get("enabled")]
+
+    print()
+    for w in wlans:
+        print(f"  SSID: {w.get('name', '?')}")
+        print(f"    Security:        {w.get('wpa_mode','?')}  wpa3={w.get('wpa3_support',False)}  wpa3_transition={w.get('wpa3_transition',False)}")
+        print(f"    Fast Roaming:    {w.get('fast_roaming_enabled', False)}  (802.11r)")
+        print(f"    BSS Transition:  {w.get('bss_transition', False)}  (802.11v steering hints)")
+        print(f"    UAPSD:           {w.get('uapsd_enabled', False)}  (AP buffers frames for sleeping clients)")
+
+        dtim_mode = w.get('dtim_mode', 'default')
+        dtim_ng   = w.get('dtim_ng', '?')
+        dtim_na   = w.get('dtim_na', '?')
+        print(f"    DTIM:            mode={dtim_mode}  2.4GHz={dtim_ng}  5GHz={dtim_na}  (wake interval for PSM clients)")
+
+        min_rssi         = w.get('minrate_na_enabled') or w.get('min_rssi_enabled')
+        min_rssi_val     = w.get('min_rssi', '—')
+        print(f"    Min RSSI:        enabled={min_rssi}  value={min_rssi_val}  (kicks clients below threshold)")
+
+        band_steering = w.get('band_steering_mode', w.get('no2ghz_oui', '—'))
+        print(f"    Band Steering:   {band_steering}")
+        print()
+
+    # Per-AP transmit power
+    devices = get(s, "/stat/device")
+    aps = sorted([d for d in devices if d.get("type") == "uap"], key=lambda d: d.get("name", ""))
+
+    print(f"  {'AP':<24}  {'Band':<6}  {'Ch':>4}  {'TxPow':>6}  {'MaxPow':>7}  {'Mode':<8}  {'Clients':>7}")
+    print(f"  {'─'*24}  {'─'*6}  {'─'*4}  {'─'*6}  {'─'*7}  {'─'*8}  {'─'*7}")
+
+    for ap in aps:
+        name = ap.get("name", ap.get("mac", "?"))
+        rt   = {r["radio"]: r for r in ap.get("radio_table", [])}
+        rts  = {r["radio"]: r for r in ap.get("radio_table_stats", [])}
+
+        for radio_key in ("ng", "na"):
+            cfg  = rt.get(radio_key)
+            stat = rts.get(radio_key)
+            if not cfg and not stat:
+                continue
+            b         = "5GHz" if radio_key == "na" else "2.4GHz"
+            channel   = (stat or cfg or {}).get("channel", "?")
+            tx_power      = stat.get("tx_power", "?") if stat else "?"
+            max_power     = cfg.get("max_txpower", "?") if cfg else "?"
+            tx_power_mode = cfg.get("tx_power_mode", "max") if cfg else "max"
+            num_sta       = stat.get("num_sta", 0) if stat else 0
+            at_max        = "  ← max" if tx_power_mode in ("max", "high") or (tx_power_mode == "max" and isinstance(tx_power, int) and isinstance(max_power, int) and tx_power >= max_power) else ""
+            print(f"  {name:<24}  {b:<6}  {str(channel):>4}  {str(tx_power):>5} dBm  {str(max_power):>5} dBm  {tx_power_mode:<8}  {num_sta:>7}{at_max}")
+        name = ""  # only print AP name on first radio row
+
+
+# ── Roaming history command ───────────────────────────────────────────────────
+
+def cmd_roaming(s, query, num_sessions=1):
+    section(f"Roaming History — {query}")
+
+    # Resolve query to a MAC. Check currently connected clients first, then
+    # all-user history so offline clients work too.
+    mac = None
+    q = query.lower()
+
+    clients = get(s, "/stat/sta")
+    for c in clients:
+        if (q in (c.get("hostname") or "").lower()
+                or q == (c.get("ip") or "").lower()
+                or q == (c.get("mac") or "").lower()):
+            mac = c["mac"]
+            break
+
+    if not mac:
+        all_users = get(s, "/stat/alluser")
+        for c in all_users:
+            if (q in (c.get("hostname") or "").lower()
+                    or q == (c.get("last_ip") or "").lower()
+                    or q == (c.get("mac") or "").lower()):
+                mac = c["mac"]
+                break
+
+    if not mac:
+        print(f"  No client found matching '{query}'")
+        return
+
+    # Build AP MAC → name map
+    devices = get(s, "/stat/device")
+    ap_names = {d["mac"]: d.get("name", d["mac"]) for d in devices if d.get("type") == "uap"}
+
+    # Fetch session history
+    r = s.get(f"{LEGACY}/stat/session", params={"mac": mac}, timeout=10)
+    r.raise_for_status()
+    sessions = r.json().get("data", [])[:num_sessions]
+
+    if not sessions:
+        print(f"  No session history found for {mac}")
+        return
+
+    for i, sess in enumerate(sessions):
+        sess_start = datetime.fromtimestamp(sess["assoc_time"]).strftime("%Y-%m-%d %H:%M:%S")
+        duration_s = sess.get("duration", 0)
+        h, rem = divmod(duration_s, 3600)
+        m, s_ = divmod(rem, 60)
+        dur_str = f"{h}h {m}m {s_}s" if h else f"{m}m {s_}s"
+
+        ap_name = ap_names.get(sess.get("ap_mac", ""), sess.get("ap_mac", "?"))
+        print(f"\n  Session {i+1}  started {sess_start}  duration {dur_str}  sat_avg={sess.get('satisfaction_avg', '?')}")
+        print()
+
+        segments = sess.get("roaming_sessions", [])
+        if not segments:
+            print(f"    (no per-segment roaming data)")
+            continue
+
+        print(f"  {'Time':<10}  {'AP':<24}  {'Duration':>9}  {'Sat':>4}  {'Band'}")
+        print(f"  {'─'*10}  {'─'*24}  {'─'*9}  {'─'*4}  {'─'*6}")
+
+        for seg in segments:
+            t = datetime.fromtimestamp(seg["start_time"]).strftime("%H:%M:%S")
+            ap = ap_names.get(seg.get("ap_mac", ""), seg.get("ap_mac", "?"))
+            d = seg.get("duration", 0)
+            dm, ds = divmod(d, 60)
+            d_str = f"{dm}m {ds}s" if dm else f"{ds}s"
+            sat = seg.get("satisfaction", "?")
+            band_key = seg.get("radio_band", "?")
+            b = "5 GHz" if band_key == "na" else "2.4 GHz" if band_key == "ng" else band_key
+
+            sat_flag = "  ←" if isinstance(sat, int) and sat < 90 else ""
+            print(f"  {t:<10}  {ap:<24}  {d_str:>9}  {sat:>4}{sat_flag}")
+
+
 # ── RF Scan command ───────────────────────────────────────────────────────────
 
-def cmd_rfscan(s, include_own=False):
+def cmd_rfscan(s, include_own=False, fresh_minutes=None):
     section("RF Scan — Neighboring APs (passive scan results)")
 
     neighbors = get(s, "/stat/rogueap")
@@ -277,6 +412,26 @@ def cmd_rfscan(s, include_own=False):
                 for vap in d.get("vap_table", []):
                     own_macs.add(vap.get("bssid", "").lower())
         neighbors = [n for n in neighbors if n.get("bssid", "").lower() not in own_macs]
+
+    now = datetime.now(timezone.utc).timestamp()
+
+    if fresh_minutes is not None:
+        cutoff = now - fresh_minutes * 60
+        neighbors = [n for n in neighbors if (n.get("last_seen") or 0) >= cutoff]
+        if not neighbors:
+            print(f"  No neighbors seen in the last {fresh_minutes} minutes")
+            return
+
+    def fmt_age(ts):
+        if not ts:
+            return "?"
+        diff = now - ts
+        if diff < 60:
+            return "<1m ago"
+        elif diff < 3600:
+            return f"{int(diff / 60)}m ago"
+        else:
+            return f"{diff / 3600:.1f}h ago"
 
     # Separate 2.4 GHz (ch 1-14) from 5 GHz (ch 36+)
     ghz24 = [n for n in neighbors if n.get("channel", 0) <= 14]
@@ -301,8 +456,8 @@ def cmd_rfscan(s, include_own=False):
         # Full neighbor table
         print()
         print(f"  {label} — all neighbors:")
-        print(f"  {'SSID':<32} {'BSSID':<18} {'Ch':>4}  {'Sig':>5}  {'Heard by'}")
-        print(f"  {'─'*32} {'─'*18} {'─'*4}  {'─'*5}  {'─'*24}")
+        print(f"  {'SSID':<32} {'BSSID':<18} {'Ch':>4}  {'Sig':>5}  {'Last Seen':>9}  {'Heard by'}")
+        print(f"  {'─'*32} {'─'*18} {'─'*4}  {'─'*5}  {'─'*9}  {'─'*24}")
 
         band_aps.sort(key=lambda n: (n.get("channel", 0), -(n.get("signal") or -100)))
         for n in band_aps:
@@ -311,9 +466,10 @@ def cmd_rfscan(s, include_own=False):
             ch       = n.get("channel", "?")
             sig      = n.get("signal", None)
             sig_str  = f"{sig}" if sig is not None else "?"
+            age_str  = fmt_age(n.get("last_seen"))
             # reported_by is a list of AP MACs that heard this neighbor
             heard    = ", ".join(n.get("ap_mac", [n.get("ap_mac", "?")])) if isinstance(n.get("ap_mac"), list) else (n.get("ap_mac") or "?")
-            print(f"  {ssid:<32} {bssid:<18} {str(ch):>4}  {sig_str:>5}  {heard}")
+            print(f"  {ssid:<32} {bssid:<18} {str(ch):>4}  {sig_str:>5}  {age_str:>9}  {heard}")
 
 
 # ── Set-channel command ───────────────────────────────────────────────────────
@@ -371,6 +527,70 @@ def cmd_set_channel(s, ap_query, band, channel, yes=False):
         print(f"  Error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
 
 
+# ── Set-power command ─────────────────────────────────────────────────────────
+
+def cmd_set_power(s, ap_query, band, mode, tx_power=None, yes=False):
+    radio_key = "na" if band == "5" else "ng"
+
+    devices = get(s, "/stat/device")
+    aps = [d for d in devices if d.get("type") == "uap"]
+    q = ap_query.lower()
+    matches = [d for d in aps if q == "all" or q in d.get("name", "").lower()]
+
+    if not matches:
+        print(f"  No AP matching '{ap_query}'")
+        print(f"  Known APs: {', '.join(d.get('name', '?') for d in aps)}")
+        return
+    if q != "all" and len(matches) > 1:
+        print(f"  Ambiguous — '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
+        return
+
+    band_label = "5 GHz" if band == "5" else "2.4 GHz"
+    print(f"\n  Band:    {band_label}")
+    print(f"  Mode:    {mode}" + (f"  ({tx_power} dBm)" if mode == "custom" else ""))
+    print()
+    print(f"  {'AP':<24}  {'Current TxPow':>13}  {'Max':>5}")
+    print(f"  {'─'*24}  {'─'*13}  {'─'*5}")
+
+    for ap in matches:
+        name = ap.get("name", "?")
+        rts  = {r["radio"]: r for r in ap.get("radio_table_stats", [])}
+        rt   = {r["radio"]: r for r in ap.get("radio_table", [])}
+        cur  = rts.get(radio_key, {}).get("tx_power", "?")
+        mx   = rt.get(radio_key, {}).get("max_txpower", "?")
+        print(f"  {name:<24}  {str(cur):>10} dBm  {str(mx):>3} dBm")
+
+    print()
+    if not yes:
+        ap_desc = "all APs" if q == "all" else f"{len(matches)} AP(s)"
+        confirm = input(f"  Set {band_label} tx power to {mode} on {ap_desc}? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("  Aborted.")
+            return
+
+    payload_extra = {"tx_power": tx_power} if mode == "custom" else {}
+
+    for ap in matches:
+        name  = ap.get("name", "?")
+        ap_id = ap["_id"]
+        rt    = {r["radio"]: r for r in ap.get("radio_table", [])}
+        radio_entry = rt.get(radio_key, {})
+        radio_name  = radio_entry.get("name", "wifi1" if radio_key == "na" else "wifi0")
+
+        r = s.put(
+            f"{LEGACY}/rest/device/{ap_id}",
+            json={"radio_table": [{"radio": radio_key, "name": radio_name,
+                                   "tx_power_mode": mode, **payload_extra}]},
+            timeout=10,
+        )
+        result = r.json()
+        meta = result.get("meta", {})
+        if meta.get("rc") == "ok":
+            print(f"  {name}: done")
+        else:
+            print(f"  {name}: error — {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -380,10 +600,21 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("aps",     help="All APs: radio config, channel utilization, client counts")
     sub.add_parser("clients", help="All WiFi clients: AP, signal, SNR, rates, satisfaction")
+    sub.add_parser("config",  help="SSID roaming/power-save settings and per-AP transmit power")
     p = sub.add_parser("client",  help="Detail for one client (hostname, IP, or MAC)")
     p.add_argument("query", help="Hostname, IP, or MAC address (partial hostname match OK)")
+    p_roam = sub.add_parser("roaming", help="Roaming history for one client: which APs, when, how long, satisfaction")
+    p_roam.add_argument("query", help="Hostname, IP, or MAC address (partial hostname match OK)")
+    p_roam.add_argument("--sessions", type=int, default=1, metavar="N", help="Number of past sessions to show (default: 1)")
     p2 = sub.add_parser("rfscan", help="Neighboring APs from passive RF scan — channel congestion summary")
     p2.add_argument("--own", action="store_true", help="Include your own APs in results")
+    p2.add_argument("--fresh", type=int, metavar="MINUTES", default=None, help="Only show neighbors seen within the last N minutes")
+    p4 = sub.add_parser("set-power", help="Set transmit power mode on an AP or all APs")
+    p4.add_argument("ap",   help="AP name (partial match OK), or 'all' for every AP")
+    p4.add_argument("band", choices=["2.4", "5"], help="Radio band")
+    p4.add_argument("mode", choices=["auto", "low", "medium", "high", "custom"], help="Power mode")
+    p4.add_argument("--dbm", type=int, default=None, help="dBm value when mode=custom")
+    p4.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     p3 = sub.add_parser("set-channel", help="Set radio channel on an AP (disconnects clients briefly)")
     p3.add_argument("ap",      help="AP name (partial match OK)")
     p3.add_argument("band",    choices=["2.4", "5"], help="Radio band to change")
@@ -393,14 +624,22 @@ def main():
     args = parser.parse_args()
     s = session()
 
-    if args.cmd == "aps":
+    if args.cmd == "config":
+        cmd_config(s)
+    elif args.cmd == "aps":
         cmd_aps(s)
     elif args.cmd == "clients":
         cmd_clients(s)
     elif args.cmd == "client":
         cmd_client(s, args.query)
+    elif args.cmd == "roaming":
+        cmd_roaming(s, args.query, num_sessions=args.sessions)
     elif args.cmd == "rfscan":
-        cmd_rfscan(s, include_own=args.own)
+        cmd_rfscan(s, include_own=args.own, fresh_minutes=args.fresh)
+    elif args.cmd == "set-power":
+        if args.mode == "custom" and args.dbm is None:
+            parser.error("--dbm required when mode=custom")
+        cmd_set_power(s, args.ap, args.band, args.mode, tx_power=args.dbm, yes=args.yes)
     elif args.cmd == "set-channel":
         ch = args.channel if args.channel == "auto" else int(args.channel)
         cmd_set_channel(s, args.ap, args.band, ch, yes=args.yes)
