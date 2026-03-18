@@ -11,7 +11,7 @@ thermostats:
         - time: "00:00"
           climate: sleep
         - time: "06:00"
-          climate: smart1  # Comfort Cool
+          climate: smart2  # Comfort Heat
 
       sunday: *downstairs_everyday
       monday: *downstairs_everyday
@@ -25,15 +25,15 @@ thermostats:
     schedule:
       _weekday: &upstairs_weekday
         - time: "00:00"
-          climate: smart1  # Comfort Cool
+          climate: smart2  # Comfort Heat
         - time: "10:00"
           climate: away    # Eco
         - time: "14:30"
-          climate: smart1  # Comfort Cool
+          climate: smart2  # Comfort Heat
 
       _weekend: &upstairs_weekend
         - time: "00:00"
-          climate: smart1  # Comfort Cool
+          climate: smart2  # Comfort Heat
 
       sunday: *upstairs_weekend
       monday: *upstairs_weekday

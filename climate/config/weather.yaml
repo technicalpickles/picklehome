@@ -1,0 +1,16 @@
+# climate/config/weather.yaml
+# Outdoor temperature sources and comfort-mode thresholds.
+# Run 'just climate-weather-discover' to find nearby stations.
+# Run 'just climate-weather' to see current outdoor temp.
+
+# Stations tried in order — first responding station wins.
+# Add discovered MACs here:
+stations: []
+
+# Temperature thresholds (°F) for comfort mode selection.
+# Below heat_below  → Comfort Heat (smart2)
+# Above cool_above  → Comfort Cool (smart1)
+# Between the two   → no change (hysteresis band)
+thresholds:
+  heat_below: 60
+  cool_above: 65

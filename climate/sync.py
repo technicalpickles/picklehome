@@ -1,4 +1,5 @@
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from pyecobee.errors import InvalidTokenError
 
 from climate.ecobee import auth, comforts, schedule, status
 from climate.ecobee.thermostats import load_thermostats, get_managed_thermostats
+from climate.ambient.client import DEFAULT_WEATHER_PATH
 
 DEFAULT_SCHEDULE_PATH = Path(__file__).parent / "config" / "schedule.yaml"
 DEFAULT_COMFORTS_PATH = Path(__file__).parent / "config" / "comforts.yaml"
@@ -286,6 +288,151 @@ def cmd_comforts_sync(args) -> None:
         sys.exit(1)
 
 
+def cmd_weather_discover(args) -> None:
+    import os
+    from climate.ambient.client import discover_stations_sync
+
+    lat_str = os.environ.get("HOME_LAT", "")
+    lon_str = os.environ.get("HOME_LON", "")
+    if not lat_str or not lon_str:
+        print("HOME_LAT and HOME_LON must be set. Run 'just dotenv'.")
+        sys.exit(1)
+    try:
+        lat, lon = float(lat_str), float(lon_str)
+    except ValueError:
+        print(f"HOME_LAT/HOME_LON are not valid floats: {lat_str!r}, {lon_str!r}")
+        sys.exit(1)
+
+    print(f"Searching within {args.radius} mile(s) of ({lat:.4f}, {lon:.4f})...")
+    try:
+        stations = discover_stations_sync(lat, lon, radius_miles=args.radius)
+    except RuntimeError as e:
+        print(f"Discovery failed: {e}")
+        sys.exit(1)
+
+    if not stations:
+        print("No outdoor stations found. Try --radius 2 or larger.")
+        sys.exit(1)
+
+    print(f"\nFound {len(stations)} outdoor station(s):\n")
+    for s in stations:
+        mac = s.get("macAddress", "unknown")
+        name = (s.get("info", {}).get("name")
+                or s.get("info", {}).get("coords", {}).get("location", "unnamed"))
+        temp = s.get("lastData", {}).get("tempf")
+        temp_str = f"{temp}°F" if temp is not None else "no temp"
+        print(f"  {mac}  {name}  ({temp_str})")
+    print("\nAdd desired MACs to climate/config/weather.yaml under 'stations:'.")
+
+
+def cmd_weather(args) -> None:
+    from climate.ambient.client import load_weather_config, get_configured_macs, get_outdoor_temp_from_stations
+
+    config = load_weather_config(args.weather)
+    macs = get_configured_macs(config)
+
+    if not macs:
+        print("No stations configured. Run 'just climate-weather-discover' and add MACs to weather.yaml.")
+        sys.exit(1)
+
+    result = get_outdoor_temp_from_stations(macs)
+    if result is None:
+        print("Could not read a fresh, plausible outdoor temp from any configured station.")
+        sys.exit(1)
+
+    mac, temp, age_minutes = result
+    age_str = f"{age_minutes:.0f} min old"
+
+    thresholds = config.get("thresholds", {})
+    heat_below = thresholds.get("heat_below", 60)
+    cool_above = thresholds.get("cool_above", 65)
+
+    if temp < heat_below:
+        mode = f"heat  → Comfort Heat (smart2)"
+    elif temp > cool_above:
+        mode = f"cool  → Comfort Cool (smart1)"
+    else:
+        mode = f"neutral  (between {heat_below}°F–{cool_above}°F, no change recommended)"
+
+    print(f"Outdoor temp: {temp}°F  ({age_str}, {mac})")
+    print(f"Comfort mode: {mode}")
+
+
+def _apply_comfort_mode(schedule_text: str, mode: str) -> str:
+    """Swap smart1↔smart2 in YAML `climate:` value positions only (not comments).
+
+    mode='heat' → smart1 → smart2 (Comfort Heat)
+    mode='cool' → smart2 → smart1 (Comfort Cool)
+    """
+    if mode == "heat":
+        return re.sub(r'(climate:\s*)smart1\b', r'\1smart2', schedule_text)
+    elif mode == "cool":
+        return re.sub(r'(climate:\s*)smart2\b', r'\1smart1', schedule_text)
+    else:
+        raise ValueError(f"Unknown mode: {mode!r}. Use 'heat' or 'cool'.")
+
+
+def cmd_comfort_switch(args) -> None:
+    from climate.ambient.client import load_weather_config, get_configured_macs, get_outdoor_temp_from_stations
+
+    mode = args.mode
+
+    if mode == "auto":
+        config = load_weather_config(args.weather)
+        macs = get_configured_macs(config)
+        if not macs:
+            print("No stations configured in weather.yaml. Run 'just climate-weather-discover'.")
+            sys.exit(1)
+        result = get_outdoor_temp_from_stations(macs)
+        if result is None:
+            print("Could not read outdoor temp from any configured station.")
+            sys.exit(1)
+        mac, temp, age_minutes = result
+        thresholds = config.get("thresholds", {})
+        heat_below = thresholds.get("heat_below", 60)
+        cool_above = thresholds.get("cool_above", 65)
+        if temp < heat_below:
+            mode = "heat"
+        elif temp > cool_above:
+            mode = "cool"
+        else:
+            print(f"Outdoor temp {temp}°F is in hysteresis band ({heat_below}–{cool_above}°F). No change.")
+            return
+        print(f"Outdoor temp: {temp}°F → switching to {mode}")
+
+    schedule_path = args.schedule
+    original = schedule_path.read_text()
+    updated = _apply_comfort_mode(original, mode)
+
+    if updated == original:
+        print(f"Schedule already set to {mode} comfort. Nothing to do.")
+        return
+
+    if args.dry_run:
+        print(f"[dry run] Would switch to {mode} comfort:")
+        for i, (old, new) in enumerate(zip(original.splitlines(), updated.splitlines()), 1):
+            if old != new:
+                print(f"  line {i}: {old.strip()!r} → {new.strip()!r}")
+        return
+
+    schedule_path.write_text(updated)
+    print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
+
+    sync_args = argparse.Namespace(
+        schedule=schedule_path,
+        thermostats=args.thermostats,
+        thermostat=None,
+        dry_run=False,
+    )
+    try:
+        cmd_sync(sync_args)
+    except SystemExit as e:
+        if e.code != 0:
+            print("Ecobee sync failed. Restoring schedule.yaml to original content.")
+            schedule_path.write_text(original)
+            raise
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Climate automation — Ecobee schedule, comfort, and status sync")
     subparsers = parser.add_subparsers(dest="command")
@@ -398,6 +545,63 @@ def main() -> None:
         help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
     )
 
+    discover_parser = subparsers.add_parser(
+        "discover-stations", help="List nearby outdoor Ambient Weather stations"
+    )
+    discover_parser.add_argument(
+        "--radius",
+        type=float,
+        default=1.0,
+        metavar="N",
+        help="Search radius in miles (default: 1.0)",
+    )
+
+    weather_parser = subparsers.add_parser(
+        "weather", help="Show current outdoor temp and comfort mode recommendation"
+    )
+    weather_parser.add_argument(
+        "--weather",
+        type=Path,
+        default=DEFAULT_WEATHER_PATH,
+        metavar="PATH",
+        help="Path to weather YAML (default: climate/config/weather.yaml)",
+    )
+
+    comfort_switch_parser = subparsers.add_parser(
+        "comfort-switch", help="Switch schedule comfort mode (heat|cool|auto)"
+    )
+    comfort_switch_parser.add_argument(
+        "mode",
+        choices=["heat", "cool", "auto"],
+        help="Comfort mode to apply, or 'auto' to decide from outdoor temp",
+    )
+    comfort_switch_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview changes without writing or syncing",
+    )
+    comfort_switch_parser.add_argument(
+        "--schedule",
+        type=Path,
+        default=DEFAULT_SCHEDULE_PATH,
+        metavar="PATH",
+        help="Path to schedule YAML (default: climate/config/schedule.yaml)",
+    )
+    comfort_switch_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+    comfort_switch_parser.add_argument(
+        "--weather",
+        type=Path,
+        default=DEFAULT_WEATHER_PATH,
+        metavar="PATH",
+        help="Path to weather YAML (default: climate/config/weather.yaml)",
+    )
+
     subparsers.choices["auth"].set_defaults(func=cmd_auth)
     subparsers.choices["list"].set_defaults(func=cmd_list)
     subparsers.choices["sync"].set_defaults(func=cmd_sync)
@@ -405,6 +609,9 @@ def main() -> None:
     subparsers.choices["status"].set_defaults(func=cmd_status)
     subparsers.choices["capture-comforts"].set_defaults(func=cmd_comforts_capture)
     subparsers.choices["sync-comforts"].set_defaults(func=cmd_comforts_sync)
+    subparsers.choices["discover-stations"].set_defaults(func=cmd_weather_discover)
+    subparsers.choices["weather"].set_defaults(func=cmd_weather)
+    subparsers.choices["comfort-switch"].set_defaults(func=cmd_comfort_switch)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):

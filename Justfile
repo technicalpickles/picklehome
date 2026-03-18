@@ -36,6 +36,22 @@ climate-comforts-sync *ARGS:
 climate-comforts-sync-dry *ARGS:
     uv run python -m climate.sync sync-comforts --dry-run {{ARGS}}
 
+# Discover nearby Ambient Weather stations (--radius N miles)
+climate-weather-discover *ARGS:
+    uv run python -m climate.sync discover-stations {{ARGS}}
+
+# Show current outdoor temp and comfort mode recommendation
+climate-weather *ARGS:
+    uv run python -m climate.sync weather {{ARGS}}
+
+# Switch schedule comfort mode: heat | cool | auto
+climate-comfort-switch MODE *ARGS:
+    uv run python -m climate.sync comfort-switch {{MODE}} {{ARGS}}
+
+# Preview comfort mode switch without writing or syncing
+climate-comfort-switch-dry MODE *ARGS:
+    uv run python -m climate.sync comfort-switch {{MODE}} --dry-run {{ARGS}}
+
 # ISP and CDN status: Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP
 network-status zip="":
     uv run network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}

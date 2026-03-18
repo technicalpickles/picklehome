@@ -16,5 +16,8 @@ network-diag-results/
 # BMAD skills are sourced from _bmad/ — leave other local skills committable
 .claude/skills/bmad-*/
 
+# Vendor / reference repos
+vendor/
+
 # OS
 .DS_Store
