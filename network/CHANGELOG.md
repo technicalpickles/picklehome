@@ -3,6 +3,29 @@
 Changes to network configuration, with rationale and follow-up checks.
 Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect current state.
 
+## Follow-up
+
+- [ ] **Roaming recheck after ch 48 move** — `just unifi-wifi roaming raisynglsiPhone --sessions 3`
+  after a day or two. Expect fewer segments and less Tracy ↔ Josh ↔ Upstairs cycling.
+  Prior check (2026-03-20, before ch 48 move): improved from 11-segment baseline but
+  still bouncy (5 segments/25 min in worst session). Ch 48 move should help further.
+- [ ] **Relocate Porch AP** — currently offline in Josh's office (co-located with Josh Office AP);
+  move to a useful location. See `docs/outdoor-wifi-research.md` for options.
+- [ ] **Ch 149 neighbor density** — 30 neighbors (strongest -79 dBm) vs ch 40 (17) and
+  ch 157 (12). Currently 2% utilization so not a problem. Recheck if Living Room clients
+  show persistent high retries.
+- [ ] **UAPSD off on all SSIDs** — low priority; may help iPhone PSM behavior but
+  Ubiquiti's own compatibility guide recommends off. Revisit only if iPhone PSM issues resurface.
+
+### Resolved
+
+- [x] ~~**Min RSSI `enabled=True` with no value on main SSID**~~ — 2026-03-20: display bug
+  in `unifi-wifi.py config` (was reading `minrate_na_enabled`). Min RSSI not configured. Fixed.
+- [x] ~~**BGW WiFi beaconing despite Disabled**~~ — 2026-03-20: resolved without factory reset.
+  No trace of SSID or BSSID in RF scan.
+- [x] ~~**5GHz TX power reduction verification**~~ — 2026-03-20: all radios confirmed mode=medium.
+- [x] ~~**Ch 48 clean after BGW disable**~~ — 2026-03-20: zero neighbors on ch 48 in RF scan.
+
 ---
 
 ## 2026-03-20
@@ -120,7 +143,7 @@ with Josh Office.
 disabled, ch 48 should be cleaner. Verify with rfscan after BGW clears.
 
 **Verify:**
-- [ ] `just unifi-wifi rfscan` after BGW clears — confirm ch 48 cleaner than ch 44
+- [x] `just unifi-wifi rfscan` — ch 48 confirmed clean (zero neighbors, 2026-03-20)
 
 ---
 
@@ -151,23 +174,3 @@ is acceptable.
 
 ---
 
-## Open / Pending
-
-- **UAPSD off on all SSIDs** — low priority; may help iPhone PSM behavior but
-  Ubiquiti's own compatibility guide recommends off; revisit after tx power change settles
-- **Relocate Porch AP** — currently offline in Josh's office (co-located with Josh Office AP);
-  move to a useful location. See `docs/outdoor-wifi-research.md` for options.
-- **Roaming still bouncy for raisynglsiPhone** — 2026-03-20 check: session 1 had
-  5 segments/3 APs in 25 min (Tracy Office ↔ Upstairs indecision), but session 2
-  was clean (2 segments in 1.5h). Improved from the 11-segment baseline on 2026-03-17
-  but not fully settled. Monitor over the next few days.
-- **Ch 149 has moderate neighbor density** — 30 neighbors (strongest -79 dBm) vs
-  ch 40 (17, -86 dBm) and ch 157 (12, -70 dBm). Not alarming but worth rechecking
-  if Living Room clients show persistent high retries.
-
-## Resolved
-
-- ~~**Min RSSI `enabled=True` with no value on main SSID**~~ — 2026-03-20: this was
-  a display bug in `unifi-wifi.py config`. The code was reading `minrate_na_enabled`
-  (minimum data rate) instead of `minrssi_enabled`. Min RSSI is not configured (keys
-  absent from API). Min data rate at 6 Mbps is a harmless default. Bug fixed.
