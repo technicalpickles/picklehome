@@ -1,6 +1,6 @@
 # Network Topology
 
-Last updated: 2026-03-18
+Last updated: 2026-03-20
 
 ## Physical Layout
 
@@ -32,11 +32,11 @@ Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from a
 
 | Location | Model | IP | 2.4GHz ch | 5GHz ch | Notes |
 |---|---|---|---|---|---|
-| Living Room | U7LR (AC LR) | 192.168.1.42 | 6 / 20MHz | 157 / 40MHz | Central AP, most clients |
-| Upstairs | U7HD (AC HD) | 192.168.1.103 | 6 / 20MHz | 157 / 40MHz | Shares ch 6 and ch 157 with Living Room |
-| Porch | U7LR (AC LR) | 192.168.1.16 | 11 / 20MHz | 44 / 40MHz | Outdoor/front porch |
-| Office (main) | U7PG2 (AC Pro) | 192.168.1.22 | 1 / 20MHz | 40 / 40MHz | |
-| Office (far side) | U7PG2 (AC Pro) | 192.168.1.194 | 11 / 20MHz | 44 / 40MHz | Separated from living room by brick wall; wired uplink confirmed clean |
+| Living Room | U7LR (AC LR) | 192.168.1.42 | 6 / 20MHz | 149 / 40MHz | Central AP, most clients |
+| Upstairs | U7HD (AC HD) | 192.168.1.103 | 6 / 20MHz | 157 / 40MHz | |
+| Porch | U7LR (AC LR) | 192.168.1.16 | 11 / 20MHz | 48 / 40MHz | **Offline** — pending relocation; see `docs/outdoor-wifi-research.md` |
+| Office (main / Josh) | U7PG2 (AC Pro) | 192.168.1.22 | 1 / 20MHz | 40 / 40MHz | |
+| Office (far side / Tracy) | U7PG2 (AC Pro) | 192.168.1.194 | 1 / 20MHz | 48 / 40MHz | Separated from Josh Office by full house; wired uplink confirmed clean |
 
 ### Channel Plan Notes
 
@@ -44,25 +44,21 @@ Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from a
 - Living Room and Upstairs both on **ch 6** — they compete with each other
 - Porch and Office (far side) both on **ch 11** — same issue
 
-5GHz (as of 2026-03-16 after optimization):
-- Living Room and Upstairs share **ch 157**
-- Porch on **ch 48** (moved from 44)
-- Office (far side / Tracy) still on **ch 44** — pending move, see below
-- Office (main / Josh) is on **ch 40** (unique)
+5GHz (as of 2026-03-19 after optimization):
+- Living Room on **ch 149** (moved from 157 to avoid co-channel with Upstairs)
+- Upstairs on **ch 157**
+- Porch on **ch 48** (offline — pending relocation)
+- Office (Tracy) on **ch 48** (moved from 40 on 2026-03-20 to reduce roaming churn)
+- Office (Josh) on **ch 40**
 
 Channel utilization as observed (2026-03-16): Living Room 2.4G at 51% (highest), all 5GHz radios under 10%.
 
-**RF scan summary (2026-03-16):** 2.4GHz is heavily congested on all three channels (130–178 neighbors each) — dense neighborhood, nothing actionable. 5GHz neighbor counts:
-- ch 40: 13 neighbors, all ≤ −82 dBm (cleanest)
-- ch 44: 76 neighbors, strongest −74 dBm (busiest — Porch and Tracy Office were both here)
-- ch 48: not scanned by neighbors (no external APs seen) — likely clean
-- ch 157: 16 neighbors, strongest −75 dBm (reasonable)
+**RF scan summary (2026-03-20):** 2.4GHz heavily congested on all three non-overlapping channels (146–157 neighbors each) — dense neighborhood, nothing actionable. 5GHz neighbor counts:
+- ch 40: 17 neighbors, strongest −86 dBm (cleanest)
+- ch 149: 30 neighbors, strongest −79 dBm (moderate — Living Room is here)
+- ch 157: 12 neighbors, strongest −70 dBm (reasonable)
 
-**Pending channel change:** Tracy Office (192.168.1.194) 5GHz should move from ch 44 → ch 40. Josh Office (far side of house) is also on ch 40 but they're physically well-separated so co-channel is not a concern. Do this during low-traffic time — the radio restarts briefly and disconnects clients for ~5–15s. Warn Tracy before executing.
-
-```bash
-just unifi-wifi set-channel "tracy" 5 40 --yes
-```
+**Channel change history:** Tracy Office moved from ch 44 → ch 40 on 2026-03-19. Both offices share ch 40 but are on opposite sides of the house — no co-channel concern.
 
 ### Changing Channels
 
@@ -94,15 +90,14 @@ for d in json.load(sys.stdin)['data']:
 
 Hardware details and CGI endpoint reference: [`docs/bgw-reference.md`](docs/bgw-reference.md).
 
-### Known Issue: WiFi "Disabled" but still beaconing (2026-03-18)
+### Resolved: WiFi "Disabled" but still beaconing (2026-03-18, resolved 2026-03-20)
 
 Both radios set to Disabled via `wconfig_unified.ha`. UI and `just bgw wifi` confirm
 Disabled, but `ATTt6kgiKH` (BSSID `bc:9a:8e:ed:fe:ec`) continued beaconing on 5GHz
 ch 149 at -50 dBm after a full restart — confirmed via `just unifi-wifi rfscan --fresh 5`.
 Channel also shifted from ch 48 → ch 149 while "disabled," indicating the radio is still
-active. Likely a firmware bug or AT&T remote management (TR-069/CWMP) overriding the
-setting. Next step if this matters: factory reset the BGW and re-disable WiFi before
-changing any other settings.
+active. Resolved without factory reset — 2026-03-20 RF scan shows no trace of the SSID
+or BSSID. The disable eventually propagated (possibly after the BGW restart settled).
 
 ## Key IPs
 

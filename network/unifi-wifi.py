@@ -279,9 +279,15 @@ def cmd_config(s):
         dtim_na   = w.get('dtim_na', '?')
         print(f"    DTIM:            mode={dtim_mode}  2.4GHz={dtim_ng}  5GHz={dtim_na}  (wake interval for PSM clients)")
 
-        min_rssi         = w.get('minrate_na_enabled') or w.get('min_rssi_enabled')
-        min_rssi_val     = w.get('min_rssi', '—')
+        min_rssi         = w.get('minrssi_enabled', False)
+        min_rssi_val     = w.get('minrssi', '—')
         print(f"    Min RSSI:        enabled={min_rssi}  value={min_rssi_val}  (kicks clients below threshold)")
+
+        minrate_na = w.get('minrate_na_enabled', False)
+        minrate_ng = w.get('minrate_ng_enabled', False)
+        minrate_na_kbps = w.get('minrate_na_data_rate_kbps', '?')
+        minrate_ng_kbps = w.get('minrate_ng_data_rate_kbps', '?')
+        print(f"    Min Rate:        5GHz={minrate_na} ({minrate_na_kbps} kbps)  2.4GHz={minrate_ng} ({minrate_ng_kbps} kbps)")
 
         band_steering = w.get('band_steering_mode', w.get('no2ghz_oui', '—'))
         print(f"    Band Steering:   {band_steering}")

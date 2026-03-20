@@ -5,6 +5,48 @@ Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect c
 
 ---
 
+## 2026-03-20
+
+### Moved Tracy Office 5GHz: ch 40 → ch 48
+
+**What:** `just unifi-wifi set-channel "tracy" 5 48 --yes`
+
+**Why:** Tracy's iPhone was bouncing rapidly between Tracy Office, Josh Office, and
+Upstairs APs from the upstairs bathroom (physically above Josh's office). Both offices
+were on ch 40, making them hard for the phone to distinguish. Ch 48 is completely clean
+(zero neighbors in RF scan) now that the BGW stopped beaconing on it. This gives three
+distinct channels from the bathroom: ch 40 (Josh), ch 48 (Tracy), ch 157 (Upstairs).
+
+**Verify:**
+- [x] Config and live stats both show ch 48 (confirmed via `/stat/device`)
+- [ ] `just unifi-wifi roaming raisynglsiPhone --sessions 3` after a day or two —
+  expect fewer segments and less Tracy ↔ Josh ↔ Upstairs cycling
+
+---
+
+## 2026-03-19
+
+### Moved Tracy Office 5GHz: ch 44 → ch 40
+
+**What:** `just unifi-wifi set-channel "tracy" 5 40 --yes`
+
+**Why:** Ch 44 had 54 neighbors (strongest -54 dBm). Ch 40 is the cleanest 5GHz channel
+(16 neighbors, all ≤ -88 dBm excluding stale BGW entries). Josh Office is also on ch 40
+but they're on opposite sides of the house — co-channel is not a concern.
+
+**Verify:**
+- [x] Config and live stats both show ch 40 (confirmed via `/stat/device`)
+
+### BGW WiFi confirmed not beaconing
+
+**What:** `just unifi-wifi rfscan --fresh 30` — no `ATTt6kgiKH` entries in the last 30 min.
+
+**Why:** Follow-up to the 2026-03-18 finding that BGW continued beaconing despite UI showing
+Disabled. All BGW entries in the full rfscan are now 13+ hours old (stale cache). The disable
+is holding — no factory reset needed.
+
+---
+
 ## 2026-03-17
 
 ### Disabled BGW WiFi (both bands)
@@ -18,7 +60,7 @@ via UniFi APs; BGW WiFi is redundant.
 
 **Verify:**
 - [x] `just bgw wifi` — both bands show Disabled ✓ (confirmed 2026-03-18)
-- [ ] `just unifi-wifi rfscan` — `ATTt6kgiKH` should be gone (allow ~15 min for APs to rescan)
+- [x] `just unifi-wifi rfscan` — `ATTt6kgiKH` gone ✓ (confirmed 2026-03-20, no SSID or BSSID in scan)
 
 **2026-03-18 follow-up:** BGW UI shows both bands Disabled, but `ATTt6kgiKH`
 (BSSID `bc:9a:8e:ed:fe:ec`, base MAC `bc:9a:8e:ed:fe:e0`) continued beaconing
@@ -27,6 +69,10 @@ both before and after a BGW restart. Channel also shifted from ch 48 → ch 149,
 suggesting the radio is still active and running auto channel selection despite
 the UI reporting Disabled. Likely a firmware bug or AT&T remote management
 overriding the setting. Next step: factory reset, re-disable WiFi, re-verify.
+
+**2026-03-20 follow-up:** Resolved without factory reset. RF scan shows no
+`ATTt6kgiKH` SSID and no `bc:9a:8e:ed:fe:ec` BSSID on any channel. The disable
+eventually took effect (possibly after the BGW restart propagated).
 
 ---
 
@@ -53,8 +99,10 @@ roaming churn.
 2.4GHz left at max — lower frequency penetrates walls better; reducing risks dead spots.
 
 **Verify:**
-- [ ] `just unifi-wifi config` — all 5GHz radios should show mode=medium
-- [ ] `just unifi-wifi roaming raisynglsiPhone --sessions 3` after a day or two — expect fewer segments per session and longer dwell times vs the 11-segment baseline from 2026-03-17
+- [x] `just unifi-wifi config` — all 5GHz radios show mode=medium ✓ (confirmed 2026-03-20)
+- [x] `just unifi-wifi roaming raisynglsiPhone --sessions 3` — improved but mixed (2026-03-20):
+  session 1 had 5 segments/25 min (Tracy ↔ Upstairs indecision), session 2 was clean
+  (2 segments/1.5h). Better than the 11-segment baseline. See Open/Pending for follow-up.
 
 ---
 
@@ -105,10 +153,21 @@ is acceptable.
 
 ## Open / Pending
 
-- **Tracy Office 5GHz: ch 44 → ch 40** — pending Tracy being off a call
-  - `just unifi-wifi set-channel "tracy" 5 40 --yes`
-  - Ch 40 is cleanest externally; Josh Office is also on ch 40 but far side of house
-- **Min RSSI `enabled=True` with no value on main SSID** — investigate whether this
-  is a no-op or actively kicking clients; verify in UniFi controller UI
 - **UAPSD off on all SSIDs** — low priority; may help iPhone PSM behavior but
   Ubiquiti's own compatibility guide recommends off; revisit after tx power change settles
+- **Relocate Porch AP** — currently offline in Josh's office (co-located with Josh Office AP);
+  move to a useful location. See `docs/outdoor-wifi-research.md` for options.
+- **Roaming still bouncy for raisynglsiPhone** — 2026-03-20 check: session 1 had
+  5 segments/3 APs in 25 min (Tracy Office ↔ Upstairs indecision), but session 2
+  was clean (2 segments in 1.5h). Improved from the 11-segment baseline on 2026-03-17
+  but not fully settled. Monitor over the next few days.
+- **Ch 149 has moderate neighbor density** — 30 neighbors (strongest -79 dBm) vs
+  ch 40 (17, -86 dBm) and ch 157 (12, -70 dBm). Not alarming but worth rechecking
+  if Living Room clients show persistent high retries.
+
+## Resolved
+
+- ~~**Min RSSI `enabled=True` with no value on main SSID**~~ — 2026-03-20: this was
+  a display bug in `unifi-wifi.py config`. The code was reading `minrate_na_enabled`
+  (minimum data rate) instead of `minrssi_enabled`. Min RSSI is not configured (keys
+  absent from API). Min data rate at 6 Mbps is a harmless default. Bug fixed.
