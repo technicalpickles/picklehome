@@ -117,6 +117,38 @@ def cmd_broadband():
             print(f"  {key:<35} {pairs[key]}")
 
 
+def cmd_wifi():
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(f"{BGW}/cgi-bin/home.ha")
+        page.wait_for_load_state("networkidle")
+        text = page.inner_text("body")
+        browser.close()
+
+    print("BGW WiFi Status")
+    print("─" * 50)
+
+    for band in ("2.4 GHz", "5 GHz"):
+        # In the rendered text, look for "<band> Frequency Status  Enabled/Disabled"
+        m = re.search(
+            rf"{re.escape(band)} Frequency Status\s+(Enabled|Disabled)",
+            text, re.IGNORECASE
+        )
+        freq_status = m.group(1) if m else "unknown"
+
+        # SSID appears as "Network Name (SSID)  <value>" in the text block for each band
+        # Find the band section and extract SSID from it
+        band_section = text[m.start():m.start() + 500] if m else text
+        ssid_m = re.search(r"Network Name \(SSID\)\s+(\S+)", band_section)
+        ssid = ssid_m.group(1) if ssid_m else "—"
+
+        status_icon = "✓" if freq_status.lower() == "disabled" else "⚠"
+        print(f"  {band:<8}  Radio: {freq_status:<10}  SSID: {ssid}  {status_icon}")
+
+
 # Maps CLI action name → (form button selector, completion marker in output)
 DIAG_ACTIONS = {
     "trace":    ("input[name='Trace']",  "test done"),
@@ -164,8 +196,9 @@ def main():
     parser = argparse.ArgumentParser(description="AT&T BGW diagnostic tool")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("fiber", help="Fiber signal / optical status")
+    sub.add_parser("fiber",     help="Fiber signal / optical status")
     sub.add_parser("broadband", help="Broadband WAN connection status")
+    sub.add_parser("wifi",      help="BGW WiFi radio status (both bands)")
 
     for cmd, desc in [
         ("trace", "Traceroute from BGW WAN interface"),
@@ -182,6 +215,8 @@ def main():
         cmd_fiber()
     elif args.cmd == "broadband":
         cmd_broadband()
+    elif args.cmd == "wifi":
+        cmd_wifi()
     else:
         cmd_diag(args.cmd, args.target, getattr(args, "ipv6", False))
 
