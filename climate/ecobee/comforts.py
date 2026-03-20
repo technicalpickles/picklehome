@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 from pyecobee.const import ECOBEE_ENDPOINT_THERMOSTAT
 
-from climate.ecobee.thermostats import get_thermostat_id
+from climate.ecobee.thermostats import get_thermostat_id, get_managed_thermostats
 
 
 def capture_all_thermostats(ecobee) -> list[tuple[str, str, list]]:
@@ -54,9 +54,12 @@ def load_comforts(path: str | Path) -> dict:
 
 
 def iter_thermostat_entries(data: dict, registry: dict, name_filter: str | None = None):
-    """Yield (name, thermostat_id, climates_dict) for each configured thermostat."""
+    """Yield (name, thermostat_id, climates_dict) for each managed thermostat in comforts.yaml."""
+    managed = {name for name, _ in get_managed_thermostats(registry)}
     for name, entry in data["thermostats"].items():
         if name_filter and name != name_filter:
+            continue
+        if name not in managed:
             continue
         if not isinstance(entry, dict):
             raise ValueError(f"Thermostat '{name}' entry must be a mapping")
@@ -109,7 +112,7 @@ def apply_comforts_to_climates(comforts_dict: dict, current_climates: list) -> l
     return updated
 
 
-def push_comforts(ecobee, thermostat_id: str, updated_climates: list) -> None:
+def push_comforts(ecobee, thermostat_id: str, updated_climates: list, schedule: list) -> None:
     body = {
         "selection": {
             "selectionType": "thermostats",
@@ -117,6 +120,7 @@ def push_comforts(ecobee, thermostat_id: str, updated_climates: list) -> None:
         },
         "thermostat": {
             "program": {
+                "schedule": schedule,
                 "climates": updated_climates,
             }
         },

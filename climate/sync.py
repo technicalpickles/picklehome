@@ -273,7 +273,7 @@ def cmd_comforts_sync(args) -> None:
             continue
 
         try:
-            comforts.push_comforts(ecobee, thermostat_id, updated_climates)
+            comforts.push_comforts(ecobee, thermostat_id, updated_climates, program["schedule"])
         except InvalidTokenError:
             print("Tokens invalid. Re-run 'just climate-auth'.")
             sys.exit(1)
