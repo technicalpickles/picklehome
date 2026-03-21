@@ -248,6 +248,192 @@ def cmd_resolve(host: str):
         print("\n  IPs consistent across all nameservers")
 
 
+def cmd_topology(s, fmt="text"):
+    """Live network topology from device uplink chain."""
+    data = get_legacy(s, "/stat/device")
+    devices = data.get("data", [])
+
+    # Build lookup by MAC
+    by_mac = {}
+    for d in devices:
+        mac = d.get("mac", "")
+        by_mac[mac] = d
+
+    # Build parent→children map using uplink info
+    children = {}  # parent_mac → [(port, child_device)]
+    roots = []
+    for d in devices:
+        uplink = d.get("uplink") or {}
+        parent_mac = uplink.get("uplink_mac", "")
+        if parent_mac and parent_mac in by_mac:
+            children.setdefault(parent_mac, []).append(
+                (uplink.get("uplink_remote_port", "?"), d)
+            )
+        else:
+            roots.append(d)
+
+    # Sort children by port number
+    for mac in children:
+        children[mac].sort(key=lambda x: (int(x[0]) if str(x[0]).isdigit() else 999))
+
+    def device_label(d):
+        name = d.get("name", d.get("mac", "?"))
+        model = d.get("model_name") or d.get("model", "?")
+        ip = d.get("ip", "?")
+        state = "online" if d.get("state") == 1 else "offline"
+        return name, model, ip, state
+
+    def radio_summary(d):
+        """Return radio info lines for APs."""
+        if d.get("type") != "uap":
+            return []
+        lines = []
+        for r in d.get("radio_table_stats", []):
+            band = "2.4GHz" if r.get("radio") == "ng" else "5GHz"
+            ch = r.get("channel", "?")
+            tx = r.get("tx_power", "?")
+            clients = r.get("num_sta", 0)
+            lines.append(f"{band} ch {ch} @ {tx}dBm ({clients} clients)")
+        return lines
+
+    def radio_badge(d):
+        """Compact radio info for mermaid nodes."""
+        if d.get("type") != "uap":
+            return ""
+        parts = []
+        for r in d.get("radio_table_stats", []):
+            band = "2.4" if r.get("radio") == "ng" else "5"
+            ch = r.get("channel", "?")
+            tx = r.get("tx_power", "?")
+            parts.append(f"{band}:ch{ch}/{tx}dBm")
+        total = sum(r.get("num_sta", 0) for r in d.get("radio_table_stats", []))
+        if parts:
+            return " ".join(parts) + f" [{total} clients]"
+        return ""
+
+    if fmt == "text":
+        _topology_text(roots, children, device_label, radio_summary)
+    elif fmt == "mermaid":
+        _topology_mermaid(roots, children, by_mac, device_label, radio_badge)
+    elif fmt == "dot":
+        _topology_dot(roots, children, by_mac, device_label, radio_badge)
+
+
+def _topology_text(roots, children, label_fn, radio_fn):
+    """Render topology as indented text tree."""
+    def walk(device, prefix="", is_last=True):
+        name, model, ip, state = label_fn(device)
+        connector = "└─ " if prefix else ""
+        if prefix:
+            connector = "└─ " if is_last else "├─ "
+        state_str = f" [{state}]" if state != "online" else ""
+        print(f"{prefix}{connector}{name}  ({model})  {ip}{state_str}")
+
+        radios = radio_fn(device)
+        mac = device.get("mac", "")
+        kids = children.get(mac, [])
+        child_prefix = prefix + ("   " if is_last else "│  ")
+        if prefix:
+            child_prefix = prefix + ("   " if is_last else "│  ")
+
+        for line in radios:
+            print(f"{child_prefix}  {line}")
+
+        for i, (port, child) in enumerate(kids):
+            last = i == len(kids) - 1
+            port_str = f"[port {port}] " if port != "?" else ""
+            name_c, model_c, ip_c, state_c = label_fn(child)
+            state_str_c = f" [{state_c}]" if state_c != "online" else ""
+            conn = "└─ " if last else "├─ "
+            print(f"{child_prefix}{conn}{port_str}{name_c}  ({model_c})  {ip_c}{state_str_c}")
+
+            child_radios = radio_fn(child)
+            grand_prefix = child_prefix + ("   " if last else "│  ")
+            for line in child_radios:
+                print(f"{grand_prefix}  {line}")
+
+            # Recurse into grandchildren
+            child_mac = child.get("mac", "")
+            grandkids = children.get(child_mac, [])
+            for j, (gport, grandchild) in enumerate(grandkids):
+                glast = j == len(grandkids) - 1
+                walk(grandchild, grand_prefix, glast)
+
+    for root in roots:
+        walk(root)
+
+
+def _topology_mermaid(roots, children, by_mac, label_fn, badge_fn):
+    """Render topology as mermaid flowchart."""
+    print("```mermaid")
+    print("graph TD")
+
+    def node_id(d):
+        return d.get("mac", "x").replace(":", "")
+
+    def walk(device):
+        nid = node_id(device)
+        name, model, ip, state = label_fn(device)
+        badge = badge_fn(device)
+        label_parts = [f"{name}", f"{model} · {ip}"]
+        if badge:
+            label_parts.append(badge)
+        if state != "online":
+            label_parts.append(f"⚠ {state}")
+        label = "<br/>".join(label_parts)
+        print(f"    {nid}[\"{label}\"]")
+
+        if state != "online":
+            print(f"    style {nid} stroke-dasharray: 5 5")
+
+        mac = device.get("mac", "")
+        for port, child in children.get(mac, []):
+            cid = node_id(child)
+            port_label = f"port {port}" if port != "?" else ""
+            walk(child)
+            if port_label:
+                print(f"    {nid} -->|{port_label}| {cid}")
+            else:
+                print(f"    {nid} --> {cid}")
+
+    for root in roots:
+        walk(root)
+    print("```")
+
+
+def _topology_dot(roots, children, by_mac, label_fn, badge_fn):
+    """Render topology as graphviz DOT."""
+    print("digraph topology {")
+    print("    rankdir=TB;")
+    print("    node [shape=box, fontname=\"monospace\", fontsize=10];")
+    print("    edge [fontname=\"monospace\", fontsize=9];")
+
+    def node_id(d):
+        return d.get("mac", "x").replace(":", "")
+
+    def walk(device):
+        nid = node_id(device)
+        name, model, ip, state = label_fn(device)
+        badge = badge_fn(device)
+        label_parts = [name, f"{model} · {ip}"]
+        if badge:
+            label_parts.append(badge)
+        label = "\\n".join(label_parts)
+        style = ", style=dashed" if state != "online" else ""
+        print(f"    {nid} [label=\"{label}\"{style}];")
+
+        mac = device.get("mac", "")
+        for port, child in children.get(mac, []):
+            cid = node_id(child)
+            port_label = f" [label=\"port {port}\"]" if port != "?" else ""
+            walk(child)
+            print(f"    {nid} -> {cid}{port_label};")
+
+    for root in roots:
+        walk(root)
+    print("}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="UniFi USG diagnostic tool")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -258,6 +444,8 @@ def main():
     sub.add_parser("dns", help="USG dnsmasq config: upstream forwarders and fallback resolvers (SSH)")
     p = sub.add_parser("resolve", help="Resolve hostname via 1.1.1.1 vs BGW DNS and compare (SSH)")
     p.add_argument("host", help="Hostname to resolve")
+    p_topo = sub.add_parser("topology", help="Live network topology: device tree with uplink ports and radio state")
+    p_topo.add_argument("--format", choices=["text", "mermaid", "dot"], default="text", help="Output format (default: text)")
 
     args = parser.parse_args()
 
@@ -277,6 +465,8 @@ def main():
         cmd_wan(s)
     elif args.cmd == "wan-detail":
         cmd_wan_detail(s)
+    elif args.cmd == "topology":
+        cmd_topology(s, fmt=args.format)
 
 
 if __name__ == "__main__":

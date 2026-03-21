@@ -1,6 +1,6 @@
 # Network Topology
 
-Last updated: 2026-03-20
+Last updated: 2026-03-21
 
 ## Physical Layout
 
@@ -26,65 +26,130 @@ UniFi CloudKey G2 Plus (network controller)
     UniFi Network: 10.1.85
 ```
 
-## Access Points
+## Hardware Inventory
 
-Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from a US 8 PoE 150W switch.
+### Infrastructure
 
-| Location | Model | IP | 2.4GHz ch | 5GHz ch | Notes |
-|---|---|---|---|---|---|
-| Living Room | U7LR (AC LR) | 192.168.1.42 | 6 / 20MHz | 149 / 40MHz | Central AP, most clients |
-| Upstairs | U7HD (AC HD) | 192.168.1.103 | 6 / 20MHz | 157 / 40MHz | |
-| Porch | U7LR (AC LR) | 192.168.1.16 | 11 / 20MHz | 48 / 40MHz | **Offline** — pending relocation; see `docs/outdoor-wifi-research.md` |
-| Office (main / Josh) | U7PG2 (AC Pro) | 192.168.1.22 | 1 / 20MHz | 40 / 40MHz | |
-| Office (far side / Tracy) | U7PG2 (AC Pro) | 192.168.1.194 | 1 / 20MHz | 48 / 40MHz | Separated from Josh Office by full house; wired uplink confirmed clean |
+| Device | Model | IP | Firmware | Notes |
+|---|---|---|---|---|
+| AT&T BGW320 | BGW320-505 | 192.168.8.254 | — | Fiber gateway; WiFi disabled; admin UI at `http://192.168.8.254` |
+| USG 3P | USG 3P | 192.168.8.65 (WAN) / 192.168.1.1 (LAN) | 4.4.57 | Router/firewall |
+| CloudKey G2 Plus | — | 192.168.1.57 | Network 10.1.85 | UniFi controller; UI at `https://192.168.1.57` |
 
-### Channel Plan Notes
+### Switches
 
-2.4GHz uses only the three non-overlapping channels (1 / 6 / 11) — correct. However:
-- Living Room and Upstairs both on **ch 6** — they compete with each other
-- Porch and Office (far side) both on **ch 11** — same issue
+| Name | Model | IP | Firmware | Notes |
+|---|---|---|---|---|
+| US 8 PoE 150W | US 8 PoE 150W | 192.168.1.134 | 7.0.50 | Main PoE switch — powers all APs |
+| US 24 | US 24 | 192.168.1.99 | 7.0.50 | |
+| US 8 | US 8 | 192.168.1.17 | 7.0.50 | |
+| US 8 | US 8 | 192.168.1.25 | 5.76.7 | **Offline** |
 
-5GHz (as of 2026-03-19 after optimization):
-- Living Room on **ch 149** (moved from 157 to avoid co-channel with Upstairs)
-- Upstairs on **ch 157**
-- Porch on **ch 48** (offline — pending relocation)
-- Office (Tracy) on **ch 48** (moved from 40 on 2026-03-20 to reduce roaming churn)
-- Office (Josh) on **ch 40**
+### Access Points
 
-Channel utilization as observed (2026-03-16): Living Room 2.4G at 51% (highest), all 5GHz radios under 10%.
+Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from the US 8 PoE 150W.
 
-**RF scan summary (2026-03-20):** 2.4GHz heavily congested on all three non-overlapping channels (146–157 neighbors each) — dense neighborhood, nothing actionable. 5GHz neighbor counts:
-- ch 40: 17 neighbors, strongest −86 dBm (cleanest)
-- ch 149: 30 neighbors, strongest −79 dBm (moderate — Living Room is here)
-- ch 157: 12 neighbors, strongest −70 dBm (reasonable)
+| Name | Model Code | Model | IP | Firmware | Floor | Mount | Antenna | Notes |
+|---|---|---|---|---|---|---|---|---|
+| Living Room AC LR | U7LR | AC Long Range | 192.168.1.42 | 6.6.65 | 1st | Floor, facing up | High-gain focused beam | Central AP, most clients; open stairwell nearby |
+| Upstairs AC HD | U7HD | AC High Density | 192.168.1.103 | 6.6.65 | 2nd | Ceiling | Wide uniform | Above/near the stairwell opening |
+| Josh Office AC Pro | U7PG2 | AC Pro | 192.168.1.22 | 6.6.65 | 1st | Floor under desk, facing up | Standard omni | Same room as Porch AP (co-located) |
+| Tracy Office AC Pro | U7PG2 | AC Pro | 192.168.1.194 | 6.6.65 | 1st | Floor, facing up | Standard omni | Converted carport; brick wall between it and main house |
+| Porch AC LR | U7LR | AC Long Range | 192.168.1.16 | 6.6.65 | 1st | Was: exterior wall, horizontal, facing backyard | High-gain focused beam | **Offline** — currently in Josh's office; pending relocation; see `docs/outdoor-wifi-research.md` |
 
-**Channel change history:** Tracy Office moved from ch 44 → ch 40 on 2026-03-19. Both offices share ch 40 but are on opposite sides of the house — no co-channel concern.
+> **Live state:** Run `just usg topology` for the full device tree with uplink ports and radio state.
+> Run `just unifi-wifi aps` for current channels, utilization, retries, and tx power.
+> Run `just unifi-wifi config` for SSID settings and per-AP power mode.
+> Run `just usg devices` for all adopted devices with firmware versions.
+> Use `just usg topology --format mermaid` to generate a diagram for docs.
 
-### Changing Channels
+### AP Model Characteristics
+
+| Model | 2.4 GHz Max | 5 GHz Max | Design Intent |
+|---|---|---|---|
+| U7LR (AC Long Range) | 24 dBm | 22 dBm | Focused high-gain antenna for long range; reaches further than needed in a home |
+| U7HD (AC High Density) | 25 dBm | 25 dBm | Wide coverage for many clients in smaller area; highest raw power |
+| U7PG2 (AC Pro) | 22 dBm | 22 dBm | Balanced omnidirectional; lowest max power of the three |
+
+---
+
+## Channel & Power Plan
+
+**This section documents _why_ the current configuration exists.** Update entries in-place
+when making changes — don't append. For change history, see `CHANGELOG.md`.
+
+### 2.4 GHz Channel Assignments
+
+Only three non-overlapping channels exist: **1, 6, 11**. Dense neighborhood means all three
+are congested with 70-110 external neighbors each — channel selection is about minimizing
+*internal* co-channel between our own APs, not avoiding neighbors.
+
+| Channel | APs | Why |
+|---|---|---|
+| **1** | Josh Office, Tracy Office | Offices are on opposite sides of the house — co-channel is acceptable at this distance |
+| **6** | Living Room | Only AP on ch 6 after Upstairs moved to ch 11 (2026-03-21) |
+| **11** | Upstairs | Moved from ch 6 to eliminate co-channel with Living Room through open stairwell. **Porch will conflict when it comes back** — re-plan at that point (only 3 channels for 5 APs) |
+
+### 5 GHz Channel Assignments
+
+5 GHz is much cleaner — shorter range through walls means fewer neighbor conflicts.
+
+| Channel | APs | Why |
+|---|---|---|
+| **40** | Josh Office | Cleanest 5 GHz channel (fewest neighbors, all weak) |
+| **48** | Tracy Office, Porch (offline) | Clean since BGW WiFi was disabled (was interfering at -13 dBm). Tracy moved here from ch 40 (2026-03-20) so phones in the bathroom above Josh's office see three distinct channels and roam cleanly |
+| **149** | Living Room | Moved from ch 157 (2026-03-16) to avoid co-channel with Upstairs. Moderate neighbor count but low utilization |
+| **157** | Upstairs | Low neighbor count, reasonable interference levels |
+
+### 2.4 GHz Power Plan
+
+| AP | Mode | Actual | Why |
+|---|---|---|---|
+| Living Room AC LR | medium | ~15 dBm | Reduced from max/17 dBm (2026-03-21) — LR's high-gain antenna was pushing signal through open stairwell into Upstairs zone; all 2.4 GHz clients have strong signal. See `docs/24ghz-power-tuning.md` |
+| Upstairs AC HD | medium | ~16 dBm | Reduced from max/19 dBm (2026-03-21) — was blasting down through stairwell; only 1-2 clients on this radio |
+| Josh Office AC Pro | max | 15 dBm | Left at max — AC Pro max (22 dBm) produces only 15 dBm; already moderate |
+| Tracy Office AC Pro | max | 15 dBm | Same as Josh Office — AC Pro's max is naturally lower than LR/HD |
+
+### 5 GHz Power Plan
+
+All APs set to **medium** (2026-03-17). Reduced from max to limit cell overlap and
+reduce iPhone roaming churn — Tracy's phone was showing 11 roam segments/hour at max power.
+See CHANGELOG.md 2026-03-17 entry.
+
+| AP | Actual (medium) | Max |
+|---|---|---|
+| Josh Office AC Pro | 14 dBm | 22 dBm |
+| Living Room AC LR | 13 dBm | 22 dBm |
+| Tracy Office AC Pro | 14 dBm | 22 dBm |
+| Upstairs AC HD | 16 dBm | 25 dBm |
+
+### Constraints & Trade-offs
+
+- **Only 3 non-overlapping 2.4 GHz channels for 5 APs** — co-channel is unavoidable somewhere.
+  Current strategy: pair APs that are physically distant on the same channel.
+- **Open stairwell** between Living Room (1st floor) and Upstairs (2nd floor) means RF
+  travels freely between floors — power reduction and channel separation both matter here.
+- **AC-LR "Long Range" antenna** on Living Room is a liability — its focused beam amplifies
+  vertical leakage through the stairwell. Would benefit from replacement with an AC Pro or
+  similar omnidirectional AP if other changes are being made.
+- **Porch AP return will force a re-plan** — it was on ch 11 (2.4 GHz) and ch 48 (5 GHz).
+  Ch 11 now conflicts with Upstairs; ch 48 shares with Tracy Office.
+
+### Inspecting & Changing Configuration
 
 ```bash
-# See current channels and RF environment
-just unifi-wifi aps
-just unifi-wifi rfscan
+# Current state
+just unifi-wifi aps                              # channels, power, utilization, retries
+just unifi-wifi config                           # SSID settings + per-AP power mode
+just unifi-wifi rfscan --summary --fresh 60      # neighbor congestion per channel
 
-# Change a channel (prompts for confirmation unless --yes)
+# Make changes (prompts for confirmation unless --yes)
 just unifi-wifi set-channel "tracy" 5 36
-just unifi-wifi set-channel "porch" 5 48 --yes
-
-# Validate the change took (config vs. live stats may lag by ~30s)
-just unifi-api get /stat/device | python3 -c "
-import json, sys
-for d in json.load(sys.stdin)['data']:
-    if d.get('type') == 'uap':
-        cfg  = {r['radio']: r.get('channel') for r in d.get('radio_table', [])}
-        live = {r['radio']: r.get('channel') for r in d.get('radio_table_stats', [])}
-        print(d['name'], '| config:', cfg, '| live:', live)
-"
+just unifi-wifi set-power "living" 2.4 medium --yes
 ```
 
-**Important:** `just unifi-wifi aps` reads `radio_table_stats` (live observed), which lags after a change. Use `just unifi-api get /stat/device` and compare `radio_table` (config) vs `radio_table_stats` (live) to confirm the change was accepted before the radio fully transitions.
-
-**Confirmed valid 5GHz channels** (tested via API): 40, 44, 48, 157. Channels 36 and 149 are untested with the current AP models (U7LR, U7PG2, U7HD).
+**After any change:** update this section's rationale, add a CHANGELOG.md entry, and verify
+with `just unifi-wifi aps`.
 
 ## BGW320
 
@@ -188,24 +253,44 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 
 ## Diagnostic Tools
 
+> **Note:** The authoritative CLI reference is in `network/CLAUDE.md`. This section is a
+> quick-reference subset. When in doubt, check `just --list` or `just unifi-wifi --help`.
+
 ```bash
-# Client WiFi and connectivity diagnostic (run on any Mac in the house)
+# Live topology — device tree with uplink ports and radio state
+just usg topology                                # text tree (default)
+just usg topology --format mermaid               # mermaid diagram for docs
+just usg topology --format dot                   # graphviz DOT
+
+# Quick network health check (AP retries + RF neighbors + watched device roaming)
+just unifi-wifi checkup
+just unifi-wifi checkup --sessions 3
+
+# WiFi diagnostics — AP perspective
+just unifi-wifi aps                              # channels, utilization, retries, power
+just unifi-wifi aps --sort retries               # worst retries first
+just unifi-wifi clients                          # all connected WiFi clients
+just unifi-wifi client <hostname|ip>             # detail for one client
+just unifi-wifi roaming                          # roaming for all watched devices
+just unifi-wifi roaming <hostname> --sessions 5  # roaming for one device
+just unifi-wifi rfscan --summary --fresh 60      # neighbor congestion summary
+just unifi-wifi config                           # SSID settings + per-AP power mode
+
+# WiFi diagnostics — client perspective (run on any Mac)
 just wifi-diag
-just wifi-diag --no-trace --no-speed   # quick version
+just wifi-diag --no-trace --no-speed
 
-# UniFi WiFi diagnostics — AP radio stats and per-client signal from the AP side
-just unifi-wifi aps                         # all APs: channel, utilization, client count, retries
-just unifi-wifi clients                     # all WiFi clients: AP, signal, SNR, rates, satisfaction
-just unifi-wifi client <hostname|ip>        # detail for one client
-just unifi-wifi rfscan                      # neighboring APs by channel — congestion summary
-just unifi-wifi set-channel <ap> <band> <ch> [--yes]  # change AP radio channel
+# Infrastructure
+just usg devices                                 # all adopted devices + firmware
+just usg wan-detail                              # WAN IP, gateway, DNS, counters
+just bgw fiber                                   # BGW fiber signal / optical metrics
+just bgw broadband                               # WAN connection status
 
-# Raw UniFi API — for debugging/exploration
+# ISP and CDN status
+just network-status                              # Cloudflare + Radar BGP + RIPE BGP state
+just network-status 30318                        # + AT&T outage check by ZIP
+
+# Raw API — last resort for debugging
 just unifi-api get /stat/device
 just unifi-api get /stat/sta
-just unifi-api put /rest/device/<id> '{"radio_table": [...]}'
-
-# ISP and CDN status (Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP)
-just network-status
-just network-status 30318
 ```

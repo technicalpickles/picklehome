@@ -122,6 +122,27 @@ just wifi-diag --no-trace --no-speed   # quick run (skip traceroute + speed test
 
 No `.env` or API keys required — runs standalone on any Mac with `uv` installed.
 
+### `usg.py` — UniFi USG and infrastructure diagnostics
+
+Queries the CloudKey API for device inventory, WAN status, and network topology.
+Requires `UNIFI_API_KEY` in `.env`. SSH commands (`dns`, `resolve`) also need
+`UNIFI_ADMIN_USERNAME` and `UNIFI_ADMIN_PASSWORD`.
+
+```bash
+just usg topology                        # live device tree with uplink ports + radio state
+just usg topology --format mermaid       # mermaid diagram for docs
+just usg topology --format dot           # graphviz DOT
+just usg devices                         # all adopted devices with firmware versions
+just usg stats                           # USG CPU, memory, uplink rates
+just usg wan-detail                      # WAN IP, gateway, DNS, port counters
+just usg dns                             # dnsmasq forwarder config (SSH)
+```
+
+**Common diagnostic workflows:**
+- "What's plugged in where?" → `topology` (shows full switch-port-to-device mapping)
+- "Device inventory / firmware?" → `devices`
+- "WAN issues?" → `wan-detail` for IP/DNS/counters, `stats` for CPU/mem
+
 ### `unifi-api.py` — Raw UniFi CloudKey API wrapper
 
 Thin wrapper around the CloudKey legacy API that handles auth and TLS, letting you
