@@ -211,6 +211,18 @@ wheels = [
 ]
 
 [[package]]
+name = "blueair-api"
+version = "1.48.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6d/be/f61ab1818d78bd7c8dcd0bac418b711d450118b3a3a24d53583a30dd5d02/blueair_api-1.48.6.tar.gz", hash = "sha256:81c52f92ed8676599d46375e017e5a42d819c1722d5512c97d9c6ba0b783931d", size = 21591 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/95/04e247839d40f1758495538381ca9481b5eaa61efd3b6dd2a7308bc9dbea/blueair_api-1.48.6-py3-none-any.whl", hash = "sha256:982b801aa3dffb82ccc2653b65f6bc3ec6ffff7170018436e66cccec17db636b", size = 19581 },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.2.25"
 source = { registry = "https://pypi.org/simple" }
@@ -785,6 +797,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aioambient" },
+    { name = "blueair-api" },
     { name = "dnspython" },
     { name = "keyring" },
     { name = "paramiko" },
@@ -803,6 +816,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aioambient", specifier = "==2024.8.0" },
+    { name = "blueair-api", specifier = ">=1.48" },
     { name = "dnspython", specifier = ">=2.6" },
     { name = "keyring", specifier = ">=24" },
     { name = "paramiko", specifier = ">=3.0" },
