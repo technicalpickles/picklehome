@@ -83,17 +83,67 @@ Use **Custom storage layout** in the installer:
 
 ## Post-Install (over SSH)
 
-_TODO: concrete commands for each step._
+### Disk Layout (verified)
 
-Planned:
+LVM on `/dev/sda4`:
 
-- Admin user: SSH key-only login, disable password SSH
+| Volume | Size | Mount |
+|--------|------|-------|
+| `vg0-root` | 30 GB | `/` |
+| `vg0-srv` | 30 GB | `/srv` |
+| **VFree** | ~49 GB | expandable later |
+
+Swap: installer-created `/swap.img` (~3.7 GB), configured in `/etc/fstab`.
+
+### Disable password SSH login
+
+```bash
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo systemctl restart ssh
+```
+
+Verify from another machine: `ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no picklelab` should get `Permission denied (publickey)`.
+
+### Unattended security updates
+
+Already installed on Ubuntu Server 24.04 minimized. Enable auto-apply:
+
+```bash
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+On minimized installs, this falls back to readline (no `dialog` package) — answer `yes`.
+
+### Docker Engine + Compose + `/srv` layout
+
+Scripted install: `homelab/scripts/setup-docker.sh`
+
+Installs Docker CE 29.3, Compose plugin, buildx from the official Docker apt repo. Configures:
+
+- `data-root: /srv/docker` — keeps images/layers off root LV
+- Log driver: `json-file` with 10MB × 3 file rotation per container
+- `/srv` directories: `/srv/docker`, `/srv/data`, `/srv/containers`
+- Adds current user to `docker` group (re-login required)
+
+### Tailscale
+
+Scripted install: `homelab/scripts/setup-tailscale.sh`
+
+- Installed on host (not in Docker) for reliable remote access even if container networking fails
+- Tailscale IP: `100.123.122.68`
+- SSH over Tailscale verified working
+
+**Client setup (Mac):**
+
+1. Install: `brew install --cask tailscale` (GUI app — not the CLI-only `brew install tailscale`, which requires manually running `tailscaled`)
+2. Open Tailscale from Applications, sign in with the same account
+3. Verify: `tailscale status` should show both your Mac and `picklelab`
+4. Test: `ssh technicalpickles@100.123.122.68`
+
+MagicDNS is enabled — `ssh picklelab` and `ssh picklelab.tail2023b7.ts.net` both work from any device on the tailnet. No SSH config or `/etc/hosts` needed.
+
+### TODO
+
 - Static DHCP lease on USG
-- Swapfile creation (2 GB)
-- Unattended security updates
-- Docker Engine + Compose plugin install and `daemon.json`
-- Tailscale install (on host, not in Docker)
-- `/srv` directory layout (`/srv/data`, `/srv/containers`, `/srv/docker`)
 - Log rotation config
 - Clone infra repo to `/opt/homelab`
-- Set hostname (e.g., `nuc`)
