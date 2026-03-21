@@ -5,6 +5,8 @@ __pycache__/
 
 # Credentials — never commit
 .env
+lighting/caseta-bridge.json
+lighting/.certs/
 
 # Network diagnostic results contain public IPs, internal IPs, device names
 network/diag-results/

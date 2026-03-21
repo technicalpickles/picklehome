@@ -84,6 +84,10 @@ bgw *ARGS:
 unifi *ARGS:
     uv run network/unifi_cli.py {{ARGS}}
 
+# Lutron Caseta lighting: just lutron devices | status | on <device> | off <device> | set <device> <value>
+lutron *ARGS:
+    uv run lighting/lutron_cli.py {{ARGS}}
+
 # Client WiFi and connectivity diagnostic (run on any Mac in the house)
 wifi-diag *ARGS:
     uv run network/wifi-diag.py {{ARGS}}

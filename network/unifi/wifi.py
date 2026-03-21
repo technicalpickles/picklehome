@@ -2,7 +2,23 @@
 
 from datetime import datetime, timezone
 
+from mac_vendor_lookup import MacLookup
+
 from network.unifi import LEGACY, get, section
+
+_mac_lookup = MacLookup()
+
+
+def vendor_lookup(mac):
+    """Look up manufacturer from MAC address OUI. Returns short vendor or ''."""
+    try:
+        name = _mac_lookup.lookup(mac)
+    except Exception:
+        return ""
+    # Shorten common long suffixes for table readability
+    for suffix in [", Inc.", " Inc.", ", Ltd.", " Ltd.", " Co.,", " Co.", " Corp.", " Corporation"]:
+        name = name.replace(suffix, "")
+    return name.strip()[:20]
 
 
 # ── Signal quality helpers ────────────────────────────────────────────────────
@@ -115,11 +131,13 @@ def cmd_clients(s):
     # Sort: by AP name, then signal strength ascending (weakest last)
     clients.sort(key=lambda c: (c.get("last_uplink_name", ""), c.get("signal", 0)))
 
-    print(f"  {'Hostname':<28} {'IP':<16} {'AP':<24} {'Band':<6} {'Ch':>4}  {'Sig':>5}  {'SNR':>4}  {'TxMbps':>7}  {'Sat':>4}  {'Retry%':>7}")
-    print(f"  {'─'*28} {'─'*16} {'─'*24} {'─'*6} {'─'*4}  {'─'*5}  {'─'*4}  {'─'*7}  {'─'*4}  {'─'*7}")
+    print(f"  {'Hostname':<28} {'Vendor':<22} {'IP':<16} {'AP':<24} {'Band':<6} {'Ch':>4}  {'Sig':>5}  {'SNR':>4}  {'TxMbps':>7}  {'Sat':>4}  {'Retry%':>7}")
+    print(f"  {'─'*28} {'─'*22} {'─'*16} {'─'*24} {'─'*6} {'─'*4}  {'─'*5}  {'─'*4}  {'─'*7}  {'─'*4}  {'─'*7}")
 
     for c in clients:
         hostname = (c.get("name") or c.get("hostname") or c.get("mac", "?"))[:28]
+        mac      = c.get("mac", "")
+        vendor   = vendor_lookup(mac) if mac else ""
         ip       = c.get("ip", c.get("last_ip", "?"))
         ap_name  = (c.get("last_uplink_name") or c.get("ap_mac", "?"))[:24]
         radio    = c.get("radio", "?")
@@ -136,7 +154,7 @@ def cmd_clients(s):
         sat_str = f"{sat}" if sat >= 0 else "—"
         ret_str = f"{retries:.1f}" if retries is not None else "?"
 
-        print(f"  {hostname:<28} {ip:<16} {ap_name:<24} {b:<6} {str(channel):>4}  {sig_str:>5}  {snr_str:>4}  {tx_rate:>7}  {sat_str:>4}  {ret_str:>7}")
+        print(f"  {hostname:<28} {vendor:<22} {ip:<16} {ap_name:<24} {b:<6} {str(channel):>4}  {sig_str:>5}  {snr_str:>4}  {tx_rate:>7}  {sat_str:>4}  {ret_str:>7}")
 
 
 # ── Single client command ─────────────────────────────────────────────────────

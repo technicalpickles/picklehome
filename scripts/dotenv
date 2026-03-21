@@ -82,3 +82,15 @@ fi
 
 mv "$tmp" "$OUTPUT"
 echo "Generated $OUTPUT from $TEMPLATE"
+
+# Write Lutron Caseta TLS certs from 1Password to disk
+# Certs are stored single-line with literal \n — restore real newlines via sed
+CERTS_DIR="lighting/.certs"
+mkdir -p "$CERTS_DIR"
+for item in "client_key:client.key" "client_cert:client.crt" "ca_cert:ca.crt"; do
+    field="${item%%:*}"
+    file="${item##*:}"
+    op read "op://picklehome/Lutron Caseta/$field" | sed 's/\\n/\n/g' > "$CERTS_DIR/$file"
+done
+chmod 600 "$CERTS_DIR"/*.key
+echo "Wrote Lutron certs to $CERTS_DIR/"
