@@ -66,7 +66,6 @@ def cmd_discover(args) -> None:
         print(f"    UUID:  {device.uuid}")
         print(f"    Model: {device.model}")
         print(f"    SKU:   {device.sku}")
-        print(f"    MAC:   {device.mac}")
         print()
 
     purifiers_path = args.purifiers
