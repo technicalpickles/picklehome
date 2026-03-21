@@ -20,7 +20,13 @@ async def discover_devices(
 
 
 def _clean_value(value):
-    """Convert the NotImplemented sentinel to None."""
+    """Convert the NotImplemented sentinel to None.
+
+    The blueair-api library uses Python's NotImplemented singleton (not None)
+    for sensors/controls a device doesn't support. For example, the 411i Max
+    returns NotImplemented for PM1, PM10, VOC, temperature, and humidity since
+    it only has a PM2.5 sensor. We normalize to None for clean downstream use.
+    """
     if value is NotImplemented:
         return None
     return value

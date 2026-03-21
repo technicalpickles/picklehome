@@ -13,6 +13,11 @@ from climate.blueair.devices import DEFAULT_PURIFIERS_PATH, get_managed_purifier
 from climate.blueair.status import format_status
 
 
+# Each command uses a single asyncio.run() calling one async helper.
+# The blueair-api aiohttp session is bound to one event loop — splitting
+# work across multiple asyncio.run() calls fails with "Event loop is closed".
+
+
 async def _auth(email: str, password: str, region: str) -> int:
     """Validate credentials and return device count."""
     devices, api = await discover_devices(email, password, region)

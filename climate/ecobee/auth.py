@@ -11,6 +11,9 @@ PIN_POLL_INTERVAL = 30        # seconds between request_tokens() calls
 
 
 class KeychainEcobee(Ecobee):
+    # The parent Ecobee class calls _write_config() after every token refresh.
+    # We override it to persist tokens to Keychain instead of a JSON file,
+    # so any API call that triggers a refresh automatically saves new tokens.
     def _write_config(self) -> None:
         if self.access_token:
             keyring.set_password(KEYCHAIN_SERVICE, "access_token", self.access_token)

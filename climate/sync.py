@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 
 import yaml
+# InvalidTokenError means the OAuth tokens have expired beyond what auto-refresh
+# can fix. The only recovery is re-running the PIN auth flow (just climate-auth).
 from pyecobee.errors import InvalidTokenError
 
 from climate.ecobee import auth, comforts, schedule, status
