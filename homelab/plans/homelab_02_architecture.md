@@ -15,7 +15,7 @@ The homelab runs on a single Intel NUC with:
 - local SSD storage
 - external Synology NAS available for backups and bulk storage
 
-The system is intended to host a small set of lightweight always-on services, support occasional remote development via VS Code devcontainers, and serve as a safe place to experiment with admin automation and coding agents.
+The system is intended to host a small set of lightweight always-on services, support occasional remote development via devcontainers, and serve as a safe place to experiment with admin automation and coding agents.
 
 This is a constrained single-node environment. It is not designed for high availability, horizontal scaling, or multi-node orchestration.
 
@@ -80,7 +80,7 @@ Reasons for this choice:
 - low operational overhead
 - good fit for a small number of services on one machine
 - easy to understand and troubleshoot
-- works well with VS Code devcontainers
+- works well with devcontainers
 
 Kubernetes was not chosen because:
 
@@ -286,7 +286,8 @@ The following ideas were considered but intentionally deferred:
   - too much complexity for the current scale
 
 - **heavy configuration management systems**
-  - tools like Puppet are powerful, but likely too much framework for a single host at this stage
+  - prior experience with Puppet confirms it works, but it introduces substantial machinery for a single host
+  - a repo of shell scripts + Compose + systemd + a validation layer (goss) is lighter weight and achieves the same declarative intent with less framework overhead
 
 - **multi-node architecture**
   - unnecessary until a real scaling or availability problem appears

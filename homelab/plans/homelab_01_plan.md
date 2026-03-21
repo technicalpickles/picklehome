@@ -25,6 +25,8 @@ This document captures the concrete, practical plan for building and operating t
 
 Primary goal: **prevent container workloads from exhausting the root filesystem.**
 
+On small Docker hosts, the most common cause of "server suddenly dead" is unbounded container log growth (`json-file` driver with no limits), followed by stale images and build cache accumulation. The daemon config below addresses both.
+
 Recommended layout:
 
 - `/` → ~30 GB
@@ -129,13 +131,14 @@ Internal service naming options:
 
 ## Development Workloads
 
-The host will also support **ephemeral VS Code devcontainers.**
+The host will support **ephemeral devcontainer‑based development** and **agent‑assisted host administration.**
 
-Workflow:
+Primary editor is **neovim** (not VS Code). The expected workflow involves SSH into the host via Tailscale and working from the terminal.
 
-1. Connect via VS Code Remote‑SSH
-2. Open project folder on host
-3. Reopen in Dev Container
+### Open questions
+
+- **Devcontainers over a remote Docker host:** devcontainers work locally and over SSH, but the exact workflow for running them against a remote Docker engine (without VS Code) needs investigation. Options may include devcontainer CLI, direct Docker Compose, or SSH + local container reopen.
+- **Agent as host admin:** a coding agent (e.g., Claude Code) should be usable over SSH for managing the host through the infra repo and wrapper commands — same access model described in the agent access doc.
 
 Devcontainer images and build cache are treated as disposable and subject to periodic pruning.
 
@@ -209,7 +212,7 @@ Principles:
 ## Near‑Term Roadmap
 
 - Introduce reverse proxy for internal HTTPS hostnames
-- Add validation checks (e.g., goss)
+- Add goss validation checks (prior experience with the tool; strong fit for this use case)
 - Improve backup automation and retention
 - Consider moving Home Assistant to dedicated hardware if it becomes critical
 

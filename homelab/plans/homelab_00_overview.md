@@ -7,15 +7,15 @@ This homelab runs on a single Intel NUC and is intended to support lightweight a
 Primary goals:
 
 - Run a small number of always‑on self‑hosted services (e.g., Home Assistant, reverse proxy, utility apps)
-- Provide a remote Docker host for VS Code devcontainers and ad‑hoc development workloads
+- Provide a remote Docker host for devcontainers and ad‑hoc development workloads
 - Enable safe experimentation with infrastructure automation and coding agents
 - Maintain a reproducible system that can be rebuilt quickly from backups and source control
 
 ## Hardware Summary
 
-- Intel NUC (Celeron J3455 class hardware)
+- Intel NUC6CAYH (Celeron J3455, 4‑core/4‑thread, 1.5 GHz base / 2.3 GHz burst, 10 W TDP)
 - 4 GB RAM
-- Local SSD for OS and container workloads
+- Local SSD (2.5" SATA bay) for OS and container workloads
 - External Synology NAS available for backups and bulk storage
 
 This is a resource‑constrained single‑node environment. Design choices favor low overhead, operational clarity, and resilience to disk or memory pressure.
@@ -42,7 +42,7 @@ Optional or future components may include:
 
 - Reverse proxy (e.g., Caddy) for internal hostnames and TLS
 - restic‑based backups to Synology
-- Validation tooling (e.g., goss) to assert expected host and service state
+- goss for host and service state validation (prior experience; planned, not optional)
 - Controlled execution environment for coding or admin agents
 
 ## Scope and Constraints
