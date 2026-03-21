@@ -21,6 +21,9 @@ def format_status(statuses: list[dict]) -> str:
         model = s["model"].replace("Blueair ", "")
         lines.append(f"{name} ({model})")
 
+        if s.get("wifi_working") is False:
+            lines.append("  ** Offline **")
+
         if s.get("standby"):
             lines.append("  Standby")
             if s["filter_usage_percentage"] is not None:
