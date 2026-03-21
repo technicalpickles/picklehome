@@ -58,14 +58,38 @@ Queries the CloudKey legacy API for per-AP radio stats and per-client WiFi metri
 Requires `UNIFI_API_KEY` in `.env`.
 
 ```bash
+# Quick health check
+just unifi-wifi checkup                      # composite: AP retries + RF neighbors + watched device roaming
+just unifi-wifi checkup --sessions 3         # with more roaming history per device
+
+# Diagnostics (read-only)
 just unifi-wifi aps                          # all APs: channel, utilization, client count, retries
+just unifi-wifi aps --sort retries           # sort APs by worst retry rate
+just unifi-wifi aps --sort utilization       # sort APs by channel utilization
 just unifi-wifi clients                      # all WiFi clients: AP, signal, SNR, rates, satisfaction
 just unifi-wifi client <hostname|ip>         # detail for one client (partial hostname OK)
-just unifi-wifi roaming <hostname|ip>        # roaming history: which APs, when, duration, satisfaction
+just unifi-wifi roaming                      # roaming history for all watched devices (from .env)
+just unifi-wifi roaming <hostname|ip>        # roaming history for a specific device
 just unifi-wifi roaming <hostname|ip> --sessions 3  # show last N sessions
+just unifi-wifi rfscan                       # neighboring APs from passive RF scan — channel congestion
+just unifi-wifi rfscan --summary             # channel congestion only, skip full neighbor list
+just unifi-wifi rfscan --fresh 60            # only neighbors seen in last N minutes
+just unifi-wifi rfscan --own                 # include own APs in the scan results
+just unifi-wifi config                       # SSID roaming/power-save settings + per-AP transmit power
+
+# Actions (mutating — will prompt for confirmation)
+just unifi-wifi set-channel <ap> <band> <ch> # change radio channel (e.g. "tracy" 5 36)
+just unifi-wifi set-power <ap> <band> <mode> # set tx power mode (auto/low/medium/high/custom)
+just unifi-wifi set-power all 2.4 medium     # set all APs at once
 just unifi-wifi locate <ap-name>             # flash AP LED to physically identify it (Enter to stop)
 just unifi-wifi locate <ap-name> --duration 30  # auto-stop after 30s
 ```
+
+**Common diagnostic workflows:**
+- "Quick network health check?" → `checkup` (AP retries + RF neighbors + watched device roaming in one command)
+- "Nosy neighbors / interference?" → `rfscan --fresh 60` for neighbor count per channel, `aps` for RX utilization
+- "Phone roaming OK?" → `roaming` (no args = all watched devices), or `roaming <hostname> --sessions 5` for one
+- "Current RF config?" → `config` for SSID settings + per-AP tx power, `aps` for live channel/utilization
 
 Key fields: `signal` (dBm from AP), `noise`, `SNR`, `tx_rate`, `wifi_tx_retries_percentage`,
 `satisfaction` (UniFi composite score 0–100), `cu_total` (channel utilization %).
@@ -135,3 +159,4 @@ Read these when working on a specific tool — do not load by default.
 | `docs/wifi-ios-unifi.md` | Diagnosing iPhone WiFi issues — iOS PSM/roaming behavior, UniFi settings that affect it, diagnostic workflow, current network config snapshot |
 | `docs/outdoor-wifi-research.md` | Outdoor backyard coverage — hardware comparison (U7LR vs U7 Outdoor), mounting orientation, TX power/channel starting config, decision gate criteria, measurement protocol |
 | `docs/wifi-survey-tools.md` | WiFi survey and floor plan tools — WiFiMan (free, LiDAR heatmap), NetSpot (paid, multi-metric), Design Center (free, simulated), InnerSpace (live coverage); recommended workflow and comparison |
+| `docs/cloud-gateway-upgrade-research.md` | Replacing CloudKey Gen2 + USG with a Cloud Gateway — model comparison (UDM Pro/SE/Pro Max), migration process, features unlocked, WiFi 7 AP lineup |

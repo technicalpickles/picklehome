@@ -27,12 +27,19 @@ Notes on UniFi signal fields:
 """
 
 import argparse
+import os
 import sys
 from datetime import datetime, timezone
 
 from network.unifi import LEGACY, session
 
 SEP = "─" * 70
+
+
+def watched_devices():
+    """Load watched device hostnames from UNIFI_WATCHED_DEVICES env var."""
+    raw = os.environ.get("UNIFI_WATCHED_DEVICES", "")
+    return [d.strip() for d in raw.split(",") if d.strip()]
 
 
 def get(s, path):
@@ -84,7 +91,7 @@ def kbps_to_mbps(kbps):
 
 # ── APs command ───────────────────────────────────────────────────────────────
 
-def cmd_aps(s):
+def cmd_aps(s, sort_by="name"):
     section("Access Points — Radio Stats")
 
     devices = get(s, "/stat/device")
@@ -94,7 +101,18 @@ def cmd_aps(s):
         print("  No APs found")
         return
 
-    aps.sort(key=lambda d: d.get("name", ""))
+    def ap_sort_key(d):
+        if sort_by == "retries":
+            rts = {r["radio"]: r for r in d.get("radio_table_stats", [])}
+            max_retry = max((rts.get(k, {}).get("tx_retries_pct", 0) or 0) for k in ("ng", "na"))
+            return (-max_retry, d.get("name", ""))
+        elif sort_by == "utilization":
+            rts = {r["radio"]: r for r in d.get("radio_table_stats", [])}
+            max_cu = max((rts.get(k, {}).get("cu_total", 0) or 0) for k in ("ng", "na"))
+            return (-max_cu, d.get("name", ""))
+        return d.get("name", "")
+
+    aps.sort(key=ap_sort_key)
 
     for ap in aps:
         name   = ap.get("name", ap.get("mac", "?"))
@@ -400,7 +418,7 @@ def cmd_roaming(s, query, num_sessions=1):
 
 # ── RF Scan command ───────────────────────────────────────────────────────────
 
-def cmd_rfscan(s, include_own=False, fresh_minutes=None):
+def cmd_rfscan(s, include_own=False, fresh_minutes=None, summary_only=False):
     section("RF Scan — Neighboring APs (passive scan results)")
 
     neighbors = get(s, "/stat/rogueap")
@@ -458,6 +476,9 @@ def cmd_rfscan(s, include_own=False, fresh_minutes=None):
             sigs = by_channel[ch]
             strongest = max(sigs)
             print(f"    ch {str(ch):<5}  {len(sigs):>3} neighbor(s)   strongest: {strongest} dBm")
+
+        if summary_only:
+            continue
 
         # Full neighbor table
         print()
@@ -643,6 +664,20 @@ def cmd_set_power(s, ap_query, band, mode, tx_power=None, yes=False):
             print(f"  {name}: error — {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
 
 
+# ── Checkup composite command ─────────────────────────────────────────────────
+
+def cmd_checkup(s, num_sessions=1):
+    """Composite network health check: AP retries, RF neighbors, watched device roaming."""
+    cmd_aps(s, sort_by="retries")
+    cmd_rfscan(s, fresh_minutes=60, summary_only=True)
+    devices = watched_devices()
+    if devices:
+        for device in devices:
+            cmd_roaming(s, device, num_sessions=num_sessions)
+    else:
+        print("\n  (UNIFI_WATCHED_DEVICES not set — skipping roaming section)")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -650,17 +685,19 @@ def main():
         description="UniFi WiFi diagnostics — AP radio stats and client signal metrics"
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("aps",     help="All APs: radio config, channel utilization, client counts")
+    p_aps = sub.add_parser("aps",     help="All APs: radio config, channel utilization, client counts")
+    p_aps.add_argument("--sort", choices=["name", "retries", "utilization"], default="name", help="Sort APs by field (default: name)")
     sub.add_parser("clients", help="All WiFi clients: AP, signal, SNR, rates, satisfaction")
     sub.add_parser("config",  help="SSID roaming/power-save settings and per-AP transmit power")
     p = sub.add_parser("client",  help="Detail for one client (hostname, IP, or MAC)")
     p.add_argument("query", help="Hostname, IP, or MAC address (partial hostname match OK)")
     p_roam = sub.add_parser("roaming", help="Roaming history for one client: which APs, when, how long, satisfaction")
-    p_roam.add_argument("query", help="Hostname, IP, or MAC address (partial hostname match OK)")
+    p_roam.add_argument("query", nargs="?", default=None, help="Hostname, IP, or MAC (partial OK). Omit to show all watched devices.")
     p_roam.add_argument("--sessions", type=int, default=1, metavar="N", help="Number of past sessions to show (default: 1)")
     p2 = sub.add_parser("rfscan", help="Neighboring APs from passive RF scan — channel congestion summary")
     p2.add_argument("--own", action="store_true", help="Include your own APs in results")
     p2.add_argument("--fresh", type=int, metavar="MINUTES", default=None, help="Only show neighbors seen within the last N minutes")
+    p2.add_argument("--summary", action="store_true", help="Show only the channel congestion summary, skip full neighbor table")
     p4 = sub.add_parser("set-power", help="Set transmit power mode on an AP or all APs")
     p4.add_argument("ap",   help="AP name (partial match OK), or 'all' for every AP")
     p4.add_argument("band", choices=["2.4", "5"], help="Radio band")
@@ -675,6 +712,8 @@ def main():
     p5 = sub.add_parser("locate", help="Flash an AP's LED to physically identify it")
     p5.add_argument("ap", help="AP name (partial match OK)")
     p5.add_argument("--duration", type=int, default=None, metavar="SECONDS", help="Auto-stop after N seconds (default: wait for Enter)")
+    p_chk = sub.add_parser("checkup", help="Network health: AP retries + RF neighbors + watched device roaming")
+    p_chk.add_argument("--sessions", type=int, default=1, metavar="N", help="Roaming sessions per device (default: 1)")
 
     args = parser.parse_args()
     s = session()
@@ -682,15 +721,24 @@ def main():
     if args.cmd == "config":
         cmd_config(s)
     elif args.cmd == "aps":
-        cmd_aps(s)
+        cmd_aps(s, sort_by=args.sort)
     elif args.cmd == "clients":
         cmd_clients(s)
     elif args.cmd == "client":
         cmd_client(s, args.query)
     elif args.cmd == "roaming":
-        cmd_roaming(s, args.query, num_sessions=args.sessions)
+        if args.query:
+            cmd_roaming(s, args.query, num_sessions=args.sessions)
+        else:
+            devices = watched_devices()
+            if not devices:
+                print("  No query given and UNIFI_WATCHED_DEVICES not set in .env")
+                print("  Usage: unifi-wifi roaming <hostname>")
+                sys.exit(1)
+            for device in devices:
+                cmd_roaming(s, device, num_sessions=args.sessions)
     elif args.cmd == "rfscan":
-        cmd_rfscan(s, include_own=args.own, fresh_minutes=args.fresh)
+        cmd_rfscan(s, include_own=args.own, fresh_minutes=args.fresh, summary_only=args.summary)
     elif args.cmd == "set-power":
         if args.mode == "custom" and args.dbm is None:
             parser.error("--dbm required when mode=custom")
@@ -700,6 +748,8 @@ def main():
         cmd_set_channel(s, args.ap, args.band, ch, yes=args.yes)
     elif args.cmd == "locate":
         cmd_locate(s, args.ap, duration=args.duration)
+    elif args.cmd == "checkup":
+        cmd_checkup(s, num_sessions=args.sessions)
 
 
 if __name__ == "__main__":
