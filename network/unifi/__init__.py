@@ -24,3 +24,18 @@ def session() -> requests.Session:
     s.headers.update({"X-API-Key": api_key, "Accept": "application/json"})
     s.verify = False
     return s
+
+
+SEP = "─" * 70
+
+
+def get(s, path):
+    """GET from legacy API endpoint and return data array."""
+    r = s.get(f"{LEGACY}{path}", timeout=10)
+    r.raise_for_status()
+    return r.json().get("data", [])
+
+
+def section(title):
+    print(f"\n{title}")
+    print(SEP)
