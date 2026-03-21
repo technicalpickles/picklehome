@@ -47,6 +47,21 @@ The logic lives in `scripts/dotenv` (supports `--template`, `--output`, `--force
 
 Scripts load `.env` automatically via `python-dotenv` (or `just`'s `set dotenv-load`).
 
+## Sandbox
+
+Scripts run inside the Claude Code sandbox. Design code to work within it rather than bypassing it.
+
+The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTTPS_PROXY` env vars — not OS firewall rules. Tools that respect proxy env vars (`curl`, `requests`) work automatically. Tools that don't get `Operation not permitted` on `connect()` even if the domain is in `allowedDomains`.
+
+- **Python `aiohttp`**: defaults to `trust_env=False` — must pass `trust_env=True` when creating a `ClientSession`, or pass a pre-configured session to libraries that create their own
+- **New API integrations**: add the domain to `sandbox.network.allowedDomains` in `.claude/settings.local.json`, and verify the HTTP client respects the proxy
+- **Keychain access**: requires `~/Library/Keychains/` in `sandbox.filesystem.allowWrite`
+- **Debugging**: if `curl` works but Python doesn't, it's almost certainly a proxy issue, not a domain allowlist issue
+
+## Coding Conventions
+
+- **Don't swallow errors in data-fetching code.** Raise with diagnostic context (what failed, why) and catch at the boundary where you can present it to the user. Returning `None` for every failure mode — network error, stale data, bad input — makes debugging impossible because the caller can't distinguish fixable problems from expected ones. Use `asyncio.gather(return_exceptions=True)` for concurrent fetches so one failure doesn't cancel the rest.
+
 ## Documentation
 
 See @docs/CONVENTIONS.md for where information belongs (code comments vs README vs CLAUDE.md).
