@@ -142,8 +142,22 @@ Scripted install: `homelab/scripts/setup-tailscale.sh`
 
 MagicDNS is enabled — `ssh picklelab` and `ssh picklelab.tail2023b7.ts.net` both work from any device on the tailnet. No SSH config or `/etc/hosts` needed.
 
+### Log rotation
+
+Scripted: `homelab/scripts/setup-log-rotation.sh`
+
+- Docker logs: handled by `daemon.json` (json-file, 10MB × 3 per container)
+- System journal: capped at 500MB via `/etc/systemd/journald.conf.d/size.conf`
+
+### Infra repo
+
+```bash
+sudo mkdir -p /opt/homelab && sudo chown technicalpickles: /opt/homelab
+git clone git@github.com:technicalpickles/picklehome.git /opt/homelab
+```
+
+Requires SSH agent forwarding — configured in `~/.ssh/config.d/hosts` on Mac (`ForwardAgent yes` for picklelab).
+
 ### TODO
 
 - Static DHCP lease on USG
-- Log rotation config
-- Clone infra repo to `/opt/homelab`
