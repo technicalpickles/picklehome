@@ -1,8 +1,15 @@
-def _c_to_f(celsius: int | None) -> float | None:
+def _c_to_f(celsius: int | float | None) -> int | None:
     """Convert Celsius to Fahrenheit. BlueAir API returns Celsius integers."""
     if celsius is None:
         return None
     return round(celsius * 9 / 5 + 32)
+
+
+def _int(value) -> int | None:
+    """Coerce a numeric value to int for clean display (e.g. 77.0 -> 77)."""
+    if value is None:
+        return None
+    return int(value)
 
 
 def format_status(statuses: list[dict]) -> str:
@@ -50,16 +57,17 @@ def format_status(statuses: list[dict]) -> str:
         fan_mode = "Auto" if s["fan_auto_mode"] else "Manual"
         if s["night_mode"]:
             fan_mode = "Night"
-        fan_speed = s["fan_speed"]
+        fan_speed = _int(s["fan_speed"])
         lines.append(f"  Fan: {fan_mode}, speed {fan_speed}%")
 
         # Filter
-        if s["filter_usage_percentage"] is not None:
-            lines.append(f"  Filter: {s['filter_usage_percentage']}% remaining")
+        filter_pct = _int(s["filter_usage_percentage"])
+        if filter_pct is not None:
+            lines.append(f"  Filter: {filter_pct}% remaining")
 
         # Settings
         settings_parts = []
-        brightness = s.get("brightness")
+        brightness = _int(s.get("brightness"))
         if brightness is not None:
             settings_parts.append(f"LED: {'off' if brightness == 0 else brightness}")
         if s.get("child_lock"):

@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import getpass
+import json
 import sys
 from pathlib import Path
 
@@ -12,6 +13,30 @@ from climate.blueair.devices import DEFAULT_PURIFIERS_PATH, get_managed_purifier
 from climate.blueair.status import format_status
 
 
+async def _auth(email: str, password: str, region: str) -> int:
+    """Validate credentials and return device count."""
+    devices, api = await discover_devices(email, password, region)
+    count = len(devices)
+    await api.cleanup_client_session()
+    return count
+
+
+async def _discover(username: str, password: str, region: str):
+    """Discover and refresh all devices. Returns list of refreshed devices."""
+    devices, api = await discover_devices(username, password, region)
+    for device in devices:
+        await device.refresh()
+    await api.cleanup_client_session()
+    return devices
+
+
+async def _status(username: str, password: str, region: str, managed):
+    """Fetch status for managed devices."""
+    statuses, api = await get_device_status(username, password, region, managed)
+    await api.cleanup_client_session()
+    return statuses
+
+
 def cmd_auth(args) -> None:
     email = input("BlueAir email: ")
     password = getpass.getpass("BlueAir password: ")
@@ -19,51 +44,50 @@ def cmd_auth(args) -> None:
 
     print("Validating credentials...")
     try:
-        devices, api = asyncio.run(discover_devices(email, password, region))
+        count = asyncio.run(_auth(email, password, region))
     except Exception as e:
         print(f"Authentication failed: {e}")
         sys.exit(1)
 
-    asyncio.run(api.cleanup_client_session())
-
     store_credentials(email, password, region)
-    print(f"Credentials stored. Found {len(devices)} device(s).")
+    print(f"Credentials stored. Found {count} device(s).")
 
 
 def cmd_discover(args) -> None:
     username, password, region = get_credentials()
 
-    devices, api = asyncio.run(discover_devices(username, password, region))
+    print("Discovering devices...")
+    devices = asyncio.run(_discover(username, password, region))
 
     print(f"Found {len(devices)} device(s):\n")
     for device in devices:
-        print(f"  Name:  {device.name}")
-        print(f"  UUID:  {device.uuid}")
-        print(f"  Model: {device.model}")
-        print(f"  SKU:   {device.sku}")
-        print(f"  MAC:   {device.mac}")
+        name = device.name or device.name_api
+        print(f"  {name}")
+        print(f"    UUID:  {device.uuid}")
+        print(f"    Model: {device.model}")
+        print(f"    SKU:   {device.sku}")
+        print(f"    MAC:   {device.mac}")
         print()
 
     purifiers_path = args.purifiers
     if purifiers_path.exists():
-        print(f"Registry exists, not overwriting: {purifiers_path}")
+        print(f"Registry exists at {purifiers_path} — not overwriting.")
+        print("Edit it manually to add/remove devices.")
     else:
         registry = {"purifiers": {}}
         for device in devices:
-            key = device.name.lower().replace(" ", "_")
-            registry["purifiers"][key] = {
+            name = device.name or device.name_api or device.uuid
+            registry["purifiers"][name] = {
                 "uuid": device.uuid,
-                "model": str(device.model.value) if device.model else None,
-                "sku": device.sku,
-                "mac": device.mac,
                 "managed": True,
             }
         purifiers_path.parent.mkdir(parents=True, exist_ok=True)
         with open(purifiers_path, "w") as f:
+            f.write("# climate/config/purifiers.yaml\n")
+            f.write("# managed: true  — included in status and automation\n")
+            f.write("# managed: false — registered but excluded\n\n")
             yaml.dump(registry, f, default_flow_style=False, sort_keys=False)
-        print(f"Purifier registry written to {purifiers_path}")
-
-    asyncio.run(api.cleanup_client_session())
+        print(f"Wrote device registry to {purifiers_path}")
 
 
 def cmd_status(args) -> None:
@@ -73,18 +97,19 @@ def cmd_status(args) -> None:
     managed = get_managed_purifiers(data)
 
     if not managed:
-        print("No managed purifiers found. Run discover first.")
+        print("No managed purifiers found. Run 'just blueair discover' first.")
         sys.exit(1)
 
-    statuses, api = asyncio.run(get_device_status(username, password, region, managed))
+    statuses = asyncio.run(_status(username, password, region, managed))
+
+    if not statuses:
+        print("No status data returned. Check that device UUIDs are correct.")
+        sys.exit(1)
 
     if args.json:
-        import json
         print(json.dumps({"purifiers": statuses}, indent=2, default=str))
     else:
         print(format_status(statuses))
-
-    asyncio.run(api.cleanup_client_session())
 
 
 def main() -> None:

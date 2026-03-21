@@ -1,0 +1,14 @@
+# climate/config/purifiers.yaml
+# managed: true  — included in status and automation
+# managed: false — registered but excluded
+
+purifiers:
+  Bedroom Purifier:
+    uuid: 12bf9544-be91-4c62-967d-3bedbdfa1136
+    managed: true
+  Media Room Air Purifier:
+    uuid: 19ac8126-9570-4b2f-a87d-abdb3f7768ea
+    managed: true
+  Alex Bedroom Purifier:
+    uuid: 1c19d803-0950-4e65-84d5-4830625c7d98
+    managed: true

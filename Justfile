@@ -52,17 +52,9 @@ climate-comfort-switch MODE *ARGS:
 climate-comfort-switch-dry MODE *ARGS:
     uv run python -m climate.sync comfort-switch {{MODE}} --dry-run {{ARGS}}
 
-# Store BlueAir credentials in Keychain
-blueair-auth:
-    uv run python climate/blueair_cli.py auth
-
-# Discover BlueAir devices and create purifiers.yaml
-blueair-discover *ARGS:
-    uv run python climate/blueair_cli.py discover {{ARGS}}
-
-# Show purifier status (sensor data, fan, filter life)
-blueair-status *ARGS:
-    uv run python climate/blueair_cli.py status {{ARGS}}
+# BlueAir purifier management: just blueair auth | discover | status [--json]
+blueair *ARGS:
+    uv run python climate/blueair_cli.py {{ARGS}}
 
 # ISP and CDN status: Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP
 network-status zip="":
