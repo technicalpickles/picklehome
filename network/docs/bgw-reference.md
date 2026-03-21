@@ -123,4 +123,4 @@ def get(path, **kwargs):
 
 Was broadcasting `ATTt6kgiKH` on 2.4GHz ch 11 (-32 dBm at nearest AP) and 5GHz ch 48 (-13 dBm) — directly interfering with our APs. All home devices connect via UniFi APs; BGW WiFi was redundant.
 
-Check `just bgw wifi` to confirm still disabled. Check `just unifi-wifi rfscan` to confirm gone from neighbor scan (rfscan data is passive/cached — allow ~15 min after change for APs to rescan).
+Check `just bgw wifi` to confirm still disabled. Check `just unifi wifi rfscan` to confirm gone from neighbor scan (rfscan data is passive/cached — allow ~15 min after change for APs to rescan).

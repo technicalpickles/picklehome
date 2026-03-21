@@ -7,7 +7,7 @@ network. Conducted 2026-03-18.
 
 ## Context
 
-- **Problem:** Existing diagnostics (`wifi-diag.py`, `unifi-wifi.py`) lack spatial context —
+- **Problem:** Existing diagnostics (`wifi-diag.py`, `just unifi wifi`) lack spatial context —
   we know signal strength at a point but not coverage across the house.
 - **Goal:** Create a floor plan with WiFi heatmap overlay to identify dead zones and
   validate AP placement decisions.

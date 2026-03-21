@@ -18,8 +18,7 @@ Each script's docstring documents its exact `uv run --with ...` invocation.
 |---|---|
 | `isp_status.py` | `just network-status [zip]` |
 | `wifi-diag.py` | `just wifi-diag [args]` |
-| `unifi-wifi.py` | `just unifi-wifi <subcommand>` |
-| `unifi-api.py` | `just unifi-api <method> <path>` |
+| `unifi_cli.py` | `just unifi <subcommand>` |
 
 ### Scripts without `just` tasks (run directly)
 
@@ -34,10 +33,10 @@ uv run --with requests --with playwright network/bgw.py ping <ip>
 uv run --with requests --with python-dotenv --with paramiko --with dnspython --with playwright network/snapshot.py
 uv run --with requests --with python-dotenv --with paramiko --with dnspython --with playwright network/snapshot.py --no-trace
 
-# USG diagnostics
-uv run --with requests --with python-dotenv network/usg.py devices
-uv run --with requests --with python-dotenv network/usg.py wan-detail
-uv run --with requests --with python-dotenv --with paramiko network/usg.py dns
+# UniFi diagnostics (use `just unifi <subcommand>` instead when possible)
+uv run --with requests --with python-dotenv network/unifi_cli.py devices
+uv run --with requests --with python-dotenv network/unifi_cli.py usg wan-detail
+uv run --with requests --with python-dotenv --with paramiko network/unifi_cli.py usg dns
 
 # DNS comparison across resolvers
 uv run --with dnspython network/resolve.py <hostname> [<hostname> ...]
@@ -53,4 +52,4 @@ Scripts that talk to the CloudKey or Cloudflare require `.env` (generated via `j
 
 - `UNIFI_API_KEY` — UniFi CloudKey API key (Network → Integrations)
 - `CLOUDFLARE_RADAR_API_TOKEN` — Cloudflare dashboard → My Profile → API Tokens → `Account > Radar: Read`
-- `UNIFI_ADMIN_USERNAME` / `UNIFI_ADMIN_PASSWORD` — only needed for `usg.py dns` (SSH)
+- `UNIFI_ADMIN_USERNAME` / `UNIFI_ADMIN_PASSWORD` — only needed for `just unifi usg dns` (SSH)

@@ -82,7 +82,7 @@ All APs report a min of 6 dBm. UniFi's named modes map approximately to:
 
 ## Follow-up Checks
 
-- After 24h: `just unifi-wifi checkup` — compare retry rates to pre-change baseline
+- After 24h: `just unifi checkup` — compare retry rates to pre-change baseline
 - Verify no IoT devices dropped off: check 2.4 GHz client counts on Living Room and Upstairs
 - If Porch AP comes back online on ch 11, may need to re-plan 2.4 GHz channel assignments
   (only 3 non-overlapping channels: 1, 6, 11)

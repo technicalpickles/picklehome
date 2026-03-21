@@ -57,11 +57,11 @@ Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from t
 | Tracy Office AC Pro | U7PG2 | AC Pro | 192.168.1.194 | 6.6.65 | 1st | Floor, facing up | Standard omni | Converted carport; brick wall between it and main house |
 | Porch AC LR | U7LR | AC Long Range | 192.168.1.16 | 6.6.65 | 1st | Was: exterior wall, horizontal, facing backyard | High-gain focused beam | **Offline** — currently in Josh's office; pending relocation; see `docs/outdoor-wifi-research.md` |
 
-> **Live state:** Run `just usg topology` for the full device tree with uplink ports and radio state.
-> Run `just unifi-wifi aps` for current channels, utilization, retries, and tx power.
-> Run `just unifi-wifi config` for SSID settings and per-AP power mode.
-> Run `just usg devices` for all adopted devices with firmware versions.
-> Use `just usg topology --format mermaid` to generate a diagram for docs.
+> **Live state:** Run `just unifi topology` for the full device tree with uplink ports and radio state.
+> Run `just unifi wifi aps` for current channels, utilization, retries, and tx power.
+> Run `just unifi wifi config` for SSID settings and per-AP power mode.
+> Run `just unifi devices` for all adopted devices with firmware versions.
+> Use `just unifi topology --format mermaid` to generate a diagram for docs.
 
 ### AP Model Characteristics
 
@@ -139,17 +139,17 @@ See CHANGELOG.md 2026-03-17 entry.
 
 ```bash
 # Current state
-just unifi-wifi aps                              # channels, power, utilization, retries
-just unifi-wifi config                           # SSID settings + per-AP power mode
-just unifi-wifi rfscan --summary --fresh 60      # neighbor congestion per channel
+just unifi wifi aps                              # channels, power, utilization, retries
+just unifi wifi config                           # SSID settings + per-AP power mode
+just unifi wifi rfscan --summary --fresh 60      # neighbor congestion per channel
 
 # Make changes (prompts for confirmation unless --yes)
-just unifi-wifi set-channel "tracy" 5 36
-just unifi-wifi set-power "living" 2.4 medium --yes
+just unifi wifi set-channel "tracy" 5 36
+just unifi wifi set-power "living" 2.4 medium --yes
 ```
 
 **After any change:** update this section's rationale, add a CHANGELOG.md entry, and verify
-with `just unifi-wifi aps`.
+with `just unifi wifi aps`.
 
 ## BGW320
 
@@ -159,7 +159,7 @@ Hardware details and CGI endpoint reference: [`docs/bgw-reference.md`](docs/bgw-
 
 Both radios set to Disabled via `wconfig_unified.ha`. UI and `just bgw wifi` confirm
 Disabled, but `ATTt6kgiKH` (BSSID `bc:9a:8e:ed:fe:ec`) continued beaconing on 5GHz
-ch 149 at -50 dBm after a full restart — confirmed via `just unifi-wifi rfscan --fresh 5`.
+ch 149 at -50 dBm after a full restart — confirmed via `just unifi wifi rfscan --fresh 5`.
 Channel also shifted from ch 48 → ch 149 while "disabled," indicating the radio is still
 active. Resolved without factory reset — 2026-03-20 RF scan shows no trace of the SSID
 or BSSID. The disable eventually propagated (possibly after the BGW restart settled).
@@ -254,35 +254,35 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 ## Diagnostic Tools
 
 > **Note:** The authoritative CLI reference is in `network/CLAUDE.md`. This section is a
-> quick-reference subset. When in doubt, check `just --list` or `just unifi-wifi --help`.
+> quick-reference subset. When in doubt, check `just --list` or `just unifi --help`.
 
 ```bash
 # Live topology — device tree with uplink ports and radio state
-just usg topology                                # text tree (default)
-just usg topology --format mermaid               # mermaid diagram for docs
-just usg topology --format dot                   # graphviz DOT
+just unifi topology                              # text tree (default)
+just unifi topology --format mermaid             # mermaid diagram for docs
+just unifi topology --format dot                 # graphviz DOT
 
 # Quick network health check (AP retries + RF neighbors + watched device roaming)
-just unifi-wifi checkup
-just unifi-wifi checkup --sessions 3
+just unifi checkup
+just unifi checkup --sessions 3
 
 # WiFi diagnostics — AP perspective
-just unifi-wifi aps                              # channels, utilization, retries, power
-just unifi-wifi aps --sort retries               # worst retries first
-just unifi-wifi clients                          # all connected WiFi clients
-just unifi-wifi client <hostname|ip>             # detail for one client
-just unifi-wifi roaming                          # roaming for all watched devices
-just unifi-wifi roaming <hostname> --sessions 5  # roaming for one device
-just unifi-wifi rfscan --summary --fresh 60      # neighbor congestion summary
-just unifi-wifi config                           # SSID settings + per-AP power mode
+just unifi wifi aps                              # channels, utilization, retries, power
+just unifi wifi aps --sort retries               # worst retries first
+just unifi clients                               # all connected WiFi clients
+just unifi client <hostname|ip>                  # detail for one client
+just unifi wifi roaming                          # roaming for all watched devices
+just unifi wifi roaming <hostname> --sessions 5  # roaming for one device
+just unifi wifi rfscan --summary --fresh 60      # neighbor congestion summary
+just unifi wifi config                           # SSID settings + per-AP power mode
 
 # WiFi diagnostics — client perspective (run on any Mac)
 just wifi-diag
 just wifi-diag --no-trace --no-speed
 
 # Infrastructure
-just usg devices                                 # all adopted devices + firmware
-just usg wan-detail                              # WAN IP, gateway, DNS, counters
+just unifi devices                               # all adopted devices + firmware
+just unifi usg wan-detail                        # WAN IP, gateway, DNS, counters
 just bgw fiber                                   # BGW fiber signal / optical metrics
 just bgw broadband                               # WAN connection status
 
@@ -291,6 +291,6 @@ just network-status                              # Cloudflare + Radar BGP + RIPE
 just network-status 30318                        # + AT&T outage check by ZIP
 
 # Raw API — last resort for debugging
-just unifi-api get /stat/device
-just unifi-api get /stat/sta
+just unifi api get /stat/device
+just unifi api get /stat/sta
 ```

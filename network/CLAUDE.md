@@ -52,44 +52,76 @@ just network-status 30318        # + AT&T check by ZIP
 traffic — the 24h normalization means overnight lows will always look like drops. The
 threshold logic needs further calibration before it's reliable as an alert.
 
-### `unifi-wifi.py` — UniFi WiFi diagnostics (AP perspective)
+### `unifi_cli.py` — Unified UniFi CLI
 
-Queries the CloudKey legacy API for per-AP radio stats and per-client WiFi metrics.
-Requires `UNIFI_API_KEY` in `.env`.
+Single entrypoint for all UniFi CloudKey diagnostics: WiFi APs, clients, roaming,
+USG/gateway stats, device inventory, topology, and raw API access. Queries the
+CloudKey legacy API. Requires `UNIFI_API_KEY` in `.env`. SSH commands (`dns`, `resolve`)
+also need `UNIFI_ADMIN_USERNAME` and `UNIFI_ADMIN_PASSWORD`.
+
+Code layout:
+- `unifi_cli.py` — CLI entrypoint (argument parsing, dispatch)
+- `unifi/__init__.py` — shared auth, helpers, devices/topology commands
+- `unifi/wifi.py` — WiFi AP commands (aps, clients, roaming, rfscan, config, set-channel, set-power, locate)
+- `unifi/usg.py` — gateway commands (stats, wan, wan-detail, dns, resolve)
 
 ```bash
 # Quick health check
-just unifi-wifi checkup                      # composite: AP retries + RF neighbors + watched device roaming
-just unifi-wifi checkup --sessions 3         # with more roaming history per device
+just unifi checkup                        # composite: AP retries + RF neighbors + watched device roaming
+just unifi checkup --sessions 3           # with more roaming history per device
 
-# Diagnostics (read-only)
-just unifi-wifi aps                          # all APs: channel, utilization, client count, retries
-just unifi-wifi aps --sort retries           # sort APs by worst retry rate
-just unifi-wifi aps --sort utilization       # sort APs by channel utilization
-just unifi-wifi clients                      # all WiFi clients: AP, signal, SNR, rates, satisfaction
-just unifi-wifi client <hostname|ip>         # detail for one client (partial hostname OK)
-just unifi-wifi roaming                      # roaming history for all watched devices (from .env)
-just unifi-wifi roaming <hostname|ip>        # roaming history for a specific device
-just unifi-wifi roaming <hostname|ip> --sessions 3  # show last N sessions
-just unifi-wifi rfscan                       # neighboring APs from passive RF scan — channel congestion
-just unifi-wifi rfscan --summary             # channel congestion only, skip full neighbor list
-just unifi-wifi rfscan --fresh 60            # only neighbors seen in last N minutes
-just unifi-wifi rfscan --own                 # include own APs in the scan results
-just unifi-wifi config                       # SSID roaming/power-save settings + per-AP transmit power
+# WiFi diagnostics (read-only)
+just unifi wifi aps                       # all APs: channel, utilization, client count, retries
+just unifi wifi aps --sort retries        # sort APs by worst retry rate
+just unifi wifi aps --sort utilization    # sort APs by channel utilization
+just unifi clients                        # all WiFi clients: AP, signal, SNR, rates, satisfaction
+just unifi client <hostname|ip>           # detail for one client (partial hostname OK)
+just unifi wifi roaming                   # roaming history for all watched devices (from .env)
+just unifi wifi roaming <hostname|ip>     # roaming history for a specific device
+just unifi wifi roaming <hostname|ip> --sessions 3  # show last N sessions
+just unifi wifi rfscan                    # neighboring APs from passive RF scan — channel congestion
+just unifi wifi rfscan --summary          # channel congestion only, skip full neighbor list
+just unifi wifi rfscan --fresh 60         # only neighbors seen in last N minutes
+just unifi wifi rfscan --own              # include own APs in the scan results
+just unifi wifi config                    # SSID roaming/power-save settings + per-AP transmit power
 
-# Actions (mutating — will prompt for confirmation)
-just unifi-wifi set-channel <ap> <band> <ch> # change radio channel (e.g. "tracy" 5 36)
-just unifi-wifi set-power <ap> <band> <mode> # set tx power mode (auto/low/medium/high/custom)
-just unifi-wifi set-power all 2.4 medium     # set all APs at once
-just unifi-wifi locate <ap-name>             # flash AP LED to physically identify it (Enter to stop)
-just unifi-wifi locate <ap-name> --duration 30  # auto-stop after 30s
+# WiFi actions (mutating — will prompt for confirmation)
+just unifi wifi set-channel <ap> <band> <ch>  # change radio channel (e.g. "tracy" 5 36)
+just unifi wifi set-power <ap> <band> <mode>  # set tx power mode (auto/low/medium/high/custom)
+just unifi wifi set-power all 2.4 medium      # set all APs at once
+just unifi wifi locate <ap-name>              # flash AP LED to physically identify it (Enter to stop)
+just unifi wifi locate <ap-name> --duration 30  # auto-stop after 30s
+
+# Infrastructure
+just unifi devices                        # all adopted devices with firmware versions
+just unifi topology                       # live device tree with uplink ports + radio state
+just unifi topology --format mermaid      # mermaid diagram for docs
+just unifi topology --format dot          # graphviz DOT
+just unifi rename <device> <new-name>     # rename a device
+
+# USG / gateway
+just unifi usg stats                      # USG CPU, memory, uplink rates
+just unifi usg wan                        # WAN IP summary
+just unifi usg wan-detail                 # WAN IP, gateway, DNS, port counters
+just unifi usg dns                        # dnsmasq forwarder config (SSH)
+just unifi usg resolve                    # DNS resolution test (SSH)
+
+# Raw API access
+just unifi api get /stat/device
+just unifi api get /stat/sta
+just unifi api put /rest/device/<id> '{"radio_table": [...]}'
 ```
 
+Paths for `api get/put` are relative to `/proxy/network/api/s/default` — omit that prefix.
+
 **Common diagnostic workflows:**
-- "Quick network health check?" → `checkup` (AP retries + RF neighbors + watched device roaming in one command)
-- "Nosy neighbors / interference?" → `rfscan --fresh 60` for neighbor count per channel, `aps` for RX utilization
-- "Phone roaming OK?" → `roaming` (no args = all watched devices), or `roaming <hostname> --sessions 5` for one
-- "Current RF config?" → `config` for SSID settings + per-AP tx power, `aps` for live channel/utilization
+- "Quick network health check?" → `just unifi checkup` (AP retries + RF neighbors + watched device roaming in one command)
+- "Nosy neighbors / interference?" → `just unifi wifi rfscan --fresh 60` for neighbor count per channel, `just unifi wifi aps` for RX utilization
+- "Phone roaming OK?" → `just unifi wifi roaming` (no args = all watched devices), or `just unifi wifi roaming <hostname> --sessions 5` for one
+- "Current RF config?" → `just unifi wifi config` for SSID settings + per-AP tx power, `just unifi wifi aps` for live channel/utilization
+- "What's plugged in where?" → `just unifi topology` (shows full switch-port-to-device mapping)
+- "Device inventory / firmware?" → `just unifi devices`
+- "WAN issues?" → `just unifi usg wan-detail` for IP/DNS/counters, `just unifi usg stats` for CPU/mem
 
 Key fields: `signal` (dBm from AP), `noise`, `SNR`, `tx_rate`, `wifi_tx_retries_percentage`,
 `satisfaction` (UniFi composite score 0–100), `cu_total` (channel utilization %).
@@ -121,40 +153,6 @@ just wifi-diag --no-trace --no-speed   # quick run (skip traceroute + speed test
 ```
 
 No `.env` or API keys required — runs standalone on any Mac with `uv` installed.
-
-### `usg.py` — UniFi USG and infrastructure diagnostics
-
-Queries the CloudKey API for device inventory, WAN status, and network topology.
-Requires `UNIFI_API_KEY` in `.env`. SSH commands (`dns`, `resolve`) also need
-`UNIFI_ADMIN_USERNAME` and `UNIFI_ADMIN_PASSWORD`.
-
-```bash
-just usg topology                        # live device tree with uplink ports + radio state
-just usg topology --format mermaid       # mermaid diagram for docs
-just usg topology --format dot           # graphviz DOT
-just usg devices                         # all adopted devices with firmware versions
-just usg stats                           # USG CPU, memory, uplink rates
-just usg wan-detail                      # WAN IP, gateway, DNS, port counters
-just usg dns                             # dnsmasq forwarder config (SSH)
-```
-
-**Common diagnostic workflows:**
-- "What's plugged in where?" → `topology` (shows full switch-port-to-device mapping)
-- "Device inventory / firmware?" → `devices`
-- "WAN issues?" → `wan-detail` for IP/DNS/counters, `stats` for CPU/mem
-
-### `unifi-api.py` — Raw UniFi CloudKey API wrapper
-
-Thin wrapper around the CloudKey legacy API that handles auth and TLS, letting you
-explore endpoints without manually managing headers in curl. Requires `UNIFI_API_KEY` in `.env`.
-
-```bash
-just unifi-api get /stat/device
-just unifi-api get /stat/sta
-just unifi-api put /rest/device/<id> '{"radio_table": [...]}'
-```
-
-Paths are relative to `/proxy/network/api/s/default` — omit that prefix.
 
 ### `diag.sh` — curl-based per-host diagnostics
 

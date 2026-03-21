@@ -79,7 +79,7 @@ Source: https://support.apple.com/guide/deployment/wi-fi-roaming-support-dep98f1
 
 ## UniFi Settings That Affect iOS Behavior
 
-Inspectable via `just unifi-wifi config`. Listed in order of likely impact:
+Inspectable via `just unifi wifi config`. Listed in order of likely impact:
 
 ### UAPSD (Unscheduled Automatic Power Save Delivery)
 - **What it does:** Allows the AP to buffer frames for sleeping clients and deliver
@@ -142,16 +142,16 @@ Inspectable via `just unifi-wifi config`. Listed in order of likely impact:
 
 1. **Identify the device and physical location** — don't analyze AP choice without
    knowing where the person actually is.
-2. **`just unifi-wifi client <hostname>`** — current signal, retries, uptime,
+2. **`just unifi client <hostname>`** — current signal, retries, uptime,
    last association time. Short uptime = recently re-associated.
-3. **`just unifi-wifi roaming <hostname>`** — session history with per-AP segments,
+3. **`just unifi wifi roaming <hostname>`** — session history with per-AP segments,
    durations, and satisfaction scores. Use `--sessions N` to look back further.
    Confirms previous AP, roam pattern, and whether bouncing is recurring.
 4. **`just network-snapshot`** — rule out WAN/ISP issues before chasing WiFi.
-5. **`just unifi-wifi config`** — check SSID settings (UAPSD, Fast Roaming, Min
+5. **`just unifi wifi config`** — check SSID settings (UAPSD, Fast Roaming, Min
    RSSI) and AP transmit power levels. APs at max power with heavy overlap are
    a roaming risk.
-6. **`just unifi-wifi rfscan`** — check external channel congestion if retries are
+6. **`just unifi wifi rfscan`** — check external channel congestion if retries are
    high and the AP config looks clean.
 
 ---
@@ -172,7 +172,7 @@ Inspectable via `just unifi-wifi config`. Listed in order of likely impact:
 
 ### AP Transmit Power
 
-**2026-03-17: reduced all 5GHz radios from max → medium** (`just unifi-wifi set-power all 5 medium --yes`)
+**2026-03-17: reduced all 5GHz radios from max → medium** (`just unifi wifi set-power all 5 medium --yes`)
 
 | AP | 5GHz Before | 5GHz After | Max | 2.4GHz | Notes |
 |---|---|---|---|---|---|
@@ -190,7 +190,7 @@ risks dead spots. Revisit if 2.4GHz bouncing becomes an issue.
 ## Open Questions / Follow-up
 
 ### 1. Did reducing 5GHz tx power improve roaming? (check in a day or two)
-- **How to check:** `just unifi-wifi roaming raisynglsiPhone --sessions 3`
+- **How to check:** `just unifi wifi roaming raisynglsiPhone --sessions 3`
 - **What to look for:** Fewer short-dwell segments (<60s), longer dwell times per AP,
   fewer distinct APs per session
 - **Baseline for comparison:** Session on 2026-03-17 showed 11 segments across 5 APs
