@@ -47,10 +47,22 @@ The logic lives in `scripts/dotenv` (supports `--template`, `--output`, `--force
 
 Scripts load `.env` automatically via `python-dotenv` (or `just`'s `set dotenv-load`).
 
+## Documentation
+
+See @docs/CONVENTIONS.md for where information belongs (code comments vs README vs CLAUDE.md).
+
+- Code comments: *why* the code works this way
+- README.md: setup, commands, API reference, findings — for everyone
+- CLAUDE.md: workflow/process guidance — for agent context
+- docs/plans/: point-in-time design documents
+
 ## Directories
 
-- `climate/` — HVAC/climate automation (Ecobee schedule, comfort setpoints, status)
-  - `climate/ecobee/` — Python package (auth, schedule, comforts, status)
-  - `climate/config/` — YAML config (thermostats, schedule, comforts)
-  - `climate/spec/` — specs and docs (hvac-spec.md)
+- `climate/` — HVAC/climate automation; see `climate/README.md`
+  - `climate/ecobee/` — Ecobee thermostat API (auth, schedule, comforts, status)
+  - `climate/blueair/` — BlueAir air purifier API; see `climate/blueair/README.md`
+  - `climate/ambient/` — Ambient Weather outdoor temp
+  - `climate/config/` — YAML config (thermostats, schedule, comforts, weather, purifiers)
+  - `climate/spec/` — source of truth for thermostat behavior (hvac-spec.md)
 - `network/` — Network diagnostic and profiling scripts; see `network/CLAUDE.md`
+- `docs/plans/` — Design documents and implementation plans
