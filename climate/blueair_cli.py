@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from climate.blueair.auth import get_credentials, store_credentials
-from climate.blueair.client import discover_devices, get_device_status
+from climate.blueair.client import SETTABLE_PROPERTIES, discover_devices, get_device_status, set_device_property
 from climate.blueair.devices import DEFAULT_PURIFIERS_PATH, get_managed_purifiers, load_purifiers
 from climate.blueair.status import format_status
 
@@ -111,6 +111,35 @@ def cmd_status(args) -> None:
         print(format_status(statuses))
 
 
+def cmd_set(args) -> None:
+    username, password, region = get_credentials()
+
+    data = load_purifiers(args.purifiers)
+    managed = get_managed_purifiers(data)
+
+    if not managed:
+        print("No managed purifiers found. Run 'just blueair discover' first.")
+        sys.exit(1)
+
+    try:
+        confirmations = asyncio.run(
+            set_device_property(username, password, region, managed, args.property, args.value, args.device)
+        )
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    if not confirmations:
+        if args.device:
+            print(f"No managed device named '{args.device}'.")
+        else:
+            print("No devices matched.")
+        sys.exit(1)
+
+    for msg in confirmations:
+        print(msg)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="BlueAir purifier management")
     subparsers = parser.add_subparsers(dest="command")
@@ -140,9 +169,26 @@ def main() -> None:
         help=f"Path to purifiers YAML (default: {DEFAULT_PURIFIERS_PATH})",
     )
 
+    prop_names = ", ".join(SETTABLE_PROPERTIES)
+    set_parser = subparsers.add_parser(
+        "set", help=f"Set a device property ({prop_names})"
+    )
+    set_parser.add_argument("property", choices=SETTABLE_PROPERTIES.keys(), metavar="property",
+                            help=f"Property to set: {prop_names}")
+    set_parser.add_argument("value", help="Value to set (integer or on/off)")
+    set_parser.add_argument("--device", metavar="NAME", help="Target a specific device by name")
+    set_parser.add_argument(
+        "--purifiers",
+        type=Path,
+        default=DEFAULT_PURIFIERS_PATH,
+        metavar="PATH",
+        help=f"Path to purifiers YAML (default: {DEFAULT_PURIFIERS_PATH})",
+    )
+
     subparsers.choices["auth"].set_defaults(func=cmd_auth)
     subparsers.choices["discover"].set_defaults(func=cmd_discover)
     subparsers.choices["status"].set_defaults(func=cmd_status)
+    subparsers.choices["set"].set_defaults(func=cmd_set)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):

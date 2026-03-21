@@ -93,3 +93,64 @@ async def get_device_status(
             statuses.append(extract_device_status(device))
 
     return statuses, api
+
+
+# Maps CLI property names to (DeviceAws method name, value type).
+# "bool" expects True/False, "int" expects an integer.
+SETTABLE_PROPERTIES = {
+    "fan-speed": ("set_fan_speed", "int"),
+    "auto-mode": ("set_fan_auto_mode", "bool"),
+    "night-mode": ("set_night_mode", "bool"),
+    "standby": ("set_standby", "bool"),
+    "brightness": ("set_brightness", "int"),
+    "child-lock": ("set_child_lock", "bool"),
+}
+
+
+def parse_set_value(value_str: str, value_type: str):
+    """Parse a CLI value string into the correct Python type."""
+    if value_type == "bool":
+        if value_str.lower() in ("on", "true", "1"):
+            return True
+        if value_str.lower() in ("off", "false", "0"):
+            return False
+        raise ValueError(f"Expected on/off, got: {value_str}")
+    if value_type == "int":
+        return int(value_str)
+    return value_str
+
+
+async def set_device_property(
+    username: str,
+    password: str,
+    region: str,
+    managed_devices: list[tuple[str, str]],
+    prop: str,
+    value_str: str,
+    device_filter: str | None = None,
+) -> list[str]:
+    """Set a property on managed devices. Returns list of confirmation messages."""
+    if prop not in SETTABLE_PROPERTIES:
+        raise ValueError(f"Unknown property: {prop}. Valid: {', '.join(SETTABLE_PROPERTIES)}")
+
+    method_name, value_type = SETTABLE_PROPERTIES[prop]
+    value = parse_set_value(value_str, value_type)
+
+    devices, api = await discover_devices(username, password, region)
+    managed_uuids = {uuid for _, uuid in managed_devices}
+
+    confirmations = []
+    for device in devices:
+        if device.uuid not in managed_uuids:
+            continue
+        # Refresh to get device name
+        await device.refresh()
+        name = device.name or device.name_api
+        if device_filter and name != device_filter:
+            continue
+        method = getattr(device, method_name)
+        await method(value)
+        confirmations.append(f"{name}: {prop} → {value_str}")
+
+    await api.cleanup_client_session()
+    return confirmations

@@ -5,11 +5,16 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from climate.blueair.client import (
+    SETTABLE_PROPERTIES,
     _clean_value,
     discover_devices,
     extract_device_status,
     get_device_status,
+    parse_set_value,
+    set_device_property,
 )
 
 
@@ -176,5 +181,97 @@ def test_get_device_status_empty_when_no_match():
 
         assert statuses == []
         dev1.refresh.assert_not_awaited()
+
+    asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# parse_set_value
+# ---------------------------------------------------------------------------
+
+
+def test_parse_set_value_bool_on():
+    assert parse_set_value("on", "bool") is True
+    assert parse_set_value("ON", "bool") is True
+    assert parse_set_value("true", "bool") is True
+
+
+def test_parse_set_value_bool_off():
+    assert parse_set_value("off", "bool") is False
+    assert parse_set_value("OFF", "bool") is False
+    assert parse_set_value("false", "bool") is False
+
+
+def test_parse_set_value_bool_invalid():
+    with pytest.raises(ValueError, match="Expected on/off"):
+        parse_set_value("maybe", "bool")
+
+
+def test_parse_set_value_int():
+    assert parse_set_value("50", "int") == 50
+    assert parse_set_value("0", "int") == 0
+
+
+def test_parse_set_value_int_invalid():
+    with pytest.raises(ValueError):
+        parse_set_value("fast", "int")
+
+
+# ---------------------------------------------------------------------------
+# set_device_property
+# ---------------------------------------------------------------------------
+
+
+def test_set_device_property_all_managed():
+    dev1 = _make_fake_device(uuid="uuid-1", name="Bedroom")
+    dev1.set_night_mode = AsyncMock()
+    dev2 = _make_fake_device(uuid="uuid-2", name="Media Room")
+    dev2.set_night_mode = AsyncMock()
+    fake_api = MagicMock()
+    fake_api.cleanup_client_session = AsyncMock()
+    managed = [("Bedroom", "uuid-1"), ("Media Room", "uuid-2")]
+
+    async def _run():
+        with patch(
+            "climate.blueair.client.get_aws_devices",
+            new_callable=AsyncMock,
+            return_value=(fake_api, [dev1, dev2]),
+        ):
+            msgs = await set_device_property("u", "p", "us", managed, "night-mode", "on")
+        assert len(msgs) == 2
+        dev1.set_night_mode.assert_awaited_once_with(True)
+        dev2.set_night_mode.assert_awaited_once_with(True)
+
+    asyncio.run(_run())
+
+
+def test_set_device_property_with_device_filter():
+    dev1 = _make_fake_device(uuid="uuid-1", name="Bedroom")
+    dev1.set_fan_speed = AsyncMock()
+    dev2 = _make_fake_device(uuid="uuid-2", name="Media Room")
+    dev2.set_fan_speed = AsyncMock()
+    fake_api = MagicMock()
+    fake_api.cleanup_client_session = AsyncMock()
+    managed = [("Bedroom", "uuid-1"), ("Media Room", "uuid-2")]
+
+    async def _run():
+        with patch(
+            "climate.blueair.client.get_aws_devices",
+            new_callable=AsyncMock,
+            return_value=(fake_api, [dev1, dev2]),
+        ):
+            msgs = await set_device_property("u", "p", "us", managed, "fan-speed", "75", device_filter="Bedroom")
+        assert len(msgs) == 1
+        assert "Bedroom" in msgs[0]
+        dev1.set_fan_speed.assert_awaited_once_with(75)
+        dev2.set_fan_speed.assert_not_awaited()
+
+    asyncio.run(_run())
+
+
+def test_set_device_property_unknown_property():
+    async def _run():
+        with pytest.raises(ValueError, match="Unknown property"):
+            await set_device_property("u", "p", "us", [], "turbo", "on")
 
     asyncio.run(_run())
