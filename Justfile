@@ -56,6 +56,10 @@ climate-comfort-switch-dry MODE *ARGS:
 blueair *ARGS:
     uv run python climate/blueair_cli.py {{ARGS}}
 
+# Set a blueair property on a specific device (handles quoting): just blueair-set "Bedroom Purifier" brightness 25
+blueair-set DEVICE PROPERTY VALUE:
+    uv run python climate/blueair_cli.py set {{PROPERTY}} {{VALUE}} --device "{{DEVICE}}"
+
 # ISP and CDN status: Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP
 network-status zip="":
     uv run network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}
