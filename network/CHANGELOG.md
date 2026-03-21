@@ -5,12 +5,17 @@ Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect c
 
 ## Follow-up
 
+- [ ] **2.4 GHz power reduction verification** — `just unifi-wifi checkup` after 24h. Compare
+  retry rates to pre-change baseline (Living Room was 25-33%, Upstairs was 33%). Also verify
+  no IoT devices dropped off (check 2.4 GHz client counts on both APs).
 - [ ] **Roaming recheck after ch 48 move** — `just unifi-wifi roaming raisynglsiPhone --sessions 3`
   after a day or two. Expect fewer segments and less Tracy ↔ Josh ↔ Upstairs cycling.
   Prior check (2026-03-20, before ch 48 move): improved from 11-segment baseline but
   still bouncy (5 segments/25 min in worst session). Ch 48 move should help further.
 - [ ] **Relocate Porch AP** — currently offline in Josh's office (co-located with Josh Office AP);
   move to a useful location. See `docs/outdoor-wifi-research.md` for options.
+  **Note:** When Porch comes back on ch 11, will conflict with Upstairs (now ch 11).
+  Re-plan 2.4 GHz channel assignments at that point.
 - [ ] **Ch 149 neighbor density** — 30 neighbors (strongest -79 dBm) vs ch 40 (17) and
   ch 157 (12). Currently 2% utilization so not a problem. Recheck if Living Room clients
   show persistent high retries.
@@ -25,6 +30,53 @@ Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect c
   No trace of SSID or BSSID in RF scan.
 - [x] ~~**5GHz TX power reduction verification**~~ — 2026-03-20: all radios confirmed mode=medium.
 - [x] ~~**Ch 48 clean after BGW disable**~~ — 2026-03-20: zero neighbors on ch 48 in RF scan.
+
+---
+
+## 2026-03-21
+
+### Moved Upstairs AC HD 2.4GHz: ch 6 → ch 11
+
+**What:** `just unifi-wifi set-channel "upstairs" 2.4 11 --yes`
+
+**Why:** Living Room AC LR and Upstairs AC HD were both on 2.4 GHz ch 6, one floor apart
+with an open stairwell between them — co-channel interference. Each AP's transmissions
+consumed the other's airtime (30% RX utilization on Living Room). Ch 11 was available
+since Porch AP is offline.
+
+**Immediate result:** Upstairs retries dropped from 33% to 0%, RX utilization from ~20% to 0%.
+
+**Verify:**
+- [x] Config confirms ch 11 (verified via `just unifi-wifi aps`)
+
+### Reduced 2.4GHz transmit power: max → medium on Living Room + Upstairs
+
+**What:**
+```
+just unifi-wifi set-power "living" 2.4 medium --yes
+just unifi-wifi set-power "upstairs" 2.4 medium --yes
+```
+
+**Why:** Research confirmed the original "leave 2.4 GHz at max" decision (2026-03-17) was
+overcautious for these two APs. The AC-LR's high-gain antenna at 17 dBm was pushing signal
+through the open stairwell into the Upstairs AP's zone, and the AC-HD at 19 dBm was blasting
+back down. All 2.4 GHz clients had strong signal (well above -70 dBm), so medium provides
+adequate coverage. Reducing power also addresses the near-far problem with low-power IoT
+devices (ESP8266, smart plugs transmit at ~10-12 dBm).
+
+See `docs/24ghz-power-tuning.md` for full research findings.
+
+**Before → After:**
+
+| AP | Before | After (est.) | Max |
+|---|---|---|---|
+| Living Room AC LR | 17 dBm | ~13 dBm | 24 dBm |
+| Upstairs AC HD | 19 dBm | ~16 dBm | 25 dBm |
+
+Office APs (AC Pro, 15 dBm max=22) left unchanged — already lower power, serve distinct zones.
+
+**Verify:**
+- [ ] `just unifi-wifi checkup` after 24h — retry rates should be lower, no IoT dropouts
 
 ---
 

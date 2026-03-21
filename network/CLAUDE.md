@@ -159,4 +159,5 @@ Read these when working on a specific tool — do not load by default.
 | `docs/wifi-ios-unifi.md` | Diagnosing iPhone WiFi issues — iOS PSM/roaming behavior, UniFi settings that affect it, diagnostic workflow, current network config snapshot |
 | `docs/outdoor-wifi-research.md` | Outdoor backyard coverage — hardware comparison (U7LR vs U7 Outdoor), mounting orientation, TX power/channel starting config, decision gate criteria, measurement protocol |
 | `docs/wifi-survey-tools.md` | WiFi survey and floor plan tools — WiFiMan (free, LiDAR heatmap), NetSpot (paid, multi-metric), Design Center (free, simulated), InnerSpace (live coverage); recommended workflow and comparison |
+| `docs/24ghz-power-tuning.md` | 2.4 GHz TX power research — near-far problem, AP model antenna characteristics, why medium beats max in multi-floor homes, before/after data |
 | `docs/cloud-gateway-upgrade-research.md` | Replacing CloudKey Gen2 + USG with a Cloud Gateway — model comparison (UDM Pro/SE/Pro Max), migration process, features unlocked, WiFi 7 AP lineup |
