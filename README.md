@@ -36,7 +36,7 @@ Scripts for understanding what's happening on the network — ISP status, WiFi s
 ```bash
 just network-status        # ISP + CDN health check
 just wifi-diag             # client-side WiFi + connectivity diagnostic
-just unifi-wifi            # UniFi AP radio stats and per-client signal
+just unifi clients         # UniFi clients, devices, WiFi, gateway diagnostics
 ```
 
 ## Setup
