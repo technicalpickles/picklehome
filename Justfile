@@ -76,21 +76,13 @@ network-profile *ARGS:
 bgw *ARGS:
     uv run network/bgw.py {{ARGS}}
 
-# UniFi USG diagnostics: just usg wan | wan-detail | devices | stats | dns
-usg *ARGS:
-    uv run network/usg.py {{ARGS}}
+# UniFi network management: just unifi clients | wifi aps | usg stats | ...
+unifi *ARGS:
+    uv run network/unifi_cli.py {{ARGS}}
 
 # Client WiFi and connectivity diagnostic (run on any Mac in the house)
 wifi-diag *ARGS:
     uv run network/wifi-diag.py {{ARGS}}
-
-# UniFi WiFi diagnostics: AP radio stats and per-client signal/retries from the AP side
-unifi-wifi *ARGS:
-    uv run network/unifi-wifi.py {{ARGS}}
-
-# Raw UniFi API wrapper for debugging: just unifi-api get /stat/device
-unifi-api *ARGS:
-    uv run network/unifi-api.py {{ARGS}}
 
 # Install dependencies (run once after clone)
 install:
