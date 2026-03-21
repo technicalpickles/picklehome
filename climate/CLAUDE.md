@@ -1,26 +1,36 @@
 # CLAUDE.md — climate/
 
+See @README.md for full command reference, architecture, and module structure.
+
 ## Spec-first workflow
 
-`climate/spec/hvac-spec.md` is the source of truth for all thermostat behavior. Before touching any config or pushing to Ecobee:
+`spec/hvac-spec.md` is the source of truth for all thermostat behavior. Before touching any config or pushing to Ecobee:
 
 1. **Read the spec first.** Understand the intent before looking at YAML values.
-2. **If the desired behavior is changing**, update the spec first to reflect the new intent, then derive the YAML changes from it.
-3. **If only fixing a drift** (YAML diverged from spec without intent changing), update YAML to match the spec.
-4. **Apply** changes to `climate/config/schedule.yaml` and/or `climate/config/comforts.yaml`.
-5. **Validate** with `just climate-validate` to confirm the remote Ecobee matches.
+2. **If the desired behavior is changing**, update the spec first, then derive YAML changes.
+3. **If only fixing a drift**, update YAML to match the spec.
+4. **Validate** with `just climate-validate` to confirm the remote Ecobee matches.
 
-Never change `schedule.yaml` or `comforts.yaml` without the spec as the reference — the spec exists precisely to avoid values drifting in ways that feel wrong at 2am.
+Never change `schedule.yaml` or `comforts.yaml` without the spec as reference.
 
-## Key design principle
+## Ecobee implementation notes
 
-The goal is always ~70°F in any actively occupied space. The heat/cool setpoint split is a thermostat constraint, not a different intent — Comfort Heat and Comfort Cool both target 70°F, just from opposite sides depending on season.
+### Token management
 
-## Tooling
+`KeychainEcobee` subclass overrides `_write_config()` to persist tokens to Keychain on refresh. This means any API call that triggers a token refresh will automatically save the new tokens — no manual token management needed.
 
-- `just climate-comforts-sync-dry` — preview what would be pushed for comfort setpoints
-- `just climate-comforts-sync` — push `comforts.yaml` to Ecobee
-- `just climate-sync-dry` — preview schedule changes
-- `just climate-sync` — push `schedule.yaml` to Ecobee
-- `just climate-validate` — confirm remote schedule matches local
-- `just climate-status` — show live thermostat state
+### Schedule YAML conventions
+
+- All times must be on 30-minute boundaries (`:00` or `:30`)
+- Every day must start with `time: "00:00"`
+- All 7 days are required
+- YAML anchors (`&name` / `*name`) are used for DRY day templates (`_everyday`, `_weekday`)
+- Climate values must be `climateRef` strings from the thermostat (not display names)
+
+### smart1 / smart2 swapping
+
+`smart1` and `smart2` are custom Ecobee climates used for seasonal switching. The `comfort-switch` command swaps which one is active in the schedule. The spec defines the intent; the YAML defines the mapping.
+
+### InvalidTokenError handling
+
+The CLI catches `InvalidTokenError` from `pyecobee` — when this happens, the user needs to re-run `just climate-auth`. Don't try to auto-refresh within the CLI.
