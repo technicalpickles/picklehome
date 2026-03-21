@@ -415,33 +415,51 @@ def cmd_comfort_switch(args) -> None:
     original = schedule_path.read_text()
     updated = _apply_comfort_mode(original, mode)
 
-    if updated == original:
-        print(f"Schedule already set to {mode} comfort. Nothing to do.")
-        return
+    schedule_changed = updated != original
 
     if args.dry_run:
-        print(f"[dry run] Would switch to {mode} comfort:")
-        for i, (old, new) in enumerate(zip(original.splitlines(), updated.splitlines()), 1):
-            if old != new:
-                print(f"  line {i}: {old.strip()!r} → {new.strip()!r}")
+        if schedule_changed:
+            print(f"[dry run] Would switch to {mode} comfort:")
+            for i, (old, new) in enumerate(zip(original.splitlines(), updated.splitlines()), 1):
+                if old != new:
+                    print(f"  line {i}: {old.strip()!r} → {new.strip()!r}")
+        else:
+            print(f"Schedule already set to {mode} comfort.")
+        print(f"[dry run] Would set HVAC mode to auto on all managed thermostats")
         return
 
-    schedule_path.write_text(updated)
-    print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
+    if schedule_changed:
+        schedule_path.write_text(updated)
+        print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
 
-    sync_args = argparse.Namespace(
-        schedule=schedule_path,
-        thermostats=args.thermostats,
-        thermostat=None,
-        dry_run=False,
-    )
-    try:
-        cmd_sync(sync_args)
-    except SystemExit as e:
-        if e.code != 0:
-            print("Ecobee sync failed. Restoring schedule.yaml to original content.")
-            schedule_path.write_text(original)
-            raise
+        sync_args = argparse.Namespace(
+            schedule=schedule_path,
+            thermostats=args.thermostats,
+            thermostat=None,
+            dry_run=False,
+        )
+        try:
+            cmd_sync(sync_args)
+        except SystemExit as e:
+            if e.code != 0:
+                print("Ecobee sync failed. Restoring schedule.yaml to original content.")
+                schedule_path.write_text(original)
+                raise
+    else:
+        print(f"Schedule already set to {mode} comfort.")
+
+    # Set HVAC mode to "auto" so both heating and cooling equipment are available,
+    # regardless of which comfort mode the schedule is using.
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+    managed = get_managed_thermostats(registry)
+    hvac_mode = "auto"
+    for name, thermostat_id in managed:
+        try:
+            schedule.set_hvac_mode(ecobee, thermostat_id, hvac_mode)
+            print(f"  [{name}] HVAC mode set to {hvac_mode}")
+        except RuntimeError as e:
+            print(f"  [{name}] Warning: failed to set HVAC mode: {e}")
 
 
 def main() -> None:

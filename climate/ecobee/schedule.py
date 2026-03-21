@@ -24,6 +24,26 @@ def get_current_program(ecobee, thermostat_id: str) -> dict:
     return program
 
 
+def set_hvac_mode(ecobee, thermostat_id: str, hvac_mode: str) -> None:
+    """Set the HVAC mode (heat, cool, auto, off, auxHeatOnly) on a thermostat."""
+    body = {
+        "selection": {
+            "selectionType": "thermostats",
+            "selectionMatch": thermostat_id,
+        },
+        "thermostat": {
+            "settings": {
+                "hvacMode": hvac_mode,
+            }
+        },
+    }
+    response = ecobee._request_with_refresh(
+        "POST", ECOBEE_ENDPOINT_THERMOSTAT, f"set HVAC mode to {hvac_mode}", body=body
+    )
+    if response is None:
+        raise RuntimeError(f"Failed to set HVAC mode to {hvac_mode}.")
+
+
 def push_schedule(ecobee, thermostat_id: str, schedule_array: list, climates: list) -> None:
     body = {
         "selection": {
