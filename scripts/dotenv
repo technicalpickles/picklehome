@@ -33,6 +33,41 @@ trap 'rm -f "$tmp"' EXIT
 
 op inject -f -i "$TEMPLATE" -o "$tmp"
 
+# Wrap multiline values in double quotes so python-dotenv can parse them.
+# op inject outputs multiline 1Password notes as bare continuation lines;
+# .env format requires quoting for values that contain newlines.
+python3 -c '
+import sys
+
+lines = open(sys.argv[1]).readlines()
+result = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    # Check if this is a KEY=value line
+    if "=" in line and not line.startswith("#") and line.split("=", 1)[0].replace("_", "").isalnum():
+        key, val = line.rstrip("\n").split("=", 1)
+        # Collect continuation lines (not blank, not comment, not another KEY=)
+        extras = []
+        while i + 1 < len(lines):
+            nxt = lines[i + 1]
+            if nxt.strip() == "" or nxt.startswith("#"):
+                break
+            if "=" in nxt and nxt.split("=", 1)[0].replace("_", "").isalnum():
+                break
+            extras.append(nxt.rstrip("\n"))
+            i += 1
+        if extras:
+            full = val + "\n" + "\n".join(extras)
+            result.append(key + "=\"" + full + "\"\n")
+        else:
+            result.append(line)
+    else:
+        result.append(line)
+    i += 1
+open(sys.argv[1], "w").writelines(result)
+' "$tmp"
+
 # Verify no keys disappeared before clobbering the real file
 if [[ -n "$old_keys" ]]; then
     new_keys=$(grep -v '^#' "$tmp" | grep -v '^[[:space:]]*$' | cut -d= -f1 | sort)

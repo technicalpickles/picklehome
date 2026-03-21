@@ -37,9 +37,10 @@ SEP = "─" * 70
 
 
 def watched_devices():
-    """Load watched device hostnames from UNIFI_WATCHED_DEVICES env var."""
+    """Load watched device names from UNIFI_WATCHED_DEVICES env var (comma or newline separated)."""
+    import re
     raw = os.environ.get("UNIFI_WATCHED_DEVICES", "")
-    return [d.strip() for d in raw.split(",") if d.strip()]
+    return [d.strip() for d in re.split(r"[,\n]", raw) if d.strip()]
 
 
 def get(s, path):
@@ -167,7 +168,7 @@ def cmd_clients(s):
     print(f"  {'─'*28} {'─'*16} {'─'*24} {'─'*6} {'─'*4}  {'─'*5}  {'─'*4}  {'─'*7}  {'─'*4}  {'─'*7}")
 
     for c in clients:
-        hostname = (c.get("hostname") or c.get("mac", "?"))[:28]
+        hostname = (c.get("name") or c.get("hostname") or c.get("mac", "?"))[:28]
         ip       = c.get("ip", c.get("last_ip", "?"))
         ap_name  = (c.get("last_uplink_name") or c.get("ap_mac", "?"))[:24]
         radio    = c.get("radio", "?")
@@ -196,7 +197,8 @@ def cmd_client(s, query):
     q = query.lower()
     matches = [
         c for c in clients
-        if q in (c.get("hostname") or "").lower()
+        if q in (c.get("name") or "").lower()
+        or q in (c.get("hostname") or "").lower()
         or q == (c.get("ip") or "").lower()
         or q == (c.get("last_ip") or "").lower()
         or q == (c.get("mac") or "").lower()
@@ -209,7 +211,7 @@ def cmd_client(s, query):
         return
 
     for c in matches:
-        hostname  = c.get("hostname") or c.get("mac", "?")
+        hostname  = c.get("name") or c.get("hostname") or c.get("mac", "?")
         ip        = c.get("ip", c.get("last_ip", "?"))
         mac       = c.get("mac", "?")
         ap_name   = c.get("last_uplink_name") or c.get("ap_mac", "?")
@@ -351,7 +353,8 @@ def cmd_roaming(s, query, num_sessions=1):
 
     clients = get(s, "/stat/sta")
     for c in clients:
-        if (q in (c.get("hostname") or "").lower()
+        if (q in (c.get("name") or "").lower()
+                or q in (c.get("hostname") or "").lower()
                 or q == (c.get("ip") or "").lower()
                 or q == (c.get("mac") or "").lower()):
             mac = c["mac"]
@@ -360,7 +363,8 @@ def cmd_roaming(s, query, num_sessions=1):
     if not mac:
         all_users = get(s, "/stat/alluser")
         for c in all_users:
-            if (q in (c.get("hostname") or "").lower()
+            if (q in (c.get("name") or "").lower()
+                    or q in (c.get("hostname") or "").lower()
                     or q == (c.get("last_ip") or "").lower()
                     or q == (c.get("mac") or "").lower()):
                 mac = c["mac"]
@@ -678,6 +682,66 @@ def cmd_checkup(s, num_sessions=1):
         print("\n  (UNIFI_WATCHED_DEVICES not set — skipping roaming section)")
 
 
+# ── Rename command ────────────────────────────────────────────────────────────
+
+def cmd_rename(s, query, new_name):
+    section(f"Rename Client — {query}")
+
+    # Search live clients first, then all-time user list for offline devices
+    clients = get(s, "/stat/sta")
+    q = query.lower()
+    matches = [
+        c for c in clients
+        if q in (c.get("hostname") or "").lower()
+        or q in (c.get("name") or "").lower()
+        or q == (c.get("ip") or "").lower()
+        or q == (c.get("last_ip") or "").lower()
+        or q == (c.get("mac") or "").lower()
+    ]
+
+    if not matches:
+        # Fall back to all-time user list (offline devices)
+        users = get(s, "/rest/user")
+        matches = [
+            u for u in users
+            if q in (u.get("hostname") or "").lower()
+            or q in (u.get("name") or "").lower()
+            or q == (u.get("mac") or "").lower()
+        ]
+
+    if not matches:
+        print(f"  No client matching '{query}'")
+        return
+    if len(matches) > 1:
+        print(f"  Ambiguous — '{query}' matches multiple clients:")
+        for c in matches:
+            h = c.get("name") or c.get("hostname") or c.get("mac", "?")
+            print(f"    {h}  ({c.get('mac', '?')})")
+        return
+
+    client = matches[0]
+    user_id = client.get("_id")
+    old_name = client.get("name") or client.get("hostname") or client.get("mac", "?")
+    mac = client.get("mac", "?")
+
+    print(f"  Client:    {old_name}")
+    print(f"  MAC:       {mac}")
+    print(f"  New name:  {new_name}")
+    print()
+
+    r = s.put(
+        f"{LEGACY}/rest/user/{user_id}",
+        json={"name": new_name},
+        timeout=10,
+    )
+    result = r.json()
+    meta = result.get("meta", {})
+    if meta.get("rc") == "ok":
+        print(f"  Done — renamed to '{new_name}'")
+    else:
+        print(f"  Error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -714,6 +778,9 @@ def main():
     p5.add_argument("--duration", type=int, default=None, metavar="SECONDS", help="Auto-stop after N seconds (default: wait for Enter)")
     p_chk = sub.add_parser("checkup", help="Network health: AP retries + RF neighbors + watched device roaming")
     p_chk.add_argument("--sessions", type=int, default=1, metavar="N", help="Roaming sessions per device (default: 1)")
+    p_rename = sub.add_parser("rename", help="Set a friendly alias for a client device")
+    p_rename.add_argument("query", help="Hostname, IP, or MAC of the client to rename")
+    p_rename.add_argument("name", help="New friendly name (alias) for the client")
 
     args = parser.parse_args()
     s = session()
@@ -750,6 +817,8 @@ def main():
         cmd_locate(s, args.ap, duration=args.duration)
     elif args.cmd == "checkup":
         cmd_checkup(s, num_sessions=args.sessions)
+    elif args.cmd == "rename":
+        cmd_rename(s, args.query, args.name)
 
 
 if __name__ == "__main__":
