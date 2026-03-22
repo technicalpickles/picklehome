@@ -4,7 +4,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$HOME/github.com/technicalpickles/dotfiles"
-LAZYVIM_DIR="$HOME/pickled-lazyvim"
+LAZYVIM_DIR="$HOME/github.com/technicalpickles/pickled-lazyvim"
 
 echo "==> Configuring git for container environment"
 # Rewrite HTTPS to SSH so private submodules work with agent forwarding
@@ -39,6 +39,7 @@ if [ -d "$LAZYVIM_DIR" ]; then
   echo "    Already exists, pulling latest"
   git -C "$LAZYVIM_DIR" pull
 else
+  mkdir -p "$(dirname "$LAZYVIM_DIR")"
   git clone git@github.com:technicalpickles/pickled-lazyvim.git "$LAZYVIM_DIR"
 fi
 ln -sf "$LAZYVIM_DIR" "$HOME/.config/nvim"
