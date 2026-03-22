@@ -1,0 +1,6 @@
+services:
+  dev:
+    volumes:
+      - ../../:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.local/share/dev-home:/home/technicalpickles

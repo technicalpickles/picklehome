@@ -1,0 +1,7 @@
+services:
+  dev:
+    volumes:
+      - /opt/homelab:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /srv:/srv:ro
+      - /srv/data/dev-home:/home/technicalpickles

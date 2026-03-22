@@ -1,0 +1,14 @@
+services:
+  dev:
+    build:
+      context: .
+      args:
+        USERNAME: technicalpickles
+        USER_UID: 1000
+        USER_GID: 1000
+    container_name: dev
+    hostname: picklelab-dev
+    ports:
+      - "2222:22"
+    working_dir: /workspace
+    restart: unless-stopped
