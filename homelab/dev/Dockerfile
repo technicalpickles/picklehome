@@ -23,10 +23,10 @@ RUN apt-add-repository -y ppa:fish-shell/release-4 \
     && apt-get update && apt-get install -y --no-install-recommends fish \
     && rm -rf /var/lib/apt/lists/*
 
-# Neovim (latest stable from PPA — Ubuntu's is old)
-RUN apt-add-repository -y ppa:neovim-ppa/stable \
-    && apt-get update && apt-get install -y --no-install-recommends neovim \
-    && rm -rf /var/lib/apt/lists/*
+# Neovim (latest stable from GitHub release — PPAs lag behind)
+RUN curl -fsSL https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
+    | tar xz -C /opt \
+    && ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
 
 # CLI tools available via apt
 RUN apt-get update && apt-get install -y --no-install-recommends \
