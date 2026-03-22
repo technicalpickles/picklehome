@@ -135,3 +135,31 @@ async def cmd_lights(bridge):
             name = _light_name(bridge, light)
             state = _light_state_str(light)
             print(f"    {name:<30} {state}")
+
+
+async def cmd_on(bridge, query):
+    """Turn on a light."""
+    light = _find_light(bridge, query)
+    await bridge.lights.turn_on(light.id)
+    print(f"  Turned on: {_light_name(bridge, light)}")
+
+
+async def cmd_off(bridge, query):
+    """Turn off a light."""
+    light = _find_light(bridge, query)
+    await bridge.lights.turn_off(light.id)
+    print(f"  Turned off: {_light_name(bridge, light)}")
+
+
+async def cmd_set(bridge, query, brightness):
+    """Set light brightness (0-100)."""
+    light = _find_light(bridge, query)
+    try:
+        level = int(brightness)
+    except ValueError:
+        sys.exit(f"Invalid brightness: {brightness} (expected 0-100)")
+    if not 0 <= level <= 100:
+        sys.exit(f"Brightness must be 0-100, got {level}")
+
+    await bridge.lights.set_brightness(light.id, level)
+    print(f"  Set {_light_name(bridge, light)} to {level}%")
