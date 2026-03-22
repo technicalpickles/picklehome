@@ -115,9 +115,24 @@ def _find_light(bridge, query):
     return matches[0]
 
 
+def _device_for(bridge, resource):
+    """Find the parent device for a resource (light, sensor, button, etc.)."""
+    if resource.owner:
+        return next((d for d in bridge.devices if d.id == resource.owner.rid), None)
+    return None
+
+
+def _device_name(bridge, resource) -> str:
+    """Get the human-readable name from a resource's parent device."""
+    device = _device_for(bridge, resource)
+    if device and device.metadata:
+        return device.metadata.name
+    return resource.id
+
+
 def _light_name(bridge, light) -> str:
-    """Get the human-readable name for a light."""
-    return light.metadata.name if light.metadata else light.id
+    """Get the human-readable name for a light (lives on parent device)."""
+    return _device_name(bridge, light)
 
 
 async def cmd_lights(bridge):
@@ -230,14 +245,12 @@ async def cmd_sensors(bridge):
     """List motion sensors with status."""
     section("Hue Sensors")
 
-    for motion in sorted(bridge.sensors.motion, key=lambda m: m.metadata.name if m.metadata else ""):
-        name = motion.metadata.name if motion.metadata else motion.id
+    for motion in sorted(bridge.sensors.motion, key=lambda m: _device_name(bridge, m)):
+        name = _device_name(bridge, motion)
         detected = "motion" if motion.motion.motion else "clear"
 
         # Find the parent device for battery and temperature
-        device = None
-        if motion.owner:
-            device = next((d for d in bridge.devices if d.id == motion.owner.rid), None)
+        device = _device_for(bridge, motion)
 
         battery = ""
         if device:
@@ -260,10 +273,11 @@ async def cmd_buttons(bridge):
     """List tap buttons with last event."""
     section("Hue Buttons")
 
-    for button in sorted(bridge.sensors.button, key=lambda b: b.metadata.name if b.metadata else ""):
-        name = button.metadata.name if button.metadata else button.id
+    for button in sorted(bridge.sensors.button, key=lambda b: _device_name(bridge, b)):
+        name = _device_name(bridge, button)
+        control_id = button.metadata.control_id if button.metadata else "?"
         last_event = button.button.last_event.value if button.button and button.button.last_event else "—"
-        print(f"  {name:<30} last: {last_event}")
+        print(f"  {name:<30} button {control_id}  last: {last_event}")
 
 
 async def cmd_status(bridge):
@@ -291,7 +305,7 @@ async def cmd_status(bridge):
     if motions:
         active = [m for m in motions if m.motion.motion]
         if active:
-            names = ", ".join(m.metadata.name for m in active if m.metadata)
+            names = ", ".join(_device_name(bridge, m) for m in active)
             print(f"  Motion: {names}")
         else:
             print("  Motion: all clear")
