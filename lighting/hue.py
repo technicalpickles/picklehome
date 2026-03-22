@@ -163,3 +163,41 @@ async def cmd_set(bridge, query, brightness):
 
     await bridge.lights.set_brightness(light.id, level)
     print(f"  Set {_light_name(bridge, light)} to {level}%")
+
+
+async def cmd_scenes(bridge):
+    """List all scenes grouped by room."""
+    section("Hue Scenes")
+
+    by_room = {}
+    for scene in bridge.scenes:
+        group = bridge.scenes.get_group(scene.id)
+        room_name = group.metadata.name if group else "Other"
+        by_room.setdefault(room_name, []).append(scene)
+
+    for room in sorted(by_room):
+        print(f"\n  {room}")
+        for scene in sorted(by_room[room], key=lambda s: s.metadata.name):
+            print(f"    {scene.metadata.name}")
+
+
+async def cmd_scene(bridge, query):
+    """Activate a scene by name (partial match)."""
+    q = query.lower()
+    matches = [s for s in bridge.scenes if q in s.metadata.name.lower()]
+
+    if not matches:
+        sys.exit(f"No scene matching '{query}'")
+    if len(matches) > 1:
+        print(f"  Multiple scenes match '{query}':")
+        for s in matches:
+            group = bridge.scenes.get_group(s.id)
+            room = group.metadata.name if group else "?"
+            print(f"    {s.metadata.name} ({room})")
+        sys.exit("Be more specific")
+
+    scene = matches[0]
+    await bridge.scenes.recall(scene.id)
+    group = bridge.scenes.get_group(scene.id)
+    room = group.metadata.name if group else "?"
+    print(f"  Activated: {scene.metadata.name} ({room})")
