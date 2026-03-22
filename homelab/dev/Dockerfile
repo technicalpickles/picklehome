@@ -6,6 +6,9 @@ ARG USER_GID=1000
 # Avoid interactive prompts during install
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Restore full system (Ubuntu minimal strips docs, man pages, etc.)
+RUN yes | unminimize
+
 # Base tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
@@ -16,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     unzip \
     software-properties-common \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Fish shell
