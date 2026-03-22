@@ -224,3 +224,43 @@ async def cmd_groups(bridge):
             print(f"    {zone.metadata.name}")
             for name in light_names:
                 print(f"      {name}")
+
+
+async def cmd_sensors(bridge):
+    """List motion sensors with status."""
+    section("Hue Sensors")
+
+    for motion in sorted(bridge.sensors.motion, key=lambda m: m.metadata.name if m.metadata else ""):
+        name = motion.metadata.name if motion.metadata else motion.id
+        detected = "motion" if motion.motion.motion else "clear"
+
+        # Find the parent device for battery and temperature
+        device = None
+        if motion.owner:
+            device = next((d for d in bridge.devices if d.id == motion.owner.rid), None)
+
+        battery = ""
+        if device:
+            power = next((s for s in bridge.sensors.device_power if s.owner and s.owner.rid == device.id), None)
+            if power and power.power_state:
+                battery = f"  battery: {power.power_state.battery_level}%"
+
+        temp = ""
+        if device:
+            temp_sensor = next((t for t in bridge.sensors.temperature if t.owner and t.owner.rid == device.id), None)
+            if temp_sensor and temp_sensor.temperature:
+                celsius = temp_sensor.temperature.temperature
+                fahrenheit = celsius * 9 / 5 + 32
+                temp = f"  temp: {fahrenheit:.0f}°F"
+
+        print(f"  {name:<30} {detected:<8}{battery}{temp}")
+
+
+async def cmd_buttons(bridge):
+    """List tap buttons with last event."""
+    section("Hue Buttons")
+
+    for button in sorted(bridge.sensors.button, key=lambda b: b.metadata.name if b.metadata else ""):
+        name = button.metadata.name if button.metadata else button.id
+        last_event = button.button.last_event.value if button.button and button.button.last_event else "—"
+        print(f"  {name:<30} last: {last_event}")
