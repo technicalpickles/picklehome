@@ -201,3 +201,26 @@ async def cmd_scene(bridge, query):
     group = bridge.scenes.get_group(scene.id)
     room = group.metadata.name if group else "?"
     print(f"  Activated: {scene.metadata.name} ({room})")
+
+
+async def cmd_groups(bridge):
+    """List rooms and zones with their lights."""
+    section("Hue Groups")
+
+    print("\n  Rooms")
+    for room in sorted(bridge.groups.room, key=lambda r: r.metadata.name):
+        lights = bridge.groups.room.get_lights(room.id)
+        light_names = sorted(_light_name(bridge, l) for l in lights)
+        print(f"    {room.metadata.name}")
+        for name in light_names:
+            print(f"      {name}")
+
+    zones = list(bridge.groups.zone)
+    if zones:
+        print("\n  Zones")
+        for zone in sorted(zones, key=lambda z: z.metadata.name):
+            lights = bridge.groups.zone.get_lights(zone.id)
+            light_names = sorted(_light_name(bridge, l) for l in lights)
+            print(f"    {zone.metadata.name}")
+            for name in light_names:
+                print(f"      {name}")
