@@ -59,3 +59,79 @@ async def cmd_pair(host: str | None = None):
     print(f"  Field: bridge_ip = {host}")
     print()
     print("Then run: just dotenv")
+
+
+def _get_room_for_light(bridge, light) -> str:
+    """Find the room name for a light by walking device → room."""
+    # light.owner is the device
+    if light.owner:
+        for room in bridge.groups.room:
+            for child in room.children:
+                if child.rid == light.owner.rid:
+                    return room.metadata.name
+    return "Other"
+
+
+def _light_state_str(light) -> str:
+    """Human-readable state for a light."""
+    if not light.on.on:
+        return "off"
+    bri = light.dimming.brightness if light.dimming else None
+    ct = light.color_temperature.mirek if (light.color_temperature and light.color_temperature.mirek) else None
+
+    parts = ["on"]
+    if bri is not None:
+        parts.append(f"{bri:.0f}%")
+    if ct is not None:
+        # Convert mirek to kelvin (mirek = 1,000,000 / kelvin)
+        kelvin = round(1_000_000 / ct)
+        parts.append(f"{kelvin}K")
+    return "  ".join(parts)
+
+
+def _find_light(bridge, query):
+    """Find a light by name substring or ID. Returns the light resource."""
+    q = query.lower()
+
+    # Exact ID match
+    for light in bridge.lights:
+        if light.id == q:
+            return light
+
+    # Fuzzy name match
+    matches = []
+    for light in bridge.lights:
+        name = _light_name(bridge, light)
+        if q in name.lower():
+            matches.append(light)
+
+    if not matches:
+        sys.exit(f"No light matching '{query}'")
+    if len(matches) > 1:
+        print(f"  Multiple lights match '{query}':")
+        for light in matches:
+            print(f"    {_light_name(bridge, light)}")
+        sys.exit("Be more specific")
+    return matches[0]
+
+
+def _light_name(bridge, light) -> str:
+    """Get the human-readable name for a light."""
+    return light.metadata.name if light.metadata else light.id
+
+
+async def cmd_lights(bridge):
+    """List all lights grouped by room."""
+    section("Hue Lights")
+
+    by_room = {}
+    for light in bridge.lights:
+        room = _get_room_for_light(bridge, light)
+        by_room.setdefault(room, []).append(light)
+
+    for room in sorted(by_room):
+        print(f"\n  {room}")
+        for light in sorted(by_room[room], key=lambda l: _light_name(bridge, l)):
+            name = _light_name(bridge, light)
+            state = _light_state_str(light)
+            print(f"    {name:<30} {state}")
