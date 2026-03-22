@@ -264,3 +264,34 @@ async def cmd_buttons(bridge):
         name = button.metadata.name if button.metadata else button.id
         last_event = button.button.last_event.value if button.button and button.button.last_event else "—"
         print(f"  {name:<30} last: {last_event}")
+
+
+async def cmd_status(bridge):
+    """Quick overview — lights, active scenes, recent motion."""
+    section("Hue Status")
+
+    # Light summary
+    lights = list(bridge.lights)
+    on_count = sum(1 for l in lights if l.on.on)
+    print(f"  Lights: {on_count}/{len(lights)} on")
+
+    # On lights by room
+    if on_count:
+        by_room = {}
+        for light in lights:
+            if light.on.on:
+                room = _get_room_for_light(bridge, light)
+                by_room.setdefault(room, []).append(light)
+        for room in sorted(by_room):
+            names = ", ".join(_light_name(bridge, l) for l in by_room[room])
+            print(f"    {room}: {names}")
+
+    # Motion sensors
+    motions = list(bridge.sensors.motion)
+    if motions:
+        active = [m for m in motions if m.motion.motion]
+        if active:
+            names = ", ".join(m.metadata.name for m in active if m.metadata)
+            print(f"  Motion: {names}")
+        else:
+            print("  Motion: all clear")
