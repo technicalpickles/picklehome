@@ -88,6 +88,10 @@ unifi *ARGS:
 lutron *ARGS:
     uv run lighting/lutron_cli.py {{ARGS}}
 
+# Philips Hue lighting: just hue lights | sensors | buttons | scenes | groups | on <light> | off <light> | set <light> <bri> | scene <scene> | status | pair [<host>]
+hue *ARGS:
+    uv run lighting/hue_cli.py {{ARGS}}
+
 # Client WiFi and connectivity diagnostic (run on any Mac in the house)
 wifi-diag *ARGS:
     uv run network/wifi-diag.py {{ARGS}}
