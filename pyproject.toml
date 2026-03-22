@@ -25,6 +25,7 @@ dependencies = [
     "mac-vendor-lookup>=0.1.12",
     # lighting
     "pylutron-caseta>=0.21",
+    "aiohue>=4.7",
 ]
 
 [dependency-groups]

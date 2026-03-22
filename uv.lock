@@ -123,6 +123,20 @@ wheels = [
 ]
 
 [[package]]
+name = "aiohue"
+version = "4.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "asyncio-throttle" },
+    { name = "awesomeversion" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0f/26/14656c285df5e3590fcaac4b7333479b9be0c5c074df178941d211dcf34f/aiohue-4.8.1.tar.gz", hash = "sha256:7fddc328add07715001bd3d75a37c730a5befcb4348b120c5259583fb9fa34bb", size = 54121 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/c1/be72d133306cd3ac36cd4c1e440f77716f1648ebf4f4ad07ba0f1bb10976/aiohue-4.8.1-py3-none-any.whl", hash = "sha256:c731f0f550eacca5da67e034cf9dbd2d2a6a6856ed9feac3738d3f6766594628", size = 80362 },
+]
+
+[[package]]
 name = "aiosignal"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -136,12 +150,30 @@ wheels = [
 ]
 
 [[package]]
+name = "asyncio-throttle"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/13/6f/0e2d42c0e95d50edf63147b8a742703061945e02760f25d6a0e8f028ccb0/asyncio-throttle-1.0.2.tar.gz", hash = "sha256:2675282e99d9129ecc446f917e174bc205c65e36c602aa18603b4948567fcbd4", size = 3775 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/6a/d18c93722fb56dc1ffed5fb7e7fcff4f8031f80f84c5cc0427363a036b0c/asyncio_throttle-1.0.2-py3-none-any.whl", hash = "sha256:4d4c1eb3250f735f59ce842d8d92cd2927c008bd52008797ba030b5787c41f3b", size = 4079 },
+]
+
+[[package]]
 name = "attrs"
 version = "25.4.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6b/5c/685e6633917e101e5dcb62b9dd76946cbb57c26e133bae9e0cd36033c0a9/attrs-25.4.0.tar.gz", hash = "sha256:16d5969b87f0859ef33a48b35d55ac1be6e42ae49d5e853b597db70c35c57e11", size = 934251 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3a/2a/7cc015f5b9f5db42b7d48157e23356022889fc354a2813c15934b7cb5c0e/attrs-25.4.0-py3-none-any.whl", hash = "sha256:adcf7e2a1fb3b36ac48d97835bb6d8ade15b8dcce26aba8bf1d14847b57a3373", size = 67615 },
+]
+
+[[package]]
+name = "awesomeversion"
+version = "25.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/3a/c97ef69b8209aa9d7209b143345fe49c1e20126f62a775038ab6dcd78fd5/awesomeversion-25.8.0.tar.gz", hash = "sha256:e6cd08c90292a11f30b8de401863dcde7bc66a671d8173f9066ebd15d9310453", size = 70873 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/b3/c6be343010721bfdd3058b708eb4868fa1a207534a3b6c80de74d35fb568/awesomeversion-25.8.0-py3-none-any.whl", hash = "sha256:1c314683abfcc3e26c62af9e609b585bbcbf2ec19568df2f60ff1034fb1dae28", size = 15919 },
 ]
 
 [[package]]
@@ -871,6 +903,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aioambient" },
+    { name = "aiohue" },
     { name = "blueair-api" },
     { name = "dnspython" },
     { name = "keyring" },
@@ -892,6 +925,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aioambient", specifier = "==2024.8.0" },
+    { name = "aiohue", specifier = ">=4.7" },
     { name = "blueair-api", specifier = ">=1.48" },
     { name = "dnspython", specifier = ">=2.6" },
     { name = "keyring", specifier = ">=24" },
