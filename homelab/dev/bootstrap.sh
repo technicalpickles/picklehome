@@ -7,6 +7,8 @@ DOTFILES_DIR="$HOME/github.com/technicalpickles/dotfiles"
 LAZYVIM_DIR="$HOME/github.com/technicalpickles/pickled-lazyvim"
 
 echo "==> Configuring git for container environment"
+# Remove old broad rewrite that broke fisher/public repo clones
+git config --global --unset-all url."git@github.com:".insteadOf 2>/dev/null || true
 # Rewrite HTTPS to SSH for our repos only — leave public repos (fisher plugins etc.) on HTTPS
 git config --global url."git@github.com:technicalpickles/".insteadOf "https://github.com/technicalpickles/"
 # Trust bind-mounted repos with different ownership
