@@ -158,6 +158,6 @@ git clone git@github.com:technicalpickles/picklehome.git /opt/homelab
 
 Requires SSH agent forwarding — configured in `~/.ssh/config.d/hosts` on Mac (`ForwardAgent yes` for picklelab).
 
-### TODO
+### Static DHCP lease
 
-- Static DHCP lease on USG
+Fixed IP `192.168.1.82` assigned via UniFi controller (`/rest/user` → `use_fixedip: true`).
