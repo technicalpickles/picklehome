@@ -103,9 +103,11 @@ RUN groupadd docker 2>/dev/null; usermod -aG docker $USERNAME
 RUN npm install -g @anthropic-ai/claude-code
 
 # SSH server setup + GitHub host key
+# Remove generated host keys — entrypoint generates them into a persistent volume
 RUN mkdir /var/run/sshd \
     && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
-    && ssh-keyscan github.com >> /etc/ssh/ssh_known_hosts 2>/dev/null
+    && ssh-keyscan github.com >> /etc/ssh/ssh_known_hosts 2>/dev/null \
+    && rm -f /etc/ssh/ssh_host_*
 
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

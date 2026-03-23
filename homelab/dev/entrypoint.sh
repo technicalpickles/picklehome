@@ -5,6 +5,17 @@ USERNAME="${DEV_USERNAME:-technicalpickles}"
 GITHUB_USER="${DEV_GITHUB_USER:-technicalpickles}"
 HOME_DIR="/home/$USERNAME"
 
+# Generate SSH host keys into persistent volume (survives image rebuilds)
+HOST_KEY_DIR="/etc/ssh/host_keys"
+if [ ! -f "$HOST_KEY_DIR/ssh_host_ed25519_key" ]; then
+  ssh-keygen -A
+  mv /etc/ssh/ssh_host_* "$HOST_KEY_DIR/"
+fi
+# Point sshd at the persistent keys
+for key in "$HOST_KEY_DIR"/ssh_host_*_key; do
+  echo "HostKey $key" >> /etc/ssh/sshd_config
+done
+
 # Fetch SSH keys from GitHub if authorized_keys doesn't exist or is empty
 AUTH_KEYS="$HOME_DIR/.ssh/authorized_keys"
 if [ ! -s "$AUTH_KEYS" ]; then

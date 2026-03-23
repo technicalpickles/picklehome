@@ -12,3 +12,8 @@ services:
       - "2222:22"
     working_dir: /workspace
     restart: unless-stopped
+    volumes:
+      - ssh-host-keys:/etc/ssh/host_keys
+
+volumes:
+  ssh-host-keys:
