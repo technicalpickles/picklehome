@@ -41,6 +41,23 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+echo "==> Ensuring SSH config for picklelab-dev"
+SSH_CONFIG="$HOME/.ssh/config"
+if ! grep -q "Host picklelab-dev" "$SSH_CONFIG" 2>/dev/null; then
+  mkdir -p "$HOME/.ssh"
+  cat >> "$SSH_CONFIG" <<SSH
+
+Host picklelab-dev
+  HostName $CONTAINER_HOST
+  Port $CONTAINER_SSH_PORT
+  User $CONTAINER_USER
+  ForwardAgent yes
+SSH
+  echo "    Added picklelab-dev to $SSH_CONFIG"
+else
+  echo "    Already configured"
+fi
+
 echo "==> Running bootstrap inside container"
 ssh -A -p "$CONTAINER_SSH_PORT" "$CONTAINER_USER@$CONTAINER_HOST" "bash /workspace/homelab/dev/bootstrap.sh"
 

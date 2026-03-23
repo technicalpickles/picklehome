@@ -7,8 +7,8 @@ DOTFILES_DIR="$HOME/github.com/technicalpickles/dotfiles"
 LAZYVIM_DIR="$HOME/github.com/technicalpickles/pickled-lazyvim"
 
 echo "==> Configuring git for container environment"
-# Rewrite HTTPS to SSH so private submodules work with agent forwarding
-git config --global url."git@github.com:".insteadOf "https://github.com/"
+# Rewrite HTTPS to SSH for our repos only — leave public repos (fisher plugins etc.) on HTTPS
+git config --global url."git@github.com:technicalpickles/".insteadOf "https://github.com/technicalpickles/"
 # Trust bind-mounted repos with different ownership
 git config --global --add safe.directory "*"
 
