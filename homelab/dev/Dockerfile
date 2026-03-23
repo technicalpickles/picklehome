@@ -96,8 +96,9 @@ RUN userdel -r ubuntu 2>/dev/null || true \
     && useradd --uid $USER_UID --gid $USER_GID -m -s /usr/bin/fish $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 
-# Add user to docker group — GID doesn't need to match host since socket access is by mount
-RUN groupadd docker 2>/dev/null; usermod -aG docker $USERNAME
+# Add user to docker group — GID must match host for socket access
+ARG DOCKER_GID=990
+RUN groupadd --gid $DOCKER_GID docker 2>/dev/null; usermod -aG docker $USERNAME
 
 # Claude Code
 RUN npm install -g @anthropic-ai/claude-code
