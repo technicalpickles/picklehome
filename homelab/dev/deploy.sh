@@ -27,7 +27,7 @@ run "cd $REMOTE_DIR/homelab/dev && docker compose $COMPOSE_FILES up -d --build"
 
 echo "==> Waiting for container sshd to be ready"
 for i in $(seq 1 30); do
-  if ssh -o ConnectTimeout=2 -o StrictHostKeyChecking=accept-new -p "$CONTAINER_SSH_PORT" "$CONTAINER_USER@$CONTAINER_HOST" true 2>/dev/null; then
+  if ssh -o ConnectTimeout=2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$CONTAINER_SSH_PORT" "$CONTAINER_USER@$CONTAINER_HOST" true 2>/dev/null; then
     break
   fi
   if [ "$i" -eq 30 ]; then
@@ -38,7 +38,7 @@ for i in $(seq 1 30); do
 done
 
 echo "==> Running bootstrap inside container"
-ssh -A -p "$CONTAINER_SSH_PORT" "$CONTAINER_USER@$CONTAINER_HOST" "bash /workspace/homelab/dev/bootstrap.sh"
+ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$CONTAINER_SSH_PORT" "$CONTAINER_USER@$CONTAINER_HOST" "bash /workspace/homelab/dev/bootstrap.sh"
 
 echo ""
 echo "Done! Connect with: ssh picklelab-dev"
