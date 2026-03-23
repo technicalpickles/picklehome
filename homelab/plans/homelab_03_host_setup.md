@@ -23,12 +23,12 @@ _TODO: fill in post-install sections as the build progresses._
 - **F10** at power-on → Boot device menu
 - If using a Mac keyboard with Fn toggle, ensure function keys send F1–F12 (not media keys), or hold Fn+F2
 - Power button hold (3 sec) → Power Button Menu → BIOS Setup (fallback)
+- **Recommended:** `sudo systemctl reboot --firmware-setup` from the OS — reboots directly into BIOS setup without key-mashing. The NUC's POST is fast enough that catching F2 is unreliable, especially through GRUB.
 
-**BIOS settings to configure:**
+**BIOS settings (configured):**
 
-- Enable auto power-on after power loss
-- Enable USB boot (if not already)
-- Boot order: USB first for install, then SSD
+- Auto power-on after power loss — enabled
+- Boot order: SSD first
 
 ---
 
