@@ -1,0 +1,11 @@
+[Unit]
+Description=Climate comfort-switch auto (outdoor temp check)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/picklehome/homelab/services/climate-auto-switch/run.sh
+WorkingDirectory=/opt/picklehome
+User=picklehome
+Environment=HOME=/home/picklehome
