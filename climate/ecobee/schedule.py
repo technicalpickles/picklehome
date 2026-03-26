@@ -44,6 +44,24 @@ def set_hvac_mode(ecobee, thermostat_id: str, hvac_mode: str) -> None:
         raise RuntimeError(f"Failed to set HVAC mode to {hvac_mode}.")
 
 
+def resume_program(ecobee, thermostat_id: str) -> None:
+    """Clear all holds on a thermostat, resuming the scheduled program."""
+    body = {
+        "selection": {
+            "selectionType": "thermostats",
+            "selectionMatch": thermostat_id,
+        },
+        "functions": [
+            {"type": "resumeProgram", "params": {"resumeAll": True}}
+        ],
+    }
+    response = ecobee._request_with_refresh(
+        "POST", ECOBEE_ENDPOINT_THERMOSTAT, "resume program", body=body
+    )
+    if response is None:
+        raise RuntimeError("Failed to resume program on Ecobee.")
+
+
 def push_schedule(ecobee, thermostat_id: str, schedule_array: list, climates: list) -> None:
     body = {
         "selection": {

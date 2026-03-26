@@ -31,7 +31,7 @@ just climate-sync [--dry-run]            # push schedule.yaml to Ecobee
 just climate-validate                    # confirm remote matches local
 just climate-comforts-capture            # snapshot current setpoints → comforts.yaml
 just climate-comforts-sync [--dry-run]   # push comforts.yaml to Ecobee
-just climate-comfort-switch heat|cool|auto [--dry-run]  # seasonal mode switch
+just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # seasonal mode switch
 ```
 
 ### Weather

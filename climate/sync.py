@@ -425,6 +425,8 @@ def cmd_comfort_switch(args) -> None:
                     print(f"  line {i}: {old.strip()!r} → {new.strip()!r}")
         else:
             print(f"Schedule already set to {mode} comfort.")
+        if args.clear_holds:
+            print(f"[dry run] Would clear active holds on all managed thermostats")
         print(f"[dry run] Would set HVAC mode to auto on all managed thermostats")
         return
 
@@ -448,11 +450,20 @@ def cmd_comfort_switch(args) -> None:
     else:
         print(f"Schedule already set to {mode} comfort.")
 
-    # Set HVAC mode to "auto" so both heating and cooling equipment are available,
-    # regardless of which comfort mode the schedule is using.
     ecobee = auth.make_ecobee()
     registry = load_thermostats(args.thermostats)
     managed = get_managed_thermostats(registry)
+
+    if args.clear_holds:
+        for name, thermostat_id in managed:
+            try:
+                schedule.resume_program(ecobee, thermostat_id)
+                print(f"  [{name}] Cleared active holds")
+            except RuntimeError as e:
+                print(f"  [{name}] Warning: failed to clear holds: {e}")
+
+    # Set HVAC mode to "auto" so both heating and cooling equipment are available,
+    # regardless of which comfort mode the schedule is using.
     hvac_mode = "auto"
     for name, thermostat_id in managed:
         try:
@@ -603,6 +614,11 @@ def main() -> None:
         "mode",
         choices=["heat", "cool", "auto"],
         help="Comfort mode to apply, or 'auto' to decide from outdoor temp",
+    )
+    comfort_switch_parser.add_argument(
+        "--clear-holds",
+        action="store_true",
+        help="Clear any active temperature holds before switching",
     )
     comfort_switch_parser.add_argument(
         "--dry-run",
