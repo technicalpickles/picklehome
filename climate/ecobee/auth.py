@@ -1,62 +1,73 @@
+import json
+import os
 import sys
 import time
+from pathlib import Path
 
-import keyring
 from pyecobee import Ecobee
 
-KEYCHAIN_SERVICE = "picklehome-ecobee"
+DEFAULT_TOKEN_PATH = Path.home() / ".local" / "state" / "picklehome" / "ecobee-tokens.json"
+
 # Standard Ecobee PIN auth values (not exposed by library after request_pin())
 PIN_EXPIRY_SECONDS = 9 * 60   # 9 minutes
 PIN_POLL_INTERVAL = 30        # seconds between request_tokens() calls
 
 
-class KeychainEcobee(Ecobee):
-    # The parent Ecobee class calls _write_config() after every token refresh.
-    # We override it to persist tokens to Keychain instead of a JSON file,
-    # so any API call that triggers a refresh automatically saves new tokens.
-    def _write_config(self) -> None:
-        if self.access_token:
-            keyring.set_password(KEYCHAIN_SERVICE, "access_token", self.access_token)
-        if self.refresh_token:
-            keyring.set_password(KEYCHAIN_SERVICE, "refresh_token", self.refresh_token)
-
-
-def get_credential(key: str) -> str | None:
-    return keyring.get_password(KEYCHAIN_SERVICE, key)
-
-
-def save_credential(key: str, value: str) -> None:
-    keyring.set_password(KEYCHAIN_SERVICE, key, value)
-
-
-def require_credential(key: str, missing_message: str) -> str:
-    value = get_credential(key)
-    if value is None:
-        print(missing_message)
-        sys.exit(1)
-    return value
-
-
 def get_api_key() -> str:
-    return require_credential("api_key", "Ecobee API key not found. See docs/climate-setup.md.")
+    api_key = os.environ.get("ECOBEE_API_KEY")
+    if not api_key:
+        print("ECOBEE_API_KEY not set. Run 'just dotenv' to generate .env.")
+        sys.exit(1)
+    return api_key
 
 
+def load_tokens(token_path: Path = DEFAULT_TOKEN_PATH) -> dict | None:
+    if not token_path.exists():
+        return None
+    with open(token_path) as f:
+        return json.load(f)
 
-def make_ecobee() -> KeychainEcobee:
+
+def save_tokens(access_token: str, refresh_token: str, token_path: Path = DEFAULT_TOKEN_PATH) -> None:
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    data = {"access_token": access_token, "refresh_token": refresh_token}
+    with open(token_path, "w") as f:
+        json.dump(data, f, indent=2)
+    token_path.chmod(0o600)
+
+
+class FileTokenEcobee(Ecobee):
+    """Ecobee subclass that persists refreshed tokens to a local JSON file.
+
+    The parent class calls _write_config() after every token refresh.
+    """
+
+    def __init__(self, config: dict, token_path: Path = DEFAULT_TOKEN_PATH):
+        super().__init__(config=config)
+        self._token_path = token_path
+
+    def _write_config(self) -> None:
+        if self.access_token and self.refresh_token:
+            save_tokens(self.access_token, self.refresh_token, self._token_path)
+
+
+def make_ecobee(token_path: Path = DEFAULT_TOKEN_PATH) -> FileTokenEcobee:
     api_key = get_api_key()
-    refresh_token = get_credential("refresh_token")
-    if not refresh_token:
+    tokens = load_tokens(token_path)
+    if not tokens or not tokens.get("refresh_token"):
         print("Ecobee tokens not found. Run 'just climate-auth' to authorize.")
         sys.exit(1)
-    access_token = get_credential("access_token")
-    return KeychainEcobee(config={
-        "API_KEY": api_key,
-        "ACCESS_TOKEN": access_token or "",
-        "REFRESH_TOKEN": refresh_token,
-    })
+    return FileTokenEcobee(
+        config={
+            "API_KEY": api_key,
+            "ACCESS_TOKEN": tokens.get("access_token", ""),
+            "REFRESH_TOKEN": tokens["refresh_token"],
+        },
+        token_path=token_path,
+    )
 
 
-def _print_thermostat_info(ecobee: KeychainEcobee) -> None:
+def _print_thermostat_info(ecobee: FileTokenEcobee) -> None:
     success = ecobee.get_thermostats()
     if not success or not ecobee.thermostats:
         print("Failed to fetch thermostat list from Ecobee.")
@@ -77,8 +88,8 @@ def list_thermostats() -> None:
     _print_thermostat_info(ecobee)
 
 
-def pin_auth_flow(api_key: str) -> None:
-    ecobee = KeychainEcobee(config={"API_KEY": api_key})
+def pin_auth_flow(api_key: str, token_path: Path = DEFAULT_TOKEN_PATH) -> None:
+    ecobee = FileTokenEcobee(config={"API_KEY": api_key}, token_path=token_path)
     result = ecobee.request_pin()
     if result is False:
         print("Failed to get PIN from Ecobee. Check your API key and network connection.")
@@ -107,4 +118,4 @@ Waiting for authorization (Ctrl-C to cancel)...""")
         sys.exit(0)
 
     _print_thermostat_info(ecobee)
-    print("\nSetup complete! Tokens saved to Keychain. Add thermostat IDs to schedule.yaml.")
+    print(f"\nSetup complete! Tokens saved to {token_path}")
