@@ -7,9 +7,10 @@ Manages home climate systems: Ecobee thermostats, Ambient Weather outdoor sensor
 ### Ecobee thermostats
 
 1. Get an API key from the [Ecobee Developer Portal](https://www.ecobee.com/developers/)
-2. Store it: `keyring set picklehome-ecobee api_key`
-3. Authorize: `just climate-auth` — follows the Ecobee PIN flow
-4. Thermostats are registered in `config/thermostats.yaml`
+2. Store it in 1Password: `op item edit Ecobee --vault=picklehome api_key=<your-key>`
+3. Run `just dotenv` to inject it into `.env`
+4. Authorize: `just climate-auth` (follows the Ecobee PIN flow, saves tokens to `~/.local/state/picklehome/ecobee-tokens.json`)
+5. Thermostats are registered in `config/thermostats.yaml`
 
 ### Ambient Weather
 
@@ -68,8 +69,8 @@ All in `config/`:
 ### Ecobee API
 
 - **Library:** `python-ecobee-api` (PyPI: `python-ecobee-api`)
-- **Auth:** OAuth PIN flow → access + refresh tokens, stored in macOS Keychain (`picklehome-ecobee`)
-- **Token refresh:** The `KeychainEcobee` subclass overrides `_write_config()` to persist refreshed tokens back to Keychain automatically
+- **Auth:** OAuth PIN flow → access + refresh tokens, stored in `~/.local/state/picklehome/ecobee-tokens.json`. API key from `ECOBEE_API_KEY` env var (1Password via `.env`)
+- **Token refresh:** The `FileTokenEcobee` subclass overrides `_write_config()` to persist refreshed tokens back to the JSON file automatically
 - **Schedule model:** Ecobee thermostats store a weekly program with time slots referencing "climates" (named comfort modes). We define ours in YAML and push them via the API.
 - **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2). smart1 and smart2 are swappable for seasonal switching — Comfort Heat targets 70°F from below, Comfort Cool from above.
 
@@ -105,7 +106,7 @@ climate/
   sync.py                  # Ecobee CLI entry point (argparse)
   blueair_cli.py           # BlueAir CLI entry point (argparse)
   ecobee/
-    auth.py                # Keychain-based OAuth (PIN flow, token refresh)
+    auth.py                # File-based OAuth (PIN flow, token refresh)
     schedule.py            # Schedule YAML loading, validation, sync
     comforts.py            # Comfort mode setpoint management
     status.py              # Live thermostat status extraction + formatting

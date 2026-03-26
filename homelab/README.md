@@ -18,3 +18,43 @@ Single Intel NUC (Celeron J3455, 4 GB RAM, local SSD) running lightweight always
 | [05 — Backup and Recovery](plans/homelab_05_backup_and_recovery.md) | Backup targets, tools, restore procedure |
 | [06 — Operations](plans/homelab_06_operations.md) | Runbook: deploy, restart, disk cleanup, reboot, troubleshooting |
 | [07 — Agent Access Model](plans/homelab_07_agent_access_model.md) | How coding/admin agents interact with the host safely |
+
+## Services
+
+### climate-auto-switch
+
+Runs `climate comfort-switch auto` every 6 hours via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes.
+
+**Setup on picklelab:**
+
+```bash
+# Clone the repo (if not already)
+git clone https://github.com/technicalpickles/picklehome.git /opt/picklehome
+
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Generate .env from 1Password
+cd /opt/picklehome
+op signin  # if not already
+scripts/dotenv
+
+# Copy token file from Mac (one-time)
+scp ~/.local/state/picklehome/ecobee-tokens.json picklelab:~/.local/state/picklehome/
+
+# Install and enable the timer
+sudo ln -s /opt/picklehome/homelab/services/climate-auto-switch/climate-auto-switch.service /etc/systemd/system/
+sudo ln -s /opt/picklehome/homelab/services/climate-auto-switch/climate-auto-switch.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now climate-auto-switch.timer
+
+# Verify
+systemctl status climate-auto-switch.timer
+sudo journalctl -u climate-auto-switch.service  # check last run
+```
+
+**Manual trigger:**
+
+```bash
+sudo systemctl start climate-auto-switch.service
+```
