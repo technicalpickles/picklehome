@@ -385,8 +385,11 @@ def _apply_comfort_mode(schedule_text: str, mode: str) -> str:
 
 def cmd_comfort_switch(args) -> None:
     from climate.ambient.client import load_weather_config, get_configured_macs, get_outdoor_temp_from_stations
+    from climate import runlog
 
     mode = args.mode
+    outdoor_temp = None
+    data_dir = runlog.get_data_dir()
 
     if mode == "auto":
         config = load_weather_config(args.weather)
@@ -398,27 +401,52 @@ def cmd_comfort_switch(args) -> None:
         if result is None:
             print("Could not read outdoor temp from any configured station.")
             sys.exit(1)
-        mac, temp, age_minutes = result
+        mac, outdoor_temp, age_minutes = result
         thresholds = config.get("thresholds", {})
         heat_below = thresholds.get("heat_below", 60)
         cool_above = thresholds.get("cool_above", 65)
-        if temp < heat_below:
+        if outdoor_temp < heat_below:
             mode = "heat"
-        elif temp > cool_above:
+        elif outdoor_temp > cool_above:
             mode = "cool"
         else:
-            print(f"Outdoor temp {temp}°F is in hysteresis band ({heat_below}–{cool_above}°F). No change.")
+            print(f"Outdoor temp {outdoor_temp}°F is in hysteresis band ({heat_below}-{cool_above}°F). No change.")
             return
-        print(f"Outdoor temp: {temp}°F → switching to {mode}")
+        print(f"Outdoor temp: {outdoor_temp}°F → switching to {mode}")
 
-    schedule_path = args.schedule
-    original = schedule_path.read_text()
-    updated = _apply_comfort_mode(original, mode)
+    # Check last-state for no-op
+    last_state = runlog.read_last_state(data_dir)
+    previous_mode = last_state["mode"] if last_state else None
 
-    schedule_changed = updated != original
+    # Always fetch thermostat status for logging
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+    managed = get_managed_thermostats(registry)
+    managed_ids = {tid for _, tid in managed}
 
-    if args.dry_run:
-        if schedule_changed:
+    success = ecobee.get_thermostats()
+    if not success or not ecobee.thermostats:
+        print("Failed to fetch thermostat data from Ecobee.")
+        sys.exit(1)
+
+    thermostat_statuses = [
+        status.extract_thermostat_status(t)
+        for t in ecobee.thermostats
+        if t["identifier"] in managed_ids
+    ]
+
+    switched = False
+    holds_cleared = False
+    skipped = False
+
+    if previous_mode == mode:
+        print(f"Already in {mode} mode. Skipping schedule push.")
+        skipped = True
+    elif args.dry_run:
+        schedule_path = args.schedule
+        original = schedule_path.read_text()
+        updated = _apply_comfort_mode(original, mode)
+        if updated != original:
             print(f"[dry run] Would switch to {mode} comfort:")
             for i, (old, new) in enumerate(zip(original.splitlines(), updated.splitlines()), 1):
                 if old != new:
@@ -429,48 +457,69 @@ def cmd_comfort_switch(args) -> None:
             print(f"[dry run] Would clear active holds on all managed thermostats")
         print(f"[dry run] Would set HVAC mode to auto on all managed thermostats")
         return
-
-    if schedule_changed:
-        schedule_path.write_text(updated)
-        print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
-
-        sync_args = argparse.Namespace(
-            schedule=schedule_path,
-            thermostats=args.thermostats,
-            thermostat=None,
-            dry_run=False,
-        )
-        try:
-            cmd_sync(sync_args)
-        except SystemExit as e:
-            if e.code != 0:
-                print("Ecobee sync failed. Restoring schedule.yaml to original content.")
-                schedule_path.write_text(original)
-                raise
     else:
-        print(f"Schedule already set to {mode} comfort.")
+        # Push schedule change
+        schedule_path = args.schedule
+        original = schedule_path.read_text()
+        updated = _apply_comfort_mode(original, mode)
 
-    ecobee = auth.make_ecobee()
-    registry = load_thermostats(args.thermostats)
-    managed = get_managed_thermostats(registry)
+        if updated != original:
+            schedule_path.write_text(updated)
+            print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
+            sync_args = argparse.Namespace(
+                schedule=schedule_path,
+                thermostats=args.thermostats,
+                thermostat=None,
+                dry_run=False,
+            )
+            try:
+                cmd_sync(sync_args)
+            except SystemExit as e:
+                if e.code != 0:
+                    print("Ecobee sync failed. Restoring schedule.yaml to original content.")
+                    schedule_path.write_text(original)
+                    raise
+            switched = True
+        else:
+            print(f"Schedule already set to {mode} comfort.")
 
-    if args.clear_holds:
+        if args.clear_holds:
+            for name, thermostat_id in managed:
+                try:
+                    schedule.resume_program(ecobee, thermostat_id)
+                    print(f"  [{name}] Cleared active holds")
+                    holds_cleared = True
+                except RuntimeError as e:
+                    print(f"  [{name}] Warning: failed to clear holds: {e}")
+
+        hvac_mode = "auto"
         for name, thermostat_id in managed:
             try:
-                schedule.resume_program(ecobee, thermostat_id)
-                print(f"  [{name}] Cleared active holds")
+                schedule.set_hvac_mode(ecobee, thermostat_id, hvac_mode)
+                print(f"  [{name}] HVAC mode set to {hvac_mode}")
             except RuntimeError as e:
-                print(f"  [{name}] Warning: failed to clear holds: {e}")
+                print(f"  [{name}] Warning: failed to set HVAC mode: {e}")
 
-    # Set HVAC mode to "auto" so both heating and cooling equipment are available,
-    # regardless of which comfort mode the schedule is using.
-    hvac_mode = "auto"
-    for name, thermostat_id in managed:
-        try:
-            schedule.set_hvac_mode(ecobee, thermostat_id, hvac_mode)
-            print(f"  [{name}] HVAC mode set to {hvac_mode}")
-        except RuntimeError as e:
-            print(f"  [{name}] Warning: failed to set HVAC mode: {e}")
+    # Write run log and last-state
+    log_entry = {
+        "timestamp": runlog.now_iso(),
+        "outdoor_temp_f": outdoor_temp,
+        "decision": mode,
+        "previous_mode": previous_mode,
+        "switched": switched,
+        "holds_cleared": holds_cleared,
+        "skipped": skipped,
+        "thermostats": thermostat_statuses,
+    }
+    runlog.append_run_log(data_dir, log_entry)
+
+    state = {
+        "timestamp": runlog.now_iso(),
+        "mode": mode,
+        "outdoor_temp_f": outdoor_temp,
+        "thermostats": thermostat_statuses,
+    }
+    runlog.write_last_state(data_dir, state)
 
 
 def main() -> None:
