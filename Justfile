@@ -106,10 +106,18 @@ dotenv *ARGS:
 
 # Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
-    ssh -t {{host}} /opt/homelab/homelab/services/climate-auto-switch/deploy.sh
+    ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
 
 # Seed ecobee token file to picklelab (one-time, from Mac)
 seed-climate-tokens host="picklelab":
-    ssh {{host}} "sudo mkdir -p /srv/data/climate-auto-switch"
+    ssh -t {{host}} "sudo mkdir -p /srv/data/climate-auto-switch"
     scp ~/.local/state/picklehome/ecobee-tokens.json {{host}}:/tmp/ecobee-tokens.json
-    ssh {{host}} "sudo mv /tmp/ecobee-tokens.json /srv/data/climate-auto-switch/ && sudo chmod 600 /srv/data/climate-auto-switch/ecobee-tokens.json"
+    ssh -t {{host}} "sudo mv /tmp/ecobee-tokens.json /srv/data/climate-auto-switch/ && sudo chmod 600 /srv/data/climate-auto-switch/ecobee-tokens.json"
+
+# Show last climate auto-switch state (from picklelab)
+climate-check host="picklelab":
+    ssh {{host}} "cat /srv/data/climate-auto-switch/last-state.json | python3 -m json.tool"
+
+# Show recent climate auto-switch run log (from picklelab)
+climate-log host="picklelab" lines="10":
+    ssh {{host}} "tail -n {{lines}} /srv/data/climate-auto-switch/run-log.jsonl | python3 -m json.tool --json-lines"
