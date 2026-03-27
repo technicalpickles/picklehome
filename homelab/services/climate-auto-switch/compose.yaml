@@ -1,0 +1,11 @@
+services:
+  climate-auto-switch:
+    build:
+      context: ../../..
+      dockerfile: homelab/services/climate-auto-switch/Dockerfile
+    env_file:
+      - ../../../.env
+    volumes:
+      - ${ECOBEE_TOKEN_DIR:-~/.local/state/picklehome}:/data/tokens
+    environment:
+      - ECOBEE_TOKEN_PATH=/data/tokens/ecobee-tokens.json
