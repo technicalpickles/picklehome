@@ -6,7 +6,13 @@ from pathlib import Path
 
 from pyecobee import Ecobee
 
-DEFAULT_TOKEN_PATH = Path.home() / ".local" / "state" / "picklehome" / "ecobee-tokens.json"
+def _default_token_path() -> Path:
+    env_path = os.environ.get("ECOBEE_TOKEN_PATH")
+    if env_path:
+        return Path(env_path)
+    return Path.home() / ".local" / "state" / "picklehome" / "ecobee-tokens.json"
+
+DEFAULT_TOKEN_PATH = _default_token_path()
 
 # Standard Ecobee PIN auth values (not exposed by library after request_pin())
 PIN_EXPIRY_SECONDS = 9 * 60   # 9 minutes
