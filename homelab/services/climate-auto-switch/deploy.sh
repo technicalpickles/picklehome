@@ -21,9 +21,10 @@ echo "==> Linking systemd units"
 sudo ln -sf "$SERVICE_DIR/climate-auto-switch.service" /etc/systemd/system/
 sudo ln -sf "$SERVICE_DIR/climate-auto-switch.timer" /etc/systemd/system/
 
-echo "==> Reloading systemd and enabling timer"
+echo "==> Reloading systemd and restarting timer"
 sudo systemctl daemon-reload
-sudo systemctl enable --now climate-auto-switch.timer
+sudo systemctl reenable --now climate-auto-switch.timer
+sudo systemctl restart climate-auto-switch.timer
 
 echo "==> Status"
 systemctl status climate-auto-switch.timer --no-pager
