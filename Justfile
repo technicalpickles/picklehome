@@ -103,3 +103,7 @@ install:
 # Generate .env from 1Password (run after clone or when secrets change)
 dotenv *ARGS:
     scripts/dotenv {{ARGS}}
+
+# Deploy climate-auto-switch to picklelab: pull latest code and rebuild image
+deploy-climate host="picklelab":
+    ssh {{host}} "cd /opt/homelab && git pull && cd homelab/services/climate-auto-switch && docker compose -f compose.yaml -f compose.picklelab.yaml build"
