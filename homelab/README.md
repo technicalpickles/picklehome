@@ -23,28 +23,27 @@ Single Intel NUC (Celeron J3455, 4 GB RAM, local SSD) running lightweight always
 
 ### climate-auto-switch
 
-Runs `climate comfort-switch auto` every 6 hours via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes.
+Runs `climate comfort-switch auto` every 6 hours via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. Runs as a Docker container with dependencies baked into the image.
 
 **Setup on picklelab:**
 
 ```bash
-# Clone the repo (if not already)
-git clone https://github.com/technicalpickles/picklehome.git /opt/picklehome
-
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Generate .env from 1Password
-cd /opt/picklehome
+# Generate .env from 1Password (repo should already be at /opt/homelab)
+cd /opt/homelab
 op signin  # if not already
 scripts/dotenv
 
-# Copy token file from Mac (one-time)
-scp ~/.local/state/picklehome/ecobee-tokens.json picklelab:~/.local/state/picklehome/
+# Create persistent data directory and seed the token file (one-time, from Mac)
+sudo mkdir -p /srv/data/climate-auto-switch
+scp ~/.local/state/picklehome/ecobee-tokens.json picklelab:/srv/data/climate-auto-switch/
 
-# Install and enable the timer
-sudo ln -s /opt/picklehome/homelab/services/climate-auto-switch/climate-auto-switch.service /etc/systemd/system/
-sudo ln -s /opt/picklehome/homelab/services/climate-auto-switch/climate-auto-switch.timer /etc/systemd/system/
+# Build the image
+cd homelab/services/climate-auto-switch
+docker compose -f compose.yaml -f compose.picklelab.yaml build
+
+# Symlink and enable the systemd units
+sudo ln -s /opt/homelab/homelab/services/climate-auto-switch/climate-auto-switch.service /etc/systemd/system/
+sudo ln -s /opt/homelab/homelab/services/climate-auto-switch/climate-auto-switch.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now climate-auto-switch.timer
 
@@ -57,4 +56,10 @@ sudo journalctl -u climate-auto-switch.service  # check last run
 
 ```bash
 sudo systemctl start climate-auto-switch.service
+```
+
+**Deploy updates (from Mac):**
+
+```bash
+just deploy-climate
 ```
