@@ -1,13 +1,9 @@
 [Unit]
-Description=Run climate comfort-switch auto every 6 hours
+Description=Run climate comfort-switch auto every 15 minutes
 
 [Timer]
-# Fire at 6am, noon, 6pm, midnight
-OnCalendar=*-*-* 00,06,12,18:00:00
-# Catch up if the machine was off
+OnCalendar=*:0/15
 Persistent=true
-# Spread across a 5-minute window to avoid thundering herd
-RandomizedDelaySec=300
 
 [Install]
 WantedBy=timers.target
