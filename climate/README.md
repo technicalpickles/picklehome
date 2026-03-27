@@ -49,7 +49,7 @@ just blueair status [--json]             # purifier sensor data + state
 just blueair set <property> <value>      # control all managed purifiers
 just blueair-set "Name" <prop> <val>     # control one purifier
 just blueair discover                    # find devices, create purifiers.yaml
-just blueair auth                        # store credentials in Keychain
+just blueair auth                        # credential setup guidance
 ```
 
 ## Configuration files
@@ -114,7 +114,7 @@ climate/
   ambient/
     client.py              # Outdoor temp fetching via Ambient Weather API
   blueair/
-    auth.py                # Keychain credential storage
+    auth.py                # Env var credential loading (1Password via .env)
     client.py              # Async API wrapper, device control
     devices.py             # Purifier registry loader
     status.py              # Purifier status formatting

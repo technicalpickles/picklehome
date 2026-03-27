@@ -12,7 +12,6 @@ requires-python = ">=3.12"
 dependencies = [
     # climate
     "python-ecobee-api==0.3.2",
-    "keyring>=24",
     "pyyaml>=6",
     "aioambient==2024.08.0",
     "blueair-api>=1.48",

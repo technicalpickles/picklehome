@@ -4,11 +4,11 @@ Manages BlueAir air purifiers via the BlueAir cloud API, using the [`blueair-api
 
 ## Setup
 
-1. **Store credentials:** `just blueair auth` — prompts for email, password, region
+1. **Configure credentials:** add BlueAir email, password, and region to the `BlueAir` item in 1Password, then run `just dotenv`
 2. **Discover devices:** `just blueair discover` — finds devices, creates `config/purifiers.yaml`
 3. **Check status:** `just blueair status`
 
-Credentials are stored in macOS Keychain (service `picklehome-blueair`), not on disk.
+Credentials are stored in 1Password (vault: `picklehome`, item: `BlueAir`) and injected into `.env` via `just dotenv`.
 
 ## Commands
 
@@ -98,7 +98,7 @@ Fan speed, brightness, and filter percentage return as **floats** from the API (
 ```
 climate/
   blueair/
-    auth.py        — keychain credential storage
+    auth.py        — env var credential loading (1Password via .env)
     client.py      — async API wrapper, property-to-method mapping
     devices.py     — purifiers.yaml loader, managed device filtering
     status.py      — human-readable output formatting
