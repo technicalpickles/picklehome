@@ -8,9 +8,7 @@ REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/climate-auto-switch"
 DATA_DIR=/srv/data/climate-auto-switch
 
-echo "==> Pulling latest code"
 cd "$REPO_DIR"
-git pull
 
 echo "==> Creating data directory"
 sudo mkdir -p "$DATA_DIR"
