@@ -10,6 +10,8 @@ DATA_DIR=/srv/data/climate-auto-switch
 
 cd "$REPO_DIR"
 
+echo "==> Deploying commit $(git rev-parse --short HEAD)"
+
 echo "==> Creating data directory"
 sudo mkdir -p "$DATA_DIR"
 
@@ -23,7 +25,7 @@ sudo ln -sf "$SERVICE_DIR/climate-auto-switch.timer" /etc/systemd/system/
 
 echo "==> Reloading systemd and restarting timer"
 sudo systemctl daemon-reload
-sudo systemctl reenable --now climate-auto-switch.timer
+sudo systemctl enable climate-auto-switch.timer
 sudo systemctl restart climate-auto-switch.timer
 
 echo "==> Status"

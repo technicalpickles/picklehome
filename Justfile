@@ -106,6 +106,21 @@ dotenv *ARGS:
 
 # Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Pre-flight: check for uncommitted or unpushed changes
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "ERROR: local HEAD ($LOCAL) differs from origin/main ($REMOTE)"
+        echo "Push first: git push"
+        exit 1
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
 
 # Seed ecobee token file to picklelab (one-time, from Mac)
