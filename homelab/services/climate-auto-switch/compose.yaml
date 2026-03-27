@@ -6,6 +6,7 @@ services:
     env_file:
       - ../../../.env
     volumes:
-      - ${ECOBEE_TOKEN_DIR:-~/.local/state/picklehome}:/data/tokens
+      - ${CLIMATE_DATA_DIR:-~/.local/state/picklehome}:/data
     environment:
-      - ECOBEE_TOKEN_PATH=/data/tokens/ecobee-tokens.json
+      - ECOBEE_TOKEN_PATH=/data/ecobee-tokens.json
+      - CLIMATE_DATA_DIR=/data

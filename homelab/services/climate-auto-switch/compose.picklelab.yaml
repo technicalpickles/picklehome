@@ -3,4 +3,4 @@ services:
     env_file:
       - /opt/homelab/.env
     volumes:
-      - /srv/data/climate-auto-switch:/data/tokens
+      - /srv/data/climate-auto-switch:/data
