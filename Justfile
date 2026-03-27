@@ -104,6 +104,12 @@ install:
 dotenv *ARGS:
     scripts/dotenv {{ARGS}}
 
-# Deploy climate-auto-switch to picklelab: pull latest code and rebuild image
+# Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
-    ssh {{host}} "cd /opt/homelab && git pull && cd homelab/services/climate-auto-switch && docker compose -f compose.yaml -f compose.picklelab.yaml build"
+    ssh -t {{host}} /opt/homelab/homelab/services/climate-auto-switch/deploy.sh
+
+# Seed ecobee token file to picklelab (one-time, from Mac)
+seed-climate-tokens host="picklelab":
+    ssh {{host}} "sudo mkdir -p /srv/data/climate-auto-switch"
+    scp ~/.local/state/picklehome/ecobee-tokens.json {{host}}:/tmp/ecobee-tokens.json
+    ssh {{host}} "sudo mv /tmp/ecobee-tokens.json /srv/data/climate-auto-switch/ && sudo chmod 600 /srv/data/climate-auto-switch/ecobee-tokens.json"

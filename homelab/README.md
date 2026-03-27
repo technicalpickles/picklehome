@@ -25,41 +25,33 @@ Single Intel NUC (Celeron J3455, 4 GB RAM, local SSD) running lightweight always
 
 Runs `climate comfort-switch auto` every 6 hours via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. Runs as a Docker container with dependencies baked into the image.
 
-**Setup on picklelab:**
+**First-time setup (from Mac):**
 
 ```bash
-# Generate .env from 1Password (repo should already be at /opt/homelab)
-cd /opt/homelab
-op signin  # if not already
-scripts/dotenv
+# 1. Generate .env on picklelab (needs 1Password signed in on host)
+ssh picklelab "cd /opt/homelab && op signin && scripts/dotenv"
 
-# Create persistent data directory and seed the token file (one-time, from Mac)
-sudo mkdir -p /srv/data/climate-auto-switch
-scp ~/.local/state/picklehome/ecobee-tokens.json picklelab:/srv/data/climate-auto-switch/
+# 2. Seed the ecobee token file (one-time)
+just seed-climate-tokens
 
-# Build the image
-cd homelab/services/climate-auto-switch
-docker compose -f compose.yaml -f compose.picklelab.yaml build
-
-# Symlink and enable the systemd units
-sudo ln -s /opt/homelab/homelab/services/climate-auto-switch/climate-auto-switch.service /etc/systemd/system/
-sudo ln -s /opt/homelab/homelab/services/climate-auto-switch/climate-auto-switch.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now climate-auto-switch.timer
-
-# Verify
-systemctl status climate-auto-switch.timer
-sudo journalctl -u climate-auto-switch.service  # check last run
-```
-
-**Manual trigger:**
-
-```bash
-sudo systemctl start climate-auto-switch.service
+# 3. Deploy (builds image, installs systemd units, enables timer)
+just deploy-climate
 ```
 
 **Deploy updates (from Mac):**
 
 ```bash
 just deploy-climate
+```
+
+**Manual trigger:**
+
+```bash
+ssh picklelab "sudo systemctl start climate-auto-switch.service"
+```
+
+**Check logs:**
+
+```bash
+ssh picklelab "sudo journalctl -u climate-auto-switch.service -n 50"
 ```
