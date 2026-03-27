@@ -1,11 +1,11 @@
 [Unit]
 Description=Climate comfort-switch auto (outdoor temp check)
-After=network-online.target
+After=network-online.target docker.service
 Wants=network-online.target
+Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/picklehome/homelab/services/climate-auto-switch/run.sh
-WorkingDirectory=/opt/picklehome
-User=picklehome
-Environment=HOME=/home/picklehome
+TimeoutStartSec=300
+WorkingDirectory=/opt/homelab/homelab/services/climate-auto-switch
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml run --rm climate-auto-switch
