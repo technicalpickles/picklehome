@@ -108,17 +108,21 @@ dotenv *ARGS:
 deploy-climate host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
-    # Pre-flight: check for uncommitted or unpushed changes
+    # Pre-flight: check for uncommitted changes
     if [ -n "$(git status --porcelain)" ]; then
         echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
         exit 1
     fi
     LOCAL=$(git rev-parse HEAD)
     REMOTE=$(git rev-parse origin/main)
     if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "ERROR: local HEAD ($LOCAL) differs from origin/main ($REMOTE)"
-        echo "Push first: git push"
-        exit 1
+        echo "Pushing to origin/main..."
+        git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
