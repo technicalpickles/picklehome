@@ -1,4 +1,6 @@
+import asyncio
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -49,3 +51,55 @@ def test_get_credentials_missing_password(monkeypatch):
     monkeypatch.delenv("ALADDIN_PASSWORD", raising=False)
     with pytest.raises(SystemExit):
         get_credentials()
+
+
+# --- AladdinAuth and login tests ---
+
+from garage.aladdin.auth import AladdinAuth, API_URL, API_KEY
+
+
+def test_aladdin_auth_returns_cached_token(tmp_path):
+    session = MagicMock()
+    auth = AladdinAuth(session, "valid_access_token", "refresh_token", tmp_path / "t.json")
+
+    async def _run():
+        token = await auth.async_get_access_token()
+        assert token == "valid_access_token"
+
+    asyncio.run(_run())
+
+
+def test_aladdin_auth_init_sets_api_constants():
+    session = MagicMock()
+    auth = AladdinAuth(session, "tok", "ref")
+    assert auth.host == API_URL
+    assert auth.api_key == API_KEY
+
+
+def test_login_saves_tokens(tmp_path):
+    token_path = tmp_path / "tokens.json"
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={
+        "access_token": "new_access",
+        "refresh_token": "new_refresh",
+    })
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=False)
+
+    mock_session = AsyncMock()
+    mock_session.post = MagicMock(return_value=mock_response)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    async def _run():
+        with patch("garage.aladdin.auth.aiohttp.ClientSession", return_value=mock_session):
+            from garage.aladdin.auth import login, load_tokens
+            result = await login("user@example.com", "pass", token_path)
+            assert result["access_token"] == "new_access"
+            tokens = load_tokens(token_path)
+            assert tokens["access_token"] == "new_access"
+            assert tokens["refresh_token"] == "new_refresh"
+
+    asyncio.run(_run())
