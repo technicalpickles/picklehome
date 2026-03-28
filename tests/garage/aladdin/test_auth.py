@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from garage.aladdin.auth import load_tokens, save_tokens
+from garage.aladdin.auth import get_credentials, load_tokens, save_tokens
 
 
 def test_save_and_load_tokens(tmp_path):
@@ -27,3 +27,25 @@ def test_save_tokens_creates_parent_dirs(tmp_path):
     token_path = tmp_path / "deep" / "nested" / "tokens.json"
     save_tokens("a", "b", token_path)
     assert token_path.exists()
+
+
+def test_get_credentials_from_env(monkeypatch):
+    monkeypatch.setenv("ALADDIN_EMAIL", "user@example.com")
+    monkeypatch.setenv("ALADDIN_PASSWORD", "secret")
+    email, password = get_credentials()
+    assert email == "user@example.com"
+    assert password == "secret"
+
+
+def test_get_credentials_missing_email(monkeypatch):
+    monkeypatch.delenv("ALADDIN_EMAIL", raising=False)
+    monkeypatch.setenv("ALADDIN_PASSWORD", "secret")
+    with pytest.raises(SystemExit):
+        get_credentials()
+
+
+def test_get_credentials_missing_password(monkeypatch):
+    monkeypatch.setenv("ALADDIN_EMAIL", "user@example.com")
+    monkeypatch.delenv("ALADDIN_PASSWORD", raising=False)
+    with pytest.raises(SystemExit):
+        get_credentials()

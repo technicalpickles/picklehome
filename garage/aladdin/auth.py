@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from pathlib import Path
 
 
@@ -26,3 +27,17 @@ def save_tokens(access_token: str, refresh_token: str, token_path: Path = DEFAUL
     with open(token_path, "w") as f:
         json.dump(data, f, indent=2)
     token_path.chmod(0o600)
+
+
+def get_credentials() -> tuple[str, str]:
+    email = os.environ.get("ALADDIN_EMAIL")
+    password = os.environ.get("ALADDIN_PASSWORD")
+    missing = []
+    if not email:
+        missing.append("ALADDIN_EMAIL")
+    if not password:
+        missing.append("ALADDIN_PASSWORD")
+    if missing:
+        print(f"{', '.join(missing)} not set. Run 'just dotenv' to generate .env.")
+        sys.exit(1)
+    return email, password
