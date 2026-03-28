@@ -3,6 +3,7 @@ from pathlib import Path
 
 from climate.runlog import (
     get_data_dir,
+    now_iso,
     read_last_state,
     write_last_state,
     append_run_log,
@@ -53,3 +54,9 @@ def test_append_run_log_creates_file(tmp_path):
     entry = {"timestamp": "2026-03-27T06:00:00Z", "decision": "heat"}
     append_run_log(tmp_path, entry)
     assert (tmp_path / "run-log.jsonl").exists()
+
+
+def test_now_iso_uses_eastern_timezone():
+    ts = now_iso()
+    # Should contain an offset like -04:00 or -05:00 (EDT/EST)
+    assert "-04:00" in ts or "-05:00" in ts

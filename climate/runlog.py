@@ -1,7 +1,8 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 LAST_STATE_FILE = "last-state.json"
 RUN_LOG_FILE = "run-log.jsonl"
@@ -36,5 +37,8 @@ def append_run_log(data_dir: Path, entry: dict) -> None:
         f.write(json.dumps(entry, default=str) + "\n")
 
 
+LOCAL_TZ = ZoneInfo("America/New_York")
+
+
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(LOCAL_TZ).isoformat()

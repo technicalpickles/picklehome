@@ -389,6 +389,7 @@ def cmd_comfort_switch(args) -> None:
 
     mode = args.mode
     outdoor_temp = None
+    hysteresis = False
     data_dir = runlog.get_data_dir()
 
     if mode == "auto":
@@ -410,9 +411,11 @@ def cmd_comfort_switch(args) -> None:
         elif outdoor_temp > cool_above:
             mode = "cool"
         else:
+            hysteresis = True
             print(f"Outdoor temp {outdoor_temp}°F is in hysteresis band ({heat_below}-{cool_above}°F). No change.")
-            return
-        print(f"Outdoor temp: {outdoor_temp}°F → switching to {mode}")
+
+        if not hysteresis:
+            print(f"Outdoor temp: {outdoor_temp}°F → switching to {mode}")
 
     # Check last-state for no-op
     last_state = runlog.read_last_state(data_dir)
@@ -434,6 +437,30 @@ def cmd_comfort_switch(args) -> None:
         for t in ecobee.thermostats
         if t["identifier"] in managed_ids
     ]
+
+    # Hysteresis: log and exit without changing anything
+    if hysteresis:
+        log_entry = {
+            "timestamp": runlog.now_iso(),
+            "outdoor_temp_f": outdoor_temp,
+            "decision": "no_change",
+            "reason": "hysteresis",
+            "previous_mode": previous_mode,
+            "switched": False,
+            "holds_cleared": False,
+            "skipped": True,
+            "thermostats": thermostat_statuses,
+        }
+        runlog.append_run_log(data_dir, log_entry)
+
+        state = {
+            "timestamp": runlog.now_iso(),
+            "mode": previous_mode or "unknown",
+            "outdoor_temp_f": outdoor_temp,
+            "thermostats": thermostat_statuses,
+        }
+        runlog.write_last_state(data_dir, state)
+        return
 
     switched = False
     holds_cleared = False
