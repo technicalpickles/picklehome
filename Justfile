@@ -144,3 +144,7 @@ climate-check host="picklelab":
 # Show recent climate auto-switch run log (from picklelab)
 climate-log host="picklelab" lines="10":
     ssh {{host}} "tail -n {{lines}} /srv/data/climate-auto-switch/run-log.jsonl | python3 -m json.tool --json-lines"
+
+# Aladdin garage door: just garage auth | status | open | close
+garage *ARGS:
+    uv run python garage/garage_cli.py {{ARGS}}
