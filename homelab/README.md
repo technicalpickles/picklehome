@@ -23,13 +23,14 @@ Single Intel NUC (Celeron J3455, 4 GB RAM, local SSD) running lightweight always
 
 ### climate-auto-switch
 
-Runs `climate comfort-switch auto` every 6 hours via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. Runs as a Docker container with dependencies baked into the image.
+Runs `climate comfort-switch auto` every 15 minutes via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. No-op detection skips API writes when the mode hasn't changed. Runs as a Docker container with dependencies baked into the image.
 
 **First-time setup (from Mac):**
 
 ```bash
-# 1. Generate .env on picklelab (needs 1Password signed in on host)
-ssh picklelab "cd /opt/homelab && op signin && scripts/dotenv"
+# 1. Generate .env locally, then push to picklelab
+just dotenv
+just push-env
 
 # 2. Seed the ecobee token file (one-time)
 just seed-climate-tokens
@@ -38,10 +39,19 @@ just seed-climate-tokens
 just deploy-climate
 ```
 
+Alternatively, if 1Password CLI is available on picklelab (e.g. via the dev container), you can generate `.env` directly: `cd /opt/homelab && scripts/dotenv`
+
 **Deploy updates (from Mac):**
 
 ```bash
 just deploy-climate
+```
+
+**Updating secrets:**
+
+```bash
+just dotenv
+just push-env
 ```
 
 **Manual trigger:**
@@ -50,7 +60,15 @@ just deploy-climate
 ssh picklelab "sudo systemctl start climate-auto-switch.service"
 ```
 
-**Check logs:**
+**Monitoring:**
+
+```bash
+just climate-check             # last run state (mode, temps, thermostats)
+just climate-log               # recent run log (JSONL, last 10 entries)
+just climate-log lines=50      # more history
+```
+
+**Systemd logs:**
 
 ```bash
 ssh picklelab "sudo journalctl -u climate-auto-switch.service -n 50"
