@@ -84,6 +84,8 @@ async def cmd_status():
             print(f"  WiFi:     {door.rssi} dBm")
             print(f"  BLE:      {door.ble_strength}")
             print(f"  Battery:  {door.battery_level}%")
+            print(f"  MAC:      {door.mac}")
+            print(f"  SSID:     {door.ssid}")
             print(f"  Device:   {door.device_status}")
             print(f"  Firmware: {door.software_version}")
     finally:

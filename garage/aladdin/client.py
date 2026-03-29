@@ -19,10 +19,12 @@ class GarageDoor:
     is_enabled: bool
     updated_at: str
     # Device-level fields
+    mac: str
     rssi: int
     device_status: str
     software_version: str
     model: str
+    ssid: str
 
 
 # Map numeric status codes to human-readable strings
@@ -56,6 +58,14 @@ FAULT_STATUS = {
     3: "not_safe",
     4: "will_not_move",
 }
+
+
+def _format_mac(device_id: str) -> str:
+    """Format a 12-char hex device ID as a colon-separated MAC address."""
+    raw = device_id.upper()
+    if len(raw) == 12 and all(c in "0123456789ABCDEF" for c in raw):
+        return ":".join(raw[i:i+2] for i in range(0, 12, 2))
+    return device_id
 
 
 async def connect() -> tuple[aiohttp.ClientSession, str]:
@@ -97,10 +107,12 @@ async def get_doors(session: aiohttp.ClientSession) -> list[GarageDoor]:
                 ble_strength=door.get("ble_strength", 0),
                 is_enabled=door.get("is_enabled", False),
                 updated_at=door.get("updated_at", ""),
+                mac=_format_mac(device_id),
                 rssi=device.get("rssi", 0),
                 device_status=DEVICE_STATUS.get(device.get("status", 0), "unknown"),
                 software_version=device.get("software_version", ""),
                 model=device.get("vendor", ""),
+                ssid=device.get("ssid", ""),
             ))
     return doors
 

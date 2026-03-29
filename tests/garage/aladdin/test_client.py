@@ -10,6 +10,7 @@ from garage.aladdin.client import (
     LINK_STATUS,
     DEVICE_STATUS,
     FAULT_STATUS,
+    _format_mac,
     connect,
     get_doors,
     open_door,
@@ -29,16 +30,20 @@ def test_garage_door_dataclass():
         ble_strength=0,
         is_enabled=True,
         updated_at="123456",
+        mac="F0:AD:4E:17:08:5C",
         rssi=-65,
         device_status="connected",
         software_version="6.20.00",
         model="GENIE",
+        ssid="picklehome-iot",
     )
     assert door.device_id == "dev1"
     assert door.name == "Garage"
     assert door.status == "closed"
     assert door.fault == "none"
     assert door.rssi == -65
+    assert door.mac == "F0:AD:4E:17:08:5C"
+    assert door.ssid == "picklehome-iot"
 
 
 def test_door_status_mapping():
@@ -59,6 +64,16 @@ def test_device_status_mapping():
     assert DEVICE_STATUS[1] == "connected"
 
 
+def test_format_mac_valid():
+    assert _format_mac("F0AD4E17085C") == "F0:AD:4E:17:08:5C"
+    assert _format_mac("aabbccddeeff") == "AA:BB:CC:DD:EE:FF"
+
+
+def test_format_mac_passthrough():
+    assert _format_mac("not-a-mac") == "not-a-mac"
+    assert _format_mac("short") == "short"
+
+
 def test_fault_status_mapping():
     assert FAULT_STATUS[0] == "none"
     assert FAULT_STATUS[1] == "ul_lockout"
@@ -75,10 +90,11 @@ def test_get_doors_parses_response():
     api_response = {
         "devices": [
             {
-                "id": "device123",
+                "id": "AABBCCDDEEFF",
                 "name": "My Opener",
                 "status": 1,
                 "rssi": -55,
+                "ssid": "my-iot-network",
                 "software_version": "6.20.00",
                 "vendor": "GENIE",
                 "doors": [
@@ -121,14 +137,16 @@ def test_get_doors_parses_response():
         doors = await get_doors(mock_session)
         assert len(doors) == 2
 
-        assert doors[0].device_id == "device123"
+        assert doors[0].device_id == "AABBCCDDEEFF"
         assert doors[0].door_index == 0
         assert doors[0].name == "Main Garage"
         assert doors[0].status == "closed"
         assert doors[0].link_status == "connected"
         assert doors[0].battery_level == 88
         assert doors[0].fault == "none"
+        assert doors[0].mac == "AA:BB:CC:DD:EE:FF"
         assert doors[0].rssi == -55
+        assert doors[0].ssid == "my-iot-network"
         assert doors[0].device_status == "connected"
         assert doors[0].is_enabled is True
 
