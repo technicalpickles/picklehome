@@ -22,9 +22,9 @@ async def cmd_auth():
     await login(email, password)
     print("Authentication successful! Tokens saved.")
 
-    session, client = await connect()
+    session, _token = await connect()
     try:
-        doors = await get_doors(client)
+        doors = await get_doors(session)
         if doors:
             print(f"\nFound {len(doors)} door(s):")
             for door in doors:
@@ -36,9 +36,9 @@ async def cmd_auth():
 
 
 async def cmd_status():
-    session, client = await connect()
+    session, _token = await connect()
     try:
-        doors = await get_doors(client)
+        doors = await get_doors(session)
         if not doors:
             print("No doors found.")
             return
@@ -52,30 +52,30 @@ async def cmd_status():
 
 
 async def cmd_open():
-    session, client = await connect()
+    session, _token = await connect()
     try:
-        doors = await get_doors(client)
+        doors = await get_doors(session)
         if not doors:
             print("No doors found.")
             return
         door = doors[0]
         print(f"Opening {door.name}...")
-        success = await open_door(client, door.device_id, door.door_number)
+        success = await open_door(session, door.device_id, door.door_index)
         print("Sent." if success else "Failed to send open command.")
     finally:
         await session.close()
 
 
 async def cmd_close():
-    session, client = await connect()
+    session, _token = await connect()
     try:
-        doors = await get_doors(client)
+        doors = await get_doors(session)
         if not doors:
             print("No doors found.")
             return
         door = doors[0]
         print(f"Closing {door.name}...")
-        success = await close_door(client, door.device_id, door.door_number)
+        success = await close_door(session, door.device_id, door.door_index)
         print("Sent." if success else "Failed to send close command.")
     finally:
         await session.close()

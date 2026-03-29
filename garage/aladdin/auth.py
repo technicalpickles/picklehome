@@ -1,15 +1,20 @@
+import base64
+import hashlib
+import hmac
 import json
 import os
 import sys
 from pathlib import Path
 
 import aiohttp
-from genie_partner_sdk.auth import Auth
 
-# OAuth/API constants (from erikreedstrom/aladdin_connect HA integration)
-API_URL = "https://twdvzuefzh.execute-api.us-east-2.amazonaws.com/v1"
-API_KEY = "k6QaiQmcTm2zfaNns5L1Z8duBtJmhDOW8JawlCC3"
-OAUTH2_TOKEN_URL = "https://twdvzuefzh.execute-api.us-east-2.amazonaws.com/v1/oauth2/token"
+# AWS Cognito auth (from homebridge-aladdin-connect, reverse-engineered from Genie iOS app)
+COGNITO_ENDPOINT = "https://cognito-idp.us-east-2.amazonaws.com/"
+COGNITO_CLIENT_ID = "27iic8c3bvslqngl3hso83t74b"
+COGNITO_CLIENT_SECRET = "7bokto0ep96055k42fnrmuth84k7jdcjablestb7j53o8lp63v5"
+
+# API base URL
+API_URL = "https://api.smartgarage.systems"
 
 
 def _default_token_path() -> Path:
@@ -51,58 +56,61 @@ def get_credentials() -> tuple[str, str]:
     return email, password
 
 
-class AladdinAuth(Auth):
-    """Auth subclass that persists tokens to a local JSON file."""
-
-    def __init__(
-        self,
-        websession: aiohttp.ClientSession,
-        access_token: str,
-        refresh_token: str,
-        token_path: Path = DEFAULT_TOKEN_PATH,
-    ):
-        super().__init__(websession, API_URL, access_token, API_KEY)
-        self._refresh_token = refresh_token
-        self._token_path = token_path
-
-    async def async_get_access_token(self) -> str:
-        return self.access_token
-
-    async def refresh_access_token(self) -> str:
-        """Exchange refresh token for new access token."""
-        async with self.websession.post(
-            OAUTH2_TOKEN_URL,
-            json={
-                "grant_type": "refresh_token",
-                "refresh_token": self._refresh_token,
-            },
-            headers={"x-api-key": API_KEY},
-        ) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-        self.access_token = data["access_token"]
-        self._refresh_token = data.get("refresh_token", self._refresh_token)
-        save_tokens(self.access_token, self._refresh_token, self._token_path)
-        return self.access_token
+def _compute_secret_hash(username: str) -> str:
+    msg = (username + COGNITO_CLIENT_ID).encode("utf-8")
+    key = COGNITO_CLIENT_SECRET.encode("utf-8")
+    return base64.b64encode(hmac.new(key, msg, hashlib.sha256).digest()).decode("utf-8")
 
 
 async def login(email: str, password: str, token_path: Path = DEFAULT_TOKEN_PATH) -> dict:
-    """Authenticate with Genie OAuth and save tokens."""
+    """Authenticate with AWS Cognito and save tokens."""
+    secret_hash = _compute_secret_hash(email)
+    payload = {
+        "ClientId": COGNITO_CLIENT_ID,
+        "AuthFlow": "USER_PASSWORD_AUTH",
+        "AuthParameters": {
+            "USERNAME": email,
+            "PASSWORD": password,
+            "SECRET_HASH": secret_hash,
+        },
+    }
+    headers = {
+        "Content-Type": "application/x-amz-json-1.1",
+        "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth",
+    }
     async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
-            OAUTH2_TOKEN_URL,
-            json={
-                "grant_type": "password",
-                "email": email,
-                "password": password,
-            },
-            headers={"x-api-key": API_KEY},
-        ) as resp:
+        async with session.post(COGNITO_ENDPOINT, json=payload, headers=headers) as resp:
             if resp.status != 200:
                 body = await resp.text()
                 raise RuntimeError(f"Aladdin login failed (HTTP {resp.status}): {body}")
             data = await resp.json()
-    access_token = data["access_token"]
-    refresh_token = data["refresh_token"]
-    save_tokens(access_token, refresh_token, token_path)
-    return data
+    result = data["AuthenticationResult"]
+    save_tokens(result["AccessToken"], result.get("RefreshToken", ""), token_path)
+    return result
+
+
+async def refresh(refresh_token: str, email: str, token_path: Path = DEFAULT_TOKEN_PATH) -> dict:
+    """Refresh access token via Cognito."""
+    secret_hash = _compute_secret_hash(email)
+    payload = {
+        "ClientId": COGNITO_CLIENT_ID,
+        "AuthFlow": "REFRESH_TOKEN_AUTH",
+        "AuthParameters": {
+            "REFRESH_TOKEN": refresh_token,
+            "SECRET_HASH": secret_hash,
+        },
+    }
+    headers = {
+        "Content-Type": "application/x-amz-json-1.1",
+        "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth",
+    }
+    async with aiohttp.ClientSession(trust_env=True) as session:
+        async with session.post(COGNITO_ENDPOINT, json=payload, headers=headers) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(f"Aladdin token refresh failed (HTTP {resp.status}): {body}")
+            data = await resp.json()
+    result = data["AuthenticationResult"]
+    # Cognito refresh doesn't return a new refresh token
+    save_tokens(result["AccessToken"], refresh_token, token_path)
+    return result

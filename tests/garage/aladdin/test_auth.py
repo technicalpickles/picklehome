@@ -1,10 +1,18 @@
 import asyncio
+import base64
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from garage.aladdin.auth import get_credentials, load_tokens, save_tokens
+from garage.aladdin.auth import (
+    get_credentials,
+    load_tokens,
+    save_tokens,
+    _compute_secret_hash,
+    COGNITO_CLIENT_ID,
+    COGNITO_CLIENT_SECRET,
+)
 
 
 def test_save_and_load_tokens(tmp_path):
@@ -53,27 +61,17 @@ def test_get_credentials_missing_password(monkeypatch):
         get_credentials()
 
 
-# --- AladdinAuth and login tests ---
-
-from garage.aladdin.auth import AladdinAuth, API_URL, API_KEY
+# --- Cognito auth tests ---
 
 
-def test_aladdin_auth_returns_cached_token(tmp_path):
-    session = MagicMock()
-    auth = AladdinAuth(session, "valid_access_token", "refresh_token", tmp_path / "t.json")
-
-    async def _run():
-        token = await auth.async_get_access_token()
-        assert token == "valid_access_token"
-
-    asyncio.run(_run())
-
-
-def test_aladdin_auth_init_sets_api_constants():
-    session = MagicMock()
-    auth = AladdinAuth(session, "tok", "ref")
-    assert auth.host == API_URL
-    assert auth.api_key == API_KEY
+def test_compute_secret_hash():
+    # Verify HMAC-SHA256 computation matches expected format
+    result = _compute_secret_hash("test@example.com")
+    assert isinstance(result, str)
+    # Should be valid base64
+    decoded = base64.b64decode(result)
+    # HMAC-SHA256 produces 32 bytes
+    assert len(decoded) == 32
 
 
 def test_login_saves_tokens(tmp_path):
@@ -82,8 +80,11 @@ def test_login_saves_tokens(tmp_path):
     mock_response = AsyncMock()
     mock_response.status = 200
     mock_response.json = AsyncMock(return_value={
-        "access_token": "new_access",
-        "refresh_token": "new_refresh",
+        "AuthenticationResult": {
+            "AccessToken": "cognito_access",
+            "RefreshToken": "cognito_refresh",
+            "IdToken": "cognito_id",
+        }
     })
     mock_response.__aenter__ = AsyncMock(return_value=mock_response)
     mock_response.__aexit__ = AsyncMock(return_value=False)
@@ -97,9 +98,41 @@ def test_login_saves_tokens(tmp_path):
         with patch("garage.aladdin.auth.aiohttp.ClientSession", return_value=mock_session):
             from garage.aladdin.auth import login, load_tokens
             result = await login("user@example.com", "pass", token_path)
-            assert result["access_token"] == "new_access"
+            assert result["AccessToken"] == "cognito_access"
             tokens = load_tokens(token_path)
-            assert tokens["access_token"] == "new_access"
-            assert tokens["refresh_token"] == "new_refresh"
+            assert tokens["access_token"] == "cognito_access"
+            assert tokens["refresh_token"] == "cognito_refresh"
+
+    asyncio.run(_run())
+
+
+def test_refresh_saves_tokens(tmp_path):
+    token_path = tmp_path / "tokens.json"
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={
+        "AuthenticationResult": {
+            "AccessToken": "refreshed_access",
+            "IdToken": "refreshed_id",
+        }
+    })
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=False)
+
+    mock_session = AsyncMock()
+    mock_session.post = MagicMock(return_value=mock_response)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    async def _run():
+        with patch("garage.aladdin.auth.aiohttp.ClientSession", return_value=mock_session):
+            from garage.aladdin.auth import refresh, load_tokens
+            result = await refresh("original_refresh", "user@example.com", token_path)
+            assert result["AccessToken"] == "refreshed_access"
+            tokens = load_tokens(token_path)
+            assert tokens["access_token"] == "refreshed_access"
+            # Refresh token should be preserved (Cognito doesn't return a new one)
+            assert tokens["refresh_token"] == "original_refresh"
 
     asyncio.run(_run())

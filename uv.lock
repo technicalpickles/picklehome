@@ -563,15 +563,6 @@ wheels = [
 ]
 
 [[package]]
-name = "genie-partner-sdk"
-version = "1.0.11"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b6/b2/f5f10454f381d609cd969b4227699731b78f11844c504d882e7ec4d18bfd/genie_partner_sdk-1.0.11.tar.gz", hash = "sha256:78d78dfa6b693f363aa74895a3fa2dd1e2f36bf69e24fef43f1347c7bfcc5686", size = 19146, upload-time = "2025-09-04T14:24:28.533Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/47/0d32539d76fd5b806f3c55094f95713c9687be01f397050bb04bcff47181/genie_partner_sdk-1.0.11-py3-none-any.whl", hash = "sha256:65d7988ddd7cbd4f8b0240d4aeef7c7364dd839fb4c24c78baa01627940ea07c", size = 6529, upload-time = "2025-09-04T14:24:27.434Z" },
-]
-
-[[package]]
 name = "greenlet"
 version = "3.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -844,10 +835,10 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aioambient" },
+    { name = "aiohttp" },
     { name = "aiohue" },
     { name = "blueair-api" },
     { name = "dnspython" },
-    { name = "genie-partner-sdk" },
     { name = "mac-vendor-lookup" },
     { name = "paramiko" },
     { name = "playwright" },
@@ -866,10 +857,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aioambient", specifier = "==2024.8.0" },
+    { name = "aiohttp", specifier = ">=3.9" },
     { name = "aiohue", specifier = ">=4.7" },
     { name = "blueair-api", specifier = ">=1.48" },
     { name = "dnspython", specifier = ">=2.6" },
-    { name = "genie-partner-sdk", specifier = ">=1.0.11" },
     { name = "mac-vendor-lookup", specifier = ">=0.1.12" },
     { name = "paramiko", specifier = ">=3.0" },
     { name = "playwright", specifier = ">=1.40" },

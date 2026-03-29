@@ -1,43 +1,94 @@
+# garage/aladdin/client.py
 import sys
+from dataclasses import dataclass
 
 import aiohttp
-from genie_partner_sdk.client import AladdinConnectClient
-from genie_partner_sdk.model import GarageDoor
 
-from garage.aladdin.auth import AladdinAuth, load_tokens, DEFAULT_TOKEN_PATH
+from garage.aladdin.auth import load_tokens, API_URL, DEFAULT_TOKEN_PATH
 
 
-async def connect() -> tuple[aiohttp.ClientSession, AladdinConnectClient]:
-    """Create an authenticated Aladdin Connect client.
+@dataclass
+class GarageDoor:
+    device_id: str
+    door_index: int
+    name: str
+    status: str
+    link_status: str
+    battery_level: int
 
-    Returns the session (caller must close) and the client.
+
+# Map numeric status codes to human-readable strings (from homebridge plugin)
+DOOR_STATUS = {
+    0: "unknown",
+    1: "open",
+    2: "opening",
+    3: "timeout_opening",
+    4: "closed",
+    5: "closing",
+    6: "timeout_closing",
+    7: "not_configured",
+}
+
+LINK_STATUS = {
+    0: "unknown",
+    1: "not_configured",
+    2: "paired",
+    3: "connected",
+}
+
+
+async def connect() -> tuple[aiohttp.ClientSession, str]:
+    """Create an authenticated session for the Aladdin API.
+
+    Returns the session (caller must close) and the access token.
     """
     tokens = load_tokens()
     if not tokens or not tokens.get("access_token"):
         print("Aladdin tokens not found. Run 'just garage auth' to authenticate.")
         sys.exit(1)
 
-    session = aiohttp.ClientSession(trust_env=True)
-    auth = AladdinAuth(
-        session,
-        tokens["access_token"],
-        tokens["refresh_token"],
-        DEFAULT_TOKEN_PATH,
+    session = aiohttp.ClientSession(
+        base_url=API_URL,
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        trust_env=True,
     )
-    client = AladdinConnectClient(auth)
-    return session, client
+    return session, tokens["access_token"]
 
 
-async def get_doors(client: AladdinConnectClient) -> list[GarageDoor]:
+async def get_doors(session: aiohttp.ClientSession) -> list[GarageDoor]:
     """Fetch all garage doors."""
-    return await client.get_doors()
+    async with session.get("/devices") as resp:
+        resp.raise_for_status()
+        data = await resp.json()
+
+    doors = []
+    for device in data.get("devices", []):
+        device_id = device["id"]
+        for door in device.get("doors", []):
+            doors.append(GarageDoor(
+                device_id=device_id,
+                door_index=door["door_index"],
+                name=door.get("name", device.get("name", "Unknown")),
+                status=DOOR_STATUS.get(door.get("status", 0), "unknown"),
+                link_status=LINK_STATUS.get(door.get("link_status", 0), "unknown"),
+                battery_level=door.get("battery_level", 0),
+            ))
+    return doors
 
 
-async def open_door(client: AladdinConnectClient, device_id: str, door_number: int) -> bool:
+async def open_door(session: aiohttp.ClientSession, device_id: str, door_index: int) -> bool:
     """Open a door. Returns True on success."""
-    return await client.open_door(device_id, door_number)
+    async with session.post(
+        f"/command/devices/{device_id}/doors/{door_index}",
+        json={"command": "OPEN_DOOR"},
+    ) as resp:
+        return resp.status <= 299
 
 
-async def close_door(client: AladdinConnectClient, device_id: str, door_number: int) -> bool:
+async def close_door(session: aiohttp.ClientSession, device_id: str, door_index: int) -> bool:
     """Close a door. Returns True on success."""
-    return await client.close_door(device_id, door_number)
+    async with session.post(
+        f"/command/devices/{device_id}/doors/{door_index}",
+        json={"command": "CLOSE_DOOR"},
+    ) as resp:
+        return resp.status <= 299
