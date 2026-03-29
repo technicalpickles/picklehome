@@ -11,9 +11,39 @@ Usage:
 
 import argparse
 import asyncio
+from datetime import datetime, timezone
 
 from garage.aladdin.auth import get_credentials, login
 from garage.aladdin.client import connect, get_doors, open_door, close_door
+
+
+def _format_since(updated_at: str) -> str:
+    """Format updated_at as a timestamp and human-readable duration."""
+    try:
+        ts = int(updated_at)
+    except (ValueError, TypeError):
+        return "unknown"
+    dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone()
+    now = datetime.now(tz=timezone.utc)
+    delta = now - datetime.fromtimestamp(ts, tz=timezone.utc)
+
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 0:
+        return f"{dt.strftime('%Y-%m-%d %H:%M %Z')} (in the future?)"
+    if total_seconds < 60:
+        ago = f"{total_seconds}s ago"
+    elif total_seconds < 3600:
+        ago = f"{total_seconds // 60}m ago"
+    elif total_seconds < 86400:
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        ago = f"{hours}h {minutes}m ago"
+    else:
+        days = total_seconds // 86400
+        hours = (total_seconds % 86400) // 3600
+        ago = f"{days}d {hours}h ago"
+
+    return f"{dt.strftime('%Y-%m-%d %H:%M %Z')} ({ago})"
 
 
 async def cmd_auth():
@@ -45,6 +75,7 @@ async def cmd_status():
         for door in doors:
             print(f"{door.name}")
             print(f"  State:    {door.status}")
+            print(f"  Since:    {_format_since(door.updated_at)}")
             if door.fault != "none":
                 print(f"  Fault:    {door.fault}")
             if not door.is_enabled:
