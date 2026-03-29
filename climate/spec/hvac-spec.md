@@ -80,7 +80,7 @@ Temperatures in °F. Minimum 5°F spread required between heat and cool.
 
 | Comfort      | Cool | Heat | Notes                                  |
 |--------------|------|------|----------------------------------------|
-| Comfort Cool | 70   | 65   | Primary occupied mode — outdoor temp > 65°F |
+| Comfort Cool | 71   | 65   | Primary occupied mode — outdoor temp > 65°F |
 | Comfort Heat | 73   | 72   | Primary occupied mode — outdoor temp < 60°F; set higher than upstairs to compensate for Ecobee running cooler than Nest and remote offices (Josh's office, Tracy's office) feeling cold |
 | Eco          | 71   | 68   | Moderate setback — allow drift without full Away range |
 | Sleep        | 72   | 65   | Nighttime energy saving — wide enough to save, narrow enough for quick recovery |
@@ -91,7 +91,7 @@ Temperatures in °F. Minimum 5°F spread required between heat and cool.
 
 | Comfort      | Cool | Heat | Notes                                  |
 |--------------|------|------|----------------------------------------|
-| Comfort Cool | 70   | 65   | Primary occupied mode — outdoor temp > 65°F |
+| Comfort Cool | 71   | 65   | Primary occupied mode — outdoor temp > 65°F |
 | Comfort Heat | 73   | 70   | Primary occupied mode — outdoor temp < 60°F |
 | Eco          | 71   | 68   | Moderate setback — allow drift without full Away range |
 | Sleep        | 71   | 66   | Not used in schedule — upstairs uses Comfort Heat overnight |
