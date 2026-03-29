@@ -83,7 +83,7 @@ async def login(email: str, password: str, token_path: Path = DEFAULT_TOKEN_PATH
             if resp.status != 200:
                 body = await resp.text()
                 raise RuntimeError(f"Aladdin login failed (HTTP {resp.status}): {body}")
-            data = await resp.json()
+            data = await resp.json(content_type=None)
     result = data["AuthenticationResult"]
     save_tokens(result["AccessToken"], result.get("RefreshToken", ""), token_path)
     return result
@@ -109,7 +109,7 @@ async def refresh(refresh_token: str, email: str, token_path: Path = DEFAULT_TOK
             if resp.status != 200:
                 body = await resp.text()
                 raise RuntimeError(f"Aladdin token refresh failed (HTTP {resp.status}): {body}")
-            data = await resp.json()
+            data = await resp.json(content_type=None)
     result = data["AuthenticationResult"]
     # Cognito refresh doesn't return a new refresh token
     save_tokens(result["AccessToken"], refresh_token, token_path)
