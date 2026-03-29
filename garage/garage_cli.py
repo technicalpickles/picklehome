@@ -44,9 +44,17 @@ async def cmd_status():
             return
         for door in doors:
             print(f"{door.name}")
-            print(f"  State:   {door.status}")
-            print(f"  Battery: {door.battery_level}%")
-            print(f"  Link:    {door.link_status}")
+            print(f"  State:    {door.status}")
+            if door.fault != "none":
+                print(f"  Fault:    {door.fault}")
+            if not door.is_enabled:
+                print(f"  Enabled:  no (operate manually)")
+            print(f"  Link:     {door.link_status}")
+            print(f"  WiFi:     {door.rssi} dBm")
+            print(f"  BLE:      {door.ble_strength}")
+            print(f"  Battery:  {door.battery_level}%")
+            print(f"  Device:   {door.device_status}")
+            print(f"  Firmware: {door.software_version}")
     finally:
         await session.close()
 

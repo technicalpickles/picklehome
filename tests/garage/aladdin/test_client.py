@@ -8,6 +8,8 @@ from garage.aladdin.client import (
     GarageDoor,
     DOOR_STATUS,
     LINK_STATUS,
+    DEVICE_STATUS,
+    FAULT_STATUS,
     connect,
     get_doors,
     open_door,
@@ -23,13 +25,20 @@ def test_garage_door_dataclass():
         status="closed",
         link_status="connected",
         battery_level=95,
+        fault="none",
+        ble_strength=0,
+        is_enabled=True,
+        updated_at="123456",
+        rssi=-65,
+        device_status="connected",
+        software_version="6.20.00",
+        model="GENIE",
     )
     assert door.device_id == "dev1"
-    assert door.door_index == 0
     assert door.name == "Garage"
     assert door.status == "closed"
-    assert door.link_status == "connected"
-    assert door.battery_level == 95
+    assert door.fault == "none"
+    assert door.rssi == -65
 
 
 def test_door_status_mapping():
@@ -45,6 +54,17 @@ def test_link_status_mapping():
     assert LINK_STATUS[2] == "paired"
 
 
+def test_device_status_mapping():
+    assert DEVICE_STATUS[0] == "offline"
+    assert DEVICE_STATUS[1] == "connected"
+
+
+def test_fault_status_mapping():
+    assert FAULT_STATUS[0] == "none"
+    assert FAULT_STATUS[1] == "ul_lockout"
+    assert FAULT_STATUS[4] == "will_not_move"
+
+
 def test_connect_exits_without_tokens(monkeypatch):
     monkeypatch.setattr("garage.aladdin.client.load_tokens", lambda: None)
     with pytest.raises(SystemExit):
@@ -57,6 +77,10 @@ def test_get_doors_parses_response():
             {
                 "id": "device123",
                 "name": "My Opener",
+                "status": 1,
+                "rssi": -55,
+                "software_version": "6.20.00",
+                "vendor": "GENIE",
                 "doors": [
                     {
                         "door_index": 0,
@@ -64,12 +88,20 @@ def test_get_doors_parses_response():
                         "status": 4,
                         "link_status": 3,
                         "battery_level": 88,
+                        "fault": 0,
+                        "ble_strength": 10,
+                        "is_enabled": True,
+                        "updated_at": "123456",
                     },
                     {
                         "door_index": 1,
                         "status": 1,
                         "link_status": 2,
                         "battery_level": 50,
+                        "fault": 1,
+                        "ble_strength": 0,
+                        "is_enabled": False,
+                        "updated_at": "789012",
                     },
                 ],
             }
@@ -95,11 +127,17 @@ def test_get_doors_parses_response():
         assert doors[0].status == "closed"
         assert doors[0].link_status == "connected"
         assert doors[0].battery_level == 88
+        assert doors[0].fault == "none"
+        assert doors[0].rssi == -55
+        assert doors[0].device_status == "connected"
+        assert doors[0].is_enabled is True
 
         # Second door has no name, should fall back to device name
         assert doors[1].name == "My Opener"
         assert doors[1].status == "open"
         assert doors[1].link_status == "paired"
+        assert doors[1].fault == "ul_lockout"
+        assert doors[1].is_enabled is False
 
     asyncio.run(_run())
 

@@ -1,4 +1,3 @@
-# garage/aladdin/client.py
 import sys
 from dataclasses import dataclass
 
@@ -15,9 +14,18 @@ class GarageDoor:
     status: str
     link_status: str
     battery_level: int
+    fault: str
+    ble_strength: int
+    is_enabled: bool
+    updated_at: str
+    # Device-level fields
+    rssi: int
+    device_status: str
+    software_version: str
+    model: str
 
 
-# Map numeric status codes to human-readable strings (from homebridge plugin)
+# Map numeric status codes to human-readable strings
 DOOR_STATUS = {
     0: "unknown",
     1: "open",
@@ -34,6 +42,19 @@ LINK_STATUS = {
     1: "not_configured",
     2: "paired",
     3: "connected",
+}
+
+DEVICE_STATUS = {
+    0: "offline",
+    1: "connected",
+}
+
+FAULT_STATUS = {
+    0: "none",
+    1: "ul_lockout",
+    2: "interlock",
+    3: "not_safe",
+    4: "will_not_move",
 }
 
 
@@ -59,7 +80,7 @@ async def get_doors(session: aiohttp.ClientSession) -> list[GarageDoor]:
     """Fetch all garage doors."""
     async with session.get("/devices") as resp:
         resp.raise_for_status()
-        data = await resp.json()
+        data = await resp.json(content_type=None)
 
     doors = []
     for device in data.get("devices", []):
@@ -72,6 +93,14 @@ async def get_doors(session: aiohttp.ClientSession) -> list[GarageDoor]:
                 status=DOOR_STATUS.get(door.get("status", 0), "unknown"),
                 link_status=LINK_STATUS.get(door.get("link_status", 0), "unknown"),
                 battery_level=door.get("battery_level", 0),
+                fault=FAULT_STATUS.get(door.get("fault", 0), "unknown"),
+                ble_strength=door.get("ble_strength", 0),
+                is_enabled=door.get("is_enabled", False),
+                updated_at=door.get("updated_at", ""),
+                rssi=device.get("rssi", 0),
+                device_status=DEVICE_STATUS.get(device.get("status", 0), "unknown"),
+                software_version=device.get("software_version", ""),
+                model=device.get("vendor", ""),
             ))
     return doors
 
