@@ -149,6 +149,10 @@ climate-log host="picklelab" lines="10":
 tailscale *ARGS:
     tailscale {{ if ARGS == "" { "status" } else { ARGS } }}
 
+# Show MagicDNS hostname for the current node
+tailscale-dns:
+    tailscale status --self --json | jq -r '.Self.DNSName | rtrimstr(".")'
+
 # Aladdin garage door: just garage auth | status | open | close
 garage *ARGS:
     uv run python garage/garage_cli.py {{ARGS}}
