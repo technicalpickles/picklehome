@@ -2,6 +2,19 @@
 
 Network diagnostic tooling for investigating ISP/CDN connectivity issues.
 
+## Tailscale
+
+Tailscale mesh VPN is installed on joshs-macbook-pro, picklelab, and iphone182.
+Devices can reach each other by Tailscale hostname or `100.x.y.z` IP. See
+`TOPOLOGY.md` for the device table.
+
+```bash
+just tailscale           # all tailnet devices + status (wraps `tailscale status`)
+```
+
+To make a local service reachable from other tailnet devices, bind to `0.0.0.0`
+instead of `127.0.0.1`.
+
 ## Scripts
 
 ### `bgw.py` — AT&T BGW gateway diagnostics

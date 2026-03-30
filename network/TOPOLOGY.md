@@ -26,6 +26,26 @@ UniFi CloudKey G2 Plus (network controller)
     UniFi Network: 10.1.85
 ```
 
+## Tailscale Overlay Network
+
+Tailscale mesh VPN connects devices across the home LAN and external networks.
+All devices are on the same tailnet with MagicDNS enabled, so they can reach each
+other by hostname (e.g. `picklelab`) or Tailscale IP (`100.x.y.z`).
+
+| Device | Tailscale IP | OS | Role |
+|---|---|---|---|
+| joshs-macbook-pro | 100.120.123.117 | macOS | Primary workstation |
+| picklelab | 100.123.122.68 | linux | Home server (runs climate-auto-switch) |
+| iphone182 | 100.125.174.38 | iOS | Josh's iPhone |
+
+To expose a service on one device to another, bind to `0.0.0.0` (not `127.0.0.1`)
+and access via Tailscale hostname or IP. No port forwarding or firewall changes needed.
+
+```bash
+just tailscale           # show all tailnet devices + status
+tailscale ip             # show this device's Tailscale IP
+```
+
 ## Hardware Inventory
 
 ### Infrastructure
