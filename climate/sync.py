@@ -466,13 +466,11 @@ def cmd_comfort_switch(args) -> None:
     holds_cleared = False
     skipped = False
 
-    if previous_mode == mode:
-        print(f"Already in {mode} mode. Skipping schedule push.")
-        skipped = True
-    elif args.dry_run:
-        schedule_path = args.schedule
-        original = schedule_path.read_text()
-        updated = _apply_comfort_mode(original, mode)
+    schedule_path = args.schedule
+    original = schedule_path.read_text()
+    updated = _apply_comfort_mode(original, mode)
+
+    if args.dry_run:
         if updated != original:
             print(f"[dry run] Would switch to {mode} comfort:")
             for i, (old, new) in enumerate(zip(original.splitlines(), updated.splitlines()), 1):
@@ -484,48 +482,44 @@ def cmd_comfort_switch(args) -> None:
             print(f"[dry run] Would clear active holds on all managed thermostats")
         print(f"[dry run] Would set HVAC mode to auto on all managed thermostats")
         return
+
+    if updated == original:
+        print(f"Already in {mode} mode. Skipping schedule push.")
+        skipped = True
     else:
-        # Push schedule change
-        schedule_path = args.schedule
-        original = schedule_path.read_text()
-        updated = _apply_comfort_mode(original, mode)
+        schedule_path.write_text(updated)
+        print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
+        sync_args = argparse.Namespace(
+            schedule=schedule_path,
+            thermostats=args.thermostats,
+            thermostat=None,
+            dry_run=False,
+        )
+        try:
+            cmd_sync(sync_args)
+        except SystemExit as e:
+            if e.code != 0:
+                print("Ecobee sync failed. Restoring schedule.yaml to original content.")
+                schedule_path.write_text(original)
+                raise
+        switched = True
 
-        if updated != original:
-            schedule_path.write_text(updated)
-            print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
-            sync_args = argparse.Namespace(
-                schedule=schedule_path,
-                thermostats=args.thermostats,
-                thermostat=None,
-                dry_run=False,
-            )
-            try:
-                cmd_sync(sync_args)
-            except SystemExit as e:
-                if e.code != 0:
-                    print("Ecobee sync failed. Restoring schedule.yaml to original content.")
-                    schedule_path.write_text(original)
-                    raise
-            switched = True
-        else:
-            print(f"Schedule already set to {mode} comfort.")
-
-        if args.clear_holds:
-            for name, thermostat_id in managed:
-                try:
-                    schedule.resume_program(ecobee, thermostat_id)
-                    print(f"  [{name}] Cleared active holds")
-                    holds_cleared = True
-                except RuntimeError as e:
-                    print(f"  [{name}] Warning: failed to clear holds: {e}")
-
-        hvac_mode = "auto"
+    if args.clear_holds:
         for name, thermostat_id in managed:
             try:
-                schedule.set_hvac_mode(ecobee, thermostat_id, hvac_mode)
-                print(f"  [{name}] HVAC mode set to {hvac_mode}")
+                schedule.resume_program(ecobee, thermostat_id)
+                print(f"  [{name}] Cleared active holds")
+                holds_cleared = True
             except RuntimeError as e:
-                print(f"  [{name}] Warning: failed to set HVAC mode: {e}")
+                print(f"  [{name}] Warning: failed to clear holds: {e}")
+
+    hvac_mode = "auto"
+    for name, thermostat_id in managed:
+        try:
+            schedule.set_hvac_mode(ecobee, thermostat_id, hvac_mode)
+            print(f"  [{name}] HVAC mode set to {hvac_mode}")
+        except RuntimeError as e:
+            print(f"  [{name}] Warning: failed to set HVAC mode: {e}")
 
     # Write run log and last-state
     log_entry = {
