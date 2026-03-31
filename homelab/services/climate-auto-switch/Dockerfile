@@ -17,4 +17,4 @@ COPY climate/ climate/
 # Install the project itself (uses cached deps layer)
 RUN uv sync --frozen
 
-ENTRYPOINT ["uv", "run", "python", "-m", "climate.sync", "comfort-switch", "auto", "--clear-holds"]
+ENTRYPOINT ["uv", "run", "python", "-m", "climate.sync", "comfort-switch", "auto"]
