@@ -83,8 +83,10 @@ grep -i "$cmd_basename" "$raw_log" > "$filtered_log" || true
 echo ""
 
 # Patterns for system read-only paths and relative path noise from fs_usage
-sys_pattern='^/(usr|System|Library|dev|var|private/(var|etc)|Applications|AppleInternal)'
-noise_pattern='^/(\.\.|\.\./|Cellar|C\.)'
+sys_pattern='^/(usr|System|Library|dev|var|private/(var|etc)|etc|Applications|AppleInternal)'
+noise_pattern='^/(\.\.|\.\./|Cellar|C\.|/)'
+# PATH search: any path ending in /<cmd_basename> is bash looking for the binary
+path_search_pattern="/${cmd_basename}$"
 
 # Generate summary
 {
@@ -107,9 +109,16 @@ noise_pattern='^/(\.\.|\.\./|Cellar|C\.)'
   fi
   echo ""
 
-  # Extract all unique paths, drop relative path artifacts from fs_usage
+  # Extract unique paths, filtering out:
+  # - Relative path artifacts from fs_usage (../, /Cellar/, /C.UTF-8/, //)
+  # - PATH search: any path ending in /<cmd_basename> (shell looking for binary)
+  # - Our own trace artifacts (output dir, previous trace dirs)
+  trace_dir_pattern="trace-${cmd_basename}-"
+
   all_paths=$(grep -oE '/[^ ]+' "$filtered_log" \
     | grep -vE "$noise_pattern" \
+    | grep -vE "$path_search_pattern" \
+    | grep -v "$trace_dir_pattern" \
     | sort -u \
     | grep -v '^\.$' \
     || true)
