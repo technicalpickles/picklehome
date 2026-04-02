@@ -44,6 +44,10 @@ climate-weather-discover *ARGS:
 climate-weather *ARGS:
     uv run python -m climate.sync weather {{ARGS}}
 
+# Show current outdoor air quality and pollen
+climate-air-quality:
+    uv run python -m climate.sync air-quality
+
 # Switch schedule comfort mode: heat | cool | auto
 climate-comfort-switch MODE *ARGS:
     uv run python -m climate.sync comfort-switch {{MODE}} {{ARGS}}

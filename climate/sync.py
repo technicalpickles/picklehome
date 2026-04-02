@@ -478,31 +478,35 @@ def cmd_comfort_switch(args) -> None:
                     print(f"  line {i}: {old.strip()!r} → {new.strip()!r}")
         else:
             print(f"Schedule already set to {mode} comfort.")
+        print(f"[dry run] Would sync schedule to Ecobee")
         if args.clear_holds:
             print(f"[dry run] Would clear active holds on all managed thermostats")
         print(f"[dry run] Would set HVAC mode to auto on all managed thermostats")
         return
 
     if updated == original:
-        print(f"Already in {mode} mode. Skipping schedule push.")
+        print(f"Already in {mode} mode. No schedule change needed.")
         skipped = True
     else:
         schedule_path.write_text(updated)
-        print(f"schedule.yaml updated to {mode} comfort. Syncing to Ecobee...")
-        sync_args = argparse.Namespace(
-            schedule=schedule_path,
-            thermostats=args.thermostats,
-            thermostat=None,
-            dry_run=False,
-        )
-        try:
-            cmd_sync(sync_args)
-        except SystemExit as e:
-            if e.code != 0:
+        print(f"schedule.yaml updated to {mode} comfort.")
+        switched = True
+
+    print(f"Syncing schedule to Ecobee...")
+    sync_args = argparse.Namespace(
+        schedule=schedule_path,
+        thermostats=args.thermostats,
+        thermostat=None,
+        dry_run=False,
+    )
+    try:
+        cmd_sync(sync_args)
+    except SystemExit as e:
+        if e.code != 0:
+            if switched:
                 print("Ecobee sync failed. Restoring schedule.yaml to original content.")
                 schedule_path.write_text(original)
-                raise
-        switched = True
+            raise
 
     if args.clear_holds:
         for name, thermostat_id in managed:
@@ -541,6 +545,67 @@ def cmd_comfort_switch(args) -> None:
         "thermostats": thermostat_statuses,
     }
     runlog.write_last_state(data_dir, state)
+
+
+def cmd_air_quality(args) -> None:
+    import asyncio
+    import os
+    from climate.outdoor_air.client import AirQualityError, format_air_quality
+    from climate.outdoor_air.pollen import PollenError, format_pollen, get_api_key
+    from climate.outdoor_air import client as aq_client
+    from climate.outdoor_air import pollen as pollen_client
+
+    lat_str = os.environ.get("HOME_LAT", "")
+    lon_str = os.environ.get("HOME_LON", "")
+    if not lat_str or not lon_str:
+        print("HOME_LAT and HOME_LON must be set. Run 'just dotenv'.")
+        sys.exit(1)
+    try:
+        lat, lon = float(lat_str), float(lon_str)
+    except ValueError:
+        print(f"HOME_LAT/HOME_LON are not valid floats: {lat_str!r}, {lon_str!r}")
+        sys.exit(1)
+
+    # Check for pollen API key before kicking off fetches
+    try:
+        api_key = get_api_key()
+    except PollenError as e:
+        api_key = None
+        pollen_warning = str(e)
+
+    async def fetch_all():
+        tasks = [aq_client._fetch(lat, lon)]
+        if api_key:
+            tasks.append(pollen_client._fetch(lat, lon, api_key))
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    results = asyncio.run(fetch_all())
+    aq_result = results[0]
+    pollen_result = results[1] if api_key else None
+
+    any_error = False
+
+    if isinstance(aq_result, AirQualityError):
+        print(f"Air quality unavailable: {aq_result}", file=sys.stderr)
+        any_error = True
+    elif isinstance(aq_result, Exception):
+        print(f"Unexpected error fetching air quality: {aq_result}", file=sys.stderr)
+        any_error = True
+    else:
+        print(format_air_quality(aq_result))
+
+    if api_key is None:
+        print(f"\n(pollen skipped: {pollen_warning})")
+    elif isinstance(pollen_result, PollenError):
+        print(f"\nPollen unavailable: {pollen_result}", file=sys.stderr)
+    elif isinstance(pollen_result, Exception):
+        print(f"\nUnexpected error fetching pollen: {pollen_result}", file=sys.stderr)
+    else:
+        print()
+        print(format_pollen(pollen_result))
+
+    if any_error:
+        sys.exit(1)
 
 
 def main() -> None:
@@ -717,6 +782,10 @@ def main() -> None:
         help="Path to weather YAML (default: climate/config/weather.yaml)",
     )
 
+    air_quality_parser = subparsers.add_parser(
+        "air-quality", help="Show current outdoor air quality, UV index, and pollen"
+    )
+
     subparsers.choices["auth"].set_defaults(func=cmd_auth)
     subparsers.choices["list"].set_defaults(func=cmd_list)
     subparsers.choices["sync"].set_defaults(func=cmd_sync)
@@ -727,6 +796,7 @@ def main() -> None:
     subparsers.choices["discover-stations"].set_defaults(func=cmd_weather_discover)
     subparsers.choices["weather"].set_defaults(func=cmd_weather)
     subparsers.choices["comfort-switch"].set_defaults(func=cmd_comfort_switch)
+    subparsers.choices["air-quality"].set_defaults(func=cmd_air_quality)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):
