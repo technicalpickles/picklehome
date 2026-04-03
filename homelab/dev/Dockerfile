@@ -100,9 +100,6 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 ARG DOCKER_GID=990
 RUN groupadd --gid $DOCKER_GID docker 2>/dev/null; usermod -aG docker $USERNAME
 
-# Claude Code
-RUN npm install -g @anthropic-ai/claude-code
-
 # SSH server setup + GitHub host key
 # Remove generated host keys — entrypoint generates them into a persistent volume
 RUN mkdir /var/run/sshd \

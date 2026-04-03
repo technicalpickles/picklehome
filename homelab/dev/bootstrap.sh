@@ -36,6 +36,13 @@ Host *
   IdentityAgent SSH_AUTH_SOCK
 SSH
 
+echo "==> Installing Claude Code"
+if ! command -v claude &>/dev/null; then
+  curl -fsSL https://claude.ai/install.sh | bash
+else
+  echo "    Already installed"
+fi
+
 echo "==> Cloning pickled-lazyvim (nvim config)"
 if [ -d "$LAZYVIM_DIR" ]; then
   echo "    Already exists, pulling latest"
