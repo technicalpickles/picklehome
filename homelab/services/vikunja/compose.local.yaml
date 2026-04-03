@@ -1,0 +1,17 @@
+# Local testing overlay — skips Caddy, exposes Vikunja directly on port 3456.
+# Reads env from .env in this directory. Usage: docker compose -f compose.yaml -f compose.local.yaml up
+services:
+  vikunja:
+    ports:
+      - "3456:3456"
+    volumes:
+      # Use a bind mount locally so we can control ownership (UID 1000 = vikunja user in container)
+      - ./local-data/files:/app/vikunja/files
+    environment:
+      # Override prod HTTPS URL for local HTTP access
+      VIKUNJA_SERVICE_PUBLICURL: http://localhost:3456/
+
+  # Don't run Caddy locally — no TLS certs available
+  caddy:
+    profiles:
+      - disabled

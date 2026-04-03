@@ -5,6 +5,7 @@ __pycache__/
 
 # Credentials — never commit
 .env
+**/.env
 lighting/caseta-bridge.json
 lighting/.certs/
 
@@ -23,3 +24,4 @@ vendor/
 
 # OS
 .DS_Store
+local-data/

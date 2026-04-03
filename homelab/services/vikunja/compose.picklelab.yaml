@@ -1,0 +1,18 @@
+services:
+  db:
+    volumes:
+      - /srv/data/vikunja/db:/var/lib/postgresql/data
+
+  vikunja:
+    env_file:
+      - /opt/homelab/.env
+    volumes:
+      - /srv/data/vikunja/files:/app/vikunja/files
+
+  caddy:
+    env_file:
+      - /opt/homelab/.env
+    volumes:
+      - /srv/data/vikunja/caddy:/data
+      - /srv/data/vikunja/caddy-config:/config
+      - /srv/certs:/certs:ro

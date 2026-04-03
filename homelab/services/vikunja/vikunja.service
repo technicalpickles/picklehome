@@ -1,0 +1,15 @@
+[Unit]
+Description=Vikunja task manager (Postgres + Caddy)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/homelab/homelab/services/vikunja
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --pull always
+ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+
+[Install]
+WantedBy=multi-user.target
