@@ -511,7 +511,9 @@ def cmd_comfort_switch(args) -> None:
             raise
 
     # Build a hold-status lookup so we can decide per-thermostat whether to resume.
-    hold_by_name = {s["name"]: s.get("hold") for s in thermostat_statuses}
+    # Ecobee API returns title-cased names ("Upstairs") but thermostats.yaml uses
+    # lowercase ("upstairs") — normalize to lowercase for the lookup.
+    hold_by_name = {s["name"].lower(): s.get("hold") for s in thermostat_statuses}
 
     if args.clear_holds:
         for name, thermostat_id in managed:
@@ -526,7 +528,7 @@ def cmd_comfort_switch(args) -> None:
         # takes effect immediately rather than waiting for the next slot boundary.
         # Thermostats with holds are left alone — the hold was a deliberate override.
         for name, thermostat_id in managed:
-            if hold_by_name.get(name) is None:
+            if hold_by_name.get(name.lower()) is None:
                 try:
                     schedule.resume_program(ecobee, thermostat_id)
                     print(f"  [{name}] Resumed program (no active hold — schedule applied immediately)")
