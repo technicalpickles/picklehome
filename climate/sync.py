@@ -481,6 +481,8 @@ def cmd_comfort_switch(args) -> None:
         print(f"[dry run] Would sync schedule to Ecobee")
         if args.clear_holds:
             print(f"[dry run] Would clear active holds on all managed thermostats")
+        else:
+            print(f"[dry run] Would resume program on thermostats without active holds")
         print(f"[dry run] Would set HVAC mode to auto on all managed thermostats")
         return
 
@@ -508,6 +510,9 @@ def cmd_comfort_switch(args) -> None:
                 schedule_path.write_text(original)
             raise
 
+    # Build a hold-status lookup so we can decide per-thermostat whether to resume.
+    hold_by_name = {s["name"]: s.get("hold") for s in thermostat_statuses}
+
     if args.clear_holds:
         for name, thermostat_id in managed:
             try:
@@ -516,6 +521,17 @@ def cmd_comfort_switch(args) -> None:
                 holds_cleared = True
             except RuntimeError as e:
                 print(f"  [{name}] Warning: failed to clear holds: {e}")
+    else:
+        # Resume program on thermostats without active holds so the new schedule
+        # takes effect immediately rather than waiting for the next slot boundary.
+        # Thermostats with holds are left alone — the hold was a deliberate override.
+        for name, thermostat_id in managed:
+            if hold_by_name.get(name) is None:
+                try:
+                    schedule.resume_program(ecobee, thermostat_id)
+                    print(f"  [{name}] Resumed program (no active hold — schedule applied immediately)")
+                except RuntimeError as e:
+                    print(f"  [{name}] Warning: failed to resume program: {e}")
 
     hvac_mode = "auto"
     for name, thermostat_id in managed:

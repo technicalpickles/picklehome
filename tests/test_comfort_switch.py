@@ -212,8 +212,11 @@ def test_cmd_comfort_switch_sync_failure_rollback(tmp_path):
 
 
 def test_cmd_comfort_switch_skips_when_schedule_already_correct(tmp_path):
-    # If schedule.yaml already has the right comfort ref, no sync should happen
-    # regardless of what last-state says.
+    # If schedule.yaml already has the right comfort ref, the file should not be
+    # modified, but the schedule is still synced to Ecobee. This is intentional:
+    # the auto-switch runs inside an ephemeral Docker container where schedule.yaml
+    # is baked into the image and starts fresh each run. Always syncing ensures
+    # Ecobee stays in the right state even if a previous sync failed mid-run.
     from climate.sync import cmd_comfort_switch
     schedule_file = tmp_path / "schedule.yaml"
     schedule_file.write_text(SCHEDULE_WITH_COOL)  # already smart1 = cool
@@ -230,8 +233,8 @@ def test_cmd_comfort_switch_skips_when_schedule_already_correct(tmp_path):
     with _mock_infrastructure(previous_mode="cool"):
         with patch("climate.sync.cmd_sync") as mock_sync:
             cmd_comfort_switch(args)
-    mock_sync.assert_not_called()
-    assert schedule_file.read_text() == SCHEDULE_WITH_COOL
+    mock_sync.assert_called_once()  # sync always runs; container schedule.yaml is ephemeral
+    assert schedule_file.read_text() == SCHEDULE_WITH_COOL  # file unchanged (already correct)
 
 
 def test_cmd_comfort_switch_syncs_when_previous_mode_matches_but_schedule_stale(tmp_path):
