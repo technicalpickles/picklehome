@@ -30,6 +30,14 @@ def get_active_hold(events: list) -> dict | None:
     return None
 
 
+def get_climate_setpoints(climates: list, climate_ref: str) -> tuple[float | None, float | None]:
+    """Return (cool_setpoint, heat_setpoint) for the named climate ref, or (None, None)."""
+    for c in climates:
+        if c.get("climateRef") == climate_ref:
+            return decode_temp(c.get("coolTemp", 0)), decode_temp(c.get("heatTemp", 0))
+    return None, None
+
+
 def extract_thermostat_status(thermostat: dict) -> dict:
     """Extract a flat status dict from a raw thermostat API response."""
     runtime = thermostat.get("runtime", {})
@@ -40,13 +48,19 @@ def extract_thermostat_status(thermostat: dict) -> dict:
     voc = runtime.get("actualVOC", ECOBEE_SENTINEL)
     co2 = runtime.get("actualCO2", ECOBEE_SENTINEL)
 
+    program = thermostat.get("program", {})
+    climate_ref = program.get("currentClimateRef")
+    cool_setpoint, heat_setpoint = get_climate_setpoints(program.get("climates", []), climate_ref)
+
     return {
         "name": thermostat.get("name"),
         "temp": decode_temp(runtime.get("actualTemperature", 0)),
         "humidity": runtime.get("actualHumidity"),
         "equipment": get_equipment_description(thermostat.get("equipmentStatus", "")),
         "hvac_mode": thermostat.get("settings", {}).get("hvacMode"),
-        "climate_ref": thermostat.get("program", {}).get("currentClimateRef"),
+        "climate_ref": climate_ref,
+        "cool_setpoint": cool_setpoint,
+        "heat_setpoint": heat_setpoint,
         "hold": get_active_hold(thermostat.get("events", [])),
         "aq_score": None if aq_score == ECOBEE_SENTINEL else aq_score,
         "voc": None if voc == ECOBEE_SENTINEL else voc,
@@ -77,7 +91,11 @@ def format_status(statuses: list[dict]) -> str:
             hold_str = f"  hold until {end}"
 
         climate = s["climate_ref"] or ""
-        line = f"{s['name']:<14} {temp:<8} {humidity:<5} {equipment:<10} {climate:<14} {hvac}{hold_str}"
+        cool_sp = s.get("cool_setpoint")
+        heat_sp = s.get("heat_setpoint")
+        if cool_sp is not None and heat_sp is not None:
+            climate = f"{climate} {heat_sp:.0f}/{cool_sp:.0f}°F"
+        line = f"{s['name']:<14} {temp:<8} {humidity:<5} {equipment:<10} {climate:<20} {hvac}{hold_str}"
         lines.append(line.rstrip())
 
     # Weather — use first thermostat's weather (they share the same feed by location)
