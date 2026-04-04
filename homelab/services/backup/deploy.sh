@@ -21,13 +21,14 @@ echo "==> Creating backup directory"
 sudo mkdir -p "$BACKUP_DIR"
 
 echo "==> Initializing restic repo (if needed)"
-# Source the env file for RESTIC_REPOSITORY and RESTIC_PASSWORD
+# Source the env file for RESTIC_REPOSITORY and RESTIC_PASSWORD.
+# Run restic as root since the backup service runs as root (system unit).
 set -a
 source "$SERVICE_DIR/.env"
 set +a
-if ! restic snapshots &> /dev/null; then
+if ! sudo -E restic snapshots &> /dev/null; then
     echo "    Initializing new restic repository at $RESTIC_REPOSITORY"
-    restic init
+    sudo -E restic init
 else
     echo "    Restic repository already initialized"
 fi
