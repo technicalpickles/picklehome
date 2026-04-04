@@ -60,6 +60,9 @@ while i < len(lines):
         if extras:
             full = val + "\n" + "\n".join(extras)
             result.append(key + "=\"" + full + "\"\n")
+        elif " " in val:
+            # Quote values with spaces so just's dotenv parser can handle them
+            result.append(key + "=\"" + val + "\"\n")
         else:
             result.append(line)
     else:
