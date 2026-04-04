@@ -1,0 +1,8 @@
+# Taskwarrior config for picklehome
+# Use with: TASKRC=./.taskrc task <command>
+# (or set TASKRC in your shell/direnv when cd'd into this repo)
+
+data.location=./.task
+
+# Default report sorts by urgency (taskwarrior's built-in)
+# Add common projects here if you want tab completion hints

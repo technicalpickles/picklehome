@@ -250,6 +250,15 @@ tailscale-dns:
 garage *ARGS:
     uv run python garage/garage_cli.py {{ARGS}}
 
+# Repo-local taskwarrior backlog (config at .taskrc, data in .task/, both at repo root)
+# Defaults to `list` with no args. Examples:
+#   just task                              # pending tasks
+#   just task list project:homelab         # filter by project
+#   just task add project:foo "do thing"   # add
+#   just task 42 done                      # complete
+task *ARGS:
+    TASKRC={{justfile_directory()}}/.taskrc task {{ if ARGS == "" { "list" } else { ARGS } }}
+
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
     #!/usr/bin/env bash

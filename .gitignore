@@ -26,3 +26,6 @@ vendor/
 .DS_Store
 local-data/
 tmp/
+
+# Taskwarrior data (config at .taskrc is committed, data is local-only)
+.task/
