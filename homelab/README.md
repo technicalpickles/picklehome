@@ -32,7 +32,7 @@ When adding a new service:
 
 ### vikunja
 
-Self-hosted task manager (Postgres + Vikunja). Accessible at `https://vikunja.<tailnet>.ts.net` over Tailscale Services. See [services/vikunja/README.md](services/vikunja/README.md) for full setup and API details.
+Self-hosted task manager (Postgres + Vikunja). Accessible at `https://vikunja.<tailnet>.ts.net` over Tailscale Services. See [services/vikunja/README.md](services/vikunja/README.md) for full setup and API details. Data (database + file attachments) is backed up nightly by the [backup service](services/backup/README.md).
 
 **First-time setup (from Mac):**
 
@@ -58,7 +58,7 @@ just vikunja-logs-follow
 
 ### baserow
 
-Self-hosted Baserow instance used as a personal relationship manager (PRM). All-in-one image with external Postgres, tuned for low memory. Accessible at `https://baserow.<tailnet>.ts.net` over Tailscale Services.
+Self-hosted Baserow instance used as a personal relationship manager (PRM). All-in-one image with external Postgres, tuned for low memory. Accessible at `https://baserow.<tailnet>.ts.net` over Tailscale Services. Data (database + app data) is backed up nightly by the [backup service](services/backup/README.md).
 
 **First-time setup (from Mac):**
 
@@ -90,7 +90,7 @@ just baserow-logs-follow
 
 ### climate-auto-switch
 
-Runs `climate comfort-switch auto` every 15 minutes via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. No-op detection skips API writes when the mode hasn't changed. Runs as a Docker container with dependencies baked into the image.
+Runs `climate comfort-switch auto` every 15 minutes via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. No-op detection skips API writes when the mode hasn't changed. Runs as a Docker container with dependencies baked into the image. State (OAuth tokens, last run, run log) is backed up nightly by the [backup service](services/backup/README.md).
 
 **First-time setup (from Mac):**
 
@@ -136,4 +136,29 @@ just climate-log lines=50      # more history
 
 ```bash
 ssh picklelab "sudo journalctl -u climate-auto-switch.service -n 50"
+```
+
+---
+
+### backup
+
+Nightly restic backups of `/srv/data` at 3am, with Postgres dumps for vikunja and baserow. GFS retention (7 daily, 4 weekly, 6 monthly). Runs as a dedicated `backup` system user. See [services/backup/README.md](services/backup/README.md) for what's captured, restore procedure, and future work (Synology, S3).
+
+**First-time setup (from Mac):**
+
+```bash
+# 1. Create "Restic Backup" item in 1Password (picklehome vault) with fields:
+#    repository (e.g. /srv/backups/restic), password (openssl rand -base64 32)
+
+just dotenv          # pull restic secrets
+just deploy-backup   # install restic, create user, set up ACLs, init repo, enable timer
+```
+
+**Operations:**
+
+```bash
+just backup-now          # manual trigger
+just backup-snapshots    # list snapshots
+just backup-status       # timer status + next run
+just backup-logs         # last 50 lines of service journal
 ```

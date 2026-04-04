@@ -102,7 +102,12 @@ just vikunja-local-down    # tear down and remove volumes
 ```
 /srv/data/vikunja/db/       — Postgres data directory
 /srv/data/vikunja/files/    — file attachments (must be owned by UID 1000)
+/srv/data/vikunja/dumps/    — nightly pg_dumpall.sql (written by the backup service)
 ```
+
+## Backups
+
+Both the database (via `pg_dumpall`) and file attachments are captured nightly at 3am by the [backup service](../backup/README.md). The raw `/srv/data/vikunja/db/` directory is intentionally excluded from restic — the SQL dump in `dumps/` is the authoritative database backup.
 
 ## Config Reference
 
