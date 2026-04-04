@@ -25,3 +25,4 @@ vendor/
 # OS
 .DS_Store
 local-data/
+tmp/

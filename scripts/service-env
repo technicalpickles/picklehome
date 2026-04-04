@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# scripts/service-env — extract a subset of .env for a specific service
+# Usage: scripts/service-env <path/to/.env.vars> [--env <path/to/.env>]
+#
+# Reads the listed var names from .env.vars and outputs only those key=value
+# pairs from .env (or the specified env file). Unrecognized vars in .env.vars
+# are silently skipped (service may define its own defaults).
+#
+# Intended use: generate a minimal .env to copy to a remote host at deploy time,
+# so each service only receives the secrets it actually needs.
+
+set -euo pipefail
+
+VARS_FILE=""
+ENV_FILE=".env"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --env) ENV_FILE="$2"; shift 2 ;;
+        -*) echo "Unknown argument: $1" >&2; exit 1 ;;
+        *) VARS_FILE="$1"; shift ;;
+    esac
+done
+
+if [[ -z "$VARS_FILE" ]]; then
+    echo "Usage: scripts/service-env <path/to/.env.vars> [--env <path>]" >&2
+    exit 1
+fi
+
+if [[ ! -f "$VARS_FILE" ]]; then
+    echo "ERROR: vars file not found: $VARS_FILE" >&2
+    exit 1
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "ERROR: env file not found: $ENV_FILE" >&2
+    exit 1
+fi
+
+# Read the list of wanted keys (skip blank lines and comments)
+wanted=$(grep -v '^#' "$VARS_FILE" | grep -v '^[[:space:]]*$')
+
+# Extract matching lines from .env in order
+while IFS= read -r key; do
+    match=$(grep -m1 "^${key}=" "$ENV_FILE" || true)
+    if [[ -n "$match" ]]; then
+        echo "$match"
+    fi
+done <<< "$wanted"
