@@ -17,23 +17,35 @@ dump_postgres() {
     mkdir -p "$dump_dir"
 
     echo "==> Dumping $service_dir postgres (user: $db_user)"
+    local tmp_file
+    tmp_file=$(mktemp "$dump_dir/pg_dumpall.XXXXXX.sql")
+
     docker compose \
         -f "$compose_project_dir/compose.yaml" \
         -f "$compose_project_dir/compose.picklelab.yaml" \
         exec -T db pg_dumpall -U "$db_user" \
-        > "$dump_dir/pg_dumpall.sql"
+        > "$tmp_file"
 
+    if [ ! -s "$tmp_file" ]; then
+        echo "ERROR: dump for $service_dir is empty" >&2
+        rm -f "$tmp_file"
+        return 1
+    fi
+
+    mv "$tmp_file" "$dump_dir/pg_dumpall.sql"
     echo "    $(wc -c < "$dump_dir/pg_dumpall.sql") bytes written"
 }
 
 REPO_DIR="/opt/homelab/homelab/services"
 
-dump_postgres "vikunja" "$REPO_DIR/vikunja" "vikunja"
-dump_postgres "baserow" "$REPO_DIR/baserow" "baserow"
+DUMP_FAILURES=0
+
+dump_postgres "vikunja" "$REPO_DIR/vikunja" "vikunja" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
+dump_postgres "baserow" "$REPO_DIR/baserow" "baserow" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 
 # --- Restic backup ---
 echo "==> Running restic backup"
-restic backup "$DATA_DIR" --tag "$BACKUP_TAG"
+restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose
 
 # --- Retention ---
 echo "==> Pruning old snapshots"
@@ -46,3 +58,8 @@ restic forget \
 
 echo "==> Backup complete"
 restic snapshots --tag "$BACKUP_TAG" --latest 3
+
+if [ "$DUMP_FAILURES" -gt 0 ]; then
+    echo "WARNING: $DUMP_FAILURES database dump(s) failed" >&2
+    exit 1
+fi
