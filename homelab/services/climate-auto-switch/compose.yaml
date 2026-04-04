@@ -4,7 +4,7 @@ services:
       context: ../../..
       dockerfile: homelab/services/climate-auto-switch/Dockerfile
     env_file:
-      - ../../../.env
+      - .env
     volumes:
       - ${CLIMATE_DATA_DIR:-~/.local/state/picklehome}:/data
     environment:

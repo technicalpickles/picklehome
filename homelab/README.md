@@ -6,6 +6,15 @@ Single Intel NUC (Celeron J3455, 4 GB RAM, local SSD) running lightweight always
 
 **Stack:** Ubuntu Server LTS, Docker Compose (per-service), systemd, Tailscale, git-managed infra repo.
 
+## Secrets
+
+Secrets live in 1Password and are pulled into a local `.env` via `just dotenv`. Each service gets only the vars it needs -- defined in `<service>/.env.vars` -- via `scripts/service-env`, which filters the master `.env` at deploy time and scps the subset to the host.
+
+When adding a new service:
+1. Add required secrets to 1Password and `.env.template`
+2. Create `homelab/services/<service>/.env.vars` listing the needed var names
+3. Have the deploy task call `scripts/service-env` before scp'ing
+
 ## Plans
 
 | Doc | Purpose |
@@ -54,18 +63,15 @@ Runs `climate comfort-switch auto` every 15 minutes via systemd timer. Checks ou
 **First-time setup (from Mac):**
 
 ```bash
-# 1. Generate .env locally, then push to picklelab
+# 1. Generate .env locally from 1Password
 just dotenv
-just push-env
 
 # 2. Seed the ecobee token file (one-time)
 just seed-climate-tokens
 
-# 3. Deploy (builds image, installs systemd units, enables timer)
+# 3. Deploy (copies .env, builds image, installs systemd units, enables timer)
 just deploy-climate
 ```
-
-Alternatively, if 1Password CLI is available on picklelab (e.g. via the dev container), you can generate `.env` directly: `cd /opt/homelab && scripts/dotenv`
 
 **Deploy updates (from Mac):**
 
@@ -77,7 +83,7 @@ just deploy-climate
 
 ```bash
 just dotenv
-just push-env
+just deploy-climate
 ```
 
 **Manual trigger:**
