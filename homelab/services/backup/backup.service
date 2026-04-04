@@ -1,0 +1,10 @@
+[Unit]
+Description=Restic backup of /srv/data (with database dumps)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/homelab/homelab/services/backup/.env
+ExecStart=/opt/homelab/homelab/services/backup/backup.sh
