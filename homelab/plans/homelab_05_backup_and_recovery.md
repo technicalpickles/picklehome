@@ -14,7 +14,7 @@ Only a small set of data must be preserved:
 
 - Persistent container state under `/srv/data`
 - Infrastructure configuration under `/opt/homelab`
-- Optional database dumps or exported service state
+- Database dumps (generated pre-backup, stored alongside service data)
 
 Everything else is rebuildable:
 
@@ -31,7 +31,7 @@ Backups should be designed so that a full rebuild can be performed confidently w
 
 ### Persistent Service Data
 
-All important container data must live in bind-mounted directories:
+All important container data lives in bind-mounted directories:
 
 ```
 /srv/data/<service>
@@ -60,7 +60,7 @@ This repository contains:
 - validation checks
 - documentation
 
-It should also be versioned remotely (e.g., GitHub or private Git service).
+It is also versioned remotely on GitHub.
 
 ---
 
@@ -78,113 +78,105 @@ Backing up these artifacts adds complexity and slows recovery without improving 
 
 ---
 
-## Backup Target
-
-Primary backup target:
-
-- Synology NAS on the local network
-
-Backups are expected to run over the LAN and should not depend on public internet connectivity.
-
-Future evolution may include:
-
-- encrypted offsite backups
-- snapshot replication
-- cloud object storage
-
----
-
 ## Backup Tools
 
-### Initial Approach: rsync
+Backups use [restic](https://restic.net/). It provides snapshot-based, deduplicated, encrypted backups with built-in retention policies.
 
-A simple nightly job can synchronize persistent data:
-
-Example:
-
-```
-rsync -a --delete /srv/data/ synology:/volume1/backups/nuc-data/
-```
-
-Advantages:
-
-- easy to understand
-- easy to debug
-- fast over LAN
-- minimal setup
-
-Tradeoffs:
-
-- no built-in snapshotting or retention
-- risk of propagating accidental deletions
-- limited visibility into historical states
-
-This approach is acceptable as a starting point.
-
-### Evolved Approach: restic
-
-Restic is a likely upgrade path once the system stabilizes.
-
-Benefits:
-
-- snapshot-based backups
-- deduplication
-- retention policies
-- encryption by default
-- easier migration to offsite storage
-
-Example workflow:
-
-```
-restic backup /srv/data
-```
-
-Restic repositories can live on:
-
-- mounted Synology storage
-- S3-compatible endpoints
-- cloud backup providers
+The backup script (`homelab/services/backup/backup.sh`) runs nightly at 3am via a systemd timer with up to 5 minutes of random delay.
 
 ---
 
-## Database Backup Considerations
+## Backup Target
 
-Some services (e.g., PostgreSQL, MariaDB) may require consistent backups.
+Current backup target:
 
-Options include:
+- Local directory: `/srv/backups/restic`
 
-### Application-Level Dumps (Preferred)
+Planned additions:
 
-Example:
+- Synology NAS on the local network
+- S3-compatible cloud storage
+
+Changing targets only requires updating `RESTIC_REPOSITORY` in the service's `.env`.
+
+---
+
+## Retention Policy
+
+Restic prunes old snapshots using a grandfather-father-son (GFS) pattern:
+
+- **7 daily** snapshots
+- **4 weekly** snapshots
+- **6 monthly** snapshots
+
+Pruning runs automatically after each backup.
+
+---
+
+## Database Backups
+
+Services with PostgreSQL databases get logical dumps before the restic snapshot runs. Currently backed up: Vikunja and Baserow.
+
+The dump process:
+
+1. `pg_dumpall` runs via `docker compose exec` against the service's `db` container
+2. Output goes to a temp file in `/srv/data/<service>/dumps/`
+3. The temp file is validated (must be non-empty)
+4. On success, it's moved to `pg_dumpall.sql`, replacing the previous dump
+
+Because dumps land inside `/srv/data`, restic picks them up automatically.
+
+If a dump fails, the backup continues with the remaining services and the previous dump file (if any) is still included in the snapshot. The script exits with a warning so the failure is visible in logs.
+
+---
+
+## Operations
+
+### Deploy or update the backup service
 
 ```
-docker exec postgres pg_dumpall > /srv/backups/postgres.sql
+just deploy-backup
 ```
 
-Advantages:
+### Run a backup manually
 
-- consistent logical backup
-- portable restore
-- simple validation
+```
+just backup-now
+```
 
-### Filesystem-Level Backups (Acceptable for Homelab)
+### View recent snapshots
 
-Backing up bind-mounted data directories while containers are running is often sufficient for lightweight services.
+```
+just backup-snapshots
+```
 
-This carries some risk of inconsistent state but is usually acceptable in non-critical environments.
+### Check timer status
+
+```
+just backup-status
+```
+
+### View logs from the last run
+
+```
+just backup-logs
+```
 
 ---
 
 ## Restore Procedure
 
-The system should be recoverable using the following high-level process:
+The system is recoverable using the following process:
 
 1. Install Ubuntu Server LTS on the NUC
 2. Install Docker Engine and required utilities
-3. Restore `/srv/data` from backup
+3. Restore `/srv/data` from backup:
+   ```
+   restic restore latest --target /srv/data
+   ```
 4. Clone or restore `/opt/homelab`
 5. Run bootstrap script
-6. Start services via systemd or wrapper commands
+6. Start services via systemd
 
 If successful, services should resume with preserved state.
 
@@ -204,28 +196,12 @@ Testing ensures that backups remain usable and that assumptions about restore or
 
 ---
 
-## Operational Safeguards
-
-To reduce backup-related risk:
-
-- monitor disk usage regularly
-- ensure backup jobs are scheduled and logged
-- alert on backup failures where practical
-- avoid storing critical state outside `/srv/data`
-
-Backup discipline is more important than backup sophistication.
-
----
-
 ## Future Improvements
 
-Potential enhancements include:
-
-- retention policies for multiple restore points
-- offsite encrypted backups
-- automated database dump workflows
-- LVM snapshot-based backup consistency
-- backup validation scripts
+- Synology NAS as a backup target
+- Offsite encrypted backups (S3)
+- Alerting on backup failures
+- Backup validation scripts
 
 The backup system should evolve alongside operational needs, not ahead of them.
 
@@ -237,8 +213,7 @@ The homelab backup model is intentionally simple:
 
 - persist only what matters
 - store state in predictable locations
-- back up to a reliable local NAS
+- snapshot nightly with restic, prune automatically
 - maintain a clear and documented restore path
 
 The success criterion is confidence: the system can be rebuilt quickly without guesswork or data loss anxiety.
-
