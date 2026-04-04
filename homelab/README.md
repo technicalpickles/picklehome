@@ -56,6 +56,38 @@ just vikunja-logs-follow
 
 ---
 
+### baserow
+
+Self-hosted Baserow instance used as a personal relationship manager (PRM). All-in-one image with external Postgres, tuned for low memory. Accessible at `https://baserow.<tailnet>.ts.net` over Tailscale Services.
+
+**First-time setup (from Mac):**
+
+```bash
+# 1. Create "Baserow" item in 1Password (picklehome vault) with fields:
+#    host, db_password, secret_key (generate with: openssl rand -base64 50 | tr -d '\n')
+# 2. Register "baserow" service in Tailscale admin console
+
+just dotenv           # pull secrets from 1Password
+just deploy-baserow   # copies .env, configures tailscale serve, installs + starts systemd unit
+# Approve the service in Tailscale admin when prompted
+# First boot takes ~4 minutes for database migrations
+```
+
+**Deploy updates:**
+
+```bash
+just deploy-baserow
+```
+
+**Logs:**
+
+```bash
+just baserow-logs
+just baserow-logs-follow
+```
+
+---
+
 ### climate-auto-switch
 
 Runs `climate comfort-switch auto` every 15 minutes via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. No-op detection skips API writes when the mode hasn't changed. Runs as a Docker container with dependencies baked into the image.
