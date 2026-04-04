@@ -1,4 +1,5 @@
 set dotenv-load
+set positional-arguments
 
 # First-time setup: PIN flow + thermostat discovery
 climate-auth:
@@ -254,10 +255,16 @@ garage *ARGS:
 # Defaults to `list` with no args. Examples:
 #   just task                              # pending tasks
 #   just task list project:homelab         # filter by project
-#   just task add project:foo "do thing"   # add
+#   just task add project:foo "do thing"   # add (quoted descriptions OK, parens OK)
 #   just task 42 done                      # complete
 task *ARGS:
-    TASKRC={{justfile_directory()}}/.taskrc task {{ if ARGS == "" { "list" } else { ARGS } }}
+    #!/usr/bin/env bash
+    export TASKRC={{justfile_directory()}}/.taskrc
+    if [ "$#" -eq 0 ]; then
+        task list
+    else
+        task "$@"
+    fi
 
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
