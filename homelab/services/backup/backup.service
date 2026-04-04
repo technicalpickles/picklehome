@@ -8,5 +8,8 @@ Requires=docker.service
 Type=oneshot
 User=backup
 Group=backup
+# Restic cache lives alongside the repo so the backup user can write to it
+# without needing a writable home directory.
+Environment=RESTIC_CACHE_DIR=/srv/backups/restic-cache
 EnvironmentFile=/opt/homelab/homelab/services/backup/.env
 ExecStart=/opt/homelab/homelab/services/backup/backup.sh
