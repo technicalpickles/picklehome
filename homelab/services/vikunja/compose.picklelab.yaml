@@ -6,13 +6,8 @@ services:
   vikunja:
     env_file:
       - /opt/homelab/.env
+    ports:
+      # Bound to loopback only — tailscale serve proxies from vikunja.<tailnet>.ts.net to here
+      - "127.0.0.1:3456:3456"
     volumes:
       - /srv/data/vikunja/files:/app/vikunja/files
-
-  caddy:
-    env_file:
-      - /opt/homelab/.env
-    volumes:
-      - /srv/data/vikunja/caddy:/data
-      - /srv/data/vikunja/caddy-config:/config
-      - /srv/certs:/certs:ro

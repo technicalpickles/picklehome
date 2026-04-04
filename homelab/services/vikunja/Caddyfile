@@ -1,8 +1,0 @@
-{env.VIKUNJA_HOST} {
-    # Certs provisioned by `tailscale cert` on the host and mounted read-only.
-    # Re-run `tailscale cert` to renew (certs are valid 90 days; Tailscale
-    # auto-renews but you need to re-run the command to refresh the files).
-    tls /certs/{env.VIKUNJA_HOST}.crt /certs/{env.VIKUNJA_HOST}.key
-
-    reverse_proxy vikunja:3456
-}

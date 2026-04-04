@@ -1,12 +1,11 @@
 # Vikunja
 
-Self-hosted task manager. Three containers managed as a single systemd service:
+Self-hosted task manager. Two containers managed as a single systemd service:
 
 - **Postgres 16** — database
-- **Vikunja** — app server + frontend (port 3456 internally)
-- **Caddy** — TLS termination via Tailscale-provisioned certs, reverse proxy
+- **Vikunja** — app server + frontend, bound to `127.0.0.1:3456` on the host
 
-Accessible at `https://$VIKUNJA_HOST` from any device on the Tailscale tailnet (including on the LAN — Tailscale routes traffic directly without hairpinning).
+TLS and routing are handled by **Tailscale Services** — `tailscaled` on the host serves `https://vikunja.<tailnet>.ts.net`, terminating HTTPS and proxying to `127.0.0.1:3456`. No reverse proxy container needed.
 
 ## Prerequisites (one-time)
 
@@ -16,7 +15,7 @@ Accessible at `https://$VIKUNJA_HOST` from any device on the Tailscale tailnet (
 
    | field | how to get it |
    |-------|---------------|
-   | `host` | Run `just tailscale-dns` on picklelab, e.g. `picklelab.tail1234.ts.net` |
+   | `host` | `vikunja.` + the tailnet suffix (run `tailscale status --json \| jq -r '.CurrentTailnet.MagicDNSSuffix'` on picklelab) |
    | `db_password` | `openssl rand -base64 32` |
    | `jwt_secret` | `openssl rand -base64 32` |
 
@@ -25,7 +24,7 @@ Accessible at `https://$VIKUNJA_HOST` from any device on the Tailscale tailnet (
 ```bash
 just dotenv          # pull secrets from 1Password into .env
 just push-env        # sync .env to picklelab
-just deploy-vikunja  # provision cert, create data dirs, install + start systemd unit
+just deploy-vikunja  # configure tailscale serve, create data dirs, install + start systemd unit
 ```
 
 `deploy.sh` is idempotent — safe to re-run.
@@ -46,21 +45,26 @@ just vikunja-logs-follow       # live tail
 ssh picklelab "sudo journalctl -u vikunja.service -n 50"
 ```
 
-## TLS Cert Renewal
+## Tailscale Serve Config
 
-Tailscale certs are valid for 90 days. Re-running `tailscale cert` refreshes the files in place; Caddy picks up the change automatically.
+The `tailscale serve` routing config lives in `tailscaled`'s persistent state (survives reboots). To inspect:
 
 ```bash
-ssh picklelab "source /opt/homelab/.env && sudo tailscale cert \
-  --cert-file=/srv/certs/\$VIKUNJA_HOST.crt \
-  --key-file=/srv/certs/\$VIKUNJA_HOST.key \
-  \$VIKUNJA_HOST"
+ssh picklelab "tailscale serve status"
 ```
+
+To remove (e.g. decommissioning):
+
+```bash
+ssh picklelab "sudo tailscale serve --service=svc:vikunja off"
+```
+
+If you reprovision the host from scratch, re-run `deploy.sh` to restore the serve config.
 
 ## API
 
-- Base URL: `https://$VIKUNJA_HOST/api/v1`
-- Docs (Swagger UI): `https://$VIKUNJA_HOST/api/v1/docs`
+- Base URL: `https://vikunja.<tailnet>.ts.net/api/v1`
+- Docs (Swagger UI): `https://vikunja.<tailnet>.ts.net/api/v1/docs`
 - **Login endpoint:** `POST /api/v1/login` — note: NOT `/api/v1/user/login` (returns 404)
 - **Auth for automation:** create an API token in Settings → API Tokens; pass as `Authorization: Bearer <token>`
 - **Inbox project** is always id=1, auto-created on first login; all 4 views (List, Gantt, Table, Kanban) are created automatically
@@ -77,19 +81,15 @@ VIKUNJA_HOST=localhost
 
 ```bash
 just vikunja-validate      # check compose config syntax
-just vikunja-local-up      # start Postgres + Vikunja locally on :3456 (no Caddy/TLS)
+just vikunja-local-up      # start Postgres + Vikunja locally on :3456
 just vikunja-local-down    # tear down and remove volumes
 ```
 
 ## Data Locations (on picklelab)
 
 ```
-/srv/data/vikunja/db/               — Postgres data directory
-/srv/data/vikunja/files/            — file attachments (must be owned by UID 1000)
-/srv/data/vikunja/caddy/            — Caddy data
-/srv/data/vikunja/caddy-config/     — Caddy config
-/srv/certs/$VIKUNJA_HOST.crt        — Tailscale TLS certificate
-/srv/certs/$VIKUNJA_HOST.key        — Tailscale TLS private key
+/srv/data/vikunja/db/       — Postgres data directory
+/srv/data/vikunja/files/    — file attachments (must be owned by UID 1000)
 ```
 
 ## Config Reference

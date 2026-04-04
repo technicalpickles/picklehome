@@ -31,23 +31,6 @@ services:
     volumes:
       - vikunja-files:/app/vikunja/files
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      - VIKUNJA_HOST=${VIKUNJA_HOST}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-      # Tailscale-provisioned TLS certs — see deploy.sh for how these are generated
-      - ${TAILSCALE_CERT_DIR:-/srv/certs}:/certs:ro
-
 volumes:
   db-data:
   vikunja-files:
-  caddy-data:
-  caddy-config:
