@@ -169,6 +169,8 @@ deploy-vikunja host="picklelab":
         git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Copying .env to {{host}}"
+    scp .env {{host}}:/opt/homelab/homelab/services/vikunja/.env
     ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/vikunja/deploy.sh"
 
 # Tail Vikunja container logs from picklelab
