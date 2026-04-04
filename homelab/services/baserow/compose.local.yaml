@@ -6,4 +6,4 @@ services:
       - "8180:80"
     environment:
       # Override prod HTTPS URL for local HTTP access
-      BASEROW_PUBLIC_URL: http://localhost:8180/
+      BASEROW_PUBLIC_URL: http://localhost:8180

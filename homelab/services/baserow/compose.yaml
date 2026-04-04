@@ -21,7 +21,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      BASEROW_PUBLIC_URL: https://${BASEROW_HOST}/
+      BASEROW_PUBLIC_URL: https://${BASEROW_HOST}
       DATABASE_HOST: db
       DATABASE_PORT: "5432"
       DATABASE_NAME: baserow
