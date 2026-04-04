@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U baserow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: baserow
+      POSTGRES_PASSWORD: ${BASEROW_DB_PASSWORD}
+      POSTGRES_DB: baserow
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  baserow:
+    image: baserow/baserow:2.1.6
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BASEROW_PUBLIC_URL: https://${BASEROW_HOST}/
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: baserow
+      DATABASE_USER: baserow
+      DATABASE_PASSWORD: ${BASEROW_DB_PASSWORD}
+      SECRET_KEY: ${BASEROW_SECRET_KEY}
+      # Tune for low memory (4GB NUC shared with other services)
+      BASEROW_AMOUNT_OF_GUNICORN_WORKERS: "1"
+      SYNC_TEMPLATES_ON_STARTUP: "false"
+    volumes:
+      - baserow-data:/baserow/data
+
+volumes:
+  db-data:
+  baserow-data:
