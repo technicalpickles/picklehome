@@ -10,6 +10,8 @@ BACKUP_DIR=/srv/backups/restic
 
 cd "$REPO_DIR"
 
+BACKUP_USER="backup"
+
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Installing restic"
@@ -17,18 +19,32 @@ if ! command -v restic &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y restic
 fi
 
-echo "==> Creating backup directory"
+echo "==> Creating backup user"
+if ! id "$BACKUP_USER" &> /dev/null; then
+    sudo useradd --system --shell /usr/sbin/nologin "$BACKUP_USER"
+fi
+# Docker group gives access to docker compose exec for pg_dump
+if ! id -nG "$BACKUP_USER" | grep -qw docker; then
+    sudo usermod -aG docker "$BACKUP_USER"
+fi
+
+echo "==> Creating directories"
 sudo mkdir -p "$BACKUP_DIR"
+sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR"
+# Pre-create dump directories so backup user can write to them
+for svc in vikunja baserow; do
+    sudo mkdir -p "/srv/data/$svc/dumps"
+    sudo chown "$BACKUP_USER:$BACKUP_USER" "/srv/data/$svc/dumps"
+done
 
 echo "==> Initializing restic repo (if needed)"
 # Source the env file for RESTIC_REPOSITORY and RESTIC_PASSWORD.
-# Run restic as root since the backup service runs as root (system unit).
 set -a
 source "$SERVICE_DIR/.env"
 set +a
-if ! sudo -E restic snapshots &> /dev/null; then
+if ! sudo -u "$BACKUP_USER" -E restic snapshots &> /dev/null; then
     echo "    Initializing new restic repository at $RESTIC_REPOSITORY"
-    sudo -E restic init
+    sudo -u "$BACKUP_USER" -E restic init
 else
     echo "    Restic repository already initialized"
 fi

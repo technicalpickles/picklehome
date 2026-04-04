@@ -6,5 +6,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
+User=backup
+Group=backup
 EnvironmentFile=/opt/homelab/homelab/services/backup/.env
 ExecStart=/opt/homelab/homelab/services/backup/backup.sh

@@ -44,8 +44,13 @@ dump_postgres "vikunja" "$REPO_DIR/vikunja" "vikunja" || DUMP_FAILURES=$((DUMP_F
 dump_postgres "baserow" "$REPO_DIR/baserow" "baserow" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 
 # --- Restic backup ---
+# Exclude raw postgres data dirs — the pg_dump SQL files are the authoritative
+# database backup. Raw data dirs are large, owned by container UIDs (unreadable
+# by the backup user), and not consistent unless postgres is stopped.
 echo "==> Running restic backup"
-restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose
+restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
+    --exclude "$DATA_DIR/vikunja/db" \
+    --exclude "$DATA_DIR/baserow/db"
 
 # --- Retention ---
 echo "==> Pruning old snapshots"
