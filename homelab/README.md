@@ -23,14 +23,13 @@ Single Intel NUC (Celeron J3455, 4 GB RAM, local SSD) running lightweight always
 
 ### vikunja
 
-Self-hosted task manager (Postgres + Vikunja + Caddy). Accessible at `https://$VIKUNJA_HOST` over Tailscale. See [services/vikunja/README.md](services/vikunja/README.md) for full setup and API details.
+Self-hosted task manager (Postgres + Vikunja). Accessible at `https://vikunja.<tailnet>.ts.net` over Tailscale Services. See [services/vikunja/README.md](services/vikunja/README.md) for full setup and API details.
 
 **First-time setup (from Mac):**
 
 ```bash
 just dotenv        # pull new secrets from 1Password (see service README for prereqs)
-just push-env
-just deploy-vikunja
+just deploy-vikunja  # copies .env, configures tailscale serve, installs + starts systemd unit
 ```
 
 **Deploy updates:**

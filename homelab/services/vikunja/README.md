@@ -11,7 +11,18 @@ TLS and routing are handled by **Tailscale Services** — `tailscaled` on the ho
 
 1. **Enable HTTPS in Tailscale admin:** https://login.tailscale.com/admin/dns → toggle "Enable HTTPS certificates"
 
-2. **Create a `Vikunja` item in the `picklehome` 1Password vault** with these fields:
+2. **Tag picklelab as `tag:server` in Tailscale:**
+   - Add `"tagOwners": { "tag:server": ["autogroup:admin"] }` to the ACL policy at https://login.tailscale.com/admin/acls
+   - Go to Machines → picklelab → `...` → "Edit tags" → add `tag:server`
+   - SSH into picklelab and restart tailscaled: `sudo systemctl restart tailscaled`
+   - Tailscale Services requires tagged (server) nodes, not personal device nodes
+
+3. **Define the vikunja Service in Tailscale admin:**
+   - Go to https://login.tailscale.com/admin/services → "Define Service"
+   - Name: `vikunja`, Ports: `443`
+   - This must exist before `tailscale serve --service=svc:vikunja` will register picklelab as a host
+
+4. **Create a `Vikunja` item in the `picklehome` 1Password vault** with these fields:
 
    | field | how to get it |
    |-------|---------------|
@@ -23,8 +34,7 @@ TLS and routing are handled by **Tailscale Services** — `tailscaled` on the ho
 
 ```bash
 just dotenv          # pull secrets from 1Password into .env
-just push-env        # sync .env to picklelab
-just deploy-vikunja  # configure tailscale serve, create data dirs, install + start systemd unit
+just deploy-vikunja  # copies .env to picklelab, configures tailscale serve, creates data dirs, installs + starts systemd unit
 ```
 
 `deploy.sh` is idempotent — safe to re-run.
@@ -47,19 +57,21 @@ ssh picklelab "sudo journalctl -u vikunja.service -n 50"
 
 ## Tailscale Serve Config
 
-The `tailscale serve` routing config lives in `tailscaled`'s persistent state (survives reboots). To inspect:
+The `tailscale serve` config does not persist across `tailscaled` restarts, but the Tailscale Service itself (registered in the admin console) keeps routing traffic to picklelab independently. In practice, the hostname stays reachable after restarts.
+
+To inspect the local serve config:
 
 ```bash
-ssh picklelab "tailscale serve status"
+ssh picklelab "sudo tailscale serve status"
 ```
 
 To remove (e.g. decommissioning):
 
 ```bash
-ssh picklelab "sudo tailscale serve --service=svc:vikunja off"
+ssh picklelab "sudo tailscale serve --service=svc:vikunja --https=443 off"
 ```
 
-If you reprovision the host from scratch, re-run `deploy.sh` to restore the serve config.
+If you reprovision the host from scratch, re-run `deploy.sh` to restore the serve config, and ensure the Service is still defined and picklelab is approved in the Tailscale admin console.
 
 ## API
 
