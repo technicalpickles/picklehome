@@ -251,6 +251,10 @@ tailscale-dns:
 garage *ARGS:
     uv run python garage/garage_cli.py {{ARGS}}
 
+# Yale Access locks: just locks auth | status
+locks *ARGS:
+    uv run python locks/locks_cli.py {{ARGS}}
+
 # Repo-local taskwarrior backlog (config at .taskrc, data in .task/, both at repo root)
 # Defaults to `list` with no args. Examples:
 #   just task                              # pending tasks
