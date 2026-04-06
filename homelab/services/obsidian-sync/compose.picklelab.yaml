@@ -1,0 +1,9 @@
+services:
+  cli:
+    volumes:
+      - /srv/data/obsidian-sync/config:/root/.config
+
+  pickled-knowledge:
+    volumes:
+      - /srv/data/obsidian-sync/config:/root/.config
+      - /srv/data/obsidian-sync/vaults/pickled-knowledge:/vault

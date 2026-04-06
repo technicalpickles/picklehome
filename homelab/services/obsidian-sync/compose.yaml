@@ -1,0 +1,24 @@
+services:
+  # One-off sidecar for auth and vault management.
+  # Usage: docker compose run --rm cli ob login
+  cli:
+    image: obsidian-sync
+    build: .
+    init: true
+    profiles: ["cli"]
+    volumes:
+      - ob-config:/root/.config
+    entrypoint: []
+    command: ["echo", "Usage: docker compose run --rm cli ob <command>"]
+
+  pickled-knowledge:
+    image: obsidian-sync
+    init: true
+    restart: unless-stopped
+    volumes:
+      - ob-config:/root/.config
+      - pickled-knowledge:/vault
+
+volumes:
+  ob-config:
+  pickled-knowledge:

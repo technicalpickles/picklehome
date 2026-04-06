@@ -312,3 +312,41 @@ backup-status host="picklelab":
 # Show backup service logs (last run output)
 backup-logs host="picklelab" lines="50":
     ssh {{host}} "journalctl -u backup.service --no-pager -n {{lines}}"
+
+# Deploy Obsidian Sync to picklelab (idempotent: first setup or update)
+deploy-obsidian-sync host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/obsidian-sync/deploy.sh"
+
+# Run ob CLI in a one-off container (for login, sync-setup, etc.)
+obsidian-sync-exec host="picklelab" *ARGS:
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose -f compose.yaml -f compose.picklelab.yaml run --rm cli ob {{ARGS}}"
+
+# Tail Obsidian Sync container logs from picklelab
+obsidian-sync-logs host="picklelab" lines="50":
+    ssh {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+
+# Follow Obsidian Sync container logs live from picklelab
+obsidian-sync-logs-follow host="picklelab":
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+
+# Show Obsidian Sync service status on picklelab
+obsidian-sync-status host="picklelab":
+    ssh {{host}} "systemctl status obsidian-sync.service --no-pager"
