@@ -17,10 +17,10 @@ echo "==> Updating brineworks source"
 if [ -d "$BRINEWORKS_REPO/.git" ]; then
     git -C "$BRINEWORKS_REPO" pull --ff-only
 else
-    echo "    Cloning pickled-finances to $BRINEWORKS_REPO"
+    echo "    Cloning brineworks to $BRINEWORKS_REPO"
     sudo mkdir -p "$BRINEWORKS_REPO"
     sudo chown "$(id -u):$(id -g)" "$BRINEWORKS_REPO"
-    git clone git@github.com:technicalpickles/pickled-finances.git "$BRINEWORKS_REPO"
+    git clone git@github.com:technicalpickles/brineworks.git "$BRINEWORKS_REPO"
 fi
 echo "    Brineworks at $(git -C "$BRINEWORKS_REPO" rev-parse --short HEAD)"
 

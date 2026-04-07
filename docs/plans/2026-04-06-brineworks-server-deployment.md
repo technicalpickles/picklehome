@@ -6,7 +6,7 @@ Deploy the brineworks PRM (Personal Relationship Manager) server to picklelab.
 
 A FastAPI REST API for managing personal contacts, interactions, relationships, and organizations. It's the backend for the brineworks email triage pipeline: emails get triaged, contacts get extracted, and sync-prm pushes them into this server.
 
-**Source repo:** `technicalpickles/pickled-finances` (private), under `server/`.
+**Source repo:** `technicalpickles/brineworks` (private), under `server/`.
 
 **Stack:**
 - Python 3.11, FastAPI 0.115+, Uvicorn
@@ -87,7 +87,7 @@ Config uses Pydantic Settings with `env_prefix = "BRINEWORKS_"` and reads from `
 
 ### Repo on picklelab
 
-Clone `pickled-finances` to a known location on the host. The compose build context points there.
+Clone `brineworks` to a known location on the host. The compose build context points there.
 
 ### Service structure (following picklehome conventions)
 

@@ -2,7 +2,7 @@
 
 FastAPI REST API for managing personal contacts, interactions, relationships, and organizations. Backend for the brineworks email triage pipeline.
 
-**Source repo:** `technicalpickles/pickled-finances` (private), under `server/`.
+**Source repo:** `technicalpickles/brineworks` (private), under `server/`.
 
 ## Prerequisites (one-time)
 
@@ -30,7 +30,7 @@ just deploy-brineworks-server
 just deploy-brineworks-server
 ```
 
-This pulls the latest from both `picklehome` and `pickled-finances`, rebuilds the container image, and restarts the service. Alembic migrations run automatically on container startup.
+This pulls the latest from both `picklehome` and `brineworks`, rebuilds the container image, and restarts the service. Alembic migrations run automatically on container startup.
 
 ## Architecture
 
@@ -68,7 +68,7 @@ BRINEWORKS_API_KEY=<same key as server>
 ## Data Locations (on picklelab)
 
 ```
-/opt/brineworks/                    # pickled-finances repo clone
+/opt/brineworks/                    # brineworks repo clone
 /srv/data/brineworks-server/db/     # Postgres data directory
 /srv/data/brineworks-server/dumps/  # pg_dumpall for backups (future)
 ```
