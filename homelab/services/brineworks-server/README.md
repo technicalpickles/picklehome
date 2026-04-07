@@ -13,8 +13,6 @@ Create a `Brineworks Server` item in the `picklehome` 1Password vault:
 | `db_password` | `openssl rand -base64 32` |
 | `api_key` | `openssl rand -hex 32` |
 
-Create a `brineworks` Service in the Tailscale admin console (same pattern as vikunja).
-
 ## First-time Setup
 
 ```bash
@@ -23,6 +21,20 @@ just deploy-brineworks-server
 ```
 
 `deploy.sh` clones the brineworks repo to `/opt/brineworks` on first run, creates data directories, configures Tailscale serve, and starts the systemd service.
+
+On first deploy, the Tailscale endpoint won't respond until you approve the service:
+
+1. Open [Tailscale Services](https://login.tailscale.com/admin/services) in the admin console
+2. Find `brineworks` and approve the pending host advertisement
+3. Re-advertise the service (tailscaled doesn't auto-detect approval):
+   ```bash
+   sudo tailscale serve --service=svc:brineworks --https=443 off
+   sleep 2
+   sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8000
+   ```
+4. Verify: `curl https://brineworks.<tailnet>.ts.net/health`
+
+The deploy script checks both the local and Tailscale health endpoints and prints these steps if the Tailscale endpoint isn't responding.
 
 ## Deploying Updates
 
