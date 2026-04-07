@@ -1,0 +1,14 @@
+services:
+  db:
+    volumes:
+      - /srv/data/brineworks-server/db:/var/lib/postgresql/data
+
+  server:
+    build:
+      context: /opt/brineworks/server
+      dockerfile: Dockerfile
+    env_file:
+      - /opt/homelab/.env
+    ports:
+      # Bound to loopback only -- tailscale serve proxies from brineworks.<tailnet>.ts.net
+      - "127.0.0.1:8000:8000"

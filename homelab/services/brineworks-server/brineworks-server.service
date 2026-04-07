@@ -1,0 +1,15 @@
+[Unit]
+Description=Brineworks PRM server (FastAPI + Postgres)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/homelab/homelab/services/brineworks-server
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build
+ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+
+[Install]
+WantedBy=multi-user.target
