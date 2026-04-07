@@ -241,12 +241,14 @@ deploy-brineworks-server host="picklelab":
         git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Pulling on {{host}}"
+    ssh {{host}} "cd /opt/homelab && git pull"
     echo "==> Copying .env to {{host}}"
     mkdir -p tmp
     scripts/service-env homelab/services/brineworks-server/.env.vars > tmp/brineworks-server.env
     scp tmp/brineworks-server.env {{host}}:/opt/homelab/homelab/services/brineworks-server/.env
     rm tmp/brineworks-server.env
-    ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/brineworks-server/deploy.sh"
+    ssh -t {{host}} "cd /opt/homelab && homelab/services/brineworks-server/deploy.sh"
 
 # Tail Brineworks server container logs from picklelab
 brineworks-server-logs host="picklelab" lines="50":
