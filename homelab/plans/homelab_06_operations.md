@@ -191,6 +191,47 @@ If recovery is unclear, follow documented restore procedure.
 
 ---
 
+## Tailscale Services Troubleshooting
+
+### "Advertising the service, but some required ports are missing"
+
+The port in the Tailscale admin console service definition doesn't match the port in the `tailscale serve` command.
+
+**Symptoms:** Service works on localhost, DNS resolves to a service IP, but connections time out from other tailnet nodes.
+
+**Why localhost still works:** picklelab routes to its own service IP locally, so `curl https://svc.<tailnet>.ts.net` succeeds on the host even when other nodes can't reach it. This makes it look like Tailscale is fine when it isn't.
+
+**Diagnosis:**
+
+```bash
+# Check serve config (plain `serve status` doesn't show --service mode)
+tailscale serve status --json
+
+# Ping the service IP from another node (should respond if healthy)
+ping <service-ip>
+```
+
+**Fix:** Update the service definition ports in the [admin console](https://login.tailscale.com/admin/services) to match the `--https` port in the serve command (usually 443), then re-advertise:
+
+```bash
+sudo tailscale serve --service=svc:<name> --https=443 off
+sleep 2
+sudo tailscale serve --service=svc:<name> --https=443 http://127.0.0.1:<port>
+```
+
+See [tailscale/tailscale#18442](https://github.com/tailscale/tailscale/issues/18442) for background.
+
+### First deploy: service not responding
+
+New services need approval in the admin console before other tailnet nodes can reach them. The deploy scripts print instructions when the Tailscale health check fails, but the short version:
+
+1. Open [Tailscale Services](https://login.tailscale.com/admin/services)
+2. Approve the pending service
+3. Re-advertise (tailscaled doesn't auto-detect approval)
+4. Verify with `curl`
+
+---
+
 ## Routine Maintenance Checklist
 
 Weekly or monthly:
