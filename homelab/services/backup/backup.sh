@@ -50,7 +50,6 @@ dump_postgres() {
 DUMP_FAILURES=0
 
 dump_postgres "vikunja" "vikunja" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
-dump_postgres "baserow" "baserow" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 
 # --- Restic backup ---
 # Exclude raw postgres data dirs — the pg_dump SQL files are the authoritative
@@ -62,7 +61,6 @@ dump_postgres "baserow" "baserow" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
     --exclude "$DATA_DIR/vikunja/db" \
-    --exclude "$DATA_DIR/baserow/db" \
     --exclude "$DATA_DIR/dev-home"
 RESTIC_EXIT=$?
 

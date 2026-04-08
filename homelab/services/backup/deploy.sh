@@ -37,20 +37,12 @@ echo "==> Creating directories"
 sudo mkdir -p "$BACKUP_DIR" "$CACHE_DIR"
 sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR"
 # Pre-create dump directories so backup user can write to them
-for svc in vikunja baserow; do
+for svc in vikunja; do
     sudo mkdir -p "/srv/data/$svc/dumps"
     sudo chown "$BACKUP_USER:$BACKUP_USER" "/srv/data/$svc/dumps"
 done
 
 echo "==> Granting backup user read ACLs on service data"
-# Baserow writes some files as root (.jwt_signing_key, .redispass) and others
-# as container UID 9999 (caddy/, media/, etc). Rather than chown'ing things
-# that would break the services, use ACLs to give the backup user read access
-# without disturbing existing permissions. -R recursive, -d sets default ACL
-# for files created later, X means "read+exec on dirs, read on files".
-sudo setfacl -R -m u:"$BACKUP_USER":rX /srv/data/baserow/data
-sudo setfacl -R -d -m u:"$BACKUP_USER":rX /srv/data/baserow/data
-
 # Ecobee tokens are seeded by the human user with mode 600
 sudo setfacl -m u:"$BACKUP_USER":r /srv/data/climate-auto-switch/ecobee-tokens.json
 

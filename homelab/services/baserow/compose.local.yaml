@@ -1,9 +1,0 @@
-# Local testing overlay — exposes Baserow directly on port 8080.
-# Reads env from .env in this directory. Usage: docker compose -f compose.yaml -f compose.local.yaml up
-services:
-  baserow:
-    ports:
-      - "8180:80"
-    environment:
-      # Override prod HTTPS URL for local HTTP access
-      BASEROW_PUBLIC_URL: http://localhost:8180

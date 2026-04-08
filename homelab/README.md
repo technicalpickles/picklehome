@@ -56,37 +56,6 @@ just vikunja-logs-follow
 
 ---
 
-### baserow
-
-Self-hosted Baserow instance used as a personal relationship manager (PRM). All-in-one image with external Postgres, tuned for low memory. Accessible at `https://baserow.<tailnet>.ts.net` over Tailscale Services. Data (database + app data) is backed up nightly by the [backup service](services/backup/README.md).
-
-**First-time setup (from Mac):**
-
-```bash
-# 1. Create "Baserow" item in 1Password (picklehome vault) with fields:
-#    host, db_password, secret_key (generate with: openssl rand -base64 50 | tr -d '\n')
-# 2. Register "baserow" service in Tailscale admin console
-
-just dotenv           # pull secrets from 1Password
-just deploy-baserow   # copies .env, configures tailscale serve, installs + starts systemd unit
-# Approve the service in Tailscale admin when prompted
-# First boot takes ~4 minutes for database migrations
-```
-
-**Deploy updates:**
-
-```bash
-just deploy-baserow
-```
-
-**Logs:**
-
-```bash
-just baserow-logs
-just baserow-logs-follow
-```
-
----
 
 ### climate-auto-switch
 
@@ -142,7 +111,7 @@ ssh picklelab "sudo journalctl -u climate-auto-switch.service -n 50"
 
 ### backup
 
-Nightly restic backups of `/srv/data` at 3am, with Postgres dumps for vikunja and baserow. GFS retention (7 daily, 4 weekly, 6 monthly). Runs as a dedicated `backup` system user. See [services/backup/README.md](services/backup/README.md) for what's captured, restore procedure, and future work (Synology, S3).
+Nightly restic backups of `/srv/data` at 3am, with Postgres dumps for vikunja. GFS retention (7 daily, 4 weekly, 6 monthly). Runs as a dedicated `backup` system user. See [services/backup/README.md](services/backup/README.md) for what's captured, restore procedure, and future work (Synology, S3).
 
 **First-time setup (from Mac):**
 

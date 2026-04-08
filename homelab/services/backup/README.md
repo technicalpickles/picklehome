@@ -9,7 +9,6 @@ Everything under `/srv/data`, except the raw Postgres data directories (backed u
 | Service | Captured | How |
 |---------|----------|-----|
 | [vikunja](../vikunja/README.md) | database + file attachments | `pg_dumpall` → `/srv/data/vikunja/dumps/pg_dumpall.sql`, then restic snapshots the whole `/srv/data/vikunja/` tree |
-| baserow | database + app data (media, caddy, jwt key, redis pass) | `pg_dumpall` → `/srv/data/baserow/dumps/pg_dumpall.sql`, then restic snapshots `/srv/data/baserow/` (ACLs grant read access to container-owned files) |
 | climate-auto-switch | OAuth tokens, last-state, run log | restic snapshots `/srv/data/climate-auto-switch/` directly (flat files, no database) |
 
 ## Retention
