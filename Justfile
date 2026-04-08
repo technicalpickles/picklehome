@@ -292,7 +292,7 @@ garage *ARGS:
 locks *ARGS:
     uv run python locks/locks_cli.py {{ARGS}}
 
-# Repo-local taskwarrior backlog (config at .taskrc, data in .task/, both at repo root)
+# Taskwarrior backlog (config at ~/.taskrc, data at ~/.task)
 # Defaults to `list` with no args. Examples:
 #   just task                              # pending tasks
 #   just task list project:homelab         # filter by project
@@ -300,7 +300,6 @@ locks *ARGS:
 #   just task 42 done                      # complete
 task *ARGS:
     #!/usr/bin/env bash
-    export TASKRC={{justfile_directory()}}/.taskrc
     if [ "$#" -eq 0 ]; then
         task list
     else
