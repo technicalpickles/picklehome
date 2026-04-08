@@ -292,20 +292,6 @@ garage *ARGS:
 locks *ARGS:
     uv run python locks/locks_cli.py {{ARGS}}
 
-# Taskwarrior backlog (config at ~/.taskrc, data at ~/.task)
-# Defaults to `list` with no args. Examples:
-#   just task                              # pending tasks
-#   just task list project:homelab         # filter by project
-#   just task add project:foo "do thing"   # add (quoted descriptions OK, parens OK)
-#   just task 42 done                      # complete
-task *ARGS:
-    #!/usr/bin/env bash
-    if [ "$#" -eq 0 ]; then
-        task list
-    else
-        task "$@"
-    fi
-
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
     #!/usr/bin/env bash

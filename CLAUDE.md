@@ -58,6 +58,20 @@ The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTT
 - **Keychain access**: requires `~/Library/Keychains/` in `sandbox.filesystem.allowWrite`
 - **Debugging**: if `curl` works but Python doesn't, it's almost certainly a proxy issue, not a domain allowlist issue
 
+## Backlog & Task Tracking
+
+Taskwarrior is the backlog system for this project. Use `task` directly (config at `~/.taskrc`, data at `~/.task`).
+
+- When working on a module that might have open tasks, check taskwarrior for relevant context (e.g. `task list project:homelab` when touching homelab code).
+- When the user asks about tasks, backlog, "what's next", or similar, use `task` commands. Don't use agent task tools (TaskCreate/TodoWrite) for project backlog items.
+- After completing work, capture any identified followups as taskwarrior tasks rather than leaving them as mental notes or memory entries.
+- Use dotted project hierarchy: `homelab.backup`, `lighting.hue.naming`, `climate.ecobee`. This lets `task list project:homelab` match all sub-projects.
+
+**Taskwarrior vs memory vs parked sessions:**
+- Taskwarrior: concrete actionable items (things to do, with optional dates)
+- Memory (project/reference): state facts, architectural decisions, non-actionable context
+- Parked sessions: mid-work state saves for resuming later
+
 ## Coding Conventions
 
 - **Don't swallow errors in data-fetching code.** Raise with diagnostic context (what failed, why) and catch at the boundary where you can present it to the user. Returning `None` for every failure mode — network error, stale data, bad input — makes debugging impossible because the caller can't distinguish fixable problems from expected ones. Use `asyncio.gather(return_exceptions=True)` for concurrent fetches so one failure doesn't cancel the rest.
