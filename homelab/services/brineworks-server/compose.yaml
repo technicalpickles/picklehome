@@ -21,6 +21,7 @@ services:
       db:
         condition: service_healthy
     environment:
+      BRINEWORKS_ENV: production
       BRINEWORKS_DATABASE_URL: postgresql+asyncpg://brineworks:${BRINEWORKS_DB_PASSWORD}@db:5432/brineworks
       BRINEWORKS_API_KEY: ${BRINEWORKS_API_KEY}
 
