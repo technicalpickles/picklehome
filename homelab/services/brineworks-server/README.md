@@ -34,6 +34,7 @@ On first deploy, the Tailscale endpoint won't respond until you approve the serv
    ```
 4. Verify: `curl https://brineworks.<tailnet>.ts.net/health`
 
+
 The deploy script checks both the local and Tailscale health endpoints and prints these steps if the Tailscale endpoint isn't responding.
 
 ## Deploying Updates

@@ -60,17 +60,11 @@ The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTT
 
 ## Backlog & Task Tracking
 
-Taskwarrior is the backlog system for this project. Use `task` directly (config at `~/.taskrc`, data at `~/.task`).
+Top-level entry point: `task list project:picklehome`
 
-- When working on a module that might have open tasks, check taskwarrior for relevant context (e.g. `task list project:homelab` when touching homelab code).
-- When the user asks about tasks, backlog, "what's next", or similar, use `task` commands. Don't use agent task tools (TaskCreate/TodoWrite) for project backlog items.
-- After completing work, capture any identified followups as taskwarrior tasks rather than leaving them as mental notes or memory entries.
-- Use dotted project hierarchy: `homelab.backup`, `lighting.hue.naming`, `climate.ecobee`. This lets `task list project:homelab` match all sub-projects.
+Projects use a dotted hierarchy: `picklehome.climate.ecobee`, `picklehome.lighting.hue`, `picklehome.homelab.backup`. This lets `task list project:picklehome.climate` match all climate sub-projects.
 
-**Taskwarrior vs memory vs parked sessions:**
-- Taskwarrior: concrete actionable items (things to do, with optional dates)
-- Memory (project/reference): state facts, architectural decisions, non-actionable context
-- Parked sessions: mid-work state saves for resuming later
+When touching a module, check the relevant sub-project (e.g. `task list project:picklehome.climate` when working in `climate/`).
 
 ## Coding Conventions
 
