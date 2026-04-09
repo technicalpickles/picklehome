@@ -135,13 +135,13 @@ deploy-climate host="picklelab":
     scripts/service-env homelab/services/climate-auto-switch/.env.vars > tmp/climate-auto-switch.env
     scp tmp/climate-auto-switch.env {{host}}:/opt/homelab/homelab/services/climate-auto-switch/.env
     rm tmp/climate-auto-switch.env
-    ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
 
 # Seed ecobee token file to picklelab (one-time, from Mac)
 seed-climate-tokens host="picklelab":
-    ssh -t {{host}} "sudo mkdir -p /srv/data/climate-auto-switch"
+    ssh {{host}} "sudo mkdir -p /srv/data/climate-auto-switch"
     scp ~/.local/state/picklehome/ecobee-tokens.json {{host}}:/tmp/ecobee-tokens.json
-    ssh -t {{host}} "sudo mv /tmp/ecobee-tokens.json /srv/data/climate-auto-switch/ && sudo chmod 600 /srv/data/climate-auto-switch/ecobee-tokens.json"
+    ssh {{host}} "sudo mv /tmp/ecobee-tokens.json /srv/data/climate-auto-switch/ && sudo chmod 600 /srv/data/climate-auto-switch/ecobee-tokens.json"
 
 # Show last climate auto-switch state (from picklelab)
 climate-check host="picklelab":
@@ -176,7 +176,7 @@ deploy-vikunja host="picklelab":
     scripts/service-env homelab/services/vikunja/.env.vars > tmp/vikunja.env
     scp tmp/vikunja.env {{host}}:/opt/homelab/homelab/services/vikunja/.env
     rm tmp/vikunja.env
-    ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/vikunja/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/vikunja/deploy.sh"
 
 # Tail Vikunja container logs from picklelab
 vikunja-logs host="picklelab" lines="50":
@@ -213,7 +213,7 @@ deploy-brineworks-server host="picklelab":
     scripts/service-env homelab/services/brineworks-server/.env.vars > tmp/brineworks-server.env
     scp tmp/brineworks-server.env {{host}}:/opt/homelab/homelab/services/brineworks-server/.env
     rm tmp/brineworks-server.env
-    ssh -t {{host}} "cd /opt/homelab && homelab/services/brineworks-server/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && homelab/services/brineworks-server/deploy.sh"
 
 # Tail Brineworks server container logs from picklelab
 brineworks-server-logs host="picklelab" lines="50":
@@ -282,11 +282,11 @@ deploy-backup host="picklelab":
     scripts/service-env homelab/services/backup/.env.vars > tmp/backup.env
     scp tmp/backup.env {{host}}:/opt/homelab/homelab/services/backup/.env
     rm tmp/backup.env
-    ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/backup/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/backup/deploy.sh"
 
 # Run backup now on picklelab (manual trigger)
 backup-now host="picklelab":
-    ssh -t {{host}} "sudo systemctl start backup.service"
+    ssh {{host}} "sudo systemctl start backup.service"
 
 # Show recent restic snapshots from picklelab
 backup-snapshots host="picklelab":
@@ -320,7 +320,7 @@ deploy-obsidian-sync host="picklelab":
         git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh -t {{host}} "cd /opt/homelab && git pull && homelab/services/obsidian-sync/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/obsidian-sync/deploy.sh"
 
 # Run ob CLI in a one-off container (for login, sync-setup, etc.)
 obsidian-sync-exec host="picklelab" *ARGS:

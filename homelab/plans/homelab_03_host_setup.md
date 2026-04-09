@@ -158,6 +158,23 @@ git clone git@github.com:technicalpickles/picklehome.git /opt/homelab
 
 Requires SSH agent forwarding — configured in `~/.ssh/config.d/hosts` on Mac (`ForwardAgent yes` for picklelab).
 
+### Deploy access (passwordless sudo)
+
+Scripted: `homelab/scripts/setup-deploy-access.sh`
+
+Installs a sudoers drop-in (`/etc/sudoers.d/deploy-ops`) granting `technicalpickles` passwordless sudo for the specific commands used by deploy scripts: `mkdir`, `ln`, `systemctl`, `chown`, `tailscale serve`, `setfacl`, `useradd`, `usermod`, `apt-get`, and running commands as the `backup` user.
+
+This enables non-interactive deploys from Mac (`ssh picklelab "..."` without `-t` flag).
+
+The allowlist template lives in `homelab/config/sudoers-deploy-ops`. The setup script validates syntax with `visudo -cf` before installing, so a bad edit won't lock you out.
+
+Run after initial host setup:
+
+```bash
+cd /opt/homelab
+homelab/scripts/setup-deploy-access.sh
+```
+
 ### Static DHCP lease
 
 Fixed IP `192.168.1.82` assigned via UniFi controller (`/rest/user` → `use_fixedip: true`).
