@@ -68,7 +68,44 @@ When touching a module, check the relevant sub-project (e.g. `task list project:
 
 ## Coding Conventions
 
-- **Don't swallow errors in data-fetching code.** Raise with diagnostic context (what failed, why) and catch at the boundary where you can present it to the user. Returning `None` for every failure mode — network error, stale data, bad input — makes debugging impossible because the caller can't distinguish fixable problems from expected ones. Use `asyncio.gather(return_exceptions=True)` for concurrent fetches so one failure doesn't cancel the rest.
+- **Don't swallow errors in data-fetching code.** Raise with diagnostic context (what failed, why) and catch at the boundary where you can present it to the user. Returning `None` for every failure mode (network error, stale data, bad input) makes debugging impossible because the caller can't distinguish fixable problems from expected ones. Use `asyncio.gather(return_exceptions=True)` for concurrent fetches so one failure doesn't cancel the rest.
+
+## Auth Patterns
+
+All integrations use the same general pattern: credentials in 1Password, injected into `.env`, loaded by `python-dotenv` at import time.
+
+| Style | Used by | Token storage | Notes |
+|-------|---------|---------------|-------|
+| API key (static) | UniFi, Cloudflare Radar, Google APIs | `.env` only | No refresh needed |
+| OAuth token (refreshable) | Ecobee | `~/.local/state/picklehome/ecobee-tokens.json` | PIN flow, auto-refresh on use |
+| Username/password to session token | Yale, Aladdin, BlueAir | `~/.local/state/picklehome/<service>-tokens.json` | Token cached, re-auth on expiry |
+| TLS client cert | Lutron Caseta | `lighting/.certs/` (key, cert, CA) | One-time pairing, certs don't expire |
+
+**Token storage convention:** `~/.local/state/picklehome/<service>-tokens.json` with 0600 permissions.
+
+**When adding a new integration:**
+1. Store credentials in 1Password (`picklehome` vault)
+2. Add `op://` references to `.env.template`
+3. Use `python-dotenv` to load at import time
+4. If tokens need refresh, cache them in `~/.local/state/picklehome/`
+5. Model the CLI on existing `*_cli.py` patterns (argparse + async dispatch)
+
+## Testing
+
+Tests live in `tests/`, mirroring the source layout (`tests/climate/ecobee/`, `tests/garage/aladdin/`, etc.).
+
+```bash
+uv run pytest                              # all tests
+uv run pytest tests/climate/ -v            # one module
+uv run pytest tests/test_comfort_switch.py -v  # one file
+```
+
+**Patterns used:**
+- `pytest` with `unittest.mock` (patch, MagicMock). No pytest plugins beyond core.
+- No conftest.py: fixtures are per-file, close to the tests that use them.
+- API responses are mocked at the client boundary (patch the HTTP call or library method, not internal functions).
+- Pure logic tests (config parsing, mode switching) don't need mocking.
+- No integration tests that hit real APIs. All tests run offline.
 
 ## Documentation
 
@@ -87,5 +124,28 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
   - `climate/ambient/` — Ambient Weather outdoor temp
   - `climate/config/` — YAML config (thermostats, schedule, comforts, weather, purifiers)
   - `climate/spec/` — source of truth for thermostat behavior (hvac-spec.md)
+- `lighting/` — Lutron Caseta + Philips Hue control; see `lighting/README.md`
 - `network/` — Network diagnostic and profiling scripts; see `network/CLAUDE.md`
+- `garage/` — Aladdin Connect garage door control; see `garage/README.md`
+- `locks/` — Yale Access smart locks; see `locks/README.md`
+- `homelab/` — NUC server services and infrastructure; see `homelab/README.md`
 - `docs/plans/` — Design documents and implementation plans
+- `tests/` — pytest tests, mirroring source layout
+- `scripts/` — Shared utilities (`dotenv`, `service-env`, `quote-env-values`)
+
+## Integrations
+
+Quick reference for all smart home and network integrations.
+
+| Integration | Module | Hardware | Protocol | Commands |
+|-------------|--------|----------|----------|----------|
+| Ecobee | `climate/ecobee/` | Thermostats + room sensors | Cloud API (OAuth) | `just climate-*` |
+| Ambient Weather | `climate/ambient/` | Outdoor weather station | Cloud API (API key) | `just climate-weather` |
+| BlueAir | `climate/blueair/` | Air purifiers | Cloud API (user/pass) | `just blueair *` |
+| Google Air Quality | `climate/` | N/A (API-only) | REST API (API key) | `just climate-air-quality` |
+| Lutron Caseta | `lighting/` | Dimmers, switches, fans | Local TLS (certs) | `just lutron *` |
+| Philips Hue | `lighting/` | Lights, motion sensors, buttons | Local API V2 (app key) | `just hue *` |
+| UniFi | `network/unifi/` | APs, switches, USG, CloudKey | Local API (API key) | `just unifi *` |
+| AT&T BGW | `network/` | Fiber gateway | Web scraping (no auth) | `just bgw *` |
+| Aladdin Connect | `garage/` | Garage door opener | Cloud API (Cognito) | `just garage *` |
+| Yale Access | `locks/` | Smart locks + bridges | Cloud API (user/pass) | `just locks *` |
