@@ -74,7 +74,7 @@ The database URL is derived in `compose.yaml`: `postgresql+asyncpg://brineworks:
 The brineworks CLI (`bw email sync-prm`) targets the server via env vars in the brineworks repo's `.env`:
 
 ```
-BRINEWORKS_PRM_URL=https://brineworks.<tailnet>.ts.net
+BRINEWORKS_SERVER_URL=https://brineworks.<tailnet>.ts.net
 BRINEWORKS_API_KEY=<same key as server>
 ```
 
