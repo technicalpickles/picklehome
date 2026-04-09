@@ -1,0 +1,37 @@
+# Passwordless sudo for deploy operations on picklelab.
+# Installed to /etc/sudoers.d/deploy-ops by homelab/scripts/setup-deploy-access.sh
+#
+# Scope: narrow allowlist covering commands used by deploy.sh scripts.
+# See docs/plans/2026-04-09-deploy-sudoers.md for rationale.
+
+# Directory setup
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p *
+
+# Symlink systemd units into place
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/ln -sf *
+
+# Systemd lifecycle
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable *
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart *
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl start *
+
+# Ownership changes (brineworks, backup)
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/chown *
+
+# Tailscale service advertising (brineworks)
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/tailscale serve *
+
+# ACLs for backup cross-user reads
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/setfacl *
+
+# Backup user management (backup deploy)
+technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/useradd *
+technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/usermod *
+
+# Package install (backup deploy installs restic, acl)
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/apt-get update
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/apt-get install *
+
+# Run restic as backup user (backup deploy init/check)
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/sudo -u backup *
