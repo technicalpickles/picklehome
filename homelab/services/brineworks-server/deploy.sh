@@ -22,7 +22,11 @@ else
     sudo chown "$(id -u):$(id -g)" "$BRINEWORKS_REPO"
     git clone git@github.com:technicalpickles/brineworks.git "$BRINEWORKS_REPO"
 fi
-echo "    Brineworks at $(git -C "$BRINEWORKS_REPO" rev-parse --short HEAD)"
+BRINEWORKS_SHA=$(git -C "$BRINEWORKS_REPO" rev-parse --short HEAD)
+echo "    Brineworks at $BRINEWORKS_SHA"
+
+echo "==> Writing build metadata"
+echo "BRINEWORKS_GIT_SHA=$BRINEWORKS_SHA" > "$SERVICE_DIR/.env.build"
 
 echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/db"

@@ -6,6 +6,7 @@ __pycache__/
 # Credentials — never commit
 .env
 **/.env
+**/.env.build
 lighting/caseta-bridge.json
 lighting/.certs/
 
