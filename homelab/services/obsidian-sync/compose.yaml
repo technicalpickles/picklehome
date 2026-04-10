@@ -11,14 +11,14 @@ services:
     entrypoint: []
     command: ["echo", "Usage: docker compose run --rm cli ob <command>"]
 
-  pickled-knowledge:
+  rpg:
     image: obsidian-sync
     init: true
     restart: unless-stopped
     volumes:
       - ob-config:/root/.config
-      - pickled-knowledge:/vault
+      - rpg:/vault
 
 volumes:
   ob-config:
-  pickled-knowledge:
+  rpg:

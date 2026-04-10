@@ -13,7 +13,7 @@ cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Creating data directories"
-sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/vaults/pickled-knowledge"
+sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/vaults/rpg"
 
 echo "==> Building image"
 cd "$SERVICE_DIR"
