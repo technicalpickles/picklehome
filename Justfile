@@ -322,9 +322,9 @@ deploy-obsidian-sync host="picklelab":
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     ssh {{host}} "cd /opt/homelab && git pull && homelab/services/obsidian-sync/deploy.sh"
 
-# Run ob CLI in a one-off container (for login, sync-setup, etc.)
-obsidian-sync-exec host="picklelab" *ARGS:
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose -f compose.yaml -f compose.picklelab.yaml run --rm cli ob {{ARGS}}"
+# Run ob CLI against a specific vault's container (e.g. "rpg sync-status")
+obsidian-sync-exec vault host="picklelab" *ARGS:
+    ssh -t {{host}} "docker exec -it obsidian-sync-{{vault}}-1 ob {{ARGS}}"
 
 # Tail Obsidian Sync container logs from picklelab
 obsidian-sync-logs host="picklelab" lines="50":

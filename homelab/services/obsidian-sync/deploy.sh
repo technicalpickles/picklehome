@@ -13,11 +13,15 @@ cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Creating data directories"
-sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/vaults/rpg"
+sudo mkdir -p \
+    "$DATA_DIR/config/rpg" \
+    "$DATA_DIR/config/pickled-knowledge" \
+    "$DATA_DIR/vaults/rpg" \
+    "$DATA_DIR/vaults/pickled-knowledge"
 
 echo "==> Building image"
 cd "$SERVICE_DIR"
-docker compose -f compose.yaml -f compose.picklelab.yaml build cli
+docker compose -f compose.yaml -f compose.picklelab.yaml build
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/obsidian-sync.service" /etc/systemd/system/
@@ -33,8 +37,6 @@ systemctl status obsidian-sync.service --no-pager
 echo ""
 echo "Done!"
 echo ""
-echo "If this is first setup, authenticate and link vaults from your laptop:"
-echo "  just obsidian-sync-exec login"
-echo "  just obsidian-sync-exec sync-setup"
-echo "Then restart the service:"
-echo "  just deploy-obsidian-sync"
+echo "To run ob commands against a specific vault (e.g. for sync-status):"
+echo "  just obsidian-sync-exec rpg sync-status"
+echo "  just obsidian-sync-exec pickled-knowledge sync-status"
