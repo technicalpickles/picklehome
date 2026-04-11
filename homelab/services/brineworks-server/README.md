@@ -30,7 +30,7 @@ On first deploy, the Tailscale endpoint won't respond until you approve the serv
    ```bash
    sudo tailscale serve --service=svc:brineworks --https=443 off
    sleep 2
-   sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8000
+   sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8765
    ```
 4. Verify: `curl https://brineworks.<tailnet>.ts.net/health`
 
@@ -49,7 +49,7 @@ This pulls the latest from both `picklehome` and `brineworks`, rebuilds the cont
 
 - **Build from source:** The brineworks repo is cloned to `/opt/brineworks` on picklelab. The compose build context points at `server/` there. No published container image.
 - **Compose layering:** `compose.yaml` is a portable base (`image: brineworks-server:local`). `compose.picklelab.yaml` adds the `build:` directive, loopback port binding, and host volume mounts. Docker Compose merges both: it builds from source and tags the result.
-- **Networking:** Server binds to `127.0.0.1:8000` (loopback only). Tailscale serve proxies `https://brineworks.<tailnet>.ts.net` to it.
+- **Networking:** Server binds to `127.0.0.1:8765` (loopback only). Tailscale serve proxies `https://brineworks.<tailnet>.ts.net` to it.
 
 ## Environment Variables
 

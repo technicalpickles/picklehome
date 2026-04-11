@@ -32,10 +32,10 @@ echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/db"
 
 echo "==> Configuring Tailscale serve for brineworks"
-# Registers brineworks.<tailnet>.ts.net, proxied to localhost:8000.
+# Registers brineworks.<tailnet>.ts.net, proxied to localhost:8765.
 # Idempotent: re-running updates the config in tailscaled's state.
 # Requires HTTPS to be enabled in the Tailscale admin console.
-sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8000
+sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8765
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/brineworks-server.service" /etc/systemd/system/
@@ -55,7 +55,7 @@ echo ""
 echo "==> Checking local health endpoint"
 # Verify the app is responding locally before checking Tailscale
 for i in 1 2 3 4 5; do
-    if curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1; then
+    if curl -sf http://127.0.0.1:8765/health > /dev/null 2>&1; then
         echo "    Local health check passed"
         break
     fi
@@ -83,6 +83,6 @@ else
     echo "    3. Re-advertise (tailscaled doesn't auto-detect approval):"
     echo "       sudo tailscale serve --service=svc:brineworks --https=443 off"
     echo "       sleep 2"
-    echo "       sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8000"
+    echo "       sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8765"
     echo "    4. Verify: curl ${BRINEWORKS_URL}/health"
 fi
