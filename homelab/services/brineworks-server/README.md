@@ -45,11 +45,29 @@ just deploy-brineworks-server
 
 This pulls the latest from both `picklehome` and `brineworks`, rebuilds the container image, and restarts the service. Alembic migrations run automatically on container startup.
 
+## Verifying a Deploy
+
+```bash
+curl https://brineworks.<tailnet>.ts.net/health
+```
+
+Expected response:
+
+```json
+{"status":"ok","env":"production","sha":"<short-sha>"}
+```
+
+- `status: ok` means the app is up AND the database connectivity probe inside `/health` passed (returns 503 if DB is unreachable).
+- `env: production` confirms `BRINEWORKS_ENV` propagated correctly from `compose.yaml`.
+- `sha` is the brineworks commit SHA baked into the image at build time via `ARG GIT_SHA` → `ENV BRINEWORKS_GIT_SHA`. It should match what `deploy.sh` printed as "Brineworks at <sha>". A mismatch means Docker served stale build layers or the build-arg didn't thread through.
+
 ## Architecture
 
 - **Build from source:** The brineworks repo is cloned to `/opt/brineworks` on picklelab. The compose build context points at `server/` there. No published container image.
 - **Compose layering:** `compose.yaml` is a portable base (`image: brineworks-server:local`). `compose.picklelab.yaml` adds the `build:` directive, loopback port binding, and host volume mounts. Docker Compose merges both: it builds from source and tags the result.
-- **Networking:** Server binds to `127.0.0.1:8765` (loopback only). Tailscale serve proxies `https://brineworks.<tailnet>.ts.net` to it.
+- **Networking:** Server binds to `127.0.0.1:8765` (loopback only). Tailscale serve proxies `https://brineworks.<tailnet>.ts.net` to it. The `tailscale serve` rule is reapplied unconditionally on every deploy — re-running with a different upstream idempotently replaces the previous rule, no manual `off` needed.
+- **Cross-repo port coupling:** The server port is defined in the brineworks repo (`server/Dockerfile`, `server/brineworks_server/run.py`, `server/docker-compose.yml`) and **duplicated** here (`compose.picklelab.yaml`, `deploy.sh`, this README). Any port change must be mirrored in both repos. Tracked for consolidation in brineworks task #54.
+- **Healthcheck layering:** Two independent probes catch different failure modes. The compose-level healthcheck on the `server` service (in `compose.yaml`) runs inside the container using python stdlib `urllib` — there's no `curl` or `wget` in the `python:3.11-slim` base image. It catches "uvicorn crashed or hung." The `deploy.sh` end-to-end curl against the published port catches "container is healthy but the port publish is wrong" (e.g. the port drift we hit on 2026-04-11).
 
 ## Environment Variables
 
