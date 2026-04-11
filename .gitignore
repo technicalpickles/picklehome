@@ -28,3 +28,6 @@ vendor/
 local-data/
 tmp/
 
+# Park skill session handoffs
+.parkinglot/
+
