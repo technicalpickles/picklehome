@@ -45,6 +45,8 @@ just deploy-brineworks-server
 
 This pulls the latest from both `picklehome` and `brineworks`, rebuilds the container image, and restarts the service. Alembic migrations run automatically on container startup.
 
+For deploying CLI changes to the `~/brineworks-workspace` install, see [`docs/dev-vs-prod-pipeline.md`](https://github.com/technicalpickles/brineworks/blob/main/docs/dev-vs-prod-pipeline.md#deploying-changes) in the brineworks repo.
+
 ## Verifying a Deploy
 
 ```bash
