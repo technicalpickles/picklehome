@@ -13,5 +13,6 @@ services:
       - /opt/homelab/.env
       - .env.build
     ports:
-      # Bound to loopback only -- tailscale serve proxies from brineworks.<tailnet>.ts.net
-      - "127.0.0.1:8765:8765"
+      # Bound to loopback only -- tailscale serve proxies from brineworks.<tailnet>.ts.net.
+      # BRINEWORKS_SERVER_PORT is set by deploy.sh (which defaults it to 8765).
+      - "127.0.0.1:${BRINEWORKS_SERVER_PORT:?set by deploy.sh}:${BRINEWORKS_SERVER_PORT:?set by deploy.sh}"

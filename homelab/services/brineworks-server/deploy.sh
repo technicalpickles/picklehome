@@ -9,6 +9,11 @@ SERVICE_DIR="$REPO_DIR/homelab/services/brineworks-server"
 DATA_DIR=/srv/data/brineworks-server
 BRINEWORKS_REPO=/opt/brineworks
 
+# Default server port -- override by exporting BRINEWORKS_SERVER_PORT before running.
+# Must match the port configured in the brineworks repo (see brineworks_cli/config.py
+# and server/brineworks_server/config.py). Compose files also read this env var.
+export BRINEWORKS_SERVER_PORT="${BRINEWORKS_SERVER_PORT:-8765}"
+
 cd "$REPO_DIR"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
@@ -32,10 +37,10 @@ echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/db"
 
 echo "==> Configuring Tailscale serve for brineworks"
-# Registers brineworks.<tailnet>.ts.net, proxied to localhost:8765.
+# Registers brineworks.<tailnet>.ts.net, proxied to localhost:$BRINEWORKS_SERVER_PORT.
 # Idempotent: re-running updates the config in tailscaled's state.
 # Requires HTTPS to be enabled in the Tailscale admin console.
-sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8765
+sudo tailscale serve --service=svc:brineworks --https=443 "http://127.0.0.1:$BRINEWORKS_SERVER_PORT"
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/brineworks-server.service" /etc/systemd/system/
@@ -55,7 +60,7 @@ echo ""
 echo "==> Checking local health endpoint"
 # Verify the app is responding locally before checking Tailscale
 for i in 1 2 3 4 5; do
-    if curl -sf http://127.0.0.1:8765/health > /dev/null 2>&1; then
+    if curl -sf "http://127.0.0.1:$BRINEWORKS_SERVER_PORT/health" > /dev/null 2>&1; then
         echo "    Local health check passed"
         break
     fi
@@ -83,6 +88,6 @@ else
     echo "    3. Re-advertise (tailscaled doesn't auto-detect approval):"
     echo "       sudo tailscale serve --service=svc:brineworks --https=443 off"
     echo "       sleep 2"
-    echo "       sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8765"
+    echo "       sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:\$BRINEWORKS_SERVER_PORT"
     echo "    4. Verify: curl ${BRINEWORKS_URL}/health"
 fi

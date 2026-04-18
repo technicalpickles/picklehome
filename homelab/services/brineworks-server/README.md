@@ -30,7 +30,7 @@ On first deploy, the Tailscale endpoint won't respond until you approve the serv
    ```bash
    sudo tailscale serve --service=svc:brineworks --https=443 off
    sleep 2
-   sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:8765
+   sudo tailscale serve --service=svc:brineworks --https=443 "http://127.0.0.1:$BRINEWORKS_SERVER_PORT"
    ```
 4. Verify: `curl https://brineworks.<tailnet>.ts.net/health`
 
@@ -67,9 +67,9 @@ Expected response:
 
 - **Build from source:** The brineworks repo is cloned to `/opt/brineworks` on picklelab. The compose build context points at `server/` there. No published container image.
 - **Compose layering:** `compose.yaml` is a portable base (`image: brineworks-server:local`). `compose.picklelab.yaml` adds the `build:` directive, loopback port binding, and host volume mounts. Docker Compose merges both: it builds from source and tags the result.
-- **Networking:** Server binds to `127.0.0.1:8765` (loopback only). Tailscale serve proxies `https://brineworks.<tailnet>.ts.net` to it. The `tailscale serve` rule is reapplied unconditionally on every deploy — re-running with a different upstream idempotently replaces the previous rule, no manual `off` needed.
-- **Cross-repo port coupling:** The server port is defined in the brineworks repo (`server/Dockerfile`, `server/brineworks_server/run.py`, `server/docker-compose.yml`) and **duplicated** here (`compose.picklelab.yaml`, `deploy.sh`, this README). Any port change must be mirrored in both repos. Tracked for consolidation in brineworks task #54.
-- **Healthcheck layering:** Two independent probes catch different failure modes. The compose-level healthcheck on the `server` service (in `compose.yaml`) runs inside the container using python stdlib `urllib` — there's no `curl` or `wget` in the `python:3.11-slim` base image. It catches "uvicorn crashed or hung." The `deploy.sh` end-to-end curl against the published port catches "container is healthy but the port publish is wrong" (e.g. the port drift we hit on 2026-04-11).
+- **Networking:** Server binds to `127.0.0.1:$BRINEWORKS_SERVER_PORT` (loopback only, default `8765`). Tailscale serve proxies `https://brineworks.<tailnet>.ts.net` to it. The `tailscale serve` rule is reapplied unconditionally on every deploy — re-running with a different upstream idempotently replaces the previous rule, no manual `off` needed.
+- **Port configuration:** The server port is controlled by one env var, `BRINEWORKS_SERVER_PORT`, threaded end-to-end. `deploy.sh` sets it once at the top (default `8765`) and exports it. Compose files fail fast (`${BRINEWORKS_SERVER_PORT:?...}`) if it's unset. The brineworks image bakes `ENV BRINEWORKS_SERVER_PORT=8765` so containers without an explicit override still work. To change the port, set `BRINEWORKS_SERVER_PORT` in the environment before running `deploy.sh`.
+- **Healthcheck layering:** Two independent probes catch different failure modes. The container healthcheck is declared in the brineworks `Dockerfile` (`python -m brineworks_server.healthcheck`) and reads the port from its own ENV — so the image is self-contained. It catches "uvicorn crashed or hung." The `deploy.sh` end-to-end curl against the published port catches "container is healthy but the port publish is wrong" (e.g. the port drift we hit on 2026-04-11).
 
 ## Environment Variables
 

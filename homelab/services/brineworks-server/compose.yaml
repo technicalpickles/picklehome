@@ -20,14 +20,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health').read()"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+    # Healthcheck is defined in the brineworks Dockerfile (python -m brineworks_server.healthcheck).
     environment:
       BRINEWORKS_ENV: production
+      BRINEWORKS_SERVER_PORT: ${BRINEWORKS_SERVER_PORT:?BRINEWORKS_SERVER_PORT must be exported (deploy.sh sets it)}
       BRINEWORKS_DATABASE_URL: postgresql+asyncpg://brineworks:${BRINEWORKS_DB_PASSWORD}@db:5432/brineworks
       BRINEWORKS_API_KEY: ${BRINEWORKS_API_KEY}
 
