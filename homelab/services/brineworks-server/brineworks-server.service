@@ -8,6 +8,10 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/brineworks-server
+# .env.build is written by deploy.sh and carries deploy-time vars
+# (BRINEWORKS_GIT_SHA, BRINEWORKS_SERVER_PORT) into the docker compose
+# process env so compose's strict ${VAR:?...} interpolation succeeds.
+EnvironmentFile=-/opt/homelab/homelab/services/brineworks-server/.env.build
 ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build
 ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 

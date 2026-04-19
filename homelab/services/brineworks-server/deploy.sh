@@ -31,7 +31,14 @@ BRINEWORKS_SHA=$(git -C "$BRINEWORKS_REPO" rev-parse --short HEAD)
 echo "    Brineworks at $BRINEWORKS_SHA"
 
 echo "==> Writing build metadata"
-echo "BRINEWORKS_GIT_SHA=$BRINEWORKS_SHA" > "$SERVICE_DIR/.env.build"
+# .env.build is loaded by both the systemd unit (EnvironmentFile=) and the
+# container (compose env_file:). The unit path is what makes compose's strict
+# ${BRINEWORKS_SERVER_PORT:?...} interpolation succeed when systemd restarts
+# the service with an otherwise-empty user env.
+{
+    echo "BRINEWORKS_GIT_SHA=$BRINEWORKS_SHA"
+    echo "BRINEWORKS_SERVER_PORT=$BRINEWORKS_SERVER_PORT"
+} > "$SERVICE_DIR/.env.build"
 
 echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/db"
