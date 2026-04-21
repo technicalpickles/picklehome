@@ -178,3 +178,19 @@ homelab/scripts/setup-deploy-access.sh
 ### Static DHCP lease
 
 Fixed IP `192.168.1.82` assigned via UniFi controller (`/rest/user` → `use_fixedip: true`).
+
+### mosh
+
+Installed on host: `sudo apt install mosh`
+
+No firewall config needed (UFW not installed on the minimized Ubuntu 24.04 image; mosh UDP ports 60000-61000 are open by default).
+
+**Client setup (Mac):** `brew install mosh`
+
+**Connect:** `mosh picklelab` (works via Tailscale MagicDNS)
+
+Initial connection may take a few seconds while Tailscale establishes a direct peer-to-peer UDP path. Once connected, mosh is resilient to network changes and sleep/wake cycles.
+
+### neovim
+
+Installed on host: `sudo apt install neovim`
