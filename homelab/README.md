@@ -23,7 +23,7 @@ When adding a new service:
 | [01 — Plan](plans/homelab_01_plan.md) | Practical setup checklist: OS, disk layout, stack, directory conventions |
 | [02 — Architecture](plans/homelab_02_architecture.md) | Decision rationale: why Compose, why Ubuntu, why Tailscale, tradeoffs |
 | 03 — Host Setup | _TODO: concrete commands to reproduce the host from bare metal_ |
-| 04 — Services | _TODO: service registry — purpose, compose path, data path, access URL per service_ |
+| 04 — Services | _Service registry has graduated to [services/README.md](services/README.md). Plan retained as historical context._ |
 | [05 — Backup and Recovery](plans/homelab_05_backup_and_recovery.md) | Backup targets, tools, restore procedure |
 | [06 — Operations](plans/homelab_06_operations.md) | Runbook: deploy, restart, disk cleanup, reboot, troubleshooting |
 | [07 — Agent Access Model](plans/homelab_07_agent_access_model.md) | How coding/admin agents interact with the host safely |
