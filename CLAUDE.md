@@ -11,6 +11,12 @@ Client → USG (192.168.1.1) → AT&T BGW (192.168.8.254) → AT&T Fiber → Int
 - **ISP:** AT&T Fiber, AS7018, southeastern US (Atlanta area)
 - **Double-NAT:** BGW is NOT in IP passthrough mode; USG gets a private WAN IP
 
+## Tailscale
+
+- **Tailnet suffix:** `tail2023b7.ts.net` (verify with `tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix'`)
+- **Service hostnames:** `<service-name>.tail2023b7.ts.net`, fronted by Tailscale Services on picklelab. TLS terminated by `tailscaled`, proxied to a `127.0.0.1:<port>` container binding. No public DNS, no Caddy.
+- **Per-service hostname** is stored as `<SERVICE>_HOST` in 1Password (e.g. `op://picklehome/Vikunja/host`) and surfaced via `.env`.
+
 ## Python Tooling
 
 This repo uses [uv](https://github.com/astral-sh/uv) for Python dependency management.
