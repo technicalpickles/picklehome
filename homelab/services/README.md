@@ -136,6 +136,26 @@ See [brineworks-server/README.md](brineworks-server/README.md) for full setup.
 
 ---
 
+### taskchampion-sync
+
+Self-hosted Taskwarrior sync server. Replicates the Mac's `~/.task` to picklelab; encryption secret stays client-side, server only sees opaque blobs.
+
+| | |
+|---|---|
+| **Purpose** | Off-laptop replica of Taskwarrior data; future multi-device sync |
+| **Compose** | `/srv/containers/taskchampion-sync/` |
+| **Data** | `/srv/data/taskchampion-sync/` (SQLite, encrypted blobs) |
+| **Access** | `https://taskchampion.<tailnet>.ts.net` (Tailscale Services, port 9080 internally) |
+| **Env vars** | `TASKCHAMPION_SYNC_HOST`, `TASKCHAMPION_SYNC_SERVER_CLIENT_ID` |
+| **Backup** | Yes, nightly (SQLite picked up by `/srv/data` restic job) |
+| **Restart** | `restart: unless-stopped` |
+
+Commands: `just deploy-taskchampion`, `just taskchampion-status`, `just taskchampion-logs`, `just taskchampion-logs-follow`
+
+See [taskchampion-sync/README.md](taskchampion-sync/README.md) for full setup.
+
+---
+
 ## Planned services
 
 - Home Assistant (containerized short-term, may migrate to dedicated hardware)

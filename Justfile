@@ -186,6 +186,58 @@ vikunja-logs host="picklelab" lines="50":
 vikunja-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/vikunja && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
+# Deploy TaskChampion sync server to picklelab (idempotent: first setup or update)
+deploy-taskchampion host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Copying .env to {{host}}"
+    mkdir -p tmp
+    scripts/service-env homelab/services/taskchampion-sync/.env.vars > tmp/taskchampion-sync.env
+    scp tmp/taskchampion-sync.env {{host}}:/opt/homelab/homelab/services/taskchampion-sync/.env
+    rm tmp/taskchampion-sync.env
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/taskchampion-sync/deploy.sh"
+
+# Status check for TaskChampion sync (systemd + loopback HTTP + tailscale routing)
+taskchampion-status host="picklelab":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "==> systemd unit on {{host}}"
+    ssh {{host}} "sudo systemctl status taskchampion-sync.service --no-pager" || true
+    echo ""
+    echo "==> loopback HTTP on {{host}}"
+    ssh {{host}} "curl -fsS http://127.0.0.1:9080/ -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "loopback FAILED"
+    echo ""
+    echo "==> tailscale routing (from this machine)"
+    if [ -z "${TASKCHAMPION_SYNC_SERVER_URL:-}" ]; then
+        echo "TASKCHAMPION_SYNC_SERVER_URL not set in shell env (fnox not loaded?)"
+    else
+        curl -fsS "$TASKCHAMPION_SYNC_SERVER_URL" -w "\nHTTP %{http_code}  %{time_total}s\n" || echo "tailscale routing FAILED"
+    fi
+
+# Tail TaskChampion container logs from picklelab
+taskchampion-logs host="picklelab" lines="50":
+    ssh {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+
+# Follow TaskChampion container logs live from picklelab
+taskchampion-logs-follow host="picklelab":
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+
 # Deploy Brineworks PRM server to picklelab (idempotent: first setup or update)
 deploy-brineworks-server host="picklelab":
     #!/usr/bin/env bash

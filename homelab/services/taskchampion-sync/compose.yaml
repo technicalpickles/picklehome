@@ -1,0 +1,15 @@
+services:
+  taskchampion-sync:
+    image: ghcr.io/gothenburgbitfactory/taskchampion-sync-server:latest
+    restart: unless-stopped
+    environment:
+      CLIENT_ID: ${TASKCHAMPION_SYNC_SERVER_CLIENT_ID:?required}
+      LISTEN: 0.0.0.0:${TASKCHAMPION_SYNC_PORT:?set by deploy.sh}
+      DATA_DIR: /var/lib/taskchampion
+    ports:
+      - "127.0.0.1:${TASKCHAMPION_SYNC_PORT:?set by deploy.sh}:${TASKCHAMPION_SYNC_PORT:?set by deploy.sh}"
+    volumes:
+      - data:/var/lib/taskchampion
+
+volumes:
+  data:

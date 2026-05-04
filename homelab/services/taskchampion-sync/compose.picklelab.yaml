@@ -1,0 +1,8 @@
+services:
+  taskchampion-sync:
+    volumes:
+      - /srv/data/taskchampion-sync:/var/lib/taskchampion
+
+volumes:
+  data:
+    name: taskchampion-sync_data_unused
