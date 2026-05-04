@@ -213,7 +213,7 @@ deploy-taskchampion host="picklelab":
     scripts/service-env homelab/services/taskchampion-sync/.env.vars > tmp/taskchampion-sync.env
     scp tmp/taskchampion-sync.env {{host}}:/opt/homelab/homelab/services/taskchampion-sync/.env
     rm tmp/taskchampion-sync.env
-    ssh {{host}} "homelab/services/taskchampion-sync/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && homelab/services/taskchampion-sync/deploy.sh"
 
 # Status check for TaskChampion sync (systemd + loopback HTTP + tailscale routing)
 taskchampion-status host="picklelab":
