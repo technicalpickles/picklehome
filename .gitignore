@@ -33,4 +33,3 @@ tmp/
 
 # Git worktrees (per-branch checkouts under .worktrees/<branch>/)
 .worktrees/
-
