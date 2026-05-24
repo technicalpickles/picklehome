@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from locks.yale.auth import get_credentials, login
-from locks.yale.client import BridgeStatus, YaleLock, get_locks
+from locks.yale.client import BridgeStatus, HealthSeverity, YaleLock, get_locks
 from yalexs.lock import LockDoorStatus, LockStatus
 
 
@@ -51,7 +51,7 @@ def _health_glyph(lock: YaleLock) -> str:
     return _red("✗")
 
 
-def _issue_glyph(severity: str) -> str:
+def _issue_glyph(severity: HealthSeverity) -> str:
     if severity == "warning":
         return _yellow("⚠")
     return _red("✗")
