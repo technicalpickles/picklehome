@@ -25,6 +25,7 @@ HEALTH_BRIDGE_LOCK_COINCIDENCE = timedelta(hours=1)
 
 HealthSeverity = Literal["warning", "critical"]
 HealthStatus = Literal["healthy", "warning", "unhealthy"]
+BridgeOfflineReason = Literal["bridge_down", "battery_likely", "unknown"]
 
 
 @dataclass
@@ -111,21 +112,41 @@ class YaleLock:
             return "unhealthy"
         return "warning"
 
+    @property
+    def bridge_offline_reason(self) -> BridgeOfflineReason | None:
+        """Why is the bridge offline? None if it isn't (online / no bridge)."""
+        if self.bridge is None or self.bridge.connectivity == "online":
+            return None
+        return _bridge_offline_reason(self.bridge, self.status_datetime)
 
-def _bridge_offline_label(
+
+_BRIDGE_OFFLINE_LABELS: dict[BridgeOfflineReason, str] = {
+    "bridge_down":     "bridge offline (lock seen recently)",
+    "battery_likely":  "bridge offline (likely dead battery)",
+    "unknown":         "bridge offline",
+}
+
+
+def _bridge_offline_reason(
     bridge: BridgeStatus, lock_status_dt: datetime | None
-) -> str:
+) -> BridgeOfflineReason:
     # Disambiguate the overloaded "offline" state: a dead lock and a dead
     # bridge both surface as bridge.connectivity == "offline", but the
     # remediation is different (replace AAs vs. power-cycle the bridge).
     if bridge.last_online is None or lock_status_dt is None:
-        return "bridge offline"
+        return "unknown"
     delta = abs(bridge.last_online - lock_status_dt)
     if delta <= HEALTH_BRIDGE_LOCK_COINCIDENCE:
-        return "bridge offline (likely dead battery)"
+        return "battery_likely"
     if lock_status_dt > bridge.last_online:
-        return "bridge offline (lock seen recently)"
-    return "bridge offline"
+        return "bridge_down"
+    return "unknown"
+
+
+def _bridge_offline_label(
+    bridge: BridgeStatus, lock_status_dt: datetime | None
+) -> str:
+    return _BRIDGE_OFFLINE_LABELS[_bridge_offline_reason(bridge, lock_status_dt)]
 
 
 def _parse_iso(s: str | None) -> datetime | None:

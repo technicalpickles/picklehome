@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from locks.yale.auth import get_credentials, login
-from locks.yale.client import BridgeStatus, HealthSeverity, YaleLock, get_locks
+from locks.yale.client import HealthSeverity, YaleLock, get_locks
 from yalexs.lock import LockDoorStatus, LockStatus
 
 
@@ -105,14 +105,34 @@ def _battery_str(lock: YaleLock) -> str:
     return f"{lock.battery_level}%" if lock.battery_valid else "--"
 
 
-def _bridge_str(bridge: BridgeStatus | None) -> tuple[str, str]:
-    """Return (connectivity label, duration-since label)."""
+# Terse cell labels for the bridge column. When offline, encode the
+# disambiguated reason so a glance tells you whether the lock or the bridge
+# is the broken party. Keep these short -- column width is sized off them.
+_BRIDGE_CELL_OFFLINE = {
+    "bridge_down":    "bridge?",
+    "battery_likely": "battery?",
+    "unknown":        "OFFLINE",
+}
+_BRIDGE_CELL_LABELS = ("no bridge", "online", *_BRIDGE_CELL_OFFLINE.values())
+
+
+def _bridge_cell(lock: YaleLock) -> tuple[str, str]:
+    """Return (label, duration-since) for the bridge column."""
+    bridge = lock.bridge
     if bridge is None:
         return ("no bridge", "")
     if bridge.connectivity == "online":
         return ("online", _format_ago_short(bridge.last_online))
-    # offline
-    return ("OFFLINE", _format_ago_short(bridge.last_online))
+    reason = lock.bridge_offline_reason or "unknown"
+    return (_BRIDGE_CELL_OFFLINE[reason], _format_ago_short(bridge.last_online))
+
+
+def _color_bridge_cell(lock: YaleLock, text: str) -> str:
+    if lock.bridge is None:
+        return _yellow(text)
+    if lock.bridge.connectivity == "online":
+        return _green(text)
+    return _red(text)
 
 
 def _format_one_line(lock: YaleLock, widths: dict) -> str:
@@ -121,20 +141,16 @@ def _format_one_line(lock: YaleLock, widths: dict) -> str:
     state = _lock_state_str(lock).ljust(widths["state"])
     door = _door_state_str(lock).ljust(widths["door"])
     battery = _battery_str(lock).rjust(widths["battery"])
-    bridge_lbl, since = _bridge_str(lock.bridge)
-    bridge_cell = bridge_lbl.ljust(widths["bridge"])
+    bridge_lbl, since = _bridge_cell(lock)
+    bridge_cell = _color_bridge_cell(lock, bridge_lbl.ljust(widths["bridge"]))
 
-    # Colorize bridge label independently so the status pops even when the
-    # rest of the line is grayed out for staleness.
-    if lock.bridge is None:
-        bridge_cell = _yellow(bridge_cell)
-    elif lock.bridge.connectivity == "online":
-        bridge_cell = _green(bridge_cell)
-    else:
-        bridge_cell = _red(bridge_cell)
-
-    line = f"  {glyph}  {name}  {state}  {door}  {battery}  {bridge_cell}  {since}"
-    return _gray(line) if lock.is_stale else line
+    # Dim only the fields that actually went stale (lock state, door, battery)
+    # -- the glyph, name, bridge cell, and time-since are current truth about
+    # the situation and should stay readable.
+    if lock.is_stale:
+        stale_fields = _gray(f"{state}  {door}  {battery}")
+        return f"  {glyph}  {name}  {stale_fields}  {bridge_cell}  {since}"
+    return f"  {glyph}  {name}  {state}  {door}  {battery}  {bridge_cell}  {since}"
 
 
 def _compute_widths(locks: list[YaleLock]) -> dict:
@@ -143,7 +159,7 @@ def _compute_widths(locks: list[YaleLock]) -> dict:
         "state": max(len("unknown"), len("unlocked")),
         "door": max(len("unknown"), len("closed"), len("n/a")),
         "battery": 4,  # "100%" or "--"
-        "bridge": max(len("no bridge"), len("OFFLINE"), len("online")),
+        "bridge": max(len(s) for s in _BRIDGE_CELL_LABELS),
     }
 
 

@@ -154,6 +154,42 @@ def test_bridge_offline_no_lock_status_datetime_uses_generic_label():
     assert lock.health_issues == [HealthIssue("critical", "bridge offline")]
 
 
+def test_bridge_offline_reason_none_when_online():
+    lock = _make_lock()
+    assert lock.bridge_offline_reason is None
+
+
+def test_bridge_offline_reason_none_when_no_bridge():
+    lock = _make_lock(bridge=None)
+    assert lock.bridge_offline_reason is None
+
+
+def test_bridge_offline_reason_battery_likely():
+    sixty_days_ago = datetime.now(timezone.utc) - timedelta(days=60)
+    lock = _make_lock(
+        bridge=_offline_bridge(last_online=sixty_days_ago),
+        status_datetime=sixty_days_ago + timedelta(minutes=10),
+    )
+    assert lock.bridge_offline_reason == "battery_likely"
+
+
+def test_bridge_offline_reason_bridge_down():
+    now = datetime.now(timezone.utc)
+    lock = _make_lock(
+        bridge=_offline_bridge(last_online=now - timedelta(days=30)),
+        status_datetime=now - timedelta(minutes=5),
+    )
+    assert lock.bridge_offline_reason == "bridge_down"
+
+
+def test_bridge_offline_reason_unknown_when_missing_timestamps():
+    lock = _make_lock(
+        bridge=_offline_bridge(last_online=None),
+        status_datetime=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    assert lock.bridge_offline_reason == "unknown"
+
+
 def test_short_circuit_unbridged_with_low_battery():
     # Even though battery would also fail, we suppress downstream issues.
     lock = _make_lock(bridge=None, battery_level=10)
