@@ -48,6 +48,7 @@ def _make_bridge(
 
 
 _UNSET = object()
+_NO_DATETIME = object()
 
 
 def _make_lock(
@@ -55,9 +56,9 @@ def _make_lock(
     bridge=_UNSET,
     lock_status: LockStatus = LockStatus.LOCKED,
     battery_level: int = 97,
-    status_datetime: datetime | None = None,
+    status_datetime=_NO_DATETIME,
 ) -> YaleLock:
-    if status_datetime is None:
+    if status_datetime is _NO_DATETIME:
         status_datetime = datetime.now(timezone.utc)
     if bridge is _UNSET:
         bridge = _make_bridge()
@@ -142,18 +143,13 @@ def test_battery_40_is_healthy():
 def test_stale_data_flags_unhealthy():
     seven_hours_ago = datetime.now(timezone.utc) - timedelta(hours=7)
     lock = _make_lock(status_datetime=seven_hours_ago)
-    msgs = [i.message for i in lock.health_issues]
-    assert any(m.startswith("data stale") for m in msgs)
+    assert HealthIssue("critical", "data stale (7h old)") in lock.health_issues
     assert lock.health_status == "unhealthy"
 
 
 def test_status_datetime_none_flags_unhealthy():
-    # The factory defaults status_datetime to "now" if not given; for this
-    # case we want None explicitly, so we construct from a base lock.
-    base = _make_lock()
-    lock = YaleLock(**{**base.__dict__, "status_datetime": None})
-    msgs = [i.message for i in lock.health_issues]
-    assert any(m.startswith("data stale") for m in msgs)
+    lock = _make_lock(status_datetime=None)
+    assert HealthIssue("critical", "data stale (unknown)") in lock.health_issues
     assert lock.health_status == "unhealthy"
 
 
