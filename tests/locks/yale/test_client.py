@@ -98,6 +98,62 @@ def test_bridge_offline_returns_only_bridge_offline():
     assert lock.health_status == "unhealthy"
 
 
+def _offline_bridge(last_online: datetime | None) -> BridgeStatus:
+    return BridgeStatus(
+        connectivity="offline",
+        last_online=last_online,
+        last_offline=None,
+        model="august-connect",
+        firmware="2.3.1",
+        mfg_id="TEST",
+        wifi_issue_at=None,
+    )
+
+
+def test_bridge_offline_with_lock_dying_together_labels_dead_battery():
+    # Classic 8 Hacker St pattern: bridge and lock both went dark within
+    # ~minutes of each other, 60 days ago.
+    sixty_days_ago = datetime.now(timezone.utc) - timedelta(days=60)
+    lock = _make_lock(
+        bridge=_offline_bridge(last_online=sixty_days_ago),
+        status_datetime=sixty_days_ago + timedelta(minutes=10),
+    )
+    assert lock.health_issues == [
+        HealthIssue("critical", "bridge offline (likely dead battery)")
+    ]
+
+
+def test_bridge_offline_with_lock_seen_recently_labels_bridge_down():
+    # Phone reached the lock over BLE long after the bridge dropped: the
+    # lock is alive, the bridge is the broken party.
+    now = datetime.now(timezone.utc)
+    lock = _make_lock(
+        bridge=_offline_bridge(last_online=now - timedelta(days=30)),
+        status_datetime=now - timedelta(minutes=5),
+    )
+    assert lock.health_issues == [
+        HealthIssue("critical", "bridge offline (lock seen recently)")
+    ]
+
+
+def test_bridge_offline_no_bridge_last_online_uses_generic_label():
+    lock = _make_lock(
+        bridge=_offline_bridge(last_online=None),
+        status_datetime=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    assert lock.health_issues == [HealthIssue("critical", "bridge offline")]
+
+
+def test_bridge_offline_no_lock_status_datetime_uses_generic_label():
+    lock = _make_lock(
+        bridge=_offline_bridge(
+            last_online=datetime.now(timezone.utc) - timedelta(days=1)
+        ),
+        status_datetime=None,
+    )
+    assert lock.health_issues == [HealthIssue("critical", "bridge offline")]
+
+
 def test_short_circuit_unbridged_with_low_battery():
     # Even though battery would also fail, we suppress downstream issues.
     lock = _make_lock(bridge=None, battery_level=10)

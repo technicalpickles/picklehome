@@ -16,6 +16,13 @@ HEALTH_BATTERY_WARNING  = 40
 HEALTH_BATTERY_CRITICAL = 25
 HEALTH_MAX_DATA_AGE     = timedelta(hours=6)
 
+# When a bridge goes offline within this window of its lock's last update,
+# the failure pattern matches "dead lock dragged the bridge offline": a
+# bridge with a dead paired lock reports as offline because it cannot keep
+# the BLE link alive. Empirically the two timestamps land within minutes of
+# each other in that mode.
+HEALTH_BRIDGE_LOCK_COINCIDENCE = timedelta(hours=1)
+
 HealthSeverity = Literal["warning", "critical"]
 HealthStatus = Literal["healthy", "warning", "unhealthy"]
 
@@ -69,7 +76,9 @@ class YaleLock:
         if self.bridge is None:
             return [HealthIssue("critical", "no bridge")]
         if self.bridge.connectivity != "online":
-            return [HealthIssue("critical", "bridge offline")]
+            return [HealthIssue("critical", _bridge_offline_label(
+                self.bridge, self.status_datetime
+            ))]
 
         issues: list[HealthIssue] = []
 
@@ -101,6 +110,22 @@ class YaleLock:
         if any(i.severity == "critical" for i in issues):
             return "unhealthy"
         return "warning"
+
+
+def _bridge_offline_label(
+    bridge: BridgeStatus, lock_status_dt: datetime | None
+) -> str:
+    # Disambiguate the overloaded "offline" state: a dead lock and a dead
+    # bridge both surface as bridge.connectivity == "offline", but the
+    # remediation is different (replace AAs vs. power-cycle the bridge).
+    if bridge.last_online is None or lock_status_dt is None:
+        return "bridge offline"
+    delta = abs(bridge.last_online - lock_status_dt)
+    if delta <= HEALTH_BRIDGE_LOCK_COINCIDENCE:
+        return "bridge offline (likely dead battery)"
+    if lock_status_dt > bridge.last_online:
+        return "bridge offline (lock seen recently)"
+    return "bridge offline"
 
 
 def _parse_iso(s: str | None) -> datetime | None:
