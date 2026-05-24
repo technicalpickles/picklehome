@@ -1,0 +1,19 @@
+services:
+  github-actions-runner:
+    image: myoung34/github-runner:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - REPO_URL=${GITHUB_RUNNER_REPO_URL}
+      - RUNNER_TOKEN=${GITHUB_RUNNER_TOKEN}
+      - RUNNER_NAME=picklelab
+      - RUNNER_SCOPE=repo
+      - LABELS=self-hosted,linux,picklelab
+      - DISABLE_AUTO_UPDATE=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-work:/runner/_work
+
+volumes:
+  runner-work:
