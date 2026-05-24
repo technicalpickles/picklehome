@@ -1,6 +1,8 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from locks.yale.client import _parse_bridge
+from yalexs.lock import LockDoorStatus, LockStatus
+
+from locks.yale.client import BridgeStatus, HealthIssue, YaleLock, _parse_bridge
 
 
 def test_parse_bridge_captures_wifi_issue_timestamp():
@@ -28,3 +30,142 @@ def test_parse_bridge_no_wifi_issue():
     bridge = _parse_bridge(raw)
     assert bridge is not None
     assert bridge.wifi_issue_at is None
+
+
+def _make_bridge(
+    connectivity: str = "online",
+    wifi_issue_at: datetime | None = None,
+) -> BridgeStatus:
+    return BridgeStatus(
+        connectivity=connectivity,
+        last_online=None,
+        last_offline=None,
+        model="august-connect",
+        firmware="2.3.1",
+        mfg_id="TEST",
+        wifi_issue_at=wifi_issue_at,
+    )
+
+
+_UNSET = object()
+
+
+def _make_lock(
+    *,
+    bridge=_UNSET,
+    lock_status: LockStatus = LockStatus.LOCKED,
+    battery_level: int = 97,
+    status_datetime: datetime | None = None,
+) -> YaleLock:
+    if status_datetime is None:
+        status_datetime = datetime.now(timezone.utc)
+    if bridge is _UNSET:
+        bridge = _make_bridge()
+    return YaleLock(
+        lock_id="lock-id",
+        name="Test Lock",
+        house_id="house-id",
+        house_name="Test House",
+        lock_status=lock_status,
+        door_state=LockDoorStatus.CLOSED,
+        doorsense=True,
+        battery_level=battery_level,
+        status_datetime=status_datetime,
+        mac_address="00:00:00:00:00:00",
+        firmware_version="1.0.0",
+        model="AUG-MDY1",
+        serial_number="TEST123",
+        bridge=bridge,
+    )
+
+
+def test_healthy_lock_has_no_issues():
+    lock = _make_lock()
+    assert lock.health_issues == []
+    assert lock.health_status == "healthy"
+
+
+def test_unbridged_lock_returns_only_no_bridge():
+    lock = _make_lock(bridge=None)
+    assert lock.health_issues == [HealthIssue("critical", "no bridge")]
+    assert lock.health_status == "unhealthy"
+
+
+def test_bridge_offline_returns_only_bridge_offline():
+    lock = _make_lock(bridge=_make_bridge(connectivity="offline"))
+    assert lock.health_issues == [HealthIssue("critical", "bridge offline")]
+    assert lock.health_status == "unhealthy"
+
+
+def test_short_circuit_unbridged_with_low_battery():
+    # Even though battery would also fail, we suppress downstream issues.
+    lock = _make_lock(bridge=None, battery_level=10)
+    assert lock.health_issues == [HealthIssue("critical", "no bridge")]
+
+
+def test_lock_status_unknown_is_unreachable():
+    lock = _make_lock(lock_status=LockStatus.UNKNOWN)
+    assert HealthIssue("critical", "lock unreachable") in lock.health_issues
+    assert lock.health_status == "unhealthy"
+
+
+def test_battery_invalid_is_unknown():
+    lock = _make_lock(battery_level=-100)
+    assert HealthIssue("critical", "battery unknown") in lock.health_issues
+    assert lock.health_status == "unhealthy"
+
+
+def test_battery_24_is_critical():
+    lock = _make_lock(battery_level=24)
+    assert HealthIssue("critical", "low battery (24%)") in lock.health_issues
+    assert lock.health_status == "unhealthy"
+
+
+def test_battery_25_is_warning():
+    lock = _make_lock(battery_level=25)
+    assert HealthIssue("warning", "low battery (25%)") in lock.health_issues
+    assert lock.health_status == "warning"
+
+
+def test_battery_39_is_warning():
+    lock = _make_lock(battery_level=39)
+    assert HealthIssue("warning", "low battery (39%)") in lock.health_issues
+    assert lock.health_status == "warning"
+
+
+def test_battery_40_is_healthy():
+    lock = _make_lock(battery_level=40)
+    assert lock.health_issues == []
+    assert lock.health_status == "healthy"
+
+
+def test_stale_data_flags_unhealthy():
+    seven_hours_ago = datetime.now(timezone.utc) - timedelta(hours=7)
+    lock = _make_lock(status_datetime=seven_hours_ago)
+    msgs = [i.message for i in lock.health_issues]
+    assert any(m.startswith("data stale") for m in msgs)
+    assert lock.health_status == "unhealthy"
+
+
+def test_status_datetime_none_flags_unhealthy():
+    # The factory defaults status_datetime to "now" if not given; for this
+    # case we want None explicitly, so we construct from a base lock.
+    base = _make_lock()
+    lock = YaleLock(**{**base.__dict__, "status_datetime": None})
+    msgs = [i.message for i in lock.health_issues]
+    assert any(m.startswith("data stale") for m in msgs)
+    assert lock.health_status == "unhealthy"
+
+
+def test_multiple_issues_critical_wins():
+    seven_hours_ago = datetime.now(timezone.utc) - timedelta(hours=7)
+    lock = _make_lock(
+        lock_status=LockStatus.UNKNOWN,
+        battery_level=20,
+        status_datetime=seven_hours_ago,
+    )
+    severities = {i.severity for i in lock.health_issues}
+    assert "critical" in severities
+    assert lock.health_status == "unhealthy"
+    # All three downstream checks should fire (lock, battery, stale)
+    assert len(lock.health_issues) == 3

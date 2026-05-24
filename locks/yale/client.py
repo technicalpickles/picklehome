@@ -1,6 +1,6 @@
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 import aiohttp
@@ -11,6 +11,19 @@ from locks.yale.auth import DEFAULT_TOKEN_PATH, YALE_BRAND, load_access_token
 
 
 BridgeConnectivity = Literal["online", "offline"]
+
+HEALTH_BATTERY_WARNING  = 40
+HEALTH_BATTERY_CRITICAL = 25
+HEALTH_MAX_DATA_AGE     = timedelta(hours=6)
+
+HealthSeverity = Literal["warning", "critical"]
+HealthStatus = Literal["healthy", "warning", "unhealthy"]
+
+
+@dataclass
+class HealthIssue:
+    severity: HealthSeverity
+    message: str
 
 
 @dataclass
@@ -50,6 +63,44 @@ class YaleLock:
     @property
     def battery_valid(self) -> bool:
         return 0 <= self.battery_level <= 100
+
+    @property
+    def health_issues(self) -> list[HealthIssue]:
+        if self.bridge is None:
+            return [HealthIssue("critical", "no bridge")]
+        if self.bridge.connectivity != "online":
+            return [HealthIssue("critical", "bridge offline")]
+
+        issues: list[HealthIssue] = []
+
+        if self.lock_status not in (LockStatus.LOCKED, LockStatus.UNLOCKED):
+            issues.append(HealthIssue("critical", "lock unreachable"))
+
+        if not self.battery_valid:
+            issues.append(HealthIssue("critical", "battery unknown"))
+        elif self.battery_level < HEALTH_BATTERY_CRITICAL:
+            issues.append(HealthIssue("critical", f"low battery ({self.battery_level}%)"))
+        elif self.battery_level < HEALTH_BATTERY_WARNING:
+            issues.append(HealthIssue("warning", f"low battery ({self.battery_level}%)"))
+
+        if self.status_datetime is None:
+            issues.append(HealthIssue("critical", "data stale (unknown)"))
+        else:
+            age = datetime.now(timezone.utc) - self.status_datetime
+            if age > HEALTH_MAX_DATA_AGE:
+                hours = int(age.total_seconds() // 3600)
+                issues.append(HealthIssue("critical", f"data stale ({hours}h old)"))
+
+        return issues
+
+    @property
+    def health_status(self) -> HealthStatus:
+        issues = self.health_issues
+        if not issues:
+            return "healthy"
+        if any(i.severity == "critical" for i in issues):
+            return "unhealthy"
+        return "warning"
 
 
 def _parse_iso(s: str | None) -> datetime | None:
