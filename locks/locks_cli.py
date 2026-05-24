@@ -138,7 +138,14 @@ def _print_summary(locks: list[YaleLock]) -> None:
     unbridged = sum(1 for l in locks if l.bridge is None)
     batt_ok = sum(1 for l in locks if l.battery_valid and not l.is_stale)
 
+    healthy = sum(1 for l in locks if l.health_status == "healthy")
+    warning = sum(1 for l in locks if l.health_status == "warning")
+    unhealthy = sum(1 for l in locks if l.health_status == "unhealthy")
+
     print(_bold(f"Yale locks: {len(locks)} across {len(homes)} homes"))
+    print(f"  Health:    {_green(str(healthy)+' healthy')}, "
+          f"{_yellow(str(warning)+' warning')}, "
+          f"{_red(str(unhealthy)+' unhealthy')}")
     print(f"  Bridges:   {_green(str(online)+' online')}, "
           f"{_red(str(offline)+' offline')}, "
           f"{_yellow(str(unbridged)+' none')}")
