@@ -51,6 +51,12 @@ def _health_glyph(lock: YaleLock) -> str:
     return _red("✗")
 
 
+def _issue_glyph(severity: str) -> str:
+    if severity == "warning":
+        return _yellow("⚠")
+    return _red("✗")
+
+
 def _format_ago_short(dt: datetime | None) -> str:
     """Compact duration: '24m', '11d', '?'."""
     if dt is None:
@@ -174,6 +180,16 @@ def _print_home_section(home_name: str, locks: list[YaleLock]) -> None:
 
 def _print_detail(lock: YaleLock) -> None:
     print(_bold(f"{lock.house_name} > {lock.name}"))
+
+    status = lock.health_status
+    if status == "healthy":
+        print(f"  Health:    {_green('healthy')}")
+    else:
+        label = _yellow("WARNING") if status == "warning" else _red("UNHEALTHY")
+        print(f"  Health:    {label}")
+        for issue in lock.health_issues:
+            print(f"    {_issue_glyph(issue.severity)} {issue.message}")
+
     state = _lock_state_str(lock)
     if lock.is_stale:
         state += " (stale)"
@@ -204,6 +220,8 @@ def _print_detail(lock: YaleLock) -> None:
         print(f"    Mfg ID:    {b.mfg_id or 'unknown'}")
         print(f"    Last online:  {_format_ts(b.last_online)}")
         print(f"    Last offline: {_format_ts(b.last_offline)}")
+        if b.wifi_issue_at is not None:
+            print(f"    WiFi issue:   {_format_ts(b.wifi_issue_at)}")
     print()
 
 
