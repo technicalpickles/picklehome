@@ -31,3 +31,6 @@ tmp/
 # Park skill session handoffs
 .parkinglot/
 
+# Git worktrees (per-branch checkouts under .worktrees/<branch>/)
+.worktrees/
+
