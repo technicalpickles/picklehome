@@ -22,6 +22,7 @@ class BridgeStatus:
     model: str | None
     firmware: str | None
     mfg_id: str | None
+    wifi_issue_at: datetime | None
 
 
 @dataclass
@@ -66,6 +67,14 @@ def _parse_bridge(raw_bridge: dict | None) -> BridgeStatus | None:
     # Treat any non-"online" value as offline -- the API has been observed to
     # return only "online" or "offline", but be permissive about unknowns.
     connectivity: BridgeConnectivity = "online" if current == "online" else "offline"
+
+    enhanced = raw_bridge.get("enhancedStatus") or {}
+    wifi_issue_ms = enhanced.get("WifiModuleConnectionIssue")
+    wifi_issue_at = (
+        datetime.fromtimestamp(wifi_issue_ms / 1000, tz=timezone.utc)
+        if wifi_issue_ms else None
+    )
+
     return BridgeStatus(
         connectivity=connectivity,
         last_online=_parse_iso(status.get("lastOnline")),
@@ -73,6 +82,7 @@ def _parse_bridge(raw_bridge: dict | None) -> BridgeStatus | None:
         model=raw_bridge.get("deviceModel"),
         firmware=raw_bridge.get("firmwareVersion"),
         mfg_id=raw_bridge.get("mfgBridgeID"),
+        wifi_issue_at=wifi_issue_at,
     )
 
 
