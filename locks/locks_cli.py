@@ -42,6 +42,15 @@ def _bold(s: str) -> str:
     return f"\033[1m{s}\033[0m" if USE_COLOR else s
 
 
+def _health_glyph(lock: YaleLock) -> str:
+    status = lock.health_status
+    if status == "healthy":
+        return _green("✓")
+    if status == "warning":
+        return _yellow("⚠")
+    return _red("✗")
+
+
 def _format_ago_short(dt: datetime | None) -> str:
     """Compact duration: '24m', '11d', '?'."""
     if dt is None:
@@ -101,6 +110,7 @@ def _bridge_str(bridge: BridgeStatus | None) -> tuple[str, str]:
 
 
 def _format_one_line(lock: YaleLock, widths: dict) -> str:
+    glyph = _health_glyph(lock)
     name = lock.name.ljust(widths["name"])
     state = _lock_state_str(lock).ljust(widths["state"])
     door = _door_state_str(lock).ljust(widths["door"])
@@ -117,7 +127,7 @@ def _format_one_line(lock: YaleLock, widths: dict) -> str:
     else:
         bridge_cell = _red(bridge_cell)
 
-    line = f"  {name}  {state}  {door}  {battery}  {bridge_cell}  {since}"
+    line = f"  {glyph}  {name}  {state}  {door}  {battery}  {bridge_cell}  {since}"
     return _gray(line) if lock.is_stale else line
 
 
@@ -155,7 +165,7 @@ def _print_summary(locks: list[YaleLock]) -> None:
 
 def _print_home_section(home_name: str, locks: list[YaleLock]) -> None:
     print(_bold(home_name))
-    print("=" * len(home_name))
+    print("═" * len(home_name))
     widths = _compute_widths(locks)
     for lock in sorted(locks, key=lambda l: l.name):
         print(_format_one_line(lock, widths))
