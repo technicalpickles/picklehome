@@ -151,6 +151,41 @@ climate-check host="picklelab":
 climate-log host="picklelab" lines="10":
     ssh {{host}} "tail -n {{lines}} /srv/data/climate-auto-switch/run-log.jsonl | python3 -m json.tool --json-lines"
 
+# Deploy github-actions-runner to picklelab
+deploy-github-runner host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Copying .env to {{host}}"
+    mkdir -p tmp
+    scripts/service-env homelab/services/github-actions-runner/.env.vars > tmp/github-actions-runner.env
+    scp tmp/github-actions-runner.env {{host}}:/opt/homelab/homelab/services/github-actions-runner/.env
+    rm tmp/github-actions-runner.env
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/github-actions-runner/deploy.sh"
+
+# Tail github-actions-runner container logs from picklelab
+github-runner-logs host="picklelab":
+    ssh {{host}} "docker logs --tail 100 -f \$(docker ps -q --filter name=github-actions-runner)"
+
+# Show github-actions-runner systemd status and container info from picklelab
+github-runner-status host="picklelab":
+    ssh {{host}} "systemctl status github-actions-runner.service --no-pager && docker ps --filter name=github-actions-runner"
+
 # Deploy Vikunja to picklelab (idempotent: first setup or update)
 deploy-vikunja host="picklelab":
     #!/usr/bin/env bash
