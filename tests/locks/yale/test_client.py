@@ -178,6 +178,14 @@ def test_battery_24_is_critical():
     assert lock.health_status == "unhealthy"
 
 
+def test_battery_0_is_critical():
+    # Valid range edge: 0 is technically a valid reading (dead but reporting),
+    # distinct from "battery unknown" which fires only on out-of-range values.
+    lock = _make_lock(battery_level=0)
+    assert HealthIssue("critical", "low battery (0%)") in lock.health_issues
+    assert lock.health_status == "unhealthy"
+
+
 def test_battery_25_is_warning():
     lock = _make_lock(battery_level=25)
     assert HealthIssue("warning", "low battery (25%)") in lock.health_issues
