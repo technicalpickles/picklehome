@@ -115,7 +115,7 @@ Pruning runs automatically after each backup.
 
 ## Database Backups
 
-Services with PostgreSQL databases get logical dumps before the restic snapshot runs. Currently backed up: Vikunja and Baserow.
+Services with PostgreSQL databases get logical dumps before the restic snapshot runs. Currently dumped: Vikunja. (brineworks-server also runs Postgres but isn't dumped yet, per the [service registry](../services/README.md).)
 
 The dump process:
 

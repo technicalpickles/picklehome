@@ -15,7 +15,7 @@ Credentials are stored in 1Password (vault: `picklehome`, item: `BlueAir`) and i
 ```
 just blueair status [--json]                           # all managed devices
 just blueair discover                                  # find devices, create purifiers.yaml
-just blueair auth                                      # store credentials in Keychain
+just blueair auth                                      # credential setup guidance (1Password + .env)
 just blueair set <property> <value>                    # set property on all managed devices
 just blueair-set "Device Name" <property> <value>      # set property on one device
 ```
