@@ -81,6 +81,45 @@ just deploy-github-runner
 - **`A session for this runner already exists. Retrying until reconnected.`**: transient, happens if the container is recreated faster than GitHub expires the previous session. It self-heals in ~30s. Just wait.
 - **Runner shows `offline` right after a deploy**: give it ~30s to reconnect before worrying.
 
+## Adding a runner for another repo
+
+GitHub registers self-hosted runners at the **repo, org, or enterprise** level, never at the user-account level. `technicalpickles` is a user account, so each personal repo needs its own repo-scoped runner (a separate container). There is no "one runner for all my repos" unless you move repos into a GitHub org and use an org-level runner.
+
+### Option A: GitHub org (one runner, many repos)
+
+If you create a GitHub org and move repos into it, register one runner with `RUNNER_SCOPE=org` + `ORG_NAME=<org>`. Every repo in the org can then use it via `runs-on: [self-hosted, picklelab]`. Cleanest if you expect several repos; the cost is a one-time org migration.
+
+### Option B: one runner per repo on this host (no org)
+
+This service is currently hardcoded to pirpg. To add a second repo by copying:
+
+1. Duplicate `homelab/services/github-actions-runner/` to `.../github-actions-runner-<repo>/`.
+2. Retarget the copy:
+   - `compose.yaml`: unique `RUNNER_NAME`, repo-specific `LABELS` if you want per-repo routing, and a **distinct `runner-config` volume name** (else it collides with pirpg's). The Compose project name (dir name, or `COMPOSE_PROJECT_NAME`) namespaces the container + volumes.
+   - `.env.vars` + `.env.template`: repo-specific var names (e.g. `GITHUB_RUNNER_TOKEN_<REPO>`) so they don't clash with pirpg's global pair.
+   - `<service>.service`: new unit name, `Description`, and `WorkingDirectory`.
+   - `deploy.sh`: new `SERVICE_DIR`.
+   - `Justfile`: new `deploy-github-runner-<repo>` / `-logs` / `-status` recipes.
+3. New 1Password item (or new fields) for that repo's registration token + repo URL.
+4. Bootstrap exactly like pirpg (mint token -> 1Password -> `just dotenv` -> deploy).
+
+That's ~10-15 edits and easy to get subtly wrong (volume/env-var collisions, two units fighting).
+
+### Making Option B push-button (the refactor, when it's worth it)
+
+Convert this single service into a **systemd template unit** so each repo is one command:
+
+- `github-runner@.service` using `%i` for the instance (repo) name, with per-instance `WorkingDirectory`.
+- `compose.yaml` parameterized by env: `COMPOSE_PROJECT_NAME=github-runner-%i`, `RUNNER_NAME`, `REPO_URL`, per-instance volume.
+- Per-repo `.env` (one 1Password item per repo, or one item with per-repo fields).
+- `just deploy-github-runner repo=<name>` -> scp `.env` -> `systemctl enable --now github-runner@<name>`.
+
+Then repo #3, #4 are a single recipe call plus a fresh registration token. Roughly an hour to build the template. Not worth it for just one more repo; clearly worth it past two or three.
+
+### Resource ceiling
+
+Each runner is an always-on container, but idle runners just poll and cost almost nothing. The J3455 + 16 GB handles a handful. The real limit is **disk** (root has run around 9-10 GB free): each running job checks out the repo + dependencies into `_work`, so the failure mode is many runners building *simultaneously*, not many runners sitting idle. Watch `df -h /` if you add several.
+
 ## Security notes
 
 - **No `/var/run/docker.sock` mount.** The runner does not give CI jobs access to the host Docker daemon. pirpg's CI is Node/npm and doesn't need it. Mounting the socket would grant any job root-equivalent control of picklelab, so it's left off by default.
