@@ -73,6 +73,23 @@ class YaleLock:
         return 0 <= self.battery_level <= 100
 
     @property
+    def is_wedged(self) -> bool:
+        """Online bridge, but the lock's firmware hung and stopped answering BLE.
+
+        The tell is blank identity on an otherwise-online bridge: the lock
+        firmware reads as ``0.0.0`` (never read) and the battery is the ``-1``
+        "no reading" sentinel. A dead battery keeps its cached identity, so this
+        is distinct -- the fix is a power-cycle of the lock, not new batteries.
+        See locks/README.md findings.
+        """
+        return (
+            self.bridge is not None
+            and self.bridge.connectivity == "online"
+            and self.firmware_version.startswith("0.0.0")
+            and not self.battery_valid
+        )
+
+    @property
     def health_issues(self) -> list[HealthIssue]:
         if self.bridge is None:
             return [HealthIssue("critical", "no bridge")]
@@ -80,6 +97,8 @@ class YaleLock:
             return [HealthIssue("critical", _bridge_offline_label(
                 self.bridge, self.status_datetime
             ))]
+        if self.is_wedged:
+            return [HealthIssue("critical", "lock wedged (power-cycle)")]
 
         issues: list[HealthIssue] = []
 

@@ -70,6 +70,47 @@ To avoid future synchronized failure clusters, stagger battery replacements
 across locks in the same home by a few weeks rather than replacing them all
 at once.
 
+### "Online bridge + blank lock identity" means the lock wedged, not a dead battery
+
+The opposite-looking case from the one above, and the diagnosis is different.
+Here the bridge stays `"online"` to the cloud the whole time, but the lock
+itself has stopped answering it over BLE because the lock's firmware hung. A
+power-cycle of the *lock* clears it; the batteries are usually fine.
+
+The tell is in the lock's identity fields, which the cloud reads over BLE and
+caches separately from live status. A healthy or merely-stale lock retains its
+cached identity (firmware version, `hostLockInfo` serial/manufacturer, last
+battery voltage, projected `deathDate`). A wedged lock comes back blank:
+
+- `currentFirmwareVersion` starts with `0.0.0` (lock firmware never read)
+- `hostLockInfo` is all `"unknown"` / `0`
+- `battery` / `batteryInfo.level` is `-1` with no battery history at all
+  (no `infoUpdatedDate`, no `lastChangeVoltage`, no `deathDate`)
+- `batteryInfo.warningState` is `"none"` (it dropped off abruptly, never
+  recorded a graceful low-battery decline)
+- yet the `Bridge` is `operative: true`, `status.current == "online"`
+
+Observed live: a wedged lock reported 97% battery the instant it recovered, so
+the blank `-1` reading meant "no read", not "empty". Do not assume dead
+batteries from this state.
+
+Recovery (does not require the full app re-registration flow):
+
+1. Pull one battery, wait ~10s, reseat it.
+2. The lock reboots and announces "Welcome to Yale Living".
+3. Enter the master code followed by the gear button.
+4. It re-bonds to the bridge and reappears healthy in the app (and in
+   `just locks status`) within a minute, identity fields repopulated.
+
+The August/Yale app surfaces this as a "communication problem" and offers to
+walk you through re-registering (power-cycle + master code). The steps above
+are the short version of that flow; you rarely need to fully re-register.
+
+Note: `Calibrated: false` is **not** a signal here. Every lock on this account
+(Yale retrofit modules) reports `Calibrated: false`, including healthy ones.
+Compare against a known-good lock before treating any single field as the
+smoking gun.
+
 ### WiFi RSSI and SSID are not populated by the API
 
 The `wifiData` field on the raw lock detail payload is `null` on every lock

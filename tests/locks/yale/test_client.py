@@ -57,6 +57,7 @@ def _make_lock(
     lock_status: LockStatus = LockStatus.LOCKED,
     battery_level: int = 97,
     status_datetime=_NO_DATETIME,
+    firmware_version: str = "4.3.0-2.0.12",
 ) -> YaleLock:
     if status_datetime is _NO_DATETIME:
         status_datetime = datetime.now(timezone.utc)
@@ -73,7 +74,7 @@ def _make_lock(
         battery_level=battery_level,
         status_datetime=status_datetime,
         mac_address="00:00:00:00:00:00",
-        firmware_version="1.0.0",
+        firmware_version=firmware_version,
         model="AUG-MDY1",
         serial_number="TEST123",
         bridge=bridge,
@@ -188,6 +189,61 @@ def test_bridge_offline_reason_unknown_when_missing_timestamps():
         status_datetime=datetime.now(timezone.utc) - timedelta(days=1),
     )
     assert lock.bridge_offline_reason == "unknown"
+
+
+def _wedged_lock() -> YaleLock:
+    # Pantry Door pattern: bridge online, but the lock's firmware hung and it
+    # stopped answering over BLE. Identity comes back blank: firmware never
+    # read (0.0.0 prefix) and battery is the -1 "no reading" sentinel.
+    four_days_ago = datetime.now(timezone.utc) - timedelta(days=4)
+    return _make_lock(
+        lock_status=LockStatus.UNKNOWN,
+        battery_level=-1,
+        firmware_version="0.0.0-2.0.12",
+        status_datetime=four_days_ago,
+    )
+
+
+def test_wedged_lock_labels_wedged_and_short_circuits():
+    lock = _wedged_lock()
+    assert lock.is_wedged is True
+    assert lock.health_issues == [
+        HealthIssue("critical", "lock wedged (power-cycle)")
+    ]
+    assert lock.health_status == "unhealthy"
+
+
+def test_wedged_signature_requires_blank_firmware():
+    # Battery unreadable but firmware is real: the lock answered enough to
+    # report its identity, so it is not wedged -- fall through to the generic
+    # issues rather than mislabeling it.
+    lock = _make_lock(
+        lock_status=LockStatus.UNKNOWN,
+        battery_level=-1,
+        firmware_version="4.3.0-2.0.12",
+    )
+    assert lock.is_wedged is False
+    assert HealthIssue("critical", "lock wedged (power-cycle)") not in lock.health_issues
+    assert HealthIssue("critical", "battery unknown") in lock.health_issues
+
+
+def test_wedged_signature_requires_unreadable_battery():
+    # Firmware blank but battery reports a valid level: not the wedge pattern
+    # (a recovered lock repopulates firmware and battery together).
+    lock = _make_lock(battery_level=97, firmware_version="0.0.0-2.0.12")
+    assert lock.is_wedged is False
+
+
+def test_wedged_only_when_bridge_online():
+    # An offline bridge takes priority: the bridge-offline disambiguation
+    # owns that case, not the wedge label.
+    lock = _make_lock(
+        bridge=_make_bridge(connectivity="offline"),
+        battery_level=-1,
+        firmware_version="0.0.0-2.0.12",
+    )
+    assert lock.is_wedged is False
+    assert lock.health_issues == [HealthIssue("critical", "bridge offline")]
 
 
 def test_short_circuit_unbridged_with_low_battery():
