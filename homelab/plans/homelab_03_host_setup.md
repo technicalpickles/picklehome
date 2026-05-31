@@ -1,6 +1,8 @@
 # Host Setup
 
-_TODO: fill in post-install sections as the build progresses._
+Concrete steps to reproduce picklelab from bare metal: install media, Ubuntu Server install,
+and the post-install configuration (disk layout, SSH hardening, Docker, Tailscale, deploy
+access, and convenience tooling). Reflects the current host; update as the build changes.
 
 ---
 

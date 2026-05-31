@@ -22,7 +22,7 @@ When adding a new service:
 | [00 — Overview](plans/homelab_00_overview.md) | Mental entry point: goals, hardware, philosophy, constraints |
 | [01 — Plan](plans/homelab_01_plan.md) | Practical setup checklist: OS, disk layout, stack, directory conventions |
 | [02 — Architecture](plans/homelab_02_architecture.md) | Decision rationale: why Compose, why Ubuntu, why Tailscale, tradeoffs |
-| 03 — Host Setup | _TODO: concrete commands to reproduce the host from bare metal_ |
+| [03 — Host Setup](plans/homelab_03_host_setup.md) | Concrete commands to reproduce the host from bare metal (install, disk, SSH, Docker, Tailscale, deploy access) |
 | 04 — Services | _Service registry has graduated to [services/README.md](services/README.md). Plan retained as historical context._ |
 | [05 — Backup and Recovery](plans/homelab_05_backup_and_recovery.md) | Backup targets, tools, restore procedure |
 | [06 — Operations](plans/homelab_06_operations.md) | Runbook: deploy, restart, disk cleanup, reboot, troubleshooting |
@@ -30,134 +30,20 @@ When adding a new service:
 
 ## Services
 
-### vikunja
+Full deployment pattern, on-host paths, and a per-service registry (purpose, data location,
+access, env vars, backup status) live in **[services/README.md](services/README.md)**. Each
+service also has its own README with first-time setup and operations.
 
-Self-hosted task manager (Postgres + Vikunja). Accessible at `https://vikunja.<tailnet>.ts.net` over Tailscale Services. See [services/vikunja/README.md](services/vikunja/README.md) for full setup and API details. Data (database + file attachments) is backed up nightly by the [backup service](services/backup/README.md).
+| Service | What it is | Details |
+|---------|------------|---------|
+| vikunja | Self-hosted task manager (Postgres + Vikunja), Tailscale Services | [README](services/vikunja/README.md) |
+| climate-auto-switch | 15-min systemd timer running seasonal HVAC comfort switching | [README](services/climate-auto-switch/README.md) |
+| backup | Nightly restic backups of `/srv/data` with Postgres dumps (GFS retention) | [README](services/backup/README.md) |
+| obsidian-sync | Headless Obsidian Sync clients keeping vaults on-host for agent access | [README](services/obsidian-sync/README.md) |
+| brineworks-server | FastAPI PRM backend (contacts/interactions), Tailscale Services | [README](services/brineworks-server/README.md) |
+| taskchampion-sync | Self-hosted Taskwarrior sync server (client-side encryption) | [README](services/taskchampion-sync/README.md) |
+| github-actions-runner | Self-hosted GitHub Actions runner for the pirpg repo | [README](services/github-actions-runner/README.md) |
 
-**First-time setup (from Mac):**
-
-```bash
-just dotenv        # pull new secrets from 1Password (see service README for prereqs)
-just deploy-vikunja  # copies .env, configures tailscale serve, installs + starts systemd unit
-```
-
-**Deploy updates:**
-
-```bash
-just deploy-vikunja
-```
-
-**Logs:**
-
-```bash
-just vikunja-logs
-just vikunja-logs-follow
-```
-
----
-
-
-### climate-auto-switch
-
-Runs `climate comfort-switch auto` every 15 minutes via systemd timer. Checks outdoor temperature and switches between heat/cool comfort modes. No-op detection skips API writes when the mode hasn't changed. Runs as a Docker container with dependencies baked into the image. State (OAuth tokens, last run, run log) is backed up nightly by the [backup service](services/backup/README.md).
-
-**First-time setup (from Mac):**
-
-```bash
-# 1. Generate .env locally from 1Password
-just dotenv
-
-# 2. Seed the ecobee token file (one-time)
-just seed-climate-tokens
-
-# 3. Deploy (copies .env, builds image, installs systemd units, enables timer)
-just deploy-climate
-```
-
-**Deploy updates (from Mac):**
-
-```bash
-just deploy-climate
-```
-
-**Updating secrets:**
-
-```bash
-just dotenv
-just deploy-climate
-```
-
-**Manual trigger:**
-
-```bash
-ssh picklelab "sudo systemctl start climate-auto-switch.service"
-```
-
-**Monitoring:**
-
-```bash
-just climate-check             # last run state (mode, temps, thermostats)
-just climate-log               # recent run log (JSONL, last 10 entries)
-just climate-log lines=50      # more history
-```
-
-**Systemd logs:**
-
-```bash
-ssh picklelab "sudo journalctl -u climate-auto-switch.service -n 50"
-```
-
----
-
-### backup
-
-Nightly restic backups of `/srv/data` at 3am, with Postgres dumps for vikunja. GFS retention (7 daily, 4 weekly, 6 monthly). Runs as a dedicated `backup` system user. See [services/backup/README.md](services/backup/README.md) for what's captured, restore procedure, and future work (Synology, S3).
-
-**First-time setup (from Mac):**
-
-```bash
-# 1. Create "Restic Backup" item in 1Password (picklehome vault) with fields:
-#    repository (e.g. /srv/backups/restic), password (openssl rand -base64 32)
-
-just dotenv          # pull restic secrets
-just deploy-backup   # install restic, create user, set up ACLs, init repo, enable timer
-```
-
-**Operations:**
-
-```bash
-just backup-now          # manual trigger
-just backup-snapshots    # list snapshots
-just backup-status       # timer status + next run
-just backup-logs         # last 50 lines of service journal
-```
-
----
-
-### github-actions-runner
-
-Self-hosted GitHub Actions runner for the [pirpg](https://github.com/technicalpickles/pirpg) repo. GitHub-hosted runners are blocked on that private repo (account billing), so CI runs here instead. A `myoung34/github-runner` container polls GitHub over outbound HTTPS, so there's nothing to expose. Registers once and reuses stored credentials across reboots (config persisted in a Docker volume). See [services/github-actions-runner/README.md](services/github-actions-runner/README.md) for the auth model and re-bootstrap procedure.
-
-**First-time setup (from Mac):**
-
-```bash
-# 1. Mint a registration token and store it in the 1Password item
-#    "GitHub Actions Runner pirpg" (picklehome vault), field `token`:
-gh api -X POST repos/technicalpickles/pirpg/actions/runners/registration-token --jq .token
-
-just dotenv                  # pull the runner secrets from 1Password
-just deploy-github-runner    # copies .env, pulls image, installs + starts systemd unit
-```
-
-**Deploy updates:**
-
-```bash
-just deploy-github-runner
-```
-
-**Logs / status:**
-
-```bash
-just github-runner-logs
-just github-runner-status
-```
+All services deploy the same way from the Mac: `just dotenv` to refresh secrets, then
+`just deploy-<service>`. See the registry for the shared file layout and the per-service
+README for prerequisites and monitoring commands.
