@@ -5,11 +5,11 @@
 
 ## Motivation
 
-Tracy experiences WiFi problems across multiple devices, especially in her office. Existing tooling (`wifi-diag.py`, `unifi-wifi.py`) covers point-in-time metrics and AP stats, but lacks spatial context — the agent knows room names but not physical layout, adjacency, or obstructions. This experiment adds that spatial layer and validates whether it improves agent reasoning.
+Tracy experiences WiFi problems across multiple devices, especially in her office. Existing tooling (`wifi-diag.py`, `unifi-wifi.py`) covers point-in-time metrics and AP stats, but lacks spatial context: the agent knows room names but not physical layout, adjacency, or obstructions. This experiment adds that spatial layer and validates whether it improves agent reasoning.
 
-## Phase 1 — Spatial Foundation
+## Phase 1: Spatial Foundation
 
-1. Scan Tracy's office + path to nearest AP(s) in MagicPlan (current house — previous scan is for old house)
+1. Scan Tracy's office + path to nearest AP(s) in MagicPlan (current house, previous scan is for old house)
 2. Export floor plan image from MagicPlan
 3. Upload to UniFi floor plan feature; place all APs on it
 4. Add a text description of the layout to `network/TOPOLOGY.md`:
@@ -19,7 +19,7 @@ Tracy experiences WiFi problems across multiple devices, especially in her offic
 
 This gives the agent a persistent spatial model that carries across sessions.
 
-## Phase 2 — Baseline Measurement
+## Phase 2: Baseline Measurement
 
 Run diagnostics on Tracy's device and from the AP side:
 
@@ -41,7 +41,7 @@ If the above data doesn't clearly explain the issue, proceed to a NetSpot walk s
 
 **This is the gate for deciding whether NetSpot is worth purchasing.**
 
-## Phase 3 — Agent Analysis and Recommendations
+## Phase 3: Agent Analysis and Recommendations
 
 Open a new session, share the investigation file. With floor plan context in TOPOLOGY.md and the diagnostic snapshot, the agent will:
 
@@ -49,7 +49,7 @@ Open a new session, share the investigation file. With floor plan context in TOP
 2. Recommend specific changes (channel, transmit power, AP placement)
 3. Optionally execute changes via `just unifi-wifi set-channel` or `just unifi-api`
 
-## Phase 4 — Validation and Staleness Detection
+## Phase 4: Validation and Staleness Detection
 
 After any changes:
 

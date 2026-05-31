@@ -1,9 +1,9 @@
 # Investigation: AT&T → Cloudflare Peering Loss (2026-03)
 
-**Status:** Resolved ~2026-03-16 — cause of resolution unclear.
+**Status:** Resolved ~2026-03-16, cause of resolution unclear.
 **Period:** 2026-03-12 to ~2026-03-16.
 **Finding:** ~47% packet loss at `108.162.235.59` (AT&T AS7018 → Cloudflare AS13335 peering, Atlanta), affecting all Cloudflare-hosted sites and `1.1.1.1` DNS.
-**Resolution ambiguity:** Two things happened around the same time — AT&T may have fixed the peering session, and USG DNS was switched from `1.1.1.1` to `8.8.8.8`. Since `1.1.1.1` is Cloudflare-hosted and was also affected, the DNS switch may have masked the issue rather than the peering actually being fixed.
+**Resolution ambiguity:** Two things happened around the same time: AT&T may have fixed the peering session, and USG DNS was switched from `1.1.1.1` to `8.8.8.8`. Since `1.1.1.1` is Cloudflare-hosted and was also affected, the DNS switch may have masked the issue rather than the peering actually being fixed.
 **Outcome:** USG DNS permanently switched from `1.1.1.1` to `8.8.8.8` regardless.
 
 ---
@@ -12,7 +12,7 @@
 
 - **ISP:** AT&T Fiber, AS7018
 - **Public IP:** redacted (southeastern US AT&T)
-- **AT&T gateway (BGW):** on a private subnet — this is the fiber modem/ONT router
+- **AT&T gateway (BGW):** on a private subnet (this is the fiber modem/ONT router)
 - **USG (UniFi Security Gateway):** sits behind the BGW, doing double-NAT
 - **Client LAN:** behind USG, or directly on BGW subnet for diagnostics
 
@@ -45,13 +45,13 @@ Users experience timeouts and very slow page loads on:
 
 | Host | CDN | Status |
 |---|---|---|
-| `cfl.dropboxstatic.com` | Cloudflare `104.16.x.x` | BROKEN — 84% of requests never complete |
-| `chunk-composing.canva.com` | Cloudflare `104.16.x.x` | BROKEN — 3–7s TCP connect |
-| `static.canva.com` | Cloudflare `104.16.x.x` | BROKEN — TLS stalls 3s+ |
-| `claude.ai` | Cloudflare | BROKEN — challenge page hangs |
-| `fjord.dropboxstatic.com` | AWS CloudFront `3.161.x.x` | WORKING — 100% complete |
-| `dropbox.com` | Dropbox own infra | WORKING — 7ms connect |
-| `stillinfinite.notion.site` | Fastly `208.103.x.x` | Partial — initial page loads, JS assets hang |
+| `cfl.dropboxstatic.com` | Cloudflare `104.16.x.x` | BROKEN: 84% of requests never complete |
+| `chunk-composing.canva.com` | Cloudflare `104.16.x.x` | BROKEN: 3–7s TCP connect |
+| `static.canva.com` | Cloudflare `104.16.x.x` | BROKEN: TLS stalls 3s+ |
+| `claude.ai` | Cloudflare | BROKEN: challenge page hangs |
+| `fjord.dropboxstatic.com` | AWS CloudFront `3.161.x.x` | WORKING: 100% complete |
+| `dropbox.com` | Dropbox own infra | WORKING: 7ms connect |
+| `stillinfinite.notion.site` | Fastly `208.103.x.x` | Partial: initial page loads, JS assets hang |
 
 ### The Smoking Gun (Dropbox A/B)
 
@@ -68,8 +68,8 @@ Same company, same app, same domain suffix. Only variable is the CDN.
 2   107.223.196.1       ~2ms    (AT&T first public hop)
 3   76.239.207.188      ~2ms    (AT&T backbone)
 4   12.242.113.40       ~3ms    (AT&T backbone)
-5   [* * *]                     (silent — AT&T peering boundary)
-6   108.162.235.x      ~60ms   (Cloudflare backbone — PEERING HOP)
+5   [* * *]                     (silent, AT&T peering boundary)
+6   108.162.235.x      ~60ms   (Cloudflare backbone, PEERING HOP)
 7   104.16.x.x         ~59ms   (Cloudflare destination)
 ```
 
@@ -116,10 +116,10 @@ done; wait; cat network/diag-results/mtr/*.txt
 ```
 
 Targets:
-- `104.16.99.29`   — Cloudflare (cfl.dropboxstatic.com) — BROKEN
-- `3.161.193.123`  — CloudFront (fjord.dropboxstatic.com) — WORKING (control)
-- `104.16.102.112` — Cloudflare (static.canva.com) — BROKEN
-- `8.8.8.8`        — Google DNS — baseline
+- `104.16.99.29`   : Cloudflare (cfl.dropboxstatic.com), BROKEN
+- `3.161.193.123`  : CloudFront (fjord.dropboxstatic.com), WORKING (control)
+- `104.16.102.112` : Cloudflare (static.canva.com), BROKEN
+- `8.8.8.8`        : Google DNS, baseline
 
 ### From USG (SSH)
 
@@ -130,7 +130,7 @@ mtr --report --report-cycles 30 3.161.193.123
 ```
 
 Running from the USG eliminates all client-side variables.
-USG runs EdgeOS (Vyatta-based) — standard Linux networking tools available.
+USG runs EdgeOS (Vyatta-based); standard Linux networking tools available.
 
 ### Check AT&T BGW admin panel
 
@@ -160,7 +160,7 @@ Common AT&T setup with UniFi: search "AT&T BGW IP passthrough UniFi".
 
 ## mtr Results (captured 2026-03-15, directly connected to AT&T BGW)
 
-### Cloudflare — cfl.dropboxstatic.com (104.16.99.29)
+### Cloudflare: cfl.dropboxstatic.com (104.16.99.29)
 ```
 1  <AT&T BGW>        80.0%  ← ICMP rate-limiting on BGW, not real loss
 2  107.223.196.1      0.0%
@@ -171,19 +171,19 @@ Common AT&T setup with UniFi: search "AT&T BGW IP passthrough UniFi".
 7  104.16.99.29     46.7%  ← Cloudflare destination
 ```
 
-### Cloudflare — static.canva.com (104.16.102.112)
+### Cloudflare: static.canva.com (104.16.102.112)
 ```
 6  108.162.235.87   46.7%  ← same peering subnet, same loss
 7  104.16.102.112   46.7%
 ```
 
-### CloudFront — fjord.dropboxstatic.com (3.161.193.123) — CONTROL
+### CloudFront: fjord.dropboxstatic.com (3.161.193.123) (CONTROL)
 ```
-2-11  ???   (intermediate hops block ICMP — normal AWS behavior)
+2-11  ???   (intermediate hops block ICMP, normal AWS behavior)
 12    3.161.193.123   0.0%  ← destination reached with ZERO loss
 ```
 
-### Google — 8.8.8.8 — BASELINE
+### Google: 8.8.8.8 (BASELINE)
 ```
 9  8.8.8.8   0.0%  ← destination reached with ZERO loss
 ```

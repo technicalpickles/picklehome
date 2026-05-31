@@ -4,7 +4,7 @@
 
 **Goal:** Pull outdoor temperature from nearby public Ambient Weather Network stations and use it to automatically select between Comfort Cool (`smart1`) and Comfort Heat (`smart2`) in the Ecobee schedule.
 
-**Architecture:** A new `climate/ambient/` module wraps `aioambient.OpenAPI` (no API key needed — public data) to discover nearby outdoor stations and read their current `tempf`. A `weather.yaml` config stores chosen station MAC addresses and heat/cool thresholds. New CLI subcommands in `climate/sync.py` expose discovery, current-temp display, and comfort-mode switching (edit `schedule.yaml` → sync to Ecobee).
+**Architecture:** A new `climate/ambient/` module wraps `aioambient.OpenAPI` (no API key needed, public data) to discover nearby outdoor stations and read their current `tempf`. A `weather.yaml` config stores chosen station MAC addresses and heat/cool thresholds. New CLI subcommands in `climate/sync.py` expose discovery, current-temp display, and comfort-mode switching (edit `schedule.yaml` → sync to Ecobee).
 
 **Tech Stack:** `aioambient==2024.08.0`, `asyncio.run()` to bridge async→sync, `pyyaml`, existing `climate.sync` CLI pattern, `just` task runner.
 
@@ -34,8 +34,8 @@ HOME_LON={{ op://picklehome/Home/longitude }}
 **Step 3: Add to 1Password**
 
 In 1Password, open the `picklehome` vault → `Home` item. Add two fields:
-- `latitude` — your home latitude (decimal degrees, e.g. `33.7490`)
-- `longitude` — your home longitude (decimal degrees, e.g. `-84.3880`)
+- `latitude`: your home latitude (decimal degrees, e.g. `33.7490`)
+- `longitude`: your home longitude (decimal degrees, e.g. `-84.3880`)
 
 Use Google Maps: right-click your address → copy the coordinates shown.
 
@@ -107,7 +107,7 @@ def test_get_outdoor_temp_sync_returns_none_when_missing():
 uv run pytest tests/ambient/test_client.py -v
 ```
 
-Expected: `ImportError` or `ModuleNotFoundError` — `client` doesn't exist yet.
+Expected: `ImportError` or `ModuleNotFoundError`, `client` doesn't exist yet.
 
 **Step 4: Implement `climate/ambient/client.py`**
 
@@ -183,7 +183,7 @@ You'll fill in real MAC addresses after running `climate-weather-discover` (Task
 # Run 'just climate-weather-discover' to find nearby stations.
 # Run 'just climate-weather' to see current outdoor temp.
 
-# Stations to try in order — first responding station wins.
+# Stations to try in order: first responding station wins.
 stations: []
   # - mac: "AA:BB:CC:DD:EE:FF"
   #   name: "Neighbor's WS-2902"
@@ -399,7 +399,7 @@ Comfort mode: heat  → Comfort Heat (smart2)
 
 ```bash
 git add climate/sync.py Justfile
-git commit -m "feat: add weather command — outdoor temp and comfort mode recommendation"
+git commit -m "feat: add weather command: outdoor temp and comfort mode recommendation"
 ```
 
 ---
@@ -464,7 +464,7 @@ def test_apply_comfort_mode_preserves_comments():
 uv run pytest tests/test_comfort_switch.py -v
 ```
 
-Expected: `ImportError` — `_apply_comfort_mode` not defined yet.
+Expected: `ImportError`, `_apply_comfort_mode` not defined yet.
 
 **Step 3: Implement `_apply_comfort_mode` in `climate/sync.py`**
 
@@ -614,12 +614,12 @@ Update the Comfort mode semantics section to reflect that `Comfort Heat` is now 
 
 In the Comfort mode semantics section, change:
 ```
-- **Comfort Heat** — primary occupied mode when it's cold out. Target ~70°F by heating. Not currently in use (treating as warm season).
+- **Comfort Heat**: primary occupied mode when it's cold out. Target ~70°F by heating. Not currently in use (treating as warm season).
 ```
 To:
 ```
-- **Comfort Heat** — primary occupied mode when it's cold out. Target ~70°F by heating. Active when outdoor temp < 60°F.
-- **Comfort Cool** — primary occupied mode when it's warm out. Target ~70°F by cooling. Active when outdoor temp > 65°F.
+- **Comfort Heat**: primary occupied mode when it's cold out. Target ~70°F by heating. Active when outdoor temp < 60°F.
+- **Comfort Cool**: primary occupied mode when it's warm out. Target ~70°F by cooling. Active when outdoor temp > 65°F.
 ```
 
 Update the schedule tables to note the active mode is determined by `just climate-comfort-switch auto` based on outdoor temp from Ambient Weather Network stations.
@@ -638,4 +638,4 @@ git commit -m "docs: update hvac-spec to reflect outdoor-temp-driven comfort swi
 - `just climate-weather-discover` must be run before Task 4 Step 5 to get real MAC addresses.
 - The `auto` mode uses hysteresis: temps between 60–65°F don't force a switch, avoiding thrash around the threshold.
 - `aioambient` is async; we use `asyncio.run()` which is fine for CLI scripts (one call per run).
-- Station data is polled live on each CLI invocation — no caching needed for a manual tool.
+- Station data is polled live on each CLI invocation, no caching needed for a manual tool.

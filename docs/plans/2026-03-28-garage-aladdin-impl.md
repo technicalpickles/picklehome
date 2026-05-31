@@ -496,7 +496,7 @@ Argparse-based CLI following the `lighting/hue_cli.py` pattern: subcommands for 
 ```python
 #!/usr/bin/env python3
 """
-garage_cli.py — Aladdin Connect garage door CLI
+garage_cli.py: Aladdin Connect garage door CLI
 
 Usage:
     uv run python garage/garage_cli.py auth      # login and save tokens

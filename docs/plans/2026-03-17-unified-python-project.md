@@ -97,7 +97,7 @@ Create `network/__init__.py` as an empty file (just the package marker):
 ```python
 ```
 
-(Empty file — hatchling needs it to recognize `network/` as an installable package.)
+(Empty file; hatchling needs it to recognize `network/` as an installable package.)
 
 **Step 2: Run uv sync to install updated deps and lock**
 
@@ -158,14 +158,14 @@ def session() -> requests.Session:
     """Return an authenticated requests.Session for the UniFi CloudKey API."""
     api_key = os.environ.get("UNIFI_API_KEY")
     if not api_key:
-        sys.exit("UNIFI_API_KEY not set — add it to .env")
+        sys.exit("UNIFI_API_KEY not set: add it to .env")
     s = requests.Session()
     s.headers.update({"X-API-Key": api_key, "Accept": "application/json"})
     s.verify = False
     return s
 ```
 
-Note: `CLOUDKEY`, `LEGACY`, and `BASE` constants are also duplicated across scripts — centralizing them here avoids three separate definitions.
+Note: `CLOUDKEY`, `LEGACY`, and `BASE` constants are also duplicated across scripts; centralizing them here avoids three separate definitions.
 
 **Step 2: Update network/unifi-api.py**
 
@@ -193,7 +193,7 @@ LEGACY = f"{CLOUDKEY}/proxy/network/api/s/default"
 def session():
     api_key = os.environ.get("UNIFI_API_KEY")
     if not api_key:
-        sys.exit("UNIFI_API_KEY not set — add it to .env")
+        sys.exit("UNIFI_API_KEY not set: add it to .env")
     s = requests.Session()
     s.headers.update({"X-API-Key": api_key, "Accept": "application/json"})
     s.verify = False
@@ -231,7 +231,7 @@ LEGACY = f"{CLOUDKEY}/proxy/network/api/s/default"
 def session():
     api_key = os.environ.get("UNIFI_API_KEY")
     if not api_key:
-        sys.exit("UNIFI_API_KEY not set — add it to .env")
+        sys.exit("UNIFI_API_KEY not set: add it to .env")
     s = requests.Session()
     s.headers.update({"X-API-Key": api_key, "Accept": "application/json"})
     s.verify = False
@@ -244,11 +244,11 @@ Add to imports:
 from network.unifi import CLOUDKEY, LEGACY, session
 ```
 
-Check `unifi-wifi.py` for any use of `BASE` (the integration/v1 URL) — if present, also import `BASE` from `network.unifi`.
+Check `unifi-wifi.py` for any use of `BASE` (the integration/v1 URL); if present, also import `BASE` from `network.unifi`.
 
 **Step 4: Update network/usg.py**
 
-Same pattern. `usg.py` uses both `CLOUDKEY`, `BASE`, and `LEGACY` — check which are referenced after the session() block and import accordingly.
+Same pattern. `usg.py` uses both `CLOUDKEY`, `BASE`, and `LEGACY`; check which are referenced after the session() block and import accordingly.
 
 Find and remove the local `session()` + constants block, add:
 
@@ -276,7 +276,7 @@ git commit -m "refactor: extract shared UniFi auth into network/unifi.py"
 
 ---
 
-### Task 4: Update Justfile — drop --with flags
+### Task 4: Update Justfile: drop --with flags
 
 Now that all deps are in the lockfile and installed by `uv sync`, the `--with` flags in the Justfile are redundant and should be removed. Scripts run as `uv run <script>` and get all deps from the venv.
 
@@ -317,7 +317,7 @@ unifi-api *ARGS:
     uv run network/unifi-api.py {{ARGS}}
 ```
 
-Also check for `bgw.py`, `profile.py`, `resolve.py`, `snapshot.py` recipes — add them if missing or update if present.
+Also check for `bgw.py`, `profile.py`, `resolve.py`, `snapshot.py` recipes; add them if missing or update if present.
 
 **Step 2: Verify just --list still shows all expected tasks**
 
@@ -381,12 +381,12 @@ git commit -m "docs: update network/CLAUDE.md to reflect unified dep management"
 
 After all tasks complete:
 
-- [ ] `python3 -c "import tomllib; tomllib.load(open('pyproject.toml','rb'))"` — valid TOML
-- [ ] `uv sync` — exits 0, lockfile updated
-- [ ] `uv run python -c "import network; import climate"` — both packages importable
-- [ ] `just --list` — all expected tasks present
-- [ ] `just climate-status` — climate scripts still work
-- [ ] `just unifi-api get /stat/site` — UniFi auth via shared module works
-- [ ] `just unifi-wifi aps` — UniFi WiFi via shared module works
-- [ ] `just network-status` — ISP status runs
-- [ ] `just wifi-diag --no-trace --no-speed` — quick WiFi check runs
+- [ ] `python3 -c "import tomllib; tomllib.load(open('pyproject.toml','rb'))"`: valid TOML
+- [ ] `uv sync`: exits 0, lockfile updated
+- [ ] `uv run python -c "import network; import climate"`: both packages importable
+- [ ] `just --list`: all expected tasks present
+- [ ] `just climate-status`: climate scripts still work
+- [ ] `just unifi-api get /stat/site`: UniFi auth via shared module works
+- [ ] `just unifi-wifi aps`: UniFi WiFi via shared module works
+- [ ] `just network-status`: ISP status runs
+- [ ] `just wifi-diag --no-trace --no-speed`: quick WiFi check runs

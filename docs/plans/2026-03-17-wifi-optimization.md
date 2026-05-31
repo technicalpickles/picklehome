@@ -4,15 +4,15 @@
 
 **Goal:** Disable redundant AT&T BGW WiFi radio, re-scan to validate channel plan, then add read-only BGW WiFi status to `bgw.py`.
 
-**Architecture:** The BGW at 192.168.8.254 has its own WiFi radio which is redundant (all devices use UniFi APs). Its 2.4GHz broadcast on ch 1 at -11 dBm is the strongest interferer on that channel, directly impacting Josh Office and Tracy Office APs. Disabling it removes the interference, then we re-evaluate the 2.4GHz channel plan. The BGW exposes WiFi config via CGI endpoints (`.ha` pages) at `http://192.168.8.254/cgi-bin/` — we'll add a read-only `wifi` subcommand to `bgw.py` to surface that state.
+**Architecture:** The BGW at 192.168.8.254 has its own WiFi radio which is redundant (all devices use UniFi APs). Its 2.4GHz broadcast on ch 1 at -11 dBm is the strongest interferer on that channel, directly impacting Josh Office and Tracy Office APs. Disabling it removes the interference, then we re-evaluate the 2.4GHz channel plan. The BGW exposes WiFi config via CGI endpoints (`.ha` pages) at `http://192.168.8.254/cgi-bin/`. We'll add a read-only `wifi` subcommand to `bgw.py` to surface that state.
 
 **Tech Stack:** Python, `requests`, `bgw.py` CGI scraping pattern (same as `fiber`/`broadband` commands)
 
 ## BGW Access Model (from exploration 2026-03-17)
 
 The BGW exposes two tiers:
-- **`home.ha`** — no auth required. Shows WiFi radio status, SSID names, enabled/disabled state, device list. Use this for read-only `bgw.py wifi`.
-- **`wconfig_unified.ha`** — requires BGW access code (device label password, cookies needed). Use for any future config changes.
+- **`home.ha`:** no auth required. Shows WiFi radio status, SSID names, enabled/disabled state, device list. Use this for read-only `bgw.py wifi`.
+- **`wconfig_unified.ha`:** requires BGW access code (device label password, cookies needed). Use for any future config changes.
 
 Known CGI endpoints (from `home.ha` nav):
 ```
@@ -46,7 +46,7 @@ WiFi status fields available in `home.ha` (no auth):
 ### 2.4GHz
 | AP | Channel | Notes |
 |---|---|---|
-| Josh Office | 1 | ATTt6kgiKH at **-11 dBm** — our own BGW |
+| Josh Office | 1 | ATTt6kgiKH at **-11 dBm** (our own BGW) |
 | Tracy Office | 1 | Same interference (moved from ch 11 yesterday) |
 | Living Room | 6 | Improved overnight (-9 → -63 dBm strongest) |
 | Porch | 11 | 183 neighbors, strongest -35 dBm |
@@ -55,7 +55,7 @@ WiFi status fields available in `home.ha` (no auth):
 
 ## Task 1: Disable BGW WiFi (manual)
 
-**Files:** None — web UI only
+**Files:** None: web UI only
 
 **Step 1: Open BGW admin UI**
 
@@ -63,7 +63,7 @@ Navigate to `http://192.168.8.254` in a browser on the LAN.
 
 **Step 2: Disable WiFi radios**
 
-Home Network → Wi-Fi (or similar — BGW UI varies by firmware):
+Home Network → Wi-Fi (or similar, BGW UI varies by firmware):
 - Turn off **2.4 GHz** radio
 - Turn off **5 GHz** radio (if present)
 - Save / Apply
@@ -80,7 +80,7 @@ Expected: `ATTt6kgiKH` no longer appears in 2.4 GHz neighbors. Ch 1 strongest ne
 
 ## Task 2: Re-evaluate 2.4GHz channel plan post-BGW-disable
 
-**Files:** None — observation only
+**Files:** None: observation only
 
 **Step 1: Run AP stats to see current retries/satisfaction**
 
@@ -102,7 +102,7 @@ If ch 6 is now clearly the cleanest of the three non-overlapping options, consid
 
 ## Task 3: Explore BGW WiFi CGI endpoint ✓ DONE
 
-**Findings:** `home.ha` is the right endpoint — no auth, shows WiFi radio status directly. The HTML structure differs from `fiber`/`broadband` (uses free-form text/table, not strict `<th><td>` pairs). Use Playwright to render and scrape the visible text. See BGW Access Model section above.
+**Findings:** `home.ha` is the right endpoint: no auth, shows WiFi radio status directly. The HTML structure differs from `fiber`/`broadband` (uses free-form text/table, not strict `<th><td>` pairs). Use Playwright to render and scrape the visible text. See BGW Access Model section above.
 
 ---
 
@@ -114,7 +114,7 @@ If ch 6 is now clearly the cleanest of the three non-overlapping options, consid
 
 **Step 1: Add `cmd_wifi()` function**
 
-Follow the same pattern as `cmd_fiber()` — fetch the CGI page, parse fields, print structured output. Fields to surface:
+Follow the same pattern as `cmd_fiber()`: fetch the CGI page, parse fields, print structured output. Fields to surface:
 - 2.4 GHz radio: enabled/disabled, SSID, channel, tx power (if available)
 - 5 GHz radio: same
 - Any guest network state
@@ -164,7 +164,7 @@ just bgw-wifi
 uv run --with requests network/bgw.py wifi
 ```
 
-Expected: prints BGW WiFi radio state — useful to confirm the radio is actually disabled after Task 1.
+Expected: prints BGW WiFi radio state, useful to confirm the radio is actually disabled after Task 1.
 
 **Step 5: Update CLAUDE.md**
 
@@ -174,7 +174,7 @@ Add `wifi` to the `bgw.py` command list in `network/CLAUDE.md`.
 
 ## Task 5: Post-optimization RF re-scan and channel review
 
-**Files:** None — observation only
+**Files:** None: observation only
 
 After BGW WiFi is disabled and `bgw.py wifi` confirms it, run a full re-scan:
 
@@ -186,14 +186,14 @@ uv run --with requests --with python-dotenv network/unifi-wifi.py clients
 
 Review:
 - Has ch 1 2.4GHz interference dropped? Check Josh Office and Tracy Office retries.
-- Porch 5GHz ch 48 (-12 dBm neighbor) — if still present, consider moving Porch to a DFS channel or accept it (Porch has 0–1 clients typically).
-- Living Room 5GHz ch 149 — 24 neighbors at -80 dBm is distant, likely fine.
+- Porch 5GHz ch 48 (-12 dBm neighbor): if still present, consider moving Porch to a DFS channel or accept it (Porch has 0–1 clients typically).
+- Living Room 5GHz ch 149: 24 neighbors at -80 dBm is distant, likely fine.
 - Check satisfaction scores across all APs vs. pre-optimization baseline.
 
 ---
 
 ## Open Questions
 
-- **Porch 5GHz ch 48 strong neighbor (-12 dBm):** Appeared overnight. May be a neighbor's newly placed router. Worth monitoring — if it persists, DFS is more justified for Porch (it has few clients and is outdoors, less disruptive if radar kicks it).
+- **Porch 5GHz ch 48 strong neighbor (-12 dBm):** Appeared overnight. May be a neighbor's newly placed router. Worth monitoring. If it persists, DFS is more justified for Porch (it has few clients and is outdoors, less disruptive if radar kicks it).
 - **Tracy Office 5GHz ch 44 (75 neighbors):** No better non-DFS option. Satisfaction 99, so leave it unless it degrades.
-- **`connect` device identity:** 4 Google-OUI devices named "connect" — 1 confirmed outdoor camera (Living Room AP), other 3 unknown. Low traffic suggests not cameras. Identify by cross-referencing UniFi DHCP history or physically checking IPs.
+- **`connect` device identity:** 4 Google-OUI devices named "connect": 1 confirmed outdoor camera (Living Room AP), other 3 unknown. Low traffic suggests not cameras. Identify by cross-referencing UniFi DHCP history or physically checking IPs.

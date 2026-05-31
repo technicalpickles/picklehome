@@ -15,15 +15,15 @@
 ## File Structure
 
 **Modified:**
-- `locks/yale/client.py` — add `HealthIssue` dataclass, health thresholds, `wifi_issue_at` field on `BridgeStatus`, `_parse_bridge` capture, and two new `@property` methods on `YaleLock`
-- `locks/locks_cli.py` — add Health line to summary header, health glyph column to per-home table, Health block + WiFi issue line to detail view, `═` underline fix
+- `locks/yale/client.py`: add `HealthIssue` dataclass, health thresholds, `wifi_issue_at` field on `BridgeStatus`, `_parse_bridge` capture, and two new `@property` methods on `YaleLock`
+- `locks/locks_cli.py`: add Health line to summary header, health glyph column to per-home table, Health block + WiFi issue line to detail view, `═` underline fix
 
 **Created:**
 - `tests/locks/__init__.py`
 - `tests/locks/yale/__init__.py`
-- `tests/locks/yale/test_client.py` — tests for `_parse_bridge` (WiFi capture) and `YaleLock.health_issues` / `health_status`
+- `tests/locks/yale/test_client.py`: tests for `_parse_bridge` (WiFi capture) and `YaleLock.health_issues` / `health_status`
 
-CLI changes are not unit-tested (per project convention — string formatting has no logic). They're validated by running `just locks status` against the live account.
+CLI changes are not unit-tested (per project convention, string formatting has no logic). They're validated by running `just locks status` against the live account.
 
 ---
 
@@ -81,7 +81,7 @@ def test_parse_bridge_no_wifi_issue():
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `uv run pytest tests/locks/yale/test_client.py -v`
-Expected: FAIL — `BridgeStatus.__init__() got an unexpected keyword argument 'wifi_issue_at'` or AttributeError on `wifi_issue_at`.
+Expected: FAIL, `BridgeStatus.__init__() got an unexpected keyword argument 'wifi_issue_at'` or AttributeError on `wifi_issue_at`.
 
 - [ ] **Step 4: Add `wifi_issue_at` field to `BridgeStatus`**
 
@@ -226,7 +226,7 @@ def test_healthy_lock_has_no_issues():
 - [ ] **Step 2: Run to verify the test fails**
 
 Run: `uv run pytest tests/locks/yale/test_client.py::test_healthy_lock_has_no_issues -v`
-Expected: FAIL — `ImportError: cannot import name 'HealthIssue'` or `AttributeError: 'YaleLock' object has no attribute 'health_issues'`.
+Expected: FAIL, `ImportError: cannot import name 'HealthIssue'` or `AttributeError: 'YaleLock' object has no attribute 'health_issues'`.
 
 - [ ] **Step 3: Add `HealthIssue` dataclass and thresholds**
 
@@ -242,7 +242,7 @@ to:
 from datetime import datetime, timedelta, timezone
 ```
 
-The `Literal` import also needs to be added — replace the existing `from typing import Literal` line if present, or add it under the other imports:
+The `Literal` import also needs to be added. Replace the existing `from typing import Literal` line if present, or add it under the other imports:
 
 ```python
 from typing import Literal
@@ -569,7 +569,7 @@ def _format_one_line(lock: YaleLock, widths: dict) -> str:
     return _gray(line) if lock.is_stale else line
 ```
 
-(`_compute_widths` does not need to change — the glyph is always one display cell.)
+(`_compute_widths` does not need to change, the glyph is always one display cell.)
 
 - [ ] **Step 3: Fix home-name underline character**
 
@@ -690,7 +690,7 @@ Expected: `Health: WARNING` (yellow) with `⚠ low battery (31%)` listed.
 
 - [ ] **Step 6: Run against a bridge that has a WiFi issue logged**
 
-Run: `just locks status storage` (8 Hacker St Storage Door — its bridge had `WifiModuleConnectionIssue` ~92 days ago)
+Run: `just locks status storage` (8 Hacker St Storage Door, its bridge had `WifiModuleConnectionIssue` ~92 days ago)
 Expected: in the `Bridge:` block, a new `WiFi issue:` line appears with the timestamp.
 
 - [ ] **Step 7: Commit**

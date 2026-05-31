@@ -1,8 +1,8 @@
-# BlueAir Purifier Integration — Implementation Plan
+# BlueAir Purifier Integration: Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add read-only BlueAir air purifier CLI to `climate/blueair/` — auth, device discovery, and status display for the Blue Pure 411i Max.
+**Goal:** Add read-only BlueAir air purifier CLI to `climate/blueair/`: auth, device discovery, and status display for the Blue Pure 411i Max.
 
 **Architecture:** Mirrors the ecobee pattern: keychain auth, YAML device registry, async client wrapper, status formatter, argparse CLI. The `blueair-api` library handles all Gigya/AWS auth and API calls; we wrap it thinly.
 
@@ -55,7 +55,7 @@ git commit -m "feat(climate): add blueair-api dependency for purifier integratio
 
 ---
 
-### Task 2: Auth module — keychain credential storage
+### Task 2: Auth module: keychain credential storage
 
 **Files:**
 - Create: `climate/blueair/__init__.py`
@@ -122,7 +122,7 @@ def test_get_credentials_missing_raises(mock_keyring):
 **Step 3: Run test to verify it fails**
 
 Run: `uv run pytest tests/climate/blueair/test_auth.py -v`
-Expected: FAIL (ImportError — module doesn't exist yet)
+Expected: FAIL (ImportError, module doesn't exist yet)
 
 **Step 4: Write implementation**
 
@@ -165,7 +165,7 @@ git commit -m "feat(blueair): auth module with keychain credential storage"
 
 ---
 
-### Task 3: Device registry — YAML loader
+### Task 3: Device registry: YAML loader
 
 **Files:**
 - Create: `climate/blueair/devices.py`
@@ -280,7 +280,7 @@ git commit -m "feat(blueair): device registry YAML loader"
 
 ---
 
-### Task 4: Client wrapper — async API interaction
+### Task 4: Client wrapper: async API interaction
 
 **Files:**
 - Create: `climate/blueair/client.py`
@@ -434,7 +434,7 @@ async def get_device_status(
     region: str,
     managed_devices: list[tuple[str, str]],
 ) -> tuple[list[dict], HttpAwsBlueair]:
-    """Fetch status for managed devices. Returns (statuses, api) — caller should clean up api."""
+    """Fetch status for managed devices. Returns (statuses, api). Caller should clean up api."""
     api, all_devices = await get_aws_devices(
         username=username, password=password, region=region
     )
@@ -461,7 +461,7 @@ git commit -m "feat(blueair): async client wrapper for device discovery and stat
 
 ---
 
-### Task 5: Status formatter — human-readable output
+### Task 5: Status formatter: human-readable output
 
 **Files:**
 - Create: `climate/blueair/status.py`
@@ -672,7 +672,7 @@ git commit -m "feat(blueair): status formatter for human-readable purifier outpu
 
 **Files:**
 - Create: `climate/blueair_cli.py`
-- Create: `climate/blueair/__main__.py` (for `python -m climate.blueair_cli` isn't a package — we use `climate/blueair_cli.py` directly, but also support `-m`)
+- Create: `climate/blueair/__main__.py` (for `python -m climate.blueair_cli` isn't a package, we use `climate/blueair_cli.py` directly, but also support `-m`)
 
 **Step 1: Write CLI**
 
@@ -752,13 +752,13 @@ def cmd_discover(args) -> None:
 
     purifiers_path = Path(args.purifiers)
     if purifiers_path.exists():
-        print(f"Registry exists at {purifiers_path} — not overwriting.")
+        print(f"Registry exists at {purifiers_path}. Not overwriting.")
         print("Edit it manually to add/remove devices.")
     else:
         with open(purifiers_path, "w") as f:
             f.write("# climate/config/purifiers.yaml\n")
-            f.write("# managed: true  — included in status and automation\n")
-            f.write("# managed: false — registered but excluded\n\n")
+            f.write("# managed: true  = included in status and automation\n")
+            f.write("# managed: false = registered but excluded\n\n")
             yaml.dump(purifiers_data, f, default_flow_style=False, sort_keys=False)
         print(f"Wrote device registry to {purifiers_path}")
 
@@ -906,7 +906,7 @@ git commit -m "feat(blueair): Justfile tasks and test package init"
 
 ---
 
-### Task 8: Manual smoke test — auth + discover + status
+### Task 8: Manual smoke test: auth + discover + status
 
 This is the live validation. Requires real BlueAir credentials.
 

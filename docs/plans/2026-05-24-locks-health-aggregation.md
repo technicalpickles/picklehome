@@ -9,16 +9,16 @@ Status: design
 
 We want two surfaces:
 
-1. **Glance view** — every lock with a health verdict, scannable at a glance
-2. **Diagnostic view** — per-lock breakdown of *why* an unhealthy lock is unhealthy
+1. **Glance view**: every lock with a health verdict, scannable at a glance
+2. **Diagnostic view**: per-lock breakdown of *why* an unhealthy lock is unhealthy
 
 ## Health model
 
 A lock is evaluated against five checks. Each failed check produces a `HealthIssue` with a severity. The aggregate `health_status` is:
 
-- `healthy` — no issues
-- `warning` — only warning-level issues
-- `unhealthy` — any critical issue (critical trumps warning)
+- `healthy`: no issues
+- `warning`: only warning-level issues
+- `unhealthy`: any critical issue (critical trumps warning)
 
 ### Checks
 
@@ -34,7 +34,7 @@ A lock is evaluated against five checks. Each failed check produces a `HealthIss
 
 ### Short-circuit semantics
 
-When a deep cause is present, downstream symptoms it would cause aren't actionable info — they're noise.
+When a deep cause is present, downstream symptoms it would cause aren't actionable info, they're noise.
 
 - `bridge is None` → return `[HealthIssue("critical", "no bridge")]` only. Battery and lock-state checks are skipped.
 - `bridge.connectivity != "online"` → return `[HealthIssue("critical", "bridge offline")]` only. Same reason.
@@ -45,7 +45,7 @@ A lock can therefore have multiple issues (e.g. `lock unreachable` + `low batter
 ### Why these thresholds
 
 - **Battery 40% warning / 25% critical**: Yale's own app surfaces low-battery warnings around 30%; bracketing it lets us warn slightly earlier and escalate slightly later, giving a clear "replace soon" vs "replace now" signal.
-- **Data age 6h**: empirical observation shows healthy bridges update lock data on a ~30-minute cadence. 6h is ~12x normal — large headroom against false positives, while still catching the "bridge online but BLE link silently dead" case. Provisional; revisit once we have alerting data.
+- **Data age 6h**: empirical observation shows healthy bridges update lock data on a ~30-minute cadence. 6h is ~12x normal, large headroom against false positives, while still catching the "bridge online but BLE link silently dead" case. Provisional; revisit once we have alerting data.
 - **`WifiModuleConnectionIssue`**: captured for diagnostic display (Yale tells us when the bridge's WiFi flapped), but **not** a health gate in v1. The signal is real but low-rate and we don't yet know how predictive it is.
 
 ## Implementation
@@ -107,7 +107,7 @@ Pattern matches the existing `is_stale` and `battery_valid` properties (computed
 
 ### CLI display (`locks/locks_cli.py`)
 
-**Summary header** — add one line above existing breakdowns:
+**Summary header**: add one line above existing breakdowns:
 
 ```
 Yale locks: 7 across 2 homes
@@ -116,7 +116,7 @@ Yale locks: 7 across 2 homes
   Batteries: 3/7 reporting (rest stale or unknown)
 ```
 
-**Per-home table** — leading status glyph column, existing columns retained:
+**Per-home table**: leading status glyph column, existing columns retained:
 
 ```
 2108 Marann Dr NE
@@ -130,10 +130,10 @@ Yale locks: 7 across 2 homes
 
 - `✓` green / `⚠` yellow / `✗` red using existing `_green`/`_yellow`/`_red` helpers
 - Glyph at the start of the row so the eye lands consistently
-- Existing gray-when-stale treatment stays — orthogonal to health
+- Existing gray-when-stale treatment stays, orthogonal to health
 - Home-name underline switches from `=` to `═` (U+2550) so the line renders continuously across all monospace fonts
 
-**Detail view** — add a Health block at the top of `_print_detail`:
+**Detail view**: add a Health block at the top of `_print_detail`:
 
 ```
 2108 Marann Dr NE > Pantry Door
@@ -176,26 +176,26 @@ Snapshot taken 2026-05-24 against the live Yale account:
 | Lock | Bridge | Lock state | Battery | Data age | Verdict | Issues |
 |---|---|---|---|---|---|---|
 | Front Door (Marann) | online | unlocked | 31% | 34m | warning | low battery (31%) |
-| Office Door | online | locked | 97% | 33m | healthy | — |
+| Office Door | online | locked | 97% | 33m | healthy | n/a |
 | Basement Door | online | unknown | 97% | 34m | unhealthy | lock unreachable |
 | Pantry Door | online | unknown | -100% | 34m | unhealthy | lock unreachable, battery unknown |
-| Garage Side Door | (none) | — | — | — | unhealthy | no bridge |
-| Front Door (8 Hacker) | offline | — | — | — | unhealthy | bridge offline |
-| Storage Door (8 Hacker) | offline | — | — | — | unhealthy | bridge offline |
+| Garage Side Door | (none) | n/a | n/a | n/a | unhealthy | no bridge |
+| Front Door (8 Hacker) | offline | n/a | n/a | n/a | unhealthy | bridge offline |
+| Storage Door (8 Hacker) | offline | n/a | n/a | n/a | unhealthy | bridge offline |
 
 Aggregate: **1 healthy / 1 warning / 5 unhealthy**.
 
 ### Observations from validation
 
 - All seven `lock_status_datetime` values cluster at 33-34 minutes. This strongly suggests Yale's API updates this field on a polling cadence, not per-lock telemetry. Implication: staleness check effectively asks "did Yale's poller skip this lock for hours," which is still a useful signal.
-- Two locks at Marann (Pantry, Basement) show `lock_status=unknown` — both BLE links are intermittent. Same hardware generation (78:9C:85:1x MAC prefix). Worth tracking as a separate diagnostic thread, not addressed by this design.
-- `WifiModuleConnectionIssue` ages range from 92d to 387d — low-rate event, confirming it's not viable as a real-time health gate.
+- Two locks at Marann (Pantry, Basement) show `lock_status=unknown`; both BLE links are intermittent. Same hardware generation (78:9C:85:1x MAC prefix). Worth tracking as a separate diagnostic thread, not addressed by this design.
+- `WifiModuleConnectionIssue` ages range from 92d to 387d, a low-rate event, confirming it's not viable as a real-time health gate.
 
 ## Testing
 
 Tests live in `tests/locks/yale/test_client.py` (mirrors source layout per project convention; `tests/locks/` is created).
 
-All tests construct `YaleLock` directly with controlled inputs — no API mocking. Health logic is a pure function of the dataclass.
+All tests construct `YaleLock` directly with controlled inputs, no API mocking. Health logic is a pure function of the dataclass.
 
 | Scenario | Expected |
 |---|---|
@@ -219,7 +219,7 @@ Parser test: one case asserting `WifiModuleConnectionIssue` (Unix ms) → `datet
 
 - CLI string formatting (no logic, just `.format()` calls)
 - Real Yale API integration (project convention: no network tests)
-- Timezone math beyond "UTC-aware comparison works" — a naive datetime would raise immediately
+- Timezone math beyond "UTC-aware comparison works"; a naive datetime would raise immediately
 
 ## Out of scope for this design
 

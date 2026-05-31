@@ -5,14 +5,14 @@ Self-host the TaskChampion sync server on picklelab so the Mac's Taskwarrior dat
 ## Goals
 
 - Off-laptop replica of `~/.task` for backup and disaster recovery.
-- Forward compatibility — adding a second device later is config-only, no infra rework.
+- Forward compatibility: adding a second device later is config-only, no infra rework.
 - Zero changes to picklehome's existing patterns (Compose + systemd + Tailscale Services + 1Password secrets).
 
 ## Non-goals
 
 - Multi-device sync today. Single client (the Mac) only.
 - Multi-user. Single client_id.
-- Making tasks readable from outside the Tailscale net (e.g. Claude Code on the web). Different problem, different shape — see "Future" below.
+- Making tasks readable from outside the Tailscale net (e.g. Claude Code on the web). Different problem, different shape. See "Future" below.
 
 ## Architecture
 
@@ -43,7 +43,7 @@ Tailscale handles network-layer access ("who can reach this URL"). The sync prot
 | File | Purpose |
 |------|---------|
 | `compose.yaml` | Local dev compose (named volume) |
-| `compose.picklelab.yaml` | Prod overrides — bind mount to `/srv/data/taskchampion-sync` |
+| `compose.picklelab.yaml` | Prod overrides: bind mount to `/srv/data/taskchampion-sync` |
 | `deploy.sh` | scp + systemd install + tailscale serve setup |
 | `.env.vars` | Lists `TASKCHAMPION_SYNC_SERVER_CLIENT_ID` (the only var needed on the host) |
 | `taskchampion-sync.service` | systemd unit (long-running) |
@@ -88,7 +88,7 @@ This mirrors the brineworks-server pattern. 8080 is avoided because it's a commo
 
 ### Bind topology
 
-Container listens on `0.0.0.0:9080` inside its network namespace; host port is mapped to `127.0.0.1:9080`. From outside picklelab, the port is unreachable directly — only `tailscaled`'s local proxy can hit it.
+Container listens on `0.0.0.0:9080` inside its network namespace; host port is mapped to `127.0.0.1:9080`. From outside picklelab, the port is unreachable directly. Only `tailscaled`'s local proxy can hit it.
 
 ## Secrets
 
@@ -109,7 +109,7 @@ TASKCHAMPION_SYNC_HOST={{ op://picklehome/TaskChampion Sync/host }}
 TASKCHAMPION_SYNC_SERVER_CLIENT_ID={{ op://picklehome/TaskChampion Sync/client_id }}
 ```
 
-`encryption_secret` is **not** in `.env.template`. It never reaches picklelab — it's a client-side secret, materialized into the Mac's shell env via fnox.
+`encryption_secret` is **not** in `.env.template`. It never reaches picklelab; it's a client-side secret, materialized into the Mac's shell env via fnox.
 
 ### Trust boundary
 
@@ -119,7 +119,7 @@ TASKCHAMPION_SYNC_SERVER_CLIENT_ID={{ op://picklehome/TaskChampion Sync/client_i
 | `encryption_secret` | yes (shell env via fnox) | **no** |
 | `host` | yes (shell env via fnox) | no (Tailscale handles routing by name) |
 
-The `service-env` script enforces this split — picklelab gets only what's in `.env.vars`.
+The `service-env` script enforces this split: picklelab gets only what's in `.env.vars`.
 
 ## Client (Mac) configuration
 
@@ -150,7 +150,7 @@ Taskwarrior expands `$VAR` from the environment. `.taskrc` itself stays free of 
 
 ```just
 deploy-taskchampion host="picklelab":
-    # follows the deploy-vikunja shape — push check, scp, systemctl install + restart
+    # follows the deploy-vikunja shape: push check, scp, systemctl install + restart
 
 # Status: systemd + loopback + tailscale routing in one shot
 taskchampion-status host="picklelab":
@@ -186,8 +186,8 @@ The status recipe doubles as a self-test. Three HTTP codes localize any failure 
 4. Add the three `sync.*` lines to `~/.taskrc`. Verify with `task _show | grep ^sync\.`.
 5. Tailscale admin prereqs (same as Vikunja): HTTPS enabled, `tag:server` on picklelab, `taskchampion` Service defined.
 6. `just deploy-taskchampion`.
-7. `just taskchampion-status` — expect three OK codes.
-8. `task sync` — uploads existing `~/.task` history.
+7. `just taskchampion-status`: expect three OK codes.
+8. `task sync`: uploads existing `~/.task` history.
 9. Add the service to `homelab/services/README.md` registry.
 
 ## Backups
@@ -201,7 +201,7 @@ No `pg_dump` equivalent needed.
 - **Upstream root response.** The status recipe assumes `curl http://127.0.0.1:9080/` returns *something* (likely 404). If the upstream image returns connection-refused on `/` instead, the loopback check needs to hit a known-good path. Verify on first deploy.
 - **Volume override pattern.** `compose.picklelab.yaml` replaces the named volume from the base file with a bind mount. The intended override mechanism may need `volumes:` declarations in both files; will confirm during implementation.
 - **fnox + keychain on a new Mac.** Recovery story is "sign into 1Password, `op read` each value, `fnox set` each value." Documented in the service README.
-- **Allowlist size.** Currently one client_id. Adding a device means appending a new UUID (comma-delimited per upstream args.rs) — config change, no rebuild.
+- **Allowlist size.** Currently one client_id. Adding a device means appending a new UUID (comma-delimited per upstream args.rs): config change, no rebuild.
 
 ## Future
 

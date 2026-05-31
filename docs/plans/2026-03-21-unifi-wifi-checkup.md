@@ -1,10 +1,10 @@
-# UniFi WiFi Checkup Enhancements — Implementation Plan
+# UniFi WiFi Checkup Enhancements: Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add four usability improvements to `unifi-wifi.py`: `--summary` flag for rfscan, `--sort` flag for aps, bare `roaming` for watched devices, and a composite `checkup` command.
 
-**Architecture:** All changes are in `network/unifi-wifi.py` (CLI + functions) with one env var addition (`UNIFI_WATCHED_DEVICES`) wired through the existing 1Password → `.env` pattern. Each feature builds on existing functions — `checkup` composes the others.
+**Architecture:** All changes are in `network/unifi-wifi.py` (CLI + functions) with one env var addition (`UNIFI_WATCHED_DEVICES`) wired through the existing 1Password → `.env` pattern. Each feature builds on existing functions. `checkup` composes the others.
 
 **Tech Stack:** Python 3, requests, argparse, python-dotenv, 1Password CLI (`op inject`)
 
@@ -20,13 +20,13 @@
 Add to `.env.template` after the Ambient Weather section:
 
 ```
-# Watched WiFi devices for roaming checks (comma-separated hostnames — 1Password item: picklehome/UniFi)
+# Watched WiFi devices for roaming checks (comma-separated hostnames; 1Password item: picklehome/UniFi)
 UNIFI_WATCHED_DEVICES={{ op://picklehome/UniFi/watched_devices }}
 ```
 
 **Step 2: Add the field in 1Password**
 
-Manual step — the user must add a `watched_devices` text field to the `UniFi` item in the `picklehome` vault with value `iPickleX-2,raisynglsiPhone`.
+Manual step: the user must add a `watched_devices` text field to the `UniFi` item in the `picklehome` vault with value `iPickleX-2,raisynglsiPhone`.
 
 **Step 3: Regenerate .env**
 
@@ -182,10 +182,10 @@ git commit -m "feat: add --sort flag to aps command (retries, utilization, name)
 
 ---
 
-### Task 4: Make `roaming` query optional — show watched devices when bare
+### Task 4: Make `roaming` query optional: show watched devices when bare
 
 **Files:**
-- Modify: `network/unifi-wifi.py:326` (`cmd_roaming` function — add multi-device wrapper)
+- Modify: `network/unifi-wifi.py:326` (`cmd_roaming` function, add multi-device wrapper)
 - Modify: `network/unifi-wifi.py:658` (argparse for roaming)
 
 **Step 1: Make `query` optional in argparse**
@@ -213,7 +213,7 @@ def watched_devices():
     return [d.strip() for d in raw.split(",") if d.strip()]
 ```
 
-Also add `import os` at the top (check if already present — it's not currently imported in unifi-wifi.py).
+Also add `import os` at the top (check if already present, it's not currently imported in unifi-wifi.py).
 
 **Step 3: Handle bare roaming in dispatch**
 
@@ -262,21 +262,21 @@ Add before `main()` (around line 646):
 ```python
 def cmd_checkup(s, num_sessions=1):
     """Composite network health check: AP retries, RF neighbors, watched device roaming."""
-    # 1. AP overview — sorted by worst retries
+    # 1. AP overview: sorted by worst retries
     cmd_aps(s, sort_by="retries")
 
-    # 2. RF scan summary — channel congestion only
+    # 2. RF scan summary: channel congestion only
     cmd_rfscan(s, fresh_minutes=60, summary_only=True)
 
     # 3. Roaming for watched devices
     devices = watched_devices()
     if devices:
-        section("Roaming — Watched Devices")
+        section("Roaming: Watched Devices")
         # Remove the extra section header that cmd_roaming prints by calling it directly
         for device in devices:
             cmd_roaming(s, device, num_sessions=num_sessions)
     else:
-        print("\n  (UNIFI_WATCHED_DEVICES not set — skipping roaming section)")
+        print("\n  (UNIFI_WATCHED_DEVICES not set, skipping roaming section)")
 ```
 
 **Step 2: Add argparse subcommand**
@@ -310,7 +310,7 @@ Expected: Same but with 3 roaming sessions per device.
 
 ```bash
 git add network/unifi-wifi.py
-git commit -m "feat: add checkup command — composite network health overview"
+git commit -m "feat: add checkup command, composite network health overview"
 ```
 
 ---

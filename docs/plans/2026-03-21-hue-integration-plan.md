@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add Philips Hue control to the `lighting/` module — pairing, lights, scenes, groups, sensors, buttons — matching the Lutron Caseta CLI pattern.
+**Goal:** Add Philips Hue control to the `lighting/` module (pairing, lights, scenes, groups, sensors, buttons) matching the Lutron Caseta CLI pattern.
 
 **Architecture:** `aiohue` (async, Hue v2 API) connects to the bridge via HTTPS with an API key. `hue.py` holds bridge connection + device commands; `hue_cli.py` is the CLI entrypoint dispatching subcommands. Secrets flow through 1Password → `.env.template` → `.env`.
 
@@ -56,7 +56,7 @@ git commit -m "feat(lighting): add aiohue dependency and Hue env template"
 
 **Step 1: Create hue.py with bridge connection and pair command**
 
-`lighting/hue.py` — bridge connection helper and pair command:
+`lighting/hue.py`: bridge connection helper and pair command:
 
 ```python
 """Philips Hue bridge connection and commands."""
@@ -93,7 +93,7 @@ async def connect() -> HueBridgeV2:
 
 
 async def cmd_pair(host: str | None = None):
-    """Pair with the Hue bridge — press the button first, then run this."""
+    """Pair with the Hue bridge: press the button first, then run this."""
     if not host:
         host = os.environ.get("HUE_BRIDGE_IP")
     if not host:
@@ -146,7 +146,7 @@ git commit -m "feat(lighting): add Hue bridge connection and pairing"
 ```python
 #!/usr/bin/env python3
 """
-hue_cli.py — Philips Hue CLI
+hue_cli.py: Philips Hue CLI
 
 Usage:
     uv run lighting/hue_cli.py pair [<host>]      # one-time bridge pairing
@@ -303,7 +303,7 @@ def _find_light(bridge, query):
         if light.id == q:
             return light
 
-    # Fuzzy name match — light name comes from its owner device metadata
+    # Fuzzy name match: light name comes from its owner device metadata
     matches = []
     for light in bridge.lights:
         name = _light_name(bridge, light)
@@ -535,7 +535,7 @@ async def cmd_buttons(bridge):
 
     for button in sorted(bridge.sensors.button, key=lambda b: b.metadata.name if b.metadata else ""):
         name = button.metadata.name if button.metadata else button.id
-        last_event = button.button.last_event.value if button.button and button.button.last_event else "—"
+        last_event = button.button.last_event.value if button.button and button.button.last_event else "n/a"
         print(f"  {name:<30} last: {last_event}")
 ```
 
@@ -557,7 +557,7 @@ git commit -m "feat(lighting): add Hue sensor and button listing"
 
 ```python
 async def cmd_status(bridge):
-    """Quick overview — lights, active scenes, recent motion."""
+    """Quick overview: lights, active scenes, recent motion."""
     section("Hue Status")
 
     # Light summary
@@ -607,7 +607,7 @@ The Hue bridge at `192.168.1.51` needs to be reachable. Add it to `.claude/setti
 
 **Step 2: Run `just hue pair` and test**
 
-This is a manual step — requires physically pressing the bridge button:
+This is a manual step that requires physically pressing the bridge button:
 
 1. Press the link button on the Hue bridge
 2. Run: `just hue pair 192.168.1.51`

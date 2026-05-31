@@ -4,7 +4,7 @@
 
 **Goal:** Reorganize the three UniFi CLI scripts (`unifi-wifi.py`, `usg.py`, `unifi-api.py`) into a single `unifi` entrypoint with `wifi` and `usg` subcommand groups, plus top-level commands for general client/device management.
 
-**Architecture:** Create `network/unifi_cli.py` as the single entrypoint with nested argparse subparsers. Move command functions into focused modules under `network/unifi/` — `wifi.py` for RF/AP commands, `usg.py` for gateway commands, and the shared helpers + top-level commands stay in `unifi_cli.py` itself. The existing `network/unifi.py` (auth/session) becomes `network/unifi/__init__.py`. The old `network/unifi-wifi.py`, `network/usg.py`, and `network/unifi-api.py` files are deleted after migration.
+**Architecture:** Create `network/unifi_cli.py` as the single entrypoint with nested argparse subparsers. Move command functions into focused modules under `network/unifi/`: `wifi.py` for RF/AP commands, `usg.py` for gateway commands, and the shared helpers + top-level commands stay in `unifi_cli.py` itself. The existing `network/unifi.py` (auth/session) becomes `network/unifi/__init__.py`. The old `network/unifi-wifi.py`, `network/usg.py`, and `network/unifi-api.py` files are deleted after migration.
 
 **Tech Stack:** Python 3, argparse (nested subparsers), requests, paramiko (SSH commands)
 
@@ -81,7 +81,7 @@ git commit -m "refactor(network): convert unifi module to package for submodules
 
 ---
 
-### Task 2: Create `network/unifi/wifi.py` — move WiFi-specific commands
+### Task 2: Create `network/unifi/wifi.py`: move WiFi-specific commands
 
 Move the RF/AP-specific command functions out of `unifi-wifi.py` into the new submodule.
 
@@ -108,7 +108,7 @@ Also move these helpers that are only used by wifi commands:
 - `kbps_to_mbps(kbps)`
 - `fmt_age(ts)` (if it exists, used by rfscan)
 
-The file should import `get` and `section` from the parent — but since those are simple, just copy them or import from the cli module. Cleanest: define `get` and `section` in `network/unifi/__init__.py` as shared utilities, since both wifi and top-level commands need them.
+The file should import `get` and `section` from the parent, but since those are simple, just copy them or import from the cli module. Cleanest: define `get` and `section` in `network/unifi/__init__.py` as shared utilities, since both wifi and top-level commands need them.
 
 Add to `network/unifi/__init__.py`:
 
@@ -129,7 +129,7 @@ def section(title):
 Then `network/unifi/wifi.py` starts with:
 
 ```python
-"""UniFi WiFi commands — RF/AP-specific diagnostics and configuration."""
+"""UniFi WiFi commands: RF/AP-specific diagnostics and configuration."""
 
 from datetime import datetime, timezone
 
@@ -152,7 +152,7 @@ git commit -m "refactor(network): extract WiFi commands to unifi/wifi.py"
 
 ---
 
-### Task 3: Create `network/unifi/usg.py` — move gateway-specific commands
+### Task 3: Create `network/unifi/usg.py`: move gateway-specific commands
 
 Move gateway-specific commands from the old `network/usg.py` into `network/unifi/usg.py`.
 
@@ -211,7 +211,7 @@ git commit -m "refactor(network): extract USG commands to unifi/usg.py"
 
 **Files:**
 - Create: `network/unifi/devices.py`
-- Reference: `network/usg.py` (source — `cmd_devices`, `cmd_topology` + topology renderers)
+- Reference: `network/usg.py` (source: `cmd_devices`, `cmd_topology` + topology renderers)
 
 **Step 1: Create `network/unifi/devices.py`**
 
@@ -242,8 +242,8 @@ Actually the cleanest: put `cmd_devices` and `cmd_topology` (with all the topolo
 **Step 1: Add to `network/unifi/__init__.py`**
 
 After the existing `get()` and `section()` functions, add:
-- `cmd_devices(s)` — copied from `network/usg.py`, using the BASE API
-- `cmd_topology(s, fmt="text")` — copied from `network/usg.py`, using LEGACY API
+- `cmd_devices(s)`: copied from `network/usg.py`, using the BASE API
+- `cmd_topology(s, fmt="text")`: copied from `network/usg.py`, using LEGACY API
 - All `_topology_*` helper functions
 
 These need both the BASE and LEGACY API helpers. Add `get_base` and `get_legacy` to `__init__.py`:
@@ -281,7 +281,7 @@ git commit -m "refactor(network): move devices and topology to unifi package"
 
 ---
 
-### Task 5: Create `network/unifi_cli.py` — the unified entrypoint
+### Task 5: Create `network/unifi_cli.py`: the unified entrypoint
 
 Build the new CLI with nested subparsers. Top-level commands live here; wifi and usg commands are imported from their modules.
 
@@ -293,7 +293,7 @@ Build the new CLI with nested subparsers. Top-level commands live here; wifi and
 ```python
 #!/usr/bin/env python3
 """
-unifi — unified UniFi network management CLI
+unifi: unified UniFi network management CLI
 
 Usage:
     uv run network/unifi_cli.py clients
@@ -331,9 +331,9 @@ Top-level command functions (`cmd_checkup`, `cmd_rename`, `cmd_api_get`, `cmd_ap
 
 `cmd_clients` and `cmd_client` move to `wifi.py` since they filter to WiFi clients, but are wired as top-level commands in the CLI. (Or they could move to `__init__.py` if we want them to include wired clients later.)
 
-For now, keep `cmd_clients` and `cmd_client` in `wifi.py` but wire them at the top level. Same for `cmd_roaming` — it's WiFi-flavored but useful enough as a top-level concept.
+For now, keep `cmd_clients` and `cmd_client` in `wifi.py` but wire them at the top level. Same for `cmd_roaming`, it's WiFi-flavored but useful enough as a top-level concept.
 
-Wait — re-reading the agreed structure: `clients`, `client`, and `rename` are top-level. `roaming` stays under `wifi`. Let's keep that.
+Wait, re-reading the agreed structure: `clients`, `client`, and `rename` are top-level. `roaming` stays under `wifi`. Let's keep that.
 
 `cmd_checkup` is the composite command. Currently it calls `cmd_aps`, `cmd_rfscan`, and `cmd_roaming`. It should stay in the top-level CLI file since it crosses domains. Import what it needs from wifi.
 
@@ -354,7 +354,7 @@ def cmd_checkup(s, num_sessions=1):
         for device in devices:
             cmd_roaming(s, device, num_sessions=num_sessions)
     else:
-        print("\n  (UNIFI_WATCHED_DEVICES not set — skipping roaming section)")
+        print("\n  (UNIFI_WATCHED_DEVICES not set, skipping roaming section)")
 
 
 def cmd_rename(s, query, new_name):
@@ -376,7 +376,7 @@ Argparse structure with nested subparsers:
 ```python
 def main():
     parser = argparse.ArgumentParser(
-        description="UniFi network management — clients, devices, WiFi, and gateway diagnostics"
+        description="UniFi network management: clients, devices, WiFi, and gateway diagnostics"
     )
     sub = parser.add_subparsers(dest="cmd")
 
@@ -414,7 +414,7 @@ def main():
 
     wifi_sub.add_parser("config", help="SSID roaming/power-save settings and per-AP transmit power")
 
-    p_rfscan = wifi_sub.add_parser("rfscan", help="Neighboring APs — channel congestion")
+    p_rfscan = wifi_sub.add_parser("rfscan", help="Neighboring APs: channel congestion")
     p_rfscan.add_argument("--own", action="store_true")
     p_rfscan.add_argument("--fresh", type=int, metavar="MINUTES", default=None)
     p_rfscan.add_argument("--summary", action="store_true")
@@ -562,7 +562,7 @@ git commit -m "feat(network): add unified unifi CLI entrypoint with wifi/usg sub
 
 ---
 
-### Task 6: Update Justfile — replace old tasks with `unifi`
+### Task 6: Update Justfile: replace old tasks with `unifi`
 
 **Files:**
 - Modify: `Justfile`
@@ -588,7 +588,7 @@ unifi *ARGS:
     uv run network/unifi_cli.py {{ARGS}}
 ```
 
-Keep `wifi-diag` as-is — it's a standalone client-side tool, not a CloudKey API tool.
+Keep `wifi-diag` as-is, it's a standalone client-side tool, not a CloudKey API tool.
 
 **Step 2: Verify**
 

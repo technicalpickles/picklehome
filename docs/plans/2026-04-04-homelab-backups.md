@@ -120,8 +120,8 @@ EnvironmentFile=/opt/homelab/homelab/services/backup/.env
 ExecStart=/opt/homelab/homelab/services/backup/backup.sh
 
 # Restic needs these from the environment
-# RESTIC_REPOSITORY — path or s3:// URL
-# RESTIC_PASSWORD  — repo encryption password
+# RESTIC_REPOSITORY: path or s3:// URL
+# RESTIC_PASSWORD: repo encryption password
 ```
 
 `EnvironmentFile` injects `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` so the backup script doesn't need to hardcode them. Restic reads these env vars natively.

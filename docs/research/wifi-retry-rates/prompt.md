@@ -1,6 +1,6 @@
-# WiFi TX Retry Rates — What's Normal, What's a Problem?
+# WiFi TX Retry Rates: What's Normal, What's a Problem?
 
-I'm trying to build a mental model for understanding WiFi TX retry rates — when they matter, when they don't, and at what point they start causing the "the internet is slow" complaints I regularly hear from people on my network.
+I'm trying to build a mental model for understanding WiFi TX retry rates: when they matter, when they don't, and at what point they start causing the "the internet is slow" complaints I regularly hear from people on my network.
 
 ## My setup
 
@@ -27,10 +27,10 @@ The signal and SNR look healthy, but the retry rate seems high. Other clients on
 
 3. **Retries vs. other metrics:** How should I weigh retry rate against signal strength, SNR, satisfaction score, and TX/RX rates when diagnosing "slow network" complaints? Which metric is the best leading indicator of user-perceived problems?
 
-4. **High retries + good signal — why?** In my example, signal and SNR are solid but retries are 19%. What are the most common explanations for this combination? (channel congestion, hidden node problem, client-side issues, etc.)
+4. **High retries + good signal, why?** In my example, signal and SNR are solid but retries are 19%. What are the most common explanations for this combination? (channel congestion, hidden node problem, client-side issues, etc.)
 
 5. **UniFi-specific considerations:** Does UniFi's reported retry % measure something different than what you'd see in a packet capture? Are there known quirks in how UniFi calculates or displays this metric?
 
 6. **Pointers for going deeper:** If I want to really understand the mechanics (Block ACK, A-MPDU aggregation, retry counters, 802.11 frame-level behavior), what are good resources or search terms to look into?
 
-I'm not looking to diagnose this one client specifically — I want to build a general framework for interpreting retry rates so I can triage network complaints more effectively.
+I'm not looking to diagnose this one client specifically. I want to build a general framework for interpreting retry rates so I can triage network complaints more effectively.

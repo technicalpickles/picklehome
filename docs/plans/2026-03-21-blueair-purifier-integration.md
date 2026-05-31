@@ -1,4 +1,4 @@
-# BlueAir Purifier Integration — Design
+# BlueAir Purifier Integration: Design
 
 ## Goal
 
@@ -10,7 +10,7 @@ Add read-only BlueAir air purifier management to `climate/`, starting with the B
 - **Library:** `blueair-api` (PyPI), async/aiohttp, MIT license
 - **API path:** AWS backend (Gigya auth → JWT → AWS API Gateway)
 - **Credentials:** username (email) + password + region ("us")
-- **No API key option** — Gigya API keys are hardcoded in the library
+- **No API key option**: Gigya API keys are hardcoded in the library
 - **Sensor refresh rate:** 5 minutes (polling faster returns stale data)
 - **Library source cloned to:** `~/github.com/technicalpickles/blueair_api/`
 
@@ -33,8 +33,8 @@ climate/
 
 - Keychain service name: `"picklehome-blueair"`
 - Three keys stored: `username`, `password`, `region`
-- `get_credentials() -> tuple[str, str, str]` — reads from keychain, raises clear error if not configured
-- `store_credentials(username, password, region)` — writes to keychain
+- `get_credentials() -> tuple[str, str, str]`: reads from keychain, raises clear error if not configured
+- `store_credentials(username, password, region)`: writes to keychain
 - Auth command validates credentials by calling `get_aws_devices()` before storing
 
 ## Device Registry (`devices.py`, `config/purifiers.yaml`)

@@ -11,7 +11,7 @@ sufficient or the U7 Outdoor hardware is needed. Phase 2 finalizes config and do
 settled state. No new code required for Phase 1; Phase 2 may add a CHANGELOG entry and
 update network/CLAUDE.md.
 
-**Reference:** `network/docs/outdoor-wifi-research.md` — full hardware comparison, antenna
+**Reference:** `network/docs/outdoor-wifi-research.md`: full hardware comparison, antenna
 orientation guidance, TX power trade-offs, and measurement protocol.
 
 **Tech Stack:** UniFi CloudKey legacy API, `just unifi-wifi` CLI, `just wifi-diag`
@@ -39,16 +39,16 @@ Porch AC LR and Josh Office AC Pro.
 just unifi-wifi clients
 ```
 
-Note any clients associated to "Porch AC LR" — these are currently on an indoor AP and
+Note any clients associated to "Porch AC LR". These are currently on an indoor AP and
 may roam once it moves.
 
-**Step 3: Commit nothing yet** — this is just a snapshot.
+**Step 3: Commit nothing yet.** This is just a snapshot.
 
 ---
 
 ### Task 2: Physically remount U7LR correctly
 
-**Current state:** U7LR is mounted vertically on exterior wall (protruding 90° — wrong orientation).
+**Current state:** U7LR is mounted vertically on exterior wall (protruding 90°, wrong orientation).
 
 **Correct orientation for wall mount:**
 - Mount flat against the exterior wall like a picture frame, face pointing outward toward the backyard
@@ -58,7 +58,7 @@ may roam once it moves.
 **If testing the high soffit point instead:**
 - Mount in normal ceiling-mount orientation (face down), elevated as high as possible under the eave
 - This radiates over the cinderblock rather than into it
-- Requires a temporary patch cable / PoE injector since it's not wired — do this only if wall-mount results are poor
+- Requires a temporary patch cable / PoE injector since it's not wired. Do this only if wall-mount results are poor
 
 No config changes yet. Just get the physical placement right first.
 
@@ -103,7 +103,7 @@ Do NOT enable Minimum RSSI or Roaming Assistant yet.
 ### Task 4: Run measurement sweep
 
 Run `wifi-diag.py` from a laptop at each of the following fixed spots. Log the output
-for each location — do not average or summarize in your head, keep the raw output.
+for each location. Do not average or summarize in your head, keep the raw output.
 
 **Test spots (in order):**
 1. Inside the room adjacent to the porch (Josh Office side)
@@ -151,7 +151,7 @@ Compare results to thresholds from `network/docs/outdoor-wifi-research.md`.
 
 ---
 
-## Phase 2A: U7LR passes — finalize and document
+## Phase 2A: U7LR passes, finalize and document
 
 ### Task 6: Final config cleanup
 
@@ -183,7 +183,7 @@ Do not add Minimum RSSI unless Roaming Assistant is insufficient.
 Add an entry to `network/CHANGELOG.md` (create if it doesn't exist):
 
 ```markdown
-## 2026-03-18 — Outdoor WiFi: Porch AC LR remounted and reconfigured
+## 2026-03-18: Outdoor WiFi: Porch AC LR remounted and reconfigured
 
 - Discovered Porch AC LR was physically inside Josh Office the entire time
 - Remounted on exterior wall in correct flat orientation (face toward backyard)
@@ -203,12 +203,12 @@ and link to the research doc.
 
 ```bash
 git add network/CHANGELOG.md network/CLAUDE.md
-git commit -m "docs: document outdoor wifi config — Porch AC LR remounted + reconfigured"
+git commit -m "docs: document outdoor wifi config, Porch AC LR remounted + reconfigured"
 ```
 
 ---
 
-## Phase 2B: U7LR fails decision gate — upgrade to U7 Outdoor
+## Phase 2B: U7LR fails decision gate, upgrade to U7 Outdoor
 
 ### Task 7: Hardware upgrade path
 
@@ -220,7 +220,7 @@ UniFi U7 Outdoor (model UWO). IPX6, directional antennas (12.5 dBi / 5 GHz).
 
 Options in order of preference:
 1. Same wired exterior wall location, flat-mounted (same cable run, no new wiring)
-2. High soffit/eave point — requires running ethernet (better geometry for over-wall coverage)
+2. High soffit/eave point: requires running ethernet (better geometry for over-wall coverage)
 
 **Step 3: Configure same starting radio settings**
 
@@ -238,8 +238,8 @@ Same as Task 6 Steps 3–5, noting the hardware change.
 
 ## Notes
 
-- Historical Porch AP data (roaming history, client associations, signal logs) is unreliable —
-  the AP was inside the office, not covering the porch. Disregard it.
+- Historical Porch AP data (roaming history, client associations, signal logs) is unreliable.
+  The AP was inside the office, not covering the porch. Disregard it.
 - The screened porch high-mount point is not wired. If testing it requires a long patch cable
   run, do that only as a last step before deciding on hardware upgrade.
 - 40 MHz on 2.4 GHz is explicitly not recommended (Cisco/Ubiquiti guidance). Stay at 20 MHz.

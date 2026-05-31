@@ -1,4 +1,4 @@
-# Climate Directory Restructure + Status Command — Implementation Plan
+# Climate Directory Restructure + Status Command: Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -63,7 +63,7 @@ cp ecobee/sync.py climate/sync.py
 Find all `from ecobee import` and change to `from climate.ecobee import`:
 
 ```python
-# climate/sync.py line ~8 — change:
+# climate/sync.py line ~8, change:
 from ecobee import auth, comforts, schedule
 # to:
 from climate.ecobee import auth, comforts, schedule
@@ -122,7 +122,7 @@ cp ecobee/comforts.yaml climate/config/comforts.yaml
 cp ecobee/hvac-spec.md climate/spec/hvac-spec.md
 ```
 
-**Step 2: Smoke test — list command still works**
+**Step 2: Smoke test, list command still works**
 
 ```bash
 uv run python -m climate.sync list
@@ -148,8 +148,8 @@ git commit -m "chore: move config and spec files into climate/"
 ```yaml
 # climate/config/thermostats.yaml
 # Canonical thermostat registry for this home.
-# managed: true  — included in all home automation (status, sync, etc.)
-# managed: false — registered but excluded (e.g. separate property)
+# managed: true  : included in all home automation (status, sync, etc.)
+# managed: false : registered but excluded (e.g. separate property)
 
 thermostats:
   downstairs:
@@ -160,7 +160,7 @@ thermostats:
     managed: true
   cottage:
     thermostat_id: "272457106318"
-    managed: false  # separate property — excluded from home automation
+    managed: false  # separate property, excluded from home automation
 ```
 
 **Step 2: Commit**
@@ -172,7 +172,7 @@ git commit -m "feat: add thermostats.yaml canonical registry"
 
 ---
 
-### Task 5: Write `thermostats.py` — registry loader (TDD)
+### Task 5: Write `thermostats.py`, the registry loader (TDD)
 
 **Files:**
 - Create: `tests/climate/ecobee/test_thermostats.py`
@@ -291,14 +291,14 @@ git commit -m "feat: add thermostats.py registry loader with tests"
 
 ---
 
-### Task 6: Refactor `schedule.yaml` — remove `thermostat_id`
+### Task 6: Refactor `schedule.yaml`: remove `thermostat_id`
 
 **Files:**
 - Modify: `climate/config/schedule.yaml`
 - Modify: `climate/ecobee/schedule.py`
 - Modify: `climate/sync.py`
 
-**Step 1: Update `climate/config/schedule.yaml`** — remove `thermostat_id` lines
+**Step 1: Update `climate/config/schedule.yaml`**, remove `thermostat_id` lines
 
 ```yaml
 # climate/config/schedule.yaml
@@ -374,12 +374,12 @@ def iter_thermostat_entries(data: dict, registry: dict, name_filter: str | None 
         yield name, thermostat_id, schedule_dict
 ```
 
-**Step 3: Update `climate/sync.py`** — load registry and pass to `iter_thermostat_entries`
+**Step 3: Update `climate/sync.py`**, load registry and pass to `iter_thermostat_entries`
 
 Add a default path constant and load it in the sync/validate commands:
 
 ```python
-# climate/sync.py — add at top with other constants:
+# climate/sync.py, add at top with other constants:
 DEFAULT_THERMOSTATS_PATH = Path(__file__).parent / "config" / "thermostats.yaml"
 
 # Add --thermostats argument to sync and validate subparsers (same pattern as --schedule):
@@ -409,14 +409,14 @@ git commit -m "refactor: resolve thermostat IDs from thermostats.yaml in schedul
 
 ---
 
-### Task 7: Refactor `comforts.yaml` — remove `thermostat_id`
+### Task 7: Refactor `comforts.yaml`: remove `thermostat_id`
 
 **Files:**
 - Modify: `climate/config/comforts.yaml`
 - Modify: `climate/ecobee/comforts.py`
 - Modify: `climate/sync.py`
 
-**Step 1: Update `climate/config/comforts.yaml`** — remove all `thermostat_id` lines
+**Step 1: Update `climate/config/comforts.yaml`**, remove all `thermostat_id` lines
 
 ```yaml
 # climate/config/comforts.yaml
@@ -482,7 +482,7 @@ thermostats:
 
 **Step 2: Update `iter_thermostat_entries` in `climate/ecobee/comforts.py`**
 
-Same pattern as schedule.py — add `registry` parameter:
+Same pattern as schedule.py, add `registry` parameter:
 
 ```python
 # climate/ecobee/comforts.py
@@ -743,7 +743,7 @@ def format_status(statuses: list[dict]) -> str:
         line = f"{s['name']:<14} {temp:<8} {humidity:<5} {equipment:<10} {climate:<14} {hvac}{hold_str}"
         lines.append(line.rstrip())
 
-    # Weather — use first thermostat's weather (they share the same feed by location)
+    # Weather: use first thermostat's weather (they share the same feed by location)
     weather_added = False
     for s in statuses:
         w = s.get("weather")
@@ -767,7 +767,7 @@ def format_status(statuses: list[dict]) -> str:
 
     if aq_lines:
         lines.append("")
-        lines.append("Air quality —")
+        lines.append("Air quality:")
         lines.extend(aq_lines)
 
     return "\n".join(lines)
@@ -980,11 +980,11 @@ git commit -m "chore: remove old ecobee/ directory, fully migrated to climate/"
 ```markdown
 ## Directories
 
-- `climate/` — HVAC/climate automation (Ecobee schedule, comfort setpoints, status)
-  - `climate/ecobee/` — Python package (auth, schedule, comforts, status)
-  - `climate/config/` — YAML config (thermostats, schedule, comforts)
-  - `climate/spec/` — specs and docs (hvac-spec.md)
-- `network/` — Network diagnostic and profiling scripts; see `network/CLAUDE.md`
+- `climate/`: HVAC/climate automation (Ecobee schedule, comfort setpoints, status)
+  - `climate/ecobee/`: Python package (auth, schedule, comforts, status)
+  - `climate/config/`: YAML config (thermostats, schedule, comforts)
+  - `climate/spec/`: specs and docs (hvac-spec.md)
+- `network/`: Network diagnostic and profiling scripts; see `network/CLAUDE.md`
 ```
 
 **Step 2: Check `docs/ecobee-setup.md` for stale path references**
