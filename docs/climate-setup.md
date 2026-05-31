@@ -1,22 +1,29 @@
 # Climate Automation — Setup Guide
 
-This guide walks through first-time setup of the climate automation tools (Ecobee schedule sync, comfort setpoints, and status).
+A first-time, step-by-step walkthrough for the Ecobee climate tools (schedule sync, comfort
+setpoints, status). For command reference and architecture, see
+[`climate/README.md`](../climate/README.md). For secrets handling generally, see the project
+[`CLAUDE.md`](../CLAUDE.md).
 
 ---
 
 ## Prerequisites
 
-Install the following tools before starting:
+Install these before starting:
 
-- **[just](https://github.com/casey/just#installation)** — task runner (`brew install just`)
-- **[mise](https://mise.jdx.dev/getting-started.html)** — Python version manager (`brew install mise`)
-- **[uv](https://docs.astral.sh/uv/getting-started/installation/)** — Python package manager (`brew install uv`)
+- **[just](https://github.com/casey/just#installation)**: task runner (`brew install just`)
+- **[mise](https://mise.jdx.dev/getting-started.html)**: toolchain manager, pins Python/uv/go (`brew install mise`)
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)**: Python package manager (`brew install uv`)
 
-After installing mise, trust the project config:
+`.mise.toml` pins the Python and uv versions for the repo. After installing mise, trust the
+config so it activates:
 
 ```bash
 mise trust
 ```
+
+You also need the [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) signed in,
+since secrets are injected from 1Password (`op signin`).
 
 ---
 
@@ -25,17 +32,8 @@ mise trust
 Run once after cloning the repo:
 
 ```bash
-just install
+just install   # uv sync: creates .venv/ with all dependencies
 ```
-
-Expected output:
-
-```
-Resolved N packages...
-Installed N packages...
-```
-
-This creates `.venv/` with all Python dependencies.
 
 ---
 
@@ -43,68 +41,79 @@ This creates `.venv/` with all Python dependencies.
 
 1. Go to [ecobee.com/developers](https://www.ecobee.com/en-us/developers/) and sign in
 2. Click **Create New Application**
-3. Give it a name (e.g., `picklehome`)
+3. Give it a name (e.g. `picklehome`)
 4. Set **Authorization Method** to **ecobee PIN**
 5. Click **Create** and copy the **API Key**
 
 ---
 
-## Step 3: Store your API key in macOS Keychain
+## Step 3: Store the API key in 1Password and generate `.env`
 
-Run `just install` first (step 1) so `keyring` is available, then:
+The API key lives in 1Password (`picklehome` vault, `Ecobee` item, `api_key` field), not in
+the macOS Keychain. Store it, then inject it into `.env`:
 
 ```bash
-uv run python -c "import keyring; keyring.set_password('picklehome-ecobee', 'api_key', 'YOUR_KEY_HERE')"
+op item edit Ecobee --vault=picklehome api_key=YOUR_KEY_HERE
+just dotenv    # injects op:// references into .env (sets ECOBEE_API_KEY)
 ```
 
-Replace `YOUR_KEY_HERE` with the API key from step 2.
-
-**Expected:** macOS Keychain dialog appears requesting permission — click **Allow**.
-
-You can verify the key was stored correctly by running `just climate-auth`; it will fail immediately with a clear message if the key is missing.
+`just dotenv` reads `.env.template` and writes `.env`. The code loads `ECOBEE_API_KEY` from
+`.env` at import time via `python-dotenv`. If the key is missing you'll see
+`ECOBEE_API_KEY not set. Run 'just dotenv' to generate .env.`
 
 ---
 
-## Step 4: Authorize with PIN flow
+## Step 4: Authorize with the PIN flow
 
 ```bash
 just climate-auth
 ```
 
-Expected output:
+This prints a PIN and waits while you authorize it:
 
 ```
 Authorization required!
   PIN: abcd-1234
-  1. Go to https://www.ecobee.com → My Apps → Add Application
-  2. Enter PIN above. You have approximately 9 minutes.
-
+  ...
 Waiting for authorization (Ctrl-C to cancel)...
-....
-Thermostat: Living Room (ID: 123456789012)
-Available climates (use these in schedule.yaml):
-  - home
-  - away
-  - sleep
-
-Setup complete! Tokens and thermostat saved to Keychain.
 ```
 
-Follow the PIN instructions in the terminal output. After authorizing in the Ecobee web UI, the script will detect it automatically.
+Enter the PIN at [ecobee.com](https://www.ecobee.com) under **My Apps → Add Application**
+(about 9 minutes before it expires). Once authorized, the script detects it, lists your
+thermostats, and saves tokens:
 
-**If you have multiple thermostats**, you will be prompted to select one by number.
+```
+Thermostats on this account (add these to schedule.yaml):
+
+  Living Room
+    thermostat_id: "123456789012"
+    Available climates: home, away, sleep, smart1, smart2
+
+Setup complete! Tokens saved to ~/.local/state/picklehome/ecobee-tokens.json
+```
+
+Tokens are stored at `~/.local/state/picklehome/ecobee-tokens.json` (0600) and refreshed in
+place automatically on later use.
 
 ---
 
-## Step 5: Edit your schedule
+## Step 5: Register thermostats and edit the schedule
 
-Open `climate/config/schedule.yaml` and update the climate values using the `climateRef` strings shown in step 4 output (e.g., `home`, `away`, `sleep`).
+Two config files in `climate/config/`:
 
-Rules:
+1. **`thermostats.yaml`** — registry mapping each thermostat name to the `thermostat_id` from
+   step 4 output.
+2. **`schedule.yaml`** — the weekly program, referencing thermostats by name and time slots by
+   their `climateRef` (e.g. `home`, `away`, `sleep`).
+
+Schedule rules:
 - All 7 days required: `sunday` through `saturday`
 - Each day must start with `time: "00:00"`
-- All times must be on 30-minute boundaries (`:00` or `:30`)
-- YAML anchors (`&weekday` / `*weekday`) can be used to share a schedule across days
+- All times on 30-minute boundaries (`:00` or `:30`)
+- YAML anchors (`&weekday` / `*weekday`) can share a schedule across days
+
+> Read [`climate/spec/hvac-spec.md`](../climate/spec/hvac-spec.md) first. It's the source of
+> truth for intended behavior; derive YAML changes from it rather than the other way around.
 
 ---
 
@@ -114,65 +123,34 @@ Rules:
 just climate-sync-dry
 ```
 
-Expected output:
-
-```
-Schedule preview (transitions only):
-
-Sunday
-  00:00  Sleep
-  08:00  Home
-  23:00  Sleep
-Monday
-  00:00  Sleep
-  06:30  Home
-  08:30  Away
-  17:00  Home
-  22:00  Sleep
-...
-Dry run complete. No changes pushed.
-```
-
-Inspect the output and confirm the transitions match your intent. No changes are pushed.
+Prints the transitions it would push and ends with `Dry run complete. No changes pushed.`
+Inspect it and confirm the transitions match your intent.
 
 ---
 
 ## Step 7: Push the schedule
 
 ```bash
-just climate-sync
+just climate-sync         # prints "Schedule pushed successfully."
+just climate-validate     # confirm the live Ecobee schedule matches schedule.yaml
 ```
 
-Expected output:
-
-```
-Schedule pushed successfully.
-```
-
-Verify in the Ecobee app or web UI that your weekly schedule has been updated. Climate temperature and fan settings should be unchanged.
+Temperature and fan settings are left unchanged; only the weekly program is updated.
 
 ---
 
 ## Checking live status
 
-Once authorized, you can check current thermostat state at any time:
-
 ```bash
-just climate-status
+just climate-status            # current state per thermostat
+just climate-status --json     # machine-readable
 ```
-
-Expected output:
 
 ```
 Downstairs   70.4°F  58% humidity  idle        Comfort Cool  heat mode
 Upstairs     70.1°F  62% humidity  idle        hold until 10:00am tomorrow
 Outdoor      61.4°F  Rain · 13mph SW  (station NCQ)
-
-Air quality — Downstairs: AQ 51  VOC 520ppm  CO2 508ppm
-              Upstairs:   AQ 50  VOC 506ppm  CO2 502ppm
 ```
-
-Use `just climate-status --json` for machine-readable output.
 
 ---
 
@@ -180,15 +158,13 @@ Use `just climate-status --json` for machine-readable output.
 
 | Error message | Cause | Fix |
 |---|---|---|
-| `Ecobee API key not found. See docs/climate-setup.md.` | API key not in Keychain | Re-run step 3 |
-| `Ecobee tokens not found. Run 'just climate-auth' to authorize.` | Tokens missing from Keychain | Re-run `just climate-auth` |
+| `ECOBEE_API_KEY not set. Run 'just dotenv' to generate .env.` | Key missing from `.env` | Verify the `Ecobee` 1Password item has `api_key`, then `just dotenv` (check `op whoami`) |
+| `Ecobee tokens not found. Run 'just climate-auth' to authorize.` | No token file yet | Run `just climate-auth` (step 4) |
 | `Tokens invalid. Re-run 'just climate-auth'.` | Tokens revoked or expired beyond refresh | Re-run `just climate-auth` |
-| `Thermostat ID not found. Run 'just climate-auth' first.` | `thermostat_id` not in Keychain | Re-run `just climate-auth` |
-| `Error in schedule.yaml: Missing days in schedule: [...]` | One or more day keys missing | Add missing days to `climate/config/schedule.yaml` |
-| `Error in schedule.yaml: Day 'X': first transition must be time '00:00'` | Day doesn't start at midnight | Add `time: "00:00"` as first entry for that day |
-| `Error in schedule.yaml: Time X not 30-minute aligned` | Time like `06:45` used | Change to `:00` or `:30` boundary |
-| `Error in schedule.yaml: Unknown climate(s): [...]` | Climate name not on thermostat | Use climate refs shown by `just climate-auth` |
-| `Failed to fetch thermostat data from Ecobee.` | Network error | Check internet connection and retry |
-| macOS Keychain dialog appears | First access to Keychain service | Click **Allow** |
+| `Thermostat 'X' in schedule.yaml not found in thermostats.yaml` | Name in `schedule.yaml` isn't registered | Add it to `thermostats.yaml` (step 5) |
+| `Missing days in schedule: [...]. All 7 days are required.` | One or more day keys missing | Add the missing days to `schedule.yaml` |
+| `Day 'X': first transition must be time '00:00'` | Day doesn't start at midnight | Add `time: "00:00"` as the first entry for that day |
+| `Time X not 30-minute aligned.` | Time like `06:45` used | Change to a `:00` or `:30` boundary |
+| `Unknown climate(s): [...]` | Climate ref not on the thermostat | Use a climate ref shown by `just climate-auth` |
 
-**If you ever need to fully reset:** delete all entries under service `picklehome-ecobee` from Keychain Access, then re-run from step 3.
+**Full reset:** delete `~/.local/state/picklehome/ecobee-tokens.json`, then re-run from step 4.

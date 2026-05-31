@@ -78,12 +78,14 @@ A single Intel NUC running the stuff that needs to stay up: a self-hosted task m
 
 ## Setup
 
-**Prerequisites:** [uv](https://github.com/astral-sh/uv) and [just](https://github.com/casey/just)
+**Prerequisites:** [uv](https://github.com/astral-sh/uv), [just](https://github.com/casey/just), and [mise](https://mise.jdx.dev) (pins the Python/uv/go versions via `.mise.toml`; run `mise trust` after cloning)
 
 ```bash
 just install   # install Python deps
 just dotenv    # pull secrets from 1Password into .env
 ```
+
+For a guided first-time walkthrough of the climate tools, see [`docs/climate-setup.md`](docs/climate-setup.md).
 
 Secrets live in 1Password (picklehome vault) and are injected via `op inject`. See `CLAUDE.md` for details on adding new secrets.
 

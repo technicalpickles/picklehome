@@ -4,6 +4,9 @@ Manages home climate systems: Ecobee thermostats, Ambient Weather outdoor sensor
 
 ## Setup
 
+> New to this? [`docs/climate-setup.md`](../docs/climate-setup.md) is a step-by-step first-time
+> walkthrough (developer app registration, PIN auth, editing the schedule, troubleshooting).
+
 ### Ecobee thermostats
 
 1. Get an API key from the [Ecobee Developer Portal](https://www.ecobee.com/developers/)
