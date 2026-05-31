@@ -379,7 +379,7 @@ Self-hosted Taskwarrior sync server. Replicates the Mac's `~/.task` to picklelab
 
 Commands: `just deploy-taskchampion`, `just taskchampion-status`, `just taskchampion-logs`, `just taskchampion-logs-follow`
 
-See [taskchampion-sync/README.md](taskchampion-sync/README.md) for full setup.
+See [../../homelab/services/taskchampion-sync/README.md](../../homelab/services/taskchampion-sync/README.md) for full setup.
 
 ---
 ```

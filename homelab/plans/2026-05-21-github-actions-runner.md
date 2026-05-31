@@ -541,7 +541,7 @@ Goal: produce all the files needed to deploy the runner as a picklehome service,
 
   Self-hosted GitHub Actions runner for `technicalpickles/pirpg`. Bypasses GitHub
   Actions billing on the private repo. See
-  [services/github-actions-runner/README.md](services/github-actions-runner/README.md).
+  [../services/github-actions-runner/README.md](../services/github-actions-runner/README.md).
 
   **Deploy updates (from Mac):**
 
