@@ -11,9 +11,20 @@ services:
       - RUNNER_SCOPE=repo
       - LABELS=self-hosted,linux,picklelab
       - DISABLE_AUTO_UPDATE=true
+      # Survive reboots without a fresh registration token: persist the runner's
+      # config files (.runner/.credentials) in a volume and reuse them on restart.
+      # This mirrors GitHub's official runner-as-a-service model (register once,
+      # reuse stored credentials). The registration token is then a one-time
+      # bootstrap, not an ongoing credential. Both vars below are required:
+      #   - CONFIGURED_ACTIONS_RUNNER_FILES_DIR: entrypoint copies the runner
+      #     config dotfiles to/from this dir and skips config.sh when .runner exists.
+      #   - DISABLE_AUTOMATIC_DEREGISTRATION: otherwise the container deregisters
+      #     the runner on stop, wiping the persisted credentials.
+      - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner-config
+      - DISABLE_AUTOMATIC_DEREGISTRATION=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - runner-work:/runner/_work
+      - runner-config:/runner-config
 
 volumes:
-  runner-work:
+  runner-config:
