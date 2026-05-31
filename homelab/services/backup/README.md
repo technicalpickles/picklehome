@@ -24,7 +24,7 @@ GFS (grandfather-father-son) retention, pruned automatically after each run:
 Currently: local directory `/srv/backups/restic` on the NUC's own SSD.
 
 This is intentionally phase 1. Future work:
-- **Synology NAS** on the LAN (when online) — change `RESTIC_REPOSITORY` in 1Password, re-init
+- **Synology NAS** on the LAN (when online): change `RESTIC_REPOSITORY` in 1Password, re-init
 - **S3 offsite** as a second repo for disaster recovery
 
 ## Prerequisites (one-time)
@@ -34,7 +34,7 @@ Create a `Restic Backup` item in the `picklehome` 1Password vault:
 | field | value |
 |-------|-------|
 | `repository` | `/srv/backups/restic` (local for now) |
-| `password` | generate with `openssl rand -base64 32` — **losing this means losing all backups** |
+| `password` | generate with `openssl rand -base64 32` (**losing this means losing all backups**) |
 
 ## First-time Setup
 
@@ -94,9 +94,9 @@ cat /srv/data/vikunja/dumps/pg_dumpall.sql | docker exec -i vikunja-db-1 psql -U
 ## Data Locations (on picklelab)
 
 ```
-/srv/backups/restic/         — restic repository (snapshots, encrypted)
-/srv/backups/restic-cache/   — restic cache (owned by backup user, safe to delete)
-/srv/data/<service>/dumps/   — per-service SQL dumps (rewritten each run)
+/srv/backups/restic/         : restic repository (snapshots, encrypted)
+/srv/backups/restic-cache/   : restic cache (owned by backup user, safe to delete)
+/srv/data/<service>/dumps/   : per-service SQL dumps (rewritten each run)
 ```
 
 ## Security Model
@@ -105,4 +105,4 @@ cat /srv/data/vikunja/dumps/pg_dumpall.sql | docker exec -i vikunja-db-1 psql -U
 - Member of `docker` group (effectively root-equivalent, but that's the nature of Docker access)
 - `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` injected via systemd `EnvironmentFile` from `.env`
 - ACLs grant read-only access to service data without changing file ownership
-- Restic encrypts all snapshots at rest — safe to ship the repo offsite
+- Restic encrypts all snapshots at rest, so it's safe to ship the repo offsite

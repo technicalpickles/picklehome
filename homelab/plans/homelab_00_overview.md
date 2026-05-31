@@ -24,11 +24,11 @@ This is a resource‑constrained single‑node environment. Design choices favor
 
 The homelab prioritizes:
 
-- **Simplicity over orchestration** — avoid cluster tooling (e.g., Kubernetes) unless clear value emerges
-- **Reproducibility over manual tuning** — infrastructure configuration is captured in source control
-- **Isolation via conventions** — services are separated using Docker Compose projects and filesystem layout
-- **Recoverability over uptime** — the system should be easy to rebuild rather than engineered for high availability
-- **Incremental evolution** — start minimal and add structure only when real operational pain appears
+- **Simplicity over orchestration**: avoid cluster tooling (e.g., Kubernetes) unless clear value emerges
+- **Reproducibility over manual tuning**: infrastructure configuration is captured in source control
+- **Isolation via conventions**: services are separated using Docker Compose projects and filesystem layout
+- **Recoverability over uptime**: the system should be easy to rebuild rather than engineered for high availability
+- **Incremental evolution**: start minimal and add structure only when real operational pain appears
 
 ## Core Technology Stack
 

@@ -5,31 +5,31 @@ Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect c
 
 ## Follow-up
 
-- [ ] **2.4 GHz power reduction verification** — `just unifi-wifi checkup` after 24h. Compare
+- [ ] **2.4 GHz power reduction verification**: `just unifi-wifi checkup` after 24h. Compare
   retry rates to pre-change baseline (Living Room was 25-33%, Upstairs was 33%). Also verify
   no IoT devices dropped off (check 2.4 GHz client counts on both APs).
-- [ ] **Roaming recheck after ch 48 move** — `just unifi-wifi roaming raisynglsiPhone --sessions 3`
+- [ ] **Roaming recheck after ch 48 move**: `just unifi-wifi roaming raisynglsiPhone --sessions 3`
   after a day or two. Expect fewer segments and less Tracy ↔ Josh ↔ Upstairs cycling.
   Prior check (2026-03-20, before ch 48 move): improved from 11-segment baseline but
   still bouncy (5 segments/25 min in worst session). Ch 48 move should help further.
-- [ ] **Relocate Porch AP** — currently offline in Josh's office (co-located with Josh Office AP);
+- [ ] **Relocate Porch AP**: currently offline in Josh's office (co-located with Josh Office AP);
   move to a useful location. See `docs/outdoor-wifi-research.md` for options.
   **Note:** When Porch comes back on ch 11, will conflict with Upstairs (now ch 11).
   Re-plan 2.4 GHz channel assignments at that point.
-- [ ] **Ch 149 neighbor density** — 30 neighbors (strongest -79 dBm) vs ch 40 (17) and
+- [ ] **Ch 149 neighbor density**: 30 neighbors (strongest -79 dBm) vs ch 40 (17) and
   ch 157 (12). Currently 2% utilization so not a problem. Recheck if Living Room clients
   show persistent high retries.
-- [ ] **UAPSD off on all SSIDs** — low priority; may help iPhone PSM behavior but
+- [ ] **UAPSD off on all SSIDs**: low priority; may help iPhone PSM behavior but
   Ubiquiti's own compatibility guide recommends off. Revisit only if iPhone PSM issues resurface.
 
 ### Resolved
 
-- [x] ~~**Min RSSI `enabled=True` with no value on main SSID**~~ — 2026-03-20: display bug
+- [x] ~~**Min RSSI `enabled=True` with no value on main SSID**~~: 2026-03-20: display bug
   in `unifi-wifi.py config` (was reading `minrate_na_enabled`). Min RSSI not configured. Fixed.
-- [x] ~~**BGW WiFi beaconing despite Disabled**~~ — 2026-03-20: resolved without factory reset.
+- [x] ~~**BGW WiFi beaconing despite Disabled**~~: 2026-03-20: resolved without factory reset.
   No trace of SSID or BSSID in RF scan.
-- [x] ~~**5GHz TX power reduction verification**~~ — 2026-03-20: all radios confirmed mode=medium.
-- [x] ~~**Ch 48 clean after BGW disable**~~ — 2026-03-20: zero neighbors on ch 48 in RF scan.
+- [x] ~~**5GHz TX power reduction verification**~~: 2026-03-20: all radios confirmed mode=medium.
+- [x] ~~**Ch 48 clean after BGW disable**~~: 2026-03-20: zero neighbors on ch 48 in RF scan.
 
 ---
 
@@ -40,7 +40,7 @@ Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect c
 **What:** `just unifi-wifi set-channel "upstairs" 2.4 11 --yes`
 
 **Why:** Living Room AC LR and Upstairs AC HD were both on 2.4 GHz ch 6, one floor apart
-with an open stairwell between them — co-channel interference. Each AP's transmissions
+with an open stairwell between them: co-channel interference. Each AP's transmissions
 consumed the other's airtime (30% RX utilization on Living Room). Ch 11 was available
 since Porch AP is offline.
 
@@ -73,10 +73,10 @@ See `docs/24ghz-power-tuning.md` for full research findings.
 | Living Room AC LR | 17 dBm | ~13 dBm | 24 dBm |
 | Upstairs AC HD | 19 dBm | ~16 dBm | 25 dBm |
 
-Office APs (AC Pro, 15 dBm max=22) left unchanged — already lower power, serve distinct zones.
+Office APs (AC Pro, 15 dBm max=22) left unchanged: already lower power, serve distinct zones.
 
 **Verify:**
-- [ ] `just unifi-wifi checkup` after 24h — retry rates should be lower, no IoT dropouts
+- [ ] `just unifi-wifi checkup` after 24h: retry rates should be lower, no IoT dropouts
 
 ---
 
@@ -94,7 +94,7 @@ distinct channels from the bathroom: ch 40 (Josh), ch 48 (Tracy), ch 157 (Upstai
 
 **Verify:**
 - [x] Config and live stats both show ch 48 (confirmed via `/stat/device`)
-- [ ] `just unifi-wifi roaming raisynglsiPhone --sessions 3` after a day or two —
+- [ ] `just unifi-wifi roaming raisynglsiPhone --sessions 3` after a day or two:
   expect fewer segments and less Tracy ↔ Josh ↔ Upstairs cycling
 
 ---
@@ -107,18 +107,18 @@ distinct channels from the bathroom: ch 40 (Josh), ch 48 (Tracy), ch 157 (Upstai
 
 **Why:** Ch 44 had 54 neighbors (strongest -54 dBm). Ch 40 is the cleanest 5GHz channel
 (16 neighbors, all ≤ -88 dBm excluding stale BGW entries). Josh Office is also on ch 40
-but they're on opposite sides of the house — co-channel is not a concern.
+but they're on opposite sides of the house, so co-channel is not a concern.
 
 **Verify:**
 - [x] Config and live stats both show ch 40 (confirmed via `/stat/device`)
 
 ### BGW WiFi confirmed not beaconing
 
-**What:** `just unifi-wifi rfscan --fresh 30` — no `ATTt6kgiKH` entries in the last 30 min.
+**What:** `just unifi-wifi rfscan --fresh 30`: no `ATTt6kgiKH` entries in the last 30 min.
 
 **Why:** Follow-up to the 2026-03-18 finding that BGW continued beaconing despite UI showing
 Disabled. All BGW entries in the full rfscan are now 13+ hours old (stale cache). The disable
-is holding — no factory reset needed.
+is holding: no factory reset needed.
 
 ---
 
@@ -130,16 +130,16 @@ is holding — no factory reset needed.
 `http://192.168.8.254/cgi-bin/wconfig_unified.ha`.
 
 **Why:** BGW was broadcasting `ATTt6kgiKH` and appearing as a strong neighbor on our
-APs — -32 dBm on 2.4GHz ch 11 and -13 dBm on 5GHz ch 48. All home devices connect
+APs: -32 dBm on 2.4GHz ch 11 and -13 dBm on 5GHz ch 48. All home devices connect
 via UniFi APs; BGW WiFi is redundant.
 
 **Verify:**
-- [x] `just bgw wifi` — both bands show Disabled ✓ (confirmed 2026-03-18)
-- [x] `just unifi-wifi rfscan` — `ATTt6kgiKH` gone ✓ (confirmed 2026-03-20, no SSID or BSSID in scan)
+- [x] `just bgw wifi`: both bands show Disabled ✓ (confirmed 2026-03-18)
+- [x] `just unifi-wifi rfscan`: `ATTt6kgiKH` gone ✓ (confirmed 2026-03-20, no SSID or BSSID in scan)
 
 **2026-03-18 follow-up:** BGW UI shows both bands Disabled, but `ATTt6kgiKH`
 (BSSID `bc:9a:8e:ed:fe:ec`, base MAC `bc:9a:8e:ed:fe:e0`) continued beaconing
-on 5GHz ch 149 at -50 dBm — confirmed via `just unifi-wifi rfscan --fresh 5`
+on 5GHz ch 149 at -50 dBm, confirmed via `just unifi-wifi rfscan --fresh 5`
 both before and after a BGW restart. Channel also shifted from ch 48 → ch 149,
 suggesting the radio is still active and running auto channel selection despite
 the UI reporting Disabled. Likely a firmware bug or AT&T remote management
@@ -157,7 +157,7 @@ eventually took effect (possibly after the BGW restart propagated).
 
 **Why:** All 5GHz radios were at or near max power (22–25 dBm), creating heavy cell
 overlap. iPhone roaming analysis (Tracy's phone, `raisynglsiPhone`) showed 11 AP-roam
-segments across 5 APs in ~1 hour — consistent with a phone constantly re-scoring
+segments across 5 APs in ~1 hour, consistent with a phone constantly re-scoring
 overlapping candidates. Research confirmed over-powered APs are a primary cause of
 roaming churn.
 
@@ -171,11 +171,11 @@ roaming churn.
 | Upstairs AC HD | 25 dBm | 16 dBm | 25 dBm |
 | Porch AC LR | 19 dBm | 13 dBm | 22 dBm |
 
-2.4GHz left at max — lower frequency penetrates walls better; reducing risks dead spots.
+2.4GHz left at max: lower frequency penetrates walls better; reducing risks dead spots.
 
 **Verify:**
-- [x] `just unifi-wifi config` — all 5GHz radios show mode=medium ✓ (confirmed 2026-03-20)
-- [x] `just unifi-wifi roaming raisynglsiPhone --sessions 3` — improved but mixed (2026-03-20):
+- [x] `just unifi-wifi config`: all 5GHz radios show mode=medium ✓ (confirmed 2026-03-20)
+- [x] `just unifi-wifi roaming raisynglsiPhone --sessions 3`: improved but mixed (2026-03-20):
   session 1 had 5 segments/25 min (Tracy ↔ Upstairs indecision), session 2 was clean
   (2 segments/1.5h). Better than the 11-segment baseline. See Open/Pending for follow-up.
 
@@ -195,7 +195,7 @@ with Josh Office.
 disabled, ch 48 should be cleaner. Verify with rfscan after BGW clears.
 
 **Verify:**
-- [x] `just unifi-wifi rfscan` — ch 48 confirmed clean (zero neighbors, 2026-03-20)
+- [x] `just unifi-wifi rfscan`: ch 48 confirmed clean (zero neighbors, 2026-03-20)
 
 ---
 

@@ -17,9 +17,9 @@ Examples:
 Reference documentation for anyone using or extending the module. Covers setup, commands, architecture, API details, and findings from integration work.
 
 Each major module directory should have a README.md:
-- `climate/README.md` — overview of all climate subsystems
-- `climate/blueair/README.md` — BlueAir-specific API details and commands
-- `network/README.md` — network diagnostic tools
+- `climate/README.md`: overview of all climate subsystems
+- `climate/blueair/README.md`: BlueAir-specific API details and commands
+- `network/README.md`: network diagnostic tools
 
 README content includes:
 - Setup steps and prerequisites
@@ -31,7 +31,7 @@ README content includes:
 
 ### CLAUDE.md (per module)
 
-Agent-specific workflow and process guidance — things that shape *how to approach work*, not *how the code works*. Keep these short.
+Agent-specific workflow and process guidance: things that shape *how to approach work*, not *how the code works*. Keep these short.
 
 Examples:
 - "Read the spec before changing config" (workflow directive)
@@ -42,7 +42,7 @@ CLAUDE.md should `@import` the README for shared context rather than duplicating
 
 ### docs/plans/
 
-Design documents and implementation plans. Named `YYYY-MM-DD-<topic>.md`. These are point-in-time artifacts — they capture the thinking behind a design, not ongoing reference material.
+Design documents and implementation plans. Named `YYYY-MM-DD-<topic>.md`. These are point-in-time artifacts: they capture the thinking behind a design, not ongoing reference material.
 
 ## Principles
 

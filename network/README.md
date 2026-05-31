@@ -7,7 +7,7 @@ See `TOPOLOGY.md` for network layout, key IPs, channel plan, DNS config, and iss
 ## Running scripts
 
 The preferred way to run scripts is via `just` (see `just --list`). Scripts can also be run
-directly with `uv run --with <deps>` — useful when iterating on a script or running it on
+directly with `uv run --with <deps>`, useful when iterating on a script or running it on
 a machine that doesn't have the full repo checked out.
 
 Each script's docstring documents its exact `uv run --with ...` invocation.
@@ -26,7 +26,7 @@ Each script's docstring documents its exact `uv run --with ...` invocation.
 
 ### Running directly (without `just`)
 
-Every script also runs standalone via `uv run --with <deps>` — useful when iterating on a
+Every script also runs standalone via `uv run --with <deps>`, useful when iterating on a
 script or running it on a machine without the full repo checked out. Each script's docstring
 documents its exact invocation. Examples:
 
@@ -41,6 +41,6 @@ uv run --with playwright network/profile.py <url> --slow-ms 1000 --timeout 15
 
 Scripts that talk to the CloudKey or Cloudflare require `.env` (generated via `just dotenv`):
 
-- `UNIFI_API_KEY` — UniFi CloudKey API key (Network → Integrations)
-- `CLOUDFLARE_RADAR_API_TOKEN` — Cloudflare dashboard → My Profile → API Tokens → `Account > Radar: Read`
-- `UNIFI_ADMIN_USERNAME` / `UNIFI_ADMIN_PASSWORD` — only needed for `just unifi usg dns` (SSH)
+- `UNIFI_API_KEY`: UniFi CloudKey API key (Network → Integrations)
+- `CLOUDFLARE_RADAR_API_TOKEN`: Cloudflare dashboard → My Profile → API Tokens → `Account > Radar: Read`
+- `UNIFI_ADMIN_USERNAME` / `UNIFI_ADMIN_PASSWORD`: only needed for `just unifi usg dns` (SSH)

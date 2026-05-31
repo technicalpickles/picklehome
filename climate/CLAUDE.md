@@ -1,4 +1,4 @@
-# CLAUDE.md — climate/
+# CLAUDE.md: climate/
 
 See @README.md for command reference, architecture, and module structure.
 

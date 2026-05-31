@@ -138,7 +138,7 @@ Primary editor is **neovim** (not VS Code). The expected workflow involves SSH i
 ### Open questions
 
 - **Devcontainers over a remote Docker host:** devcontainers work locally and over SSH, but the exact workflow for running them against a remote Docker engine (without VS Code) needs investigation. Options may include devcontainer CLI, direct Docker Compose, or SSH + local container reopen.
-- **Agent as host admin:** a coding agent (e.g., Claude Code) should be usable over SSH for managing the host through the infra repo and wrapper commands — same access model described in the agent access doc.
+- **Agent as host admin:** a coding agent (e.g., Claude Code) should be usable over SSH for managing the host through the infra repo and wrapper commands, the same access model described in the agent access doc.
 
 Devcontainer images and build cache are treated as disposable and subject to periodic pruning.
 

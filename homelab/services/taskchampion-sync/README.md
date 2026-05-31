@@ -2,7 +2,7 @@
 
 Self-hosted Taskwarrior sync server. Replicates the Mac's `~/.task` to picklelab; encryption secret stays Mac-side, server only sees opaque blobs keyed by client ID.
 
-Single-client today (Mac only). Adding a second device is a config change — append a UUID to the allowlist, set the same env on the new device, run `task sync`.
+Single-client today (Mac only). Adding a second device is a config change: append a UUID to the allowlist, set the same env on the new device, run `task sync`.
 
 Design: [`docs/plans/2026-05-03-taskchampion-sync.md`](../../../docs/plans/2026-05-03-taskchampion-sync.md).
 
@@ -94,7 +94,7 @@ The status recipe runs three checks in order. Any failure tells you which layer 
 - **Networking:** container binds `0.0.0.0:9080` inside its netns; host port maps to `127.0.0.1:9080`. Reachable only via `tailscaled`'s local proxy.
 - **Port configuration:** controlled by `TASKCHAMPION_SYNC_PORT`, default `9080`. `deploy.sh` exports it; compose interpolates with `${...:?...}` and fails fast if unset; `tailscale serve` references the same var. To change the port, export `TASKCHAMPION_SYNC_PORT` before running `deploy.sh`. (Same pattern as brineworks-server.)
 - **Storage:** SQLite at `/srv/data/taskchampion-sync/`. Single file (plus WAL/SHM). Backed up nightly by the existing restic job.
-- **Auth model:** zero-knowledge. Server stores opaque encrypted blobs keyed by `CLIENT_ID`. The encryption secret never reaches picklelab — only Mac-side clients can decrypt. The `CLIENT_ID` allowlist (set via env) limits which client UUIDs can write.
+- **Auth model:** zero-knowledge. Server stores opaque encrypted blobs keyed by `CLIENT_ID`. The encryption secret never reaches picklelab; only Mac-side clients can decrypt. The `CLIENT_ID` allowlist (set via env) limits which client UUIDs can write.
 
 ## Environment Variables
 

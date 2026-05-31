@@ -1,6 +1,6 @@
 # AT&T BGW320 Reference
 
-AT&T fiber gateway at `http://192.168.8.254`. Double-NAT — not in IP passthrough mode. USG gets `192.168.8.65` via DHCP.
+AT&T fiber gateway at `http://192.168.8.254`. Double-NAT, not in IP passthrough mode. USG gets `192.168.8.65` via DHCP.
 
 ## Hardware
 
@@ -33,10 +33,10 @@ Two tiers of access:
 
 | Tier | Auth required | Use for |
 |---|---|---|
-| Status pages | None | Read-only diagnostics — fiber, broadband, WiFi state, device list |
+| Status pages | None | Read-only diagnostics: fiber, broadband, WiFi state, device list |
 | Config pages | BGW access code (device label) + cookies | Changing WiFi, firewall, etc. |
 
-Config pages redirect to a login page if no valid session cookie is present. `requests` alone won't work for these — use Playwright to handle the login flow.
+Config pages redirect to a login page if no valid session cookie is present. `requests` alone won't work for these; use Playwright to handle the login flow.
 
 Status pages are freely accessible with a plain GET.
 
@@ -54,13 +54,13 @@ All pages are at `http://192.168.8.254/cgi-bin/<page>.ha`.
 | `lanstatistics.ha` | LAN port statistics |
 | `sysinfo.ha` | Device info, firmware version, uptime |
 | `devices.ha` | Known device list |
-| `diag.ha` | Diagnostics UI — ping, traceroute, nslookup from BGW WAN |
+| `diag.ha` | Diagnostics UI: ping, traceroute, nslookup from BGW WAN |
 
 ### Config (requires auth)
 
 | Page | Description |
 |---|---|
-| `wconfig_unified.ha` | WiFi configuration — SSID, password, band enable/disable |
+| `wconfig_unified.ha` | WiFi configuration: SSID, password, band enable/disable |
 | `firewall.ha` | Firewall rules |
 | `remoteaccess.ha` | Remote access settings |
 | `routerpasswd.ha` | Change BGW access code |
@@ -70,7 +70,7 @@ All pages are at `http://192.168.8.254/cgi-bin/<page>.ha`.
 
 `wrestart.ha`, `vrestart.ha`, `crestart.ha`, `restart.ha`
 
-## home.ha — WiFi Status Fields
+## home.ha: WiFi Status Fields
 
 `home.ha` renders WiFi state without auth. Scrape with Playwright (the page uses JavaScript to render some sections). Key fields visible in page text:
 
@@ -121,6 +121,6 @@ def get(path, **kwargs):
 
 **2026-03-17: Both bands disabled** via `wconfig_unified.ha` in browser. Confirmed off with `just bgw wifi`.
 
-Was broadcasting `ATTt6kgiKH` on 2.4GHz ch 11 (-32 dBm at nearest AP) and 5GHz ch 48 (-13 dBm) — directly interfering with our APs. All home devices connect via UniFi APs; BGW WiFi was redundant.
+Was broadcasting `ATTt6kgiKH` on 2.4GHz ch 11 (-32 dBm at nearest AP) and 5GHz ch 48 (-13 dBm), directly interfering with our APs. All home devices connect via UniFi APs; BGW WiFi was redundant.
 
-Check `just bgw wifi` to confirm still disabled. Check `just unifi wifi rfscan` to confirm gone from neighbor scan (rfscan data is passive/cached — allow ~15 min after change for APs to rescan).
+Check `just bgw wifi` to confirm still disabled. Check `just unifi wifi rfscan` to confirm gone from neighbor scan (rfscan data is passive/cached; allow ~15 min after change for APs to rescan).

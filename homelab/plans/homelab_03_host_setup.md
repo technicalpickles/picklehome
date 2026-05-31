@@ -25,18 +25,18 @@ access, and convenience tooling). Reflects the current host; update as the build
 - **F10** at power-on → Boot device menu
 - If using a Mac keyboard with Fn toggle, ensure function keys send F1–F12 (not media keys), or hold Fn+F2
 - Power button hold (3 sec) → Power Button Menu → BIOS Setup (fallback)
-- **Recommended:** `sudo systemctl reboot --firmware-setup` from the OS — reboots directly into BIOS setup without key-mashing. The NUC's POST is fast enough that catching F2 is unreliable, especially through GRUB.
+- **Recommended:** `sudo systemctl reboot --firmware-setup` from the OS, which reboots directly into BIOS setup without key-mashing. The NUC's POST is fast enough that catching F2 is unreliable, especially through GRUB.
 
 **BIOS settings (configured):**
 
-- Auto power-on after power loss — enabled
+- Auto power-on after power loss: enabled
 - Boot order: SSD first
 
 ---
 
 ## Install Media
 
-**Image:** Ubuntu Server 24.04 LTS (amd64) — `ubuntu-24.04.4-live-server-amd64.iso` (~3.2 GB)
+**Image:** Ubuntu Server 24.04 LTS (amd64): `ubuntu-24.04.4-live-server-amd64.iso` (~3.2 GB)
 
 **Download:** https://ubuntu.com/download/server
 
@@ -56,7 +56,7 @@ sudo dd if=~/Downloads/ubuntu-24.04.4-live-server-amd64.iso of=/dev/rdiskN bs=1M
 diskutil eject /dev/diskN
 ```
 
-macOS may show a "disk not readable" dialog after dd completes — ignore/eject it (the disk is now a Linux boot image).
+macOS may show a "disk not readable" dialog after dd completes. Ignore/eject it (the disk is now a Linux boot image).
 
 ---
 
@@ -65,7 +65,7 @@ macOS may show a "disk not readable" dialog after dd completes — ignore/eject 
 - Choose **Ubuntu Server (minimized)** if offered
 - Enable **OpenSSH server** during install
 - Import SSH keys from GitHub when prompted (enter GitHub username)
-- Plug in Ethernet for the install — smoother than WiFi
+- Plug in Ethernet for the install (smoother than WiFi)
 
 **Post-install gotcha:** the minimized server install may not enable `sshd` at boot even if selected during install. After first boot, verify and fix from the console:
 
@@ -114,7 +114,7 @@ Already installed on Ubuntu Server 24.04 minimized. Enable auto-apply:
 sudo dpkg-reconfigure -plow unattended-upgrades
 ```
 
-On minimized installs, this falls back to readline (no `dialog` package) — answer `yes`.
+On minimized installs, this falls back to readline (no `dialog` package). Answer `yes`.
 
 ### Docker Engine + Compose + `/srv` layout
 
@@ -122,7 +122,7 @@ Scripted install: `homelab/scripts/setup-docker.sh`
 
 Installs Docker CE 29.3, Compose plugin, buildx from the official Docker apt repo. Configures:
 
-- `data-root: /srv/docker` — keeps images/layers off root LV
+- `data-root: /srv/docker`: keeps images/layers off root LV
 - Log driver: `json-file` with 10MB × 3 file rotation per container
 - `/srv` directories: `/srv/docker`, `/srv/data`, `/srv/containers`
 - Adds current user to `docker` group (re-login required)
@@ -137,12 +137,12 @@ Scripted install: `homelab/scripts/setup-tailscale.sh`
 
 **Client setup (Mac):**
 
-1. Install: `brew install --cask tailscale` (GUI app — not the CLI-only `brew install tailscale`, which requires manually running `tailscaled`)
+1. Install: `brew install --cask tailscale` (GUI app, not the CLI-only `brew install tailscale`, which requires manually running `tailscaled`)
 2. Open Tailscale from Applications, sign in with the same account
 3. Verify: `tailscale status` should show both your Mac and `picklelab`
 4. Test: `ssh technicalpickles@100.123.122.68`
 
-MagicDNS is enabled — `ssh picklelab` and `ssh picklelab.tail2023b7.ts.net` both work from any device on the tailnet. No SSH config or `/etc/hosts` needed.
+MagicDNS is enabled, so `ssh picklelab` and `ssh picklelab.tail2023b7.ts.net` both work from any device on the tailnet. No SSH config or `/etc/hosts` needed.
 
 ### Log rotation
 
@@ -158,7 +158,7 @@ sudo mkdir -p /opt/homelab && sudo chown technicalpickles: /opt/homelab
 git clone git@github.com:technicalpickles/picklehome.git /opt/homelab
 ```
 
-Requires SSH agent forwarding — configured in `~/.ssh/config.d/hosts` on Mac (`ForwardAgent yes` for picklelab).
+Requires SSH agent forwarding, configured in `~/.ssh/config.d/hosts` on Mac (`ForwardAgent yes` for picklelab).
 
 ### Deploy access (passwordless sudo)
 

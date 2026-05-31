@@ -1,4 +1,4 @@
-# CLAUDE.md — network/
+# CLAUDE.md: network/
 
 Network diagnostic tooling for investigating ISP/CDN connectivity issues.
 
@@ -17,7 +17,7 @@ instead of `127.0.0.1`.
 
 ## Scripts
 
-### `bgw.py` — AT&T BGW gateway diagnostics
+### `bgw.py`: AT&T BGW gateway diagnostics
 
 Queries the AT&T BGW router admin interface (`http://192.168.8.254`) directly.
 Uses `requests` for status pages, `playwright` for diag commands (which stream output progressively).
@@ -30,9 +30,9 @@ just bgw ping <ip>           # ping from BGW WAN
 just bgw nslookup <host>
 ```
 
-The traceroute/ping/nslookup commands run from the BGW's WAN interface, bypassing the USG entirely — useful for isolating whether issues are in the LAN/USG or in the AT&T network.
+The traceroute/ping/nslookup commands run from the BGW's WAN interface, bypassing the USG entirely. Useful for isolating whether issues are in the LAN/USG or in the AT&T network.
 
-### `profile.py` — Playwright network profiler
+### `profile.py`: Playwright network profiler
 
 Visits a URL with a headless browser and reports per-hostname request stats (latency, errors, pending requests).
 
@@ -41,7 +41,7 @@ just network-profile https://example.com
 just network-profile https://example.com --slow-ms 1000 --timeout 15
 ```
 
-### `isp_status.py` — ISP and CDN status checker
+### `isp_status.py`: ISP and CDN status checker
 
 Checks Cloudflare's status API (overall + nearby colos + active incidents), the
 Cloudflare trace endpoint (which colo your traffic routes through), Cloudflare Radar
@@ -49,7 +49,7 @@ BGP hijack/leak events and NetFlows traffic trend for AT&T (AS7018), RIPE BGP st
 (your IP's current ASN + Cloudflare/Google prefix health), and optionally AT&T outage
 status by ZIP code (via Playwright). Prints manual-check URLs for BGP tools.
 
-The RIPE section uses `stat.ripe.net` (no token needed) and reports dynamically — your
+The RIPE section uses `stat.ripe.net` (no token needed) and reports dynamically: your
 IP's ASN (confirms AT&T / flags if different), and prefix visibility + origin ASN for
 key destinations. Useful for detecting hijacks or unexpected origin changes.
 
@@ -62,10 +62,10 @@ just network-status 30318        # + AT&T check by ZIP
 ```
 
 **Traffic trend note:** The NetFlows sparkline uses `[?]` rather than `[!]` for low recent
-traffic — the 24h normalization means overnight lows will always look like drops. The
+traffic: the 24h normalization means overnight lows will always look like drops. The
 threshold logic needs further calibration before it's reliable as an alert.
 
-### `unifi_cli.py` — Unified UniFi CLI
+### `unifi_cli.py`: Unified UniFi CLI
 
 Single entrypoint for all UniFi CloudKey diagnostics: WiFi APs, clients, roaming,
 USG/gateway stats, device inventory, topology, and raw API access. Queries the
@@ -73,10 +73,10 @@ CloudKey legacy API. Requires `UNIFI_API_KEY` in `.env`. SSH commands (`dns`, `r
 also need `UNIFI_ADMIN_USERNAME` and `UNIFI_ADMIN_PASSWORD`.
 
 Code layout:
-- `unifi_cli.py` — CLI entrypoint (argument parsing, dispatch)
-- `unifi/__init__.py` — shared auth, helpers, devices/topology commands
-- `unifi/wifi.py` — WiFi AP commands (aps, clients, roaming, rfscan, config, set-channel, set-power, locate)
-- `unifi/usg.py` — gateway commands (stats, wan, wan-detail, dns, resolve)
+- `unifi_cli.py`: CLI entrypoint (argument parsing, dispatch)
+- `unifi/__init__.py`: shared auth, helpers, devices/topology commands
+- `unifi/wifi.py`: WiFi AP commands (aps, clients, roaming, rfscan, config, set-channel, set-power, locate)
+- `unifi/usg.py`: gateway commands (stats, wan, wan-detail, dns, resolve)
 
 ```bash
 # Quick health check
@@ -92,13 +92,13 @@ just unifi client <hostname|ip>           # detail for one client (partial hostn
 just unifi wifi roaming                   # roaming history for all watched devices (from .env)
 just unifi wifi roaming <hostname|ip>     # roaming history for a specific device
 just unifi wifi roaming <hostname|ip> --sessions 3  # show last N sessions
-just unifi wifi rfscan                    # neighboring APs from passive RF scan — channel congestion
+just unifi wifi rfscan                    # neighboring APs from passive RF scan: channel congestion
 just unifi wifi rfscan --summary          # channel congestion only, skip full neighbor list
 just unifi wifi rfscan --fresh 60         # only neighbors seen in last N minutes
 just unifi wifi rfscan --own              # include own APs in the scan results
 just unifi wifi config                    # SSID roaming/power-save settings + per-AP transmit power
 
-# WiFi actions (mutating — will prompt for confirmation)
+# WiFi actions (mutating, will prompt for confirmation)
 just unifi wifi set-channel <ap> <band> <ch>  # change radio channel (e.g. "tracy" 5 36)
 just unifi wifi set-power <ap> <band> <mode>  # set tx power mode (auto/low/medium/high/custom)
 just unifi wifi set-power all 2.4 medium      # set all APs at once
@@ -125,7 +125,7 @@ just unifi api get /stat/sta
 just unifi api put /rest/device/<id> '{"radio_table": [...]}'
 ```
 
-Paths for `api get/put` are relative to `/proxy/network/api/s/default` — omit that prefix.
+Paths for `api get/put` are relative to `/proxy/network/api/s/default`; omit that prefix.
 
 **Common diagnostic workflows:**
 - "Quick network health check?" → `just unifi checkup` (AP retries + RF neighbors + watched device roaming in one command)
@@ -147,7 +147,7 @@ Note: UniFi's `rssi` field is a normalized 0–95 scale, NOT dBm. Use `signal` f
 scores < 90 are flagged with `←`. Use this to confirm which AP a client was on before
 roaming, diagnose sticky-client behavior, or correlate a complaint with a specific transition.
 
-### `wifi-diag.py` — Client-side WiFi and connectivity diagnostic
+### `wifi-diag.py`: Client-side WiFi and connectivity diagnostic
 
 Run on any Mac in the home network to diagnose local WiFi issues. Collects:
 - WiFi association: SSID, BSSID (which physical AP), RSSI, noise, SNR, channel, link rate
@@ -157,7 +157,7 @@ Run on any Mac in the home network to diagnose local WiFi issues. Collects:
 - Traceroute to 8.8.8.8 with known-hop annotations (USG, BGW, etc.)
 - Internet download speed via Cloudflare (~25 MB)
 
-The BSSID field identifies exactly which physical AP the device is on — cross-reference
+The BSSID field identifies exactly which physical AP the device is on. Cross-reference
 with UniFi UI → Clients → `<device>` → AP, or the AP's radio MAC in UniFi → Devices.
 
 ```bash
@@ -165,13 +165,13 @@ just wifi-diag
 just wifi-diag --no-trace --no-speed   # quick run (skip traceroute + speed test)
 ```
 
-No `.env` or API keys required — runs standalone on any Mac with `uv` installed.
+No `.env` or API keys required; runs standalone on any Mac with `uv` installed.
 
-### `diag.sh` — curl-based per-host diagnostics
+### `diag.sh`: curl-based per-host diagnostics
 
 Shell script for curl-based TCP connect timing to a list of hosts. No dependencies.
 
-### `mtr-capture.sh` — mtr batch capture
+### `mtr-capture.sh`: mtr batch capture
 
 Runs mtr to multiple targets and saves results to `network-diag-results/mtr/`.
 
@@ -183,13 +183,13 @@ Past investigations are in `investigations/`.
 
 ## Deep Reference Docs (`network/docs/`)
 
-Read these when working on a specific tool — do not load by default.
+Read these when working on a specific tool; do not load by default.
 
 | File | When to read |
 |---|---|
-| `docs/bgw-reference.md` | Working on `bgw.py` or BGW WiFi config — CGI endpoints, auth model, `home.ha` scraping |
-| `docs/wifi-ios-unifi.md` | Diagnosing iPhone WiFi issues — iOS PSM/roaming behavior, UniFi settings that affect it, diagnostic workflow, current network config snapshot |
-| `docs/outdoor-wifi-research.md` | Outdoor backyard coverage — hardware comparison (U7LR vs U7 Outdoor), mounting orientation, TX power/channel starting config, decision gate criteria, measurement protocol |
-| `docs/wifi-survey-tools.md` | WiFi survey and floor plan tools — WiFiMan (free, LiDAR heatmap), NetSpot (paid, multi-metric), Design Center (free, simulated), InnerSpace (live coverage); recommended workflow and comparison |
-| `docs/24ghz-power-tuning.md` | 2.4 GHz TX power research — near-far problem, AP model antenna characteristics, why medium beats max in multi-floor homes, before/after data |
-| `docs/cloud-gateway-upgrade-research.md` | Replacing CloudKey Gen2 + USG with a Cloud Gateway — model comparison (UDM Pro/SE/Pro Max), migration process, features unlocked, WiFi 7 AP lineup |
+| `docs/bgw-reference.md` | Working on `bgw.py` or BGW WiFi config: CGI endpoints, auth model, `home.ha` scraping |
+| `docs/wifi-ios-unifi.md` | Diagnosing iPhone WiFi issues: iOS PSM/roaming behavior, UniFi settings that affect it, diagnostic workflow, current network config snapshot |
+| `docs/outdoor-wifi-research.md` | Outdoor backyard coverage: hardware comparison (U7LR vs U7 Outdoor), mounting orientation, TX power/channel starting config, decision gate criteria, measurement protocol |
+| `docs/wifi-survey-tools.md` | WiFi survey and floor plan tools: WiFiMan (free, LiDAR heatmap), NetSpot (paid, multi-metric), Design Center (free, simulated), InnerSpace (live coverage); recommended workflow and comparison |
+| `docs/24ghz-power-tuning.md` | 2.4 GHz TX power research: near-far problem, AP model antenna characteristics, why medium beats max in multi-floor homes, before/after data |
+| `docs/cloud-gateway-upgrade-research.md` | Replacing CloudKey Gen2 + USG with a Cloud Gateway: model comparison (UDM Pro/SE/Pro Max), migration process, features unlocked, WiFi 7 AP lineup |

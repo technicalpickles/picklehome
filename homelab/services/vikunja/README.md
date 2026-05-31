@@ -2,10 +2,10 @@
 
 Self-hosted task manager. Two containers managed as a single systemd service:
 
-- **Postgres 16** — database
-- **Vikunja** — app server + frontend, bound to `127.0.0.1:3456` on the host
+- **Postgres 16**: database
+- **Vikunja**: app server + frontend, bound to `127.0.0.1:3456` on the host
 
-TLS and routing are handled by **Tailscale Services** — `tailscaled` on the host serves `https://vikunja.<tailnet>.ts.net`, terminating HTTPS and proxying to `127.0.0.1:3456`. No reverse proxy container needed.
+TLS and routing are handled by **Tailscale Services**: `tailscaled` on the host serves `https://vikunja.<tailnet>.ts.net`, terminating HTTPS and proxying to `127.0.0.1:3456`. No reverse proxy container needed.
 
 ## Prerequisites (one-time)
 
@@ -37,7 +37,7 @@ just dotenv          # pull secrets from 1Password into .env
 just deploy-vikunja  # copies .env to picklelab, configures tailscale serve, creates data dirs, installs + starts systemd unit
 ```
 
-`deploy.sh` is idempotent — safe to re-run.
+`deploy.sh` is idempotent, safe to re-run.
 
 ## Deploying Updates
 
@@ -77,7 +77,7 @@ If you reprovision the host from scratch, re-run `deploy.sh` to restore the serv
 
 - Base URL: `https://vikunja.<tailnet>.ts.net/api/v1`
 - Docs (Swagger UI): `https://vikunja.<tailnet>.ts.net/api/v1/docs`
-- **Login endpoint:** `POST /api/v1/login` — note: NOT `/api/v1/user/login` (returns 404)
+- **Login endpoint:** `POST /api/v1/login` (note: NOT `/api/v1/user/login`, which returns 404)
 - **Auth for automation:** create an API token in Settings → API Tokens; pass as `Authorization: Bearer <token>`
 - **Inbox project** is always id=1, auto-created on first login; all 4 views (List, Gantt, Table, Kanban) are created automatically
 
@@ -100,14 +100,14 @@ just vikunja-local-down    # tear down and remove volumes
 ## Data Locations (on picklelab)
 
 ```
-/srv/data/vikunja/db/       — Postgres data directory
-/srv/data/vikunja/files/    — file attachments (must be owned by UID 1000)
-/srv/data/vikunja/dumps/    — nightly pg_dumpall.sql (written by the backup service)
+/srv/data/vikunja/db/       : Postgres data directory
+/srv/data/vikunja/files/    : file attachments (must be owned by UID 1000)
+/srv/data/vikunja/dumps/    : nightly pg_dumpall.sql (written by the backup service)
 ```
 
 ## Backups
 
-Both the database (via `pg_dumpall`) and file attachments are captured nightly at 3am by the [backup service](../backup/README.md). The raw `/srv/data/vikunja/db/` directory is intentionally excluded from restic — the SQL dump in `dumps/` is the authoritative database backup.
+Both the database (via `pg_dumpall`) and file attachments are captured nightly at 3am by the [backup service](../backup/README.md). The raw `/srv/data/vikunja/db/` directory is intentionally excluded from restic. The SQL dump in `dumps/` is the authoritative database backup.
 
 ## Config Reference
 

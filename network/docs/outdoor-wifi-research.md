@@ -8,7 +8,7 @@ with minimal interference to indoor APs. Conducted 2026-03-18.
 ## Context
 
 - **Problem:** Porch AC LR (U7LR) was discovered to be physically co-located with Josh
-  Office AC Pro (U7PG2) inside the house — all historical performance data for "Porch"
+  Office AC Pro (U7PG2) inside the house, so all historical performance data for "Porch"
   is unreliable. The AP was never actually covering the porch or backyard.
 - **Goal:** Provide reliable WiFi coverage in the backyard, past a cinderblock wall,
   without interfering with indoor APs or causing sticky-client problems.
@@ -38,7 +38,7 @@ a controlled test but is not the ideal permanent outdoor solution.
 | **UAP-AC-M** | Yes | 3 dBi | 4 dBi | 20 dBm | Weakest radio; not recommended |
 
 **Recommendation:** Use U7LR for initial testing. If it passes the decision gate, keep it
-temporarily. Long-term, **U7 Outdoor** is the right hardware — meaningfully better antenna
+temporarily. Long-term, **U7 Outdoor** is the right hardware: meaningfully better antenna
 gain and directional pattern for "cover yard from one side."
 
 ---
@@ -72,10 +72,10 @@ Not wired currently, but worth considering if wall mount results are poor.
 
 Rationale:
 - Use only 1/6/11 on 2.4 GHz (non-overlapping); avoid ch 40 on 5 GHz (Josh Office)
-- Start conservative on power — high TX does not fix cinderblock penetration and increases
+- Start conservative on power: high TX does not fix cinderblock penetration and increases
   indoor bleed / sticky-client risk
 - Band steering nudges capable clients to 5 GHz (shorter range, less indoor bleed)
-- Keep 2.4 GHz enabled on outdoor AP — it penetrates block better than 5 GHz
+- Keep 2.4 GHz enabled on outdoor AP: it penetrates block better than 5 GHz
 
 Do NOT use 40 MHz on 2.4 GHz (Cisco: causes co-channel problems in dense environments).
 
@@ -96,11 +96,11 @@ Target outdoor RSSI: **-65 to -70 dBm** minimum for reliable connections.
 
 Apply in order, only as needed:
 
-1. **First:** tune channels, width, TX power only — no roaming kicks
+1. **First:** tune channels, width, TX power only, no roaming kicks
 2. **If indoor clients stick to Porch AP:** enable Roaming Assistant on Porch AP (softer than Min RSSI)
 3. **If still broken:** add mild Minimum RSSI on Porch 5 GHz only, test carefully
 
-Minimum RSSI can cause instability if mis-tuned — use as last resort.
+Minimum RSSI can cause instability if mis-tuned; use as last resort.
 
 BSS coloring / RRM are cleanup tools, not primary design tools. They don't solve geometry.
 
@@ -126,7 +126,7 @@ retry %, and a quick speed test. Compare before (current indoor placement) and a
 (exterior wall, correct orientation).
 
 Fixed test spots:
-1. Inside the room adjacent to porch (Josh Office side) — should stay on Office AP
+1. Inside the room adjacent to porch (Josh Office side): should stay on Office AP
 2. Screened porch center
 3. Just past the cinderblock wall (near-yard)
 4. Mid-yard
@@ -136,7 +136,7 @@ Fixed test spots:
 
 ## Sources
 
-- Aruba Networks RF Design Guide — cinderblock attenuation
+- Aruba Networks RF Design Guide: cinderblock attenuation
 - UniFi Tech Specs: U7LR, U7 Outdoor, U7 Mesh, U6 Mesh, UAP-AC-M
 - Ubiquiti Help Center: AP Antenna Radiation Patterns, Optimizing WiFi Connectivity,
   UniFi WiFi SSID and AP Settings Overview, WiFi Troubleshooting Guide

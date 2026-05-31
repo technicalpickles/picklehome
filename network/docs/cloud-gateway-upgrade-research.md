@@ -41,8 +41,8 @@ Enough for several APs and a few cameras without a separate PoE switch.
 
 ### Why Not the Others
 
-- **UDM Pro ($379):** $120 less but no PoE — need to keep or buy a separate PoE switch.
-- **UDM Pro Max ($599):** Faster CPU, more RAM, RAID HDD, 5 Gbps IPS — but no PoE.
+- **UDM Pro ($379):** $120 less but no PoE, so you need to keep or buy a separate PoE switch.
+- **UDM Pro Max ($599):** Faster CPU, more RAM, RAID HDD, 5 Gbps IPS, but no PoE.
   Extra horsepower is unnecessary for a home network with <30 devices.
 
 ---
@@ -65,19 +65,19 @@ No PoE, no HDD bays (UCG-Max/Fiber have NVMe), smaller device/client limits.
 
 ### Blocked on CloudKey + USG (available on Cloud Gateways)
 
-- **WiFiMan Floor Plan Mapper** — LiDAR-based walk survey heatmaps (see wifi-survey-tools.md)
-- **InnerSpace** — floor plan with live WiFi coverage from real devices
-- **Usable IDS/IPS** — USG maxes out at ~85 Mbps with IDS/IPS; Cloud Gateways do 3.5-5 Gbps
-- **WireGuard VPN** — fast built-in VPN (replaces L2TP/IPsec on USG)
-- **Teleport VPN** — one-tap remote access from UniFi mobile app
-- **Site Magic** — multi-site VPN mesh
+- **WiFiMan Floor Plan Mapper**: LiDAR-based walk survey heatmaps (see wifi-survey-tools.md)
+- **InnerSpace**: floor plan with live WiFi coverage from real devices
+- **Usable IDS/IPS**: USG maxes out at ~85 Mbps with IDS/IPS; Cloud Gateways do 3.5-5 Gbps
+- **WireGuard VPN**: fast built-in VPN (replaces L2TP/IPsec on USG)
+- **Teleport VPN**: one-tap remote access from UniFi mobile app
+- **Site Magic**: multi-site VPN mesh
 
 ### General Ecosystem Improvements (last ~5 years)
 
-- **UniFi OS** — unified platform, all apps run as containers (Network, Protect, etc.)
-- **Network Application 9.x** — improved dashboard, topology views, client insights, DPI
-- **Protect** — AI smart detections (person, vehicle, animal, package), better timeline/search
-- **WiFi 7 APs** — current generation (U7 series), tri-band with 6 GHz, MLO
+- **UniFi OS**: unified platform, all apps run as containers (Network, Protect, etc.)
+- **Network Application 9.x**: improved dashboard, topology views, client insights, DPI
+- **Protect**: AI smart detections (person, vehicle, animal, package), better timeline/search
+- **WiFi 7 APs**: current generation (U7 series), tri-band with 6 GHz, MLO
 
 ---
 
@@ -93,7 +93,7 @@ Not required for the gateway upgrade, but relevant context for future planning.
 | U7 Pro Wall | $199 | Tri-band (6 GHz) | 6 | In-wall, 2.5GbE passthrough |
 | U7 Pro Outdoor | ~$299 | Tri-band (6 GHz) | 6 | IP67, outdoor |
 
-Existing WiFi 5/6 APs continue to work — upgrade is optional and incremental.
+Existing WiFi 5/6 APs continue to work; upgrade is optional and incremental.
 
 ---
 
@@ -113,22 +113,22 @@ Existing WiFi 5/6 APs continue to work — upgrade is optional and incremental.
 
 - **Protect recordings do NOT transfer.** HDD starts fresh on the new device. Keep
   CloudKey powered on temporarily if you need access to old footage.
-- **Camera re-adoption** can be finicky — some may need factory reset to connect to
+- **Camera re-adoption** can be finicky; some may need factory reset to connect to
   Protect on the new gateway.
 - **New gateway must run UniFi OS 3.1+** for cross-device backup restore.
 - **Gateway IP should match.** If USG was 192.168.1.1, new gateway should be too.
   The backup should handle this, but verify.
 - **No multi-site on Cloud Gateways.** One site per device (fine for home use).
-- **WireGuard/Teleport VPN** are new features — set up fresh after migration.
+- **WireGuard/Teleport VPN** are new features; set up fresh after migration.
 
 ---
 
 ## References
 
-- [UniFi Gateway Comparison 2026 — iFeeltech](https://ifeeltech.com/blog/unifi-gateway-comparison-guide)
-- [UDM Pro Max Review — Dong Knows Tech](https://dongknows.com/ubiquiti-dream-machine-pro-max-udm-pro-max-review/)
-- [Cloud Gateway Max Review — Dong Knows Tech](https://dongknows.com/ubiquiti-cloud-gateway-max-review/)
+- [UniFi Gateway Comparison 2026, iFeeltech](https://ifeeltech.com/blog/unifi-gateway-comparison-guide)
+- [UDM Pro Max Review, Dong Knows Tech](https://dongknows.com/ubiquiti-dream-machine-pro-max-udm-pro-max-review/)
+- [Cloud Gateway Max Review, Dong Knows Tech](https://dongknows.com/ubiquiti-cloud-gateway-max-review/)
 - [UniFi Cloud Gateways Tech Specs](https://techspecs.ui.com/unifi/cloud-gateways/compare)
-- [Migrate CloudKey & USG to UDM-Pro — TechBits](https://techbits.io/migrate-unifi-cloudkey-usg-udm-pro/)
-- [Migrate CloudKey and USG to UCG-Max — Edd Grant](https://www.eddgrant.com/blog/2025/09/10/migrating-unifi-cloud-key-and-usg-to-ucg-max)
-- [Backups and Migration in UniFi — Ubiquiti Help](https://help.ui.com/hc/en-us/articles/360008976393-Backups-and-Migration-in-UniFi)
+- [Migrate CloudKey & USG to UDM-Pro, TechBits](https://techbits.io/migrate-unifi-cloudkey-usg-udm-pro/)
+- [Migrate CloudKey and USG to UCG-Max, Edd Grant](https://www.eddgrant.com/blog/2025/09/10/migrating-unifi-cloud-key-and-usg-to-ucg-max)
+- [Backups and Migration in UniFi, Ubiquiti Help](https://help.ui.com/hc/en-us/articles/360008976393-Backups-and-Migration-in-UniFi)

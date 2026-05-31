@@ -1,4 +1,4 @@
-# Climate — HVAC & Air Quality Automation
+# Climate: HVAC & Air Quality Automation
 
 Manages home climate systems: Ecobee thermostats, Ambient Weather outdoor sensors, BlueAir air purifiers, and outdoor air quality (Google Air Quality + Pollen).
 
@@ -17,7 +17,7 @@ Manages home climate systems: Ecobee thermostats, Ambient Weather outdoor sensor
 
 ### Ambient Weather
 
-Station MACs are sensitive (geolocatable) — stored in 1Password, injected via `.env`. See `.env.template` for the `AMBIENT_STATION_MACS` variable.
+Station MACs are sensitive (geolocatable), stored in 1Password, injected via `.env`. See `.env.template` for the `AMBIENT_STATION_MACS` variable.
 
 ### BlueAir purifiers
 
@@ -28,7 +28,7 @@ See [blueair/README.md](blueair/README.md).
 Uses the Google Air Quality and Pollen APIs.
 
 1. Enable the Air Quality API and Pollen API in the [Google Cloud console](https://console.cloud.google.com)
-2. Store the key in 1Password (`Google Air Quality API` item, `api_key` field) and run `just dotenv` — it lands in `.env` as `GOOGLE_POLLEN_API_KEY` (one key covers both APIs)
+2. Store the key in 1Password (`Google Air Quality API` item, `api_key` field) and run `just dotenv`; it lands in `.env` as `GOOGLE_POLLEN_API_KEY` (one key covers both APIs)
 3. The lookup uses your home coordinates from `HOME_LAT` / `HOME_LON` (also in `.env`, sourced from the `Home` 1Password item)
 
 ## Commands
@@ -89,7 +89,7 @@ All in `config/`:
 - **Auth:** OAuth PIN flow → access + refresh tokens, stored in `~/.local/state/picklehome/ecobee-tokens.json`. API key from `ECOBEE_API_KEY` env var (1Password via `.env`)
 - **Token refresh:** The `FileTokenEcobee` subclass overrides `_write_config()` to persist refreshed tokens back to the JSON file automatically
 - **Schedule model:** Ecobee thermostats store a weekly program with time slots referencing "climates" (named comfort modes). We define ours in YAML and push them via the API.
-- **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2). smart1 and smart2 are swappable for seasonal switching — Comfort Heat targets 70°F from below, Comfort Cool from above.
+- **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2). smart1 and smart2 are swappable for seasonal switching: Comfort Heat targets 70°F from below, Comfort Cool from above.
 
 ### Ambient Weather API
 

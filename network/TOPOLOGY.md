@@ -9,10 +9,10 @@ AT&T Fiber
     │
     ▼
 AT&T BGW320 (fiber gateway)
-    192.168.8.254  —  admin UI: http://192.168.8.254
+    192.168.8.254  (admin UI: http://192.168.8.254)
     WAN: public AT&T IP (AS7018)
     │
-    │  (double-NAT — BGW is NOT in IP passthrough mode)
+    │  (double-NAT: BGW is NOT in IP passthrough mode)
     │
     ▼
 UniFi USG 3P (router/firewall)
@@ -52,15 +52,15 @@ tailscale ip             # show this device's Tailscale IP
 
 | Device | Model | IP | Firmware | Notes |
 |---|---|---|---|---|
-| AT&T BGW320 | BGW320-505 | 192.168.8.254 | — | Fiber gateway; WiFi disabled; admin UI at `http://192.168.8.254` |
+| AT&T BGW320 | BGW320-505 | 192.168.8.254 | n/a | Fiber gateway; WiFi disabled; admin UI at `http://192.168.8.254` |
 | USG 3P | USG 3P | 192.168.8.65 (WAN) / 192.168.1.1 (LAN) | 4.4.57 | Router/firewall |
-| CloudKey G2 Plus | — | 192.168.1.57 | Network 10.1.85 | UniFi controller; UI at `https://192.168.1.57` |
+| CloudKey G2 Plus | n/a | 192.168.1.57 | Network 10.1.85 | UniFi controller; UI at `https://192.168.1.57` |
 
 ### Switches
 
 | Name | Model | IP | Firmware | Notes |
 |---|---|---|---|---|
-| US 8 PoE 150W | US 8 PoE 150W | 192.168.1.134 | 7.0.50 | Main PoE switch — powers all APs |
+| US 8 PoE 150W | US 8 PoE 150W | 192.168.1.134 | 7.0.50 | Main PoE switch: powers all APs |
 | US 24 | US 24 | 192.168.1.99 | 7.0.50 | |
 | US 8 | US 8 | 192.168.1.17 | 7.0.50 | |
 | US 8 | US 8 | 192.168.1.25 | 5.76.7 | **Offline** |
@@ -75,7 +75,7 @@ Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from t
 | Upstairs AC HD | U7HD | AC High Density | 192.168.1.103 | 6.6.65 | 2nd | Ceiling | Wide uniform | Above/near the stairwell opening |
 | Josh Office AC Pro | U7PG2 | AC Pro | 192.168.1.22 | 6.6.65 | 1st | Floor under desk, facing up | Standard omni | Same room as Porch AP (co-located) |
 | Tracy Office AC Pro | U7PG2 | AC Pro | 192.168.1.194 | 6.6.65 | 1st | Floor, facing up | Standard omni | Converted carport; brick wall between it and main house |
-| Porch AC LR | U7LR | AC Long Range | 192.168.1.16 | 6.6.65 | 1st | Was: exterior wall, horizontal, facing backyard | High-gain focused beam | **Offline** — currently in Josh's office; pending relocation; see `docs/outdoor-wifi-research.md` |
+| Porch AC LR | U7LR | AC Long Range | 192.168.1.16 | 6.6.65 | 1st | Was: exterior wall, horizontal, facing backyard | High-gain focused beam | **Offline**: currently in Josh's office; pending relocation; see `docs/outdoor-wifi-research.md` |
 
 > **Live state:** Run `just unifi topology` for the full device tree with uplink ports and radio state.
 > Run `just unifi wifi aps` for current channels, utilization, retries, and tx power.
@@ -96,23 +96,23 @@ Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from t
 ## Channel & Power Plan
 
 **This section documents _why_ the current configuration exists.** Update entries in-place
-when making changes — don't append. For change history, see `CHANGELOG.md`.
+when making changes, don't append. For change history, see `CHANGELOG.md`.
 
 ### 2.4 GHz Channel Assignments
 
 Only three non-overlapping channels exist: **1, 6, 11**. Dense neighborhood means all three
-are congested with 70-110 external neighbors each — channel selection is about minimizing
+are congested with 70-110 external neighbors each. Channel selection is about minimizing
 *internal* co-channel between our own APs, not avoiding neighbors.
 
 | Channel | APs | Why |
 |---|---|---|
-| **1** | Josh Office, Tracy Office | Offices are on opposite sides of the house — co-channel is acceptable at this distance |
+| **1** | Josh Office, Tracy Office | Offices are on opposite sides of the house, so co-channel is acceptable at this distance |
 | **6** | Living Room | Only AP on ch 6 after Upstairs moved to ch 11 (2026-03-21) |
-| **11** | Upstairs | Moved from ch 6 to eliminate co-channel with Living Room through open stairwell. **Porch will conflict when it comes back** — re-plan at that point (only 3 channels for 5 APs) |
+| **11** | Upstairs | Moved from ch 6 to eliminate co-channel with Living Room through open stairwell. **Porch will conflict when it comes back**: re-plan at that point (only 3 channels for 5 APs) |
 
 ### 5 GHz Channel Assignments
 
-5 GHz is much cleaner — shorter range through walls means fewer neighbor conflicts.
+5 GHz is much cleaner: shorter range through walls means fewer neighbor conflicts.
 
 | Channel | APs | Why |
 |---|---|---|
@@ -125,15 +125,15 @@ are congested with 70-110 external neighbors each — channel selection is about
 
 | AP | Mode | Actual | Why |
 |---|---|---|---|
-| Living Room AC LR | medium | ~15 dBm | Reduced from max/17 dBm (2026-03-21) — LR's high-gain antenna was pushing signal through open stairwell into Upstairs zone; all 2.4 GHz clients have strong signal. See `docs/24ghz-power-tuning.md` |
-| Upstairs AC HD | medium | ~16 dBm | Reduced from max/19 dBm (2026-03-21) — was blasting down through stairwell; only 1-2 clients on this radio |
-| Josh Office AC Pro | max | 15 dBm | Left at max — AC Pro max (22 dBm) produces only 15 dBm; already moderate |
-| Tracy Office AC Pro | max | 15 dBm | Same as Josh Office — AC Pro's max is naturally lower than LR/HD |
+| Living Room AC LR | medium | ~15 dBm | Reduced from max/17 dBm (2026-03-21): LR's high-gain antenna was pushing signal through open stairwell into Upstairs zone; all 2.4 GHz clients have strong signal. See `docs/24ghz-power-tuning.md` |
+| Upstairs AC HD | medium | ~16 dBm | Reduced from max/19 dBm (2026-03-21): was blasting down through stairwell; only 1-2 clients on this radio |
+| Josh Office AC Pro | max | 15 dBm | Left at max: AC Pro max (22 dBm) produces only 15 dBm; already moderate |
+| Tracy Office AC Pro | max | 15 dBm | Same as Josh Office: AC Pro's max is naturally lower than LR/HD |
 
 ### 5 GHz Power Plan
 
 All APs set to **medium** (2026-03-17). Reduced from max to limit cell overlap and
-reduce iPhone roaming churn — Tracy's phone was showing 11 roam segments/hour at max power.
+reduce iPhone roaming churn: Tracy's phone was showing 11 roam segments/hour at max power.
 See CHANGELOG.md 2026-03-17 entry.
 
 | AP | Actual (medium) | Max |
@@ -145,14 +145,14 @@ See CHANGELOG.md 2026-03-17 entry.
 
 ### Constraints & Trade-offs
 
-- **Only 3 non-overlapping 2.4 GHz channels for 5 APs** — co-channel is unavoidable somewhere.
+- **Only 3 non-overlapping 2.4 GHz channels for 5 APs**: co-channel is unavoidable somewhere.
   Current strategy: pair APs that are physically distant on the same channel.
 - **Open stairwell** between Living Room (1st floor) and Upstairs (2nd floor) means RF
-  travels freely between floors — power reduction and channel separation both matter here.
-- **AC-LR "Long Range" antenna** on Living Room is a liability — its focused beam amplifies
+  travels freely between floors, so power reduction and channel separation both matter here.
+- **AC-LR "Long Range" antenna** on Living Room is a liability: its focused beam amplifies
   vertical leakage through the stairwell. Would benefit from replacement with an AC Pro or
   similar omnidirectional AP if other changes are being made.
-- **Porch AP return will force a re-plan** — it was on ch 11 (2.4 GHz) and ch 48 (5 GHz).
+- **Porch AP return will force a re-plan**: it was on ch 11 (2.4 GHz) and ch 48 (5 GHz).
   Ch 11 now conflicts with Upstairs; ch 48 shares with Tracy Office.
 
 ### Inspecting & Changing Configuration
@@ -179,9 +179,9 @@ Hardware details and CGI endpoint reference: [`docs/bgw-reference.md`](docs/bgw-
 
 Both radios set to Disabled via `wconfig_unified.ha`. UI and `just bgw wifi` confirm
 Disabled, but `ATTt6kgiKH` (BSSID `bc:9a:8e:ed:fe:ec`) continued beaconing on 5GHz
-ch 149 at -50 dBm after a full restart — confirmed via `just unifi wifi rfscan --fresh 5`.
+ch 149 at -50 dBm after a full restart, confirmed via `just unifi wifi rfscan --fresh 5`.
 Channel also shifted from ch 48 → ch 149 while "disabled," indicating the radio is still
-active. Resolved without factory reset — 2026-03-20 RF scan shows no trace of the SSID
+active. Resolved without factory reset: 2026-03-20 RF scan shows no trace of the SSID
 or BSSID. The disable eventually propagated (possibly after the BGW restart settled).
 
 ## Key IPs
@@ -192,7 +192,7 @@ or BSSID. The disable eventually propagated (possibly after the BGW restart sett
 | USG 3P WAN              | 192.168.8.65     | DHCP from BGW                |
 | USG 3P LAN              | 192.168.1.1      | Home network gateway         |
 | CloudKey G2 Plus        | 192.168.1.57     | UniFi controller             |
-| LAN subnet              | 192.168.1.0/24   | DHCP range .6–.254           |
+| LAN subnet              | 192.168.1.0/24   | DHCP range .6 to .254        |
 
 ## DNS Configuration
 
@@ -242,7 +242,7 @@ Example to fully control dnsmasq forwarders:
 
 ## Known Issues / History
 
-### AT&T → Cloudflare peering (2026-03-12 to ~2026-03-16) — resolved
+### AT&T → Cloudflare peering (2026-03-12 to ~2026-03-16): resolved
 See [`investigations/cloudflare-peering-2026-03.md`](investigations/cloudflare-peering-2026-03.md).
 Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudflare IP, so switching may have masked the issue rather than AT&T fixing the peering).
 
@@ -261,7 +261,7 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 
 | Tool | URL | What to check |
 |---|---|---|
-| RIPE Stat | https://stat.ripe.net/ | BGP state, prefix visibility, origin ASN — **automated via `just network-status`** |
+| RIPE Stat | https://stat.ripe.net/ | BGP state, prefix visibility, origin ASN (**automated via `just network-status`**) |
 | BGPview | https://bgpview.io/ | Peering relationships, prefix announcements (manual deep-dive only) |
 
 ### Looking glass / traceroute
@@ -277,7 +277,7 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 > quick-reference subset. When in doubt, check `just --list` or `just unifi --help`.
 
 ```bash
-# Live topology — device tree with uplink ports and radio state
+# Live topology: device tree with uplink ports and radio state
 just unifi topology                              # text tree (default)
 just unifi topology --format mermaid             # mermaid diagram for docs
 just unifi topology --format dot                 # graphviz DOT
@@ -286,7 +286,7 @@ just unifi topology --format dot                 # graphviz DOT
 just unifi checkup
 just unifi checkup --sessions 3
 
-# WiFi diagnostics — AP perspective
+# WiFi diagnostics: AP perspective
 just unifi wifi aps                              # channels, utilization, retries, power
 just unifi wifi aps --sort retries               # worst retries first
 just unifi clients                               # all connected WiFi clients
@@ -296,7 +296,7 @@ just unifi wifi roaming <hostname> --sessions 5  # roaming for one device
 just unifi wifi rfscan --summary --fresh 60      # neighbor congestion summary
 just unifi wifi config                           # SSID settings + per-AP power mode
 
-# WiFi diagnostics — client perspective (run on any Mac)
+# WiFi diagnostics: client perspective (run on any Mac)
 just wifi-diag
 just wifi-diag --no-trace --no-speed
 
@@ -310,7 +310,7 @@ just bgw broadband                               # WAN connection status
 just network-status                              # Cloudflare + Radar BGP + RIPE BGP state
 just network-status 30318                        # + AT&T outage check by ZIP
 
-# Raw API — last resort for debugging
+# Raw API: last resort for debugging
 just unifi api get /stat/device
 just unifi api get /stat/sta
 ```

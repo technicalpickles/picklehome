@@ -1,4 +1,4 @@
-# Garage — Aladdin Connect by Genie
+# Garage: Aladdin Connect by Genie
 
 Garage door status and control via the Aladdin Connect smart garage door opener.
 

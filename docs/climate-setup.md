@@ -1,4 +1,4 @@
-# Climate Automation — Setup Guide
+# Climate Automation: Setup Guide
 
 A first-time, step-by-step walkthrough for the Ecobee climate tools (schedule sync, comfort
 setpoints, status). For command reference and architecture, see
@@ -101,9 +101,9 @@ place automatically on later use.
 
 Two config files in `climate/config/`:
 
-1. **`thermostats.yaml`** — registry mapping each thermostat name to the `thermostat_id` from
+1. **`thermostats.yaml`**: registry mapping each thermostat name to the `thermostat_id` from
    step 4 output.
-2. **`schedule.yaml`** — the weekly program, referencing thermostats by name and time slots by
+2. **`schedule.yaml`**: the weekly program, referencing thermostats by name and time slots by
    their `climateRef` (e.g. `home`, `away`, `sleep`).
 
 Schedule rules:
