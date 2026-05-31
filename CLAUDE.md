@@ -128,6 +128,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
   - `climate/ecobee/` — Ecobee thermostat API (auth, schedule, comforts, status)
   - `climate/blueair/` — BlueAir air purifier API; see `climate/blueair/README.md`
   - `climate/ambient/` — Ambient Weather outdoor temp
+  - `climate/outdoor_air/` — Google Air Quality + Pollen APIs (AQI, pollutants, pollen UPI)
   - `climate/config/` — YAML config (thermostats, schedule, comforts, weather, purifiers)
   - `climate/spec/` — source of truth for thermostat behavior (hvac-spec.md)
 - `lighting/` — Lutron Caseta + Philips Hue control; see `lighting/README.md`
@@ -148,7 +149,7 @@ Quick reference for all smart home and network integrations.
 | Ecobee | `climate/ecobee/` | Thermostats + room sensors | Cloud API (OAuth) | `just climate-*` |
 | Ambient Weather | `climate/ambient/` | Outdoor weather station | Cloud API (API key) | `just climate-weather` |
 | BlueAir | `climate/blueair/` | Air purifiers | Cloud API (user/pass) | `just blueair *` |
-| Google Air Quality | `climate/` | N/A (API-only) | REST API (API key) | `just climate-air-quality` |
+| Google Air Quality | `climate/outdoor_air/` | N/A (API-only) | REST API (API key) | `just climate-air-quality` |
 | Lutron Caseta | `lighting/` | Dimmers, switches, fans | Local TLS (certs) | `just lutron *` |
 | Philips Hue | `lighting/` | Lights, motion sensors, buttons | Local API V2 (app key) | `just hue *` |
 | UniFi | `network/unifi/` | APs, switches, USG, CloudKey | Local API (API key) | `just unifi *` |

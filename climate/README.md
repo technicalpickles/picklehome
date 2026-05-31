@@ -1,6 +1,6 @@
 # Climate — HVAC & Air Quality Automation
 
-Manages home climate systems: Ecobee thermostats, Ambient Weather outdoor sensors, and BlueAir air purifiers.
+Manages home climate systems: Ecobee thermostats, Ambient Weather outdoor sensors, BlueAir air purifiers, and outdoor air quality (Google Air Quality + Pollen).
 
 ## Setup
 
@@ -19,6 +19,14 @@ Station MACs are sensitive (geolocatable) — stored in 1Password, injected via 
 ### BlueAir purifiers
 
 See [blueair/README.md](blueair/README.md).
+
+### Outdoor air quality
+
+Uses the Google Air Quality and Pollen APIs.
+
+1. Enable the Air Quality API and Pollen API in the [Google Cloud console](https://console.cloud.google.com)
+2. Store the key in 1Password (`Google Air Quality API` item, `api_key` field) and run `just dotenv` — it lands in `.env` as `GOOGLE_POLLEN_API_KEY` (one key covers both APIs)
+3. The lookup uses your home coordinates from `HOME_LAT` / `HOME_LON` (also in `.env`, sourced from the `Home` 1Password item)
 
 ## Commands
 
@@ -40,6 +48,12 @@ just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # season
 ```
 just climate-weather                     # outdoor temp + comfort mode recommendation
 just climate-weather-discover            # find nearby Ambient Weather stations
+```
+
+### Air quality
+
+```
+just climate-air-quality                 # current AQI, dominant pollutant, health rec + pollen forecast
 ```
 
 ### BlueAir
@@ -84,6 +98,13 @@ All in `config/`:
 
 See [blueair/README.md](blueair/README.md) for full API details.
 
+### Outdoor air quality (Google)
+
+- **APIs:** Google Air Quality (`airquality.googleapis.com`) + Pollen (`pollen.googleapis.com`)
+- **Auth:** single API key (`GOOGLE_POLLEN_API_KEY`); location from `HOME_LAT` / `HOME_LON`
+- **Data:** current AQI, dominant pollutant + concentrations, general-population health recommendation, and pollen UPI (Universal Pollen Index) forecast by type
+- **HTTP client:** `aiohttp` with `trust_env=True` so it respects the sandbox proxy (see root CLAUDE.md). Air quality and pollen are fetched concurrently; a missing or unset pollen key degrades gracefully (air quality still returns, pollen is skipped with a warning).
+
 ## Spec-first workflow
 
 `spec/hvac-spec.md` is the source of truth for all thermostat behavior. The workflow:
@@ -118,6 +139,9 @@ climate/
     client.py              # Async API wrapper, device control
     devices.py             # Purifier registry loader
     status.py              # Purifier status formatting
+  outdoor_air/
+    client.py              # Google Air Quality API (AQI, pollutants, health rec)
+    pollen.py              # Google Pollen API (UPI forecast by type)
   config/                  # YAML configuration (see table above)
   spec/
     hvac-spec.md           # Source of truth for thermostat behavior
