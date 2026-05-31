@@ -1,4 +1,0 @@
-services:
-  github-actions-runner:
-    env_file:
-      - /opt/homelab/.env

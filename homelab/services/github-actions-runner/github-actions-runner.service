@@ -8,8 +8,8 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/github-actions-runner
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --pull always
-ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+ExecStart=/usr/bin/docker compose -f compose.yaml up -d --pull always
+ExecStop=/usr/bin/docker compose -f compose.yaml down
 
 [Install]
 WantedBy=multi-user.target

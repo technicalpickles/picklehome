@@ -13,7 +13,7 @@ echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Pulling runner image"
 cd "$SERVICE_DIR"
-docker compose -f compose.yaml -f compose.picklelab.yaml pull
+docker compose -f compose.yaml pull
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/github-actions-runner.service" /etc/systemd/system/
