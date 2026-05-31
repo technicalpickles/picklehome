@@ -83,5 +83,13 @@ just deploy-github-runner
 
 ## Security notes
 
-- The container mounts `/var/run/docker.sock`, so CI jobs can drive Docker on the host (effectively root). pirpg's CI (Node/npm) doesn't currently use it. It's an accepted tradeoff for a solo private repo with no fork PRs; drop the `docker.sock` volume line in `compose.yaml` if you don't want CI jobs to have Docker access.
+- **No `/var/run/docker.sock` mount.** The runner does not give CI jobs access to the host Docker daemon. pirpg's CI is Node/npm and doesn't need it. Mounting the socket would grant any job root-equivalent control of picklelab, so it's left off by default.
+
+  Add it back (a `- /var/run/docker.sock:/var/run/docker.sock` line under `volumes:` in `compose.yaml`) only if a workflow genuinely needs Docker *on the runner*:
+  - building or pushing Docker images (`docker build` / `docker/build-push-action`)
+  - docker-in-docker workflows
+  - container-based actions (a step whose `uses:` action declares `runs.using: docker`)
+  - job-level `services:` containers (GitHub spins these up via the host Docker daemon)
+
+  If you do, treat it as a deliberate trust decision: it's only safe because this is a solo private repo with no fork PRs running untrusted code.
 - The runner only carries its own two env vars, not the master `.env` (see the no-`compose.picklelab.yaml` note above).

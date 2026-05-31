@@ -23,7 +23,12 @@ services:
       - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner-config
       - DISABLE_AUTOMATIC_DEREGISTRATION=true
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # NOTE: no /var/run/docker.sock mount. pirpg CI is Node/npm and doesn't
+      # need Docker. Mount it (- /var/run/docker.sock:/var/run/docker.sock) only
+      # if a workflow needs Docker on the runner: building/pushing images,
+      # docker-in-docker, container-based actions (`uses:` that run in a
+      # container), or `services:` containers in a job. That grants CI jobs
+      # root-equivalent host access, so add it back deliberately.
       - runner-config:/runner-config
 
 volumes:
