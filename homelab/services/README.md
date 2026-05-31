@@ -156,6 +156,28 @@ See [taskchampion-sync/README.md](taskchampion-sync/README.md) for full setup.
 
 ---
 
+### github-actions-runner
+
+Self-hosted GitHub Actions runner for the pirpg repo (GitHub-hosted runners are billing-blocked on that private repo). Polls GitHub over outbound HTTPS.
+
+| | |
+|---|---|
+| **Purpose** | Run pirpg CI on the homelab box |
+| **Compose** | `/opt/homelab/homelab/services/github-actions-runner/` (no `compose.picklelab.yaml`; single `compose.yaml`, see below) |
+| **Data** | `runner-config` Docker volume (persisted `.runner`/`.credentials`, so it survives reboots without re-registering) |
+| **Access** | No UI. Registers as runner `picklelab`, labels `self-hosted,linux,picklelab`. |
+| **Env vars** | `GITHUB_RUNNER_REPO_URL`, `GITHUB_RUNNER_TOKEN` (token is a one-time bootstrap, not ongoing auth) |
+| **Backup** | No (re-bootstrappable from a fresh registration token) |
+| **Restart** | `restart: unless-stopped` |
+
+Unlike other services, this one has **no `compose.picklelab.yaml`**: it only ever runs on picklelab and has no prod-vs-local difference, and an `env_file: [/opt/homelab/.env]` override would have leaked the entire homelab secret set into a container that runs arbitrary CI jobs.
+
+Commands: `just deploy-github-runner`, `just github-runner-logs`, `just github-runner-status`
+
+See [github-actions-runner/README.md](github-actions-runner/README.md) for the auth model and re-bootstrap procedure.
+
+---
+
 ## Planned services
 
 - Home Assistant (containerized short-term, may migrate to dedicated hardware)

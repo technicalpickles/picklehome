@@ -1,6 +1,6 @@
 # Homelab
 
-Single Intel NUC (Celeron J3455, 4 GB RAM, local SSD) running lightweight always-on services, remote dev environments, and home automation experimentation. Synology NAS on the LAN for backups.
+Single Intel NUC (Celeron J3455, 16 GB RAM, local SSD) running lightweight always-on services, remote dev environments, and home automation experimentation. Synology NAS on the LAN for backups.
 
 **Philosophy:** simple, reproducible, recoverable. No cluster tooling. Easy to rebuild from source control and backups.
 
@@ -130,4 +130,34 @@ just backup-now          # manual trigger
 just backup-snapshots    # list snapshots
 just backup-status       # timer status + next run
 just backup-logs         # last 50 lines of service journal
+```
+
+---
+
+### github-actions-runner
+
+Self-hosted GitHub Actions runner for the [pirpg](https://github.com/technicalpickles/pirpg) repo. GitHub-hosted runners are blocked on that private repo (account billing), so CI runs here instead. A `myoung34/github-runner` container polls GitHub over outbound HTTPS, so there's nothing to expose. Registers once and reuses stored credentials across reboots (config persisted in a Docker volume). See [services/github-actions-runner/README.md](services/github-actions-runner/README.md) for the auth model and re-bootstrap procedure.
+
+**First-time setup (from Mac):**
+
+```bash
+# 1. Mint a registration token and store it in the 1Password item
+#    "GitHub Actions Runner pirpg" (picklehome vault), field `token`:
+gh api -X POST repos/technicalpickles/pirpg/actions/runners/registration-token --jq .token
+
+just dotenv                  # pull the runner secrets from 1Password
+just deploy-github-runner    # copies .env, pulls image, installs + starts systemd unit
+```
+
+**Deploy updates:**
+
+```bash
+just deploy-github-runner
+```
+
+**Logs / status:**
+
+```bash
+just github-runner-logs
+just github-runner-status
 ```
