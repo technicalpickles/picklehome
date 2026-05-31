@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ISP and CDN status checker — surfaces outages relevant to this network.
+ISP and CDN status checker: surfaces outages relevant to this network.
 
 Checks:
   - Cloudflare status (overall + nearby colos + active incidents)
@@ -9,7 +9,7 @@ Checks:
   - Cloudflare Radar NetFlows traffic trend for AT&T (AS7018)
   - RIPE BGP state: your IP's current ASN + Cloudflare/Google prefix health
   - AT&T outage lookup by ZIP code (requires --zip, uses Playwright)
-  - DownDetector AT&T report status (manual URL — bot-protected)
+  - DownDetector AT&T report status (manual URL, bot-protected)
 
 Usage:
     uv run --with requests --with python-dotenv network/isp_status.py
@@ -37,8 +37,8 @@ CLOUDFLARE_TRACE_URL = "https://one.one.one.one/cdn-cgi/trace"
 INTERESTING_COLOS = ["ATL", "Atlanta", "IAH", "Houston", "DFW", "Dallas"]
 
 MANUAL_URLS = [
-    # BGP.he.net and PeeringDB omitted — HTML-only, no useful API; RIPE Stat covers the same signals
-    ("DownDetector — AT&T", "https://downdetector.com/status/att/"),
+    # BGP.he.net and PeeringDB omitted: HTML-only, no useful API; RIPE Stat covers the same signals
+    ("DownDetector: AT&T", "https://downdetector.com/status/att/"),
 ]
 
 RIPE_STAT = "https://stat.ripe.net/data"
@@ -179,7 +179,7 @@ def _sparkline(values: list[float]) -> str:
     """
     Render a list of 0.0–1.0 normalized floats as a Unicode block sparkline.
 
-    Values come from Cloudflare's MIN0_MAX normalization — 0.0 is the window
+    Values come from Cloudflare's MIN0_MAX normalization: 0.0 is the window
     minimum, 1.0 is the window maximum. Maps each float to one of 9 block
     characters: ' ' (0.0) through '█' (1.0).
     """
@@ -203,7 +203,7 @@ def _radar_get(token: str, path: str, params: dict = None) -> dict | None:
 
 
 def check_radar_bgp(token: str):
-    print("Cloudflare Radar — BGP Events (AT&T AS7018)")
+    print("Cloudflare Radar: BGP Events (AT&T AS7018)")
     print(SEP)
 
     # Hijacks
@@ -239,7 +239,7 @@ def check_radar_bgp(token: str):
 
 
 def check_radar_traffic(token: str):
-    print("Cloudflare Radar — AT&T (AS7018) Traffic Trend  (last 24h)")
+    print("Cloudflare Radar: AT&T (AS7018) Traffic Trend  (last 24h)")
     print(SEP)
 
     result = _radar_get(token, "/netflows/timeseries", {
@@ -260,7 +260,7 @@ def check_radar_traffic(token: str):
 
     spark = _sparkline(raw_values)
 
-    # Last 3 hours vs peak — flag a sustained drop
+    # Last 3 hours vs peak: flag a sustained drop
     recent_avg = sum(raw_values[-3:]) / 3
     peak = max(raw_values)
     pct = int(recent_avg / peak * 100) if peak else 0
@@ -271,17 +271,17 @@ def check_radar_traffic(token: str):
     print(f"  {start_ts}Z ┤{spark}├ {end_ts}Z  (data as of {updated}Z)")
     print(f"  Recent avg (last 3h): {pct}% of 24h peak", end="")
     if pct < 40:
-        print("  [?] Low vs peak — may just be overnight hours (threshold needs tuning)")
+        print("  [?] Low vs peak: may just be overnight hours (threshold needs tuning)")
     else:
         print()
     print()
 
 
 def check_ripe_routing():
-    print("RIPE — BGP Routing State")
+    print("RIPE: BGP Routing State")
     print(SEP)
 
-    # Look up your public IP's ASN — dynamic, not hardcoded
+    # Look up your public IP's ASN: dynamic, not hardcoded
     your_ip = None
     trace = get_text(CLOUDFLARE_TRACE_URL)
     if trace:

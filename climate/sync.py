@@ -147,12 +147,12 @@ def cmd_validate(args) -> None:
         remote_array = program["schedule"]
         diffs = schedule.diff_schedules(local_array, remote_array, program)
         if diffs:
-            print(f"  MISMATCH — {len(diffs)} slot(s) differ:")
+            print(f"  MISMATCH: {len(diffs)} slot(s) differ:")
             for line in diffs:
                 print(line)
             any_mismatch = True
         else:
-            print(f"  OK — remote matches schedule.yaml")
+            print(f"  OK: remote matches schedule.yaml")
 
     if any_mismatch:
         sys.exit(1)
@@ -512,7 +512,7 @@ def cmd_comfort_switch(args) -> None:
 
     # Build a hold-status lookup so we can decide per-thermostat whether to resume.
     # Ecobee API returns title-cased names ("Upstairs") but thermostats.yaml uses
-    # lowercase ("upstairs") — normalize to lowercase for the lookup.
+    # lowercase ("upstairs"), normalize to lowercase for the lookup.
     hold_by_name = {s["name"].lower(): s.get("hold") for s in thermostat_statuses}
 
     if args.clear_holds:
@@ -526,12 +526,12 @@ def cmd_comfort_switch(args) -> None:
     else:
         # Resume program on thermostats without active holds so the new schedule
         # takes effect immediately rather than waiting for the next slot boundary.
-        # Thermostats with holds are left alone — the hold was a deliberate override.
+        # Thermostats with holds are left alone (the hold was a deliberate override).
         for name, thermostat_id in managed:
             if hold_by_name.get(name.lower()) is None:
                 try:
                     schedule.resume_program(ecobee, thermostat_id)
-                    print(f"  [{name}] Resumed program (no active hold — schedule applied immediately)")
+                    print(f"  [{name}] Resumed program (no active hold, schedule applied immediately)")
                 except RuntimeError as e:
                     print(f"  [{name}] Warning: failed to resume program: {e}")
 
@@ -627,7 +627,7 @@ def cmd_air_quality(args) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Climate automation — Ecobee schedule, comfort, and status sync")
+    parser = argparse.ArgumentParser(description="Climate automation: Ecobee schedule, comfort, and status sync")
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("auth", help="First-time PIN auth flow + thermostat discovery")

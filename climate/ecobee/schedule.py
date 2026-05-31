@@ -123,12 +123,12 @@ def time_to_slot(time_str: str) -> int:
         hour = int(hour_str)
         minute = int(minute_str)
     except (ValueError, AttributeError):
-        raise ValueError(f"Invalid time format: {time_str} — expected HH:MM")
+        raise ValueError(f"Invalid time format: {time_str}, expected HH:MM")
     if not (0 <= hour <= 23):
         raise ValueError(f"Invalid hour in {time_str}")
     if minute not in (0, 30):
         raise ValueError(
-            f"Time {time_str} not 30-minute aligned. Use :00 or :30 — Ecobee uses 30-minute slots."
+            f"Time {time_str} not 30-minute aligned. Use :00 or :30 (Ecobee uses 30-minute slots)."
         )
     return hour * 2 + minute // 30
 
@@ -164,7 +164,7 @@ def expand_day(day_name: str, transitions: list[dict]) -> list[str]:
 
     # Guard: all slots must be filled (belt-and-suspenders against logic gaps)
     if "" in result:
-        raise ValueError(f"Day '{day_name}': internal error — unexpanded slots remain")
+        raise ValueError(f"Day '{day_name}': internal error, unexpanded slots remain")
 
     return result
 
@@ -225,7 +225,7 @@ def print_schedule_grid(schedule_array: list, program: dict, name: str = "") -> 
     day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     ref_to_name = {c["climateRef"]: c.get("name", c["climateRef"]) for c in program["climates"]}
 
-    header = f"Schedule preview — {name}" if name else "Schedule preview"
+    header = f"Schedule preview: {name}" if name else "Schedule preview"
     print(f"{header} (transitions only):\n")
     for day_idx, day_slots in enumerate(schedule_array):
         print(day_names[day_idx])

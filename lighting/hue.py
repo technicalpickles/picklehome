@@ -32,7 +32,7 @@ async def connect() -> HueBridgeV2:
 
 
 async def cmd_pair(host: str | None = None):
-    """Pair with the Hue bridge — press the button first, then run this."""
+    """Pair with the Hue bridge (press the button first, then run this)."""
     if not host:
         host = os.environ.get("HUE_BRIDGE_IP")
     if not host:
@@ -276,12 +276,12 @@ async def cmd_buttons(bridge):
     for button in sorted(bridge.sensors.button, key=lambda b: _device_name(bridge, b)):
         name = _device_name(bridge, button)
         control_id = button.metadata.control_id if button.metadata else "?"
-        last_event = button.button.last_event.value if button.button and button.button.last_event else "—"
+        last_event = button.button.last_event.value if button.button and button.button.last_event else "n/a"
         print(f"  {name:<30} button {control_id}  last: {last_event}")
 
 
 async def cmd_status(bridge):
-    """Quick overview — lights, active scenes, recent motion."""
+    """Quick overview: lights, active scenes, recent motion."""
     section("Hue Status")
 
     # Light summary

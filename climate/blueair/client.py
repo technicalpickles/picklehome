@@ -12,7 +12,7 @@ async def discover_devices(
 ) -> tuple[list[DeviceAws], HttpAwsBlueair]:
     """Discover all BlueAir AWS devices and return (devices, api).
 
-    Each device is created but NOT refreshed yet — the caller decides
+    Each device is created but NOT refreshed yet; the caller decides
     when to call device.refresh().
     """
     api, devices = await get_aws_devices(username, password, region)

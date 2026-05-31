@@ -27,7 +27,7 @@ RUN apt-add-repository -y ppa:fish-shell/release-4 \
     && apt-get update && apt-get install -y --no-install-recommends fish \
     && rm -rf /var/lib/apt/lists/*
 
-# Neovim (latest stable from GitHub release — PPAs lag behind)
+# Neovim (latest stable from GitHub release, PPAs lag behind)
 RUN curl -fsSL https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
     | tar xz -C /opt \
     && ln -sf /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
@@ -40,11 +40,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     direnv \
     tmux \
     && rm -rf /var/lib/apt/lists/* \
-    # Ubuntu names these differently — add symlinks for expected names
+    # Ubuntu names these differently, add symlinks for expected names
     && ln -sf /usr/bin/batcat /usr/local/bin/bat \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd
 
-# Docker CLI (not the daemon — talks to host via socket)
+# Docker CLI (not the daemon, talks to host via socket)
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
     && chmod a+r /etc/apt/keyrings/docker.asc \
@@ -76,7 +76,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# eza (ls replacement — not in Ubuntu 24.04 apt)
+# eza (ls replacement, not in Ubuntu 24.04 apt)
 RUN curl -fsSL https://raw.githubusercontent.com/eza-community/eza/main/deb.asc \
     | gpg --dearmor -o /usr/share/keyrings/eza-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/eza-archive-keyring.gpg] http://deb.gierens.de stable main" \
@@ -90,18 +90,18 @@ RUN DELTA_VERSION=0.18.2 \
     && dpkg -i /tmp/delta.deb && rm /tmp/delta.deb
 
 # Create user matching host UID/GID, with fish as default shell
-# Ubuntu 24.04 ships with a 'ubuntu' user at UID 1000 — remove it first
+# Ubuntu 24.04 ships with a 'ubuntu' user at UID 1000, remove it first
 RUN userdel -r ubuntu 2>/dev/null || true \
     && groupadd --force --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m -s /usr/bin/fish $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 
-# Add user to docker group — GID must match host for socket access
+# Add user to docker group, GID must match host for socket access
 ARG DOCKER_GID=990
 RUN groupadd --gid $DOCKER_GID docker 2>/dev/null; usermod -aG docker $USERNAME
 
 # SSH server setup + GitHub host key
-# Remove generated host keys — entrypoint generates them into a persistent volume
+# Remove generated host keys, entrypoint generates them into a persistent volume
 RUN mkdir /var/run/sshd \
     && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
     && ssh-keyscan github.com >> /etc/ssh/ssh_known_hosts 2>/dev/null \

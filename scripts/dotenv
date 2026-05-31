@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/dotenv — generate .env from 1Password via op inject
+# scripts/dotenv: generate .env from 1Password via op inject
 # Usage: scripts/dotenv [--template <path>] [--output <path>] [--force]
 #
 # Snapshots keys from the existing .env (if any) and verifies the newly
@@ -52,7 +52,7 @@ mv "$tmp" "$OUTPUT"
 echo "Generated $OUTPUT from $TEMPLATE"
 
 # Write Lutron Caseta TLS certs from 1Password to disk
-# Certs are stored single-line with literal \n — restore real newlines via sed
+# Certs are stored single-line with literal \n; restore real newlines via sed
 CERTS_DIR="lighting/.certs"
 mkdir -p "$CERTS_DIR"
 for item in "client_key:client.key" "client_cert:client.crt" "ca_cert:ca.crt"; do

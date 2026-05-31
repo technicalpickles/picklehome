@@ -10,7 +10,7 @@ from aiohttp import ClientSession
 from aioambient import OpenAPI
 from aioambient.errors import RequestError
 
-FETCH_TIMEOUT = 10        # seconds — HTTP request timeout
+FETCH_TIMEOUT = 10        # seconds, HTTP request timeout
 MAX_DATA_AGE_MINUTES = 30 # readings older than this are treated as stale
 TEMP_MIN_PLAUSIBLE = -20.0  # °F
 TEMP_MAX_PLAUSIBLE = 120.0  # °F
@@ -103,12 +103,12 @@ def get_outdoor_temp_from_stations(macs: list[str]) -> tuple[str, float, float] 
         if isinstance(r, tuple):
             return r
 
-    # All stations failed — print why for each one
+    # All stations failed, print why for each one
     for r in results:
         if isinstance(r, StationError):
             print(f"  {r.mac}: {r.reason}", file=sys.stderr)
         elif isinstance(r, Exception):
-            # Unexpected exception type — don't swallow it
+            # Unexpected exception type, don't swallow it
             print(f"  unexpected error: {r}", file=sys.stderr)
     return None
 

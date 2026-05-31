@@ -63,7 +63,7 @@ async def _fetch(lat: float, lon: float, api_key: str) -> PollenReading:
         "location.latitude": lat,
         "location.longitude": lon,
         "days": 1,
-        # Suppress plant-level detail — type summary is sufficient for display
+        # Suppress plant-level detail; type summary is sufficient for display
         "plantsDescription": 0,
     }
     headers = {"Referer": REFERER}

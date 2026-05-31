@@ -98,7 +98,7 @@ def format_status(statuses: list[dict]) -> str:
         line = f"{s['name']:<14} {temp:<8} {humidity:<5} {equipment:<10} {climate:<20} {hvac}{hold_str}"
         lines.append(line.rstrip())
 
-    # Weather — use first thermostat's weather (they share the same feed by location)
+    # Weather: use first thermostat's weather (they share the same feed by location)
     weather_added = False
     for s in statuses:
         w = s.get("weather")
@@ -122,7 +122,7 @@ def format_status(statuses: list[dict]) -> str:
 
     if aq_lines:
         lines.append("")
-        lines.append("Air quality —")
+        lines.append("Air quality:")
         lines.extend(aq_lines)
 
     return "\n".join(lines)

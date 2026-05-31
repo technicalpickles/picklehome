@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-unifi_cli.py — Unified UniFi CLI
+unifi_cli.py: Unified UniFi CLI
 
 Top-level: clients, client, rename, devices, topology, checkup, api
 WiFi group: aps, config, rfscan, roaming, set-power, set-channel, locate
@@ -42,11 +42,11 @@ def cmd_checkup(s, num_sessions=1):
         for device in devices:
             cmd_roaming(s, device, num_sessions=num_sessions)
     else:
-        print("\n  (UNIFI_WATCHED_DEVICES not set — skipping roaming section)")
+        print("\n  (UNIFI_WATCHED_DEVICES not set: skipping roaming section)")
 
 
 def cmd_rename(s, query, new_name):
-    section(f"Rename Client — {query}")
+    section(f"Rename Client: {query}")
 
     # Search live clients first, then all-time user list for offline devices
     clients = get(s, "/stat/sta")
@@ -74,7 +74,7 @@ def cmd_rename(s, query, new_name):
         print(f"  No client matching '{query}'")
         return
     if len(matches) > 1:
-        print(f"  Ambiguous — '{query}' matches multiple clients:")
+        print(f"  Ambiguous: '{query}' matches multiple clients:")
         for c in matches:
             h = c.get("name") or c.get("hostname") or c.get("mac", "?")
             print(f"    {h}  ({c.get('mac', '?')})")
@@ -98,7 +98,7 @@ def cmd_rename(s, query, new_name):
     result = r.json()
     meta = result.get("meta", {})
     if meta.get("rc") == "ok":
-        print(f"  Done — renamed to '{new_name}'")
+        print(f"  Done: renamed to '{new_name}'")
     else:
         print(f"  Error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
 
@@ -124,7 +124,7 @@ def cmd_api(s, method, path, body=None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Unified UniFi CLI — WiFi, gateway, and device management"
+        description="Unified UniFi CLI: WiFi, gateway, and device management"
     )
     sub = parser.add_subparsers(dest="cmd")
 
@@ -160,7 +160,7 @@ def main():
 
     wifi_sub.add_parser("config", help="SSID roaming/power-save settings and per-AP transmit power")
 
-    p_rfscan = wifi_sub.add_parser("rfscan", help="Neighboring APs from passive RF scan — channel congestion summary")
+    p_rfscan = wifi_sub.add_parser("rfscan", help="Neighboring APs from passive RF scan: channel congestion summary")
     p_rfscan.add_argument("--own", action="store_true", help="Include your own APs in results")
     p_rfscan.add_argument("--fresh", type=int, metavar="MINUTES", default=None, help="Only show neighbors seen within the last N minutes")
     p_rfscan.add_argument("--summary", action="store_true", help="Show only the channel congestion summary, skip full neighbor table")

@@ -24,7 +24,7 @@ def test_cool_replaces_heat_value():
 
 
 def test_comment_text_not_replaced():
-    # Comment mentions "smart2" but value is smart1 — only value should flip
+    # Comment mentions "smart2" but value is smart1, only value should flip
     result = _apply_comfort_mode(SCHEDULE_WITH_COMMENT, "heat")
     assert "climate: smart2" in result
     assert "# was smart2 before" in result  # comment preserved
@@ -183,7 +183,7 @@ def test_cmd_comfort_switch_auto_hysteresis(tmp_path, capsys):
         with patch("climate.ambient.client.get_outdoor_temp_from_stations", return_value=("AA:BB", 62.0, 2.0)):
             with patch("climate.sync.cmd_sync") as mock_sync:
                 cmd_comfort_switch(args)
-    # No change — in hysteresis band
+    # No change, in hysteresis band
     assert schedule_file.read_text() == original
     mock_sync.assert_not_called()
 
@@ -243,7 +243,7 @@ def test_cmd_comfort_switch_syncs_when_previous_mode_matches_but_schedule_stale(
     # Comfort Heat all summer. The fix: skip based on schedule content, not last-state.
     from climate.sync import cmd_comfort_switch
     schedule_file = tmp_path / "schedule.yaml"
-    schedule_file.write_text(SCHEDULE_WITH_HEAT)  # stale — still has smart2
+    schedule_file.write_text(SCHEDULE_WITH_HEAT)  # stale, still has smart2
     thermostats_file = tmp_path / "thermostats.yaml"
     thermostats_file.write_text("")
     args = argparse.Namespace(

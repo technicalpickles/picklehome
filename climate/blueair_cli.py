@@ -14,7 +14,7 @@ from climate.blueair.status import format_status
 
 
 # Each command uses a single asyncio.run() calling one async helper.
-# The blueair-api aiohttp session is bound to one event loop — splitting
+# The blueair-api aiohttp session is bound to one event loop; splitting
 # work across multiple asyncio.run() calls fails with "Event loop is closed".
 
 
@@ -75,7 +75,7 @@ def cmd_discover(args) -> None:
 
     purifiers_path = args.purifiers
     if purifiers_path.exists():
-        print(f"Registry exists at {purifiers_path} — not overwriting.")
+        print(f"Registry exists at {purifiers_path}, not overwriting.")
         print("Edit it manually to add/remove devices.")
     else:
         registry = {"purifiers": {}}
@@ -88,8 +88,8 @@ def cmd_discover(args) -> None:
         purifiers_path.parent.mkdir(parents=True, exist_ok=True)
         with open(purifiers_path, "w") as f:
             f.write("# climate/config/purifiers.yaml\n")
-            f.write("# managed: true  — included in status and automation\n")
-            f.write("# managed: false — registered but excluded\n\n")
+            f.write("# managed: true  : included in status and automation\n")
+            f.write("# managed: false : registered but excluded\n\n")
             yaml.dump(registry, f, default_flow_style=False, sort_keys=False)
         print(f"Wrote device registry to {purifiers_path}")
 

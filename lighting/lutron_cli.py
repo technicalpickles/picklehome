@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-lutron_cli.py — Lutron Caseta CLI
+lutron_cli.py: Lutron Caseta CLI
 
 Usage:
     uv run lighting/lutron_cli.py devices         # list all devices with state

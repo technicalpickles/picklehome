@@ -79,7 +79,7 @@ def apply_comforts_to_climates(comforts_dict: dict, current_climates: list) -> l
     """Merge YAML comfort settings into the current API climates list.
 
     Matches by climateRef (YAML key). For user-owned climates that include a 'name'
-    field, also validates the name matches the thermostat — warns if it doesn't,
+    field, also validates the name matches the thermostat, warns if it doesn't,
     which indicates the climateRef was reassigned or the YAML is stale.
 
     Only updates cool_temp and heat_temp. All other API fields are preserved.
@@ -100,7 +100,7 @@ def apply_comforts_to_climates(comforts_dict: dict, current_climates: list) -> l
             yaml_name = overrides.get("name")
             if yaml_name and climate.get("owner") == "user" and yaml_name != climate.get("name"):
                 print(
-                    f"  Warning: {ref} name mismatch — "
+                    f"  Warning: {ref} name mismatch: "
                     f"YAML has '{yaml_name}', thermostat has '{climate.get('name')}'. "
                     f"Re-run 'just climate-comforts-capture' to refresh."
                 )
@@ -134,7 +134,7 @@ def push_comforts(ecobee, thermostat_id: str, updated_climates: list, schedule: 
 
 def print_comforts(climates_dict: dict, current_climates: list, name: str = "") -> None:
     ref_to_display = {c["climateRef"]: c.get("name", c["climateRef"]) for c in current_climates}
-    header = f"Comfort modes — {name}" if name else "Comfort modes"
+    header = f"Comfort modes: {name}" if name else "Comfort modes"
     print(f"{header}:\n")
     for ref, settings in climates_dict.items():
         display = ref_to_display.get(ref, ref)

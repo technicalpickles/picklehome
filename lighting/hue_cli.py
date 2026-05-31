@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-hue_cli.py — Philips Hue CLI
+hue_cli.py: Philips Hue CLI
 
 Usage:
     uv run lighting/hue_cli.py pair [<host>]      # one-time bridge pairing

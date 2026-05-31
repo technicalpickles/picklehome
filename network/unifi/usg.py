@@ -1,4 +1,4 @@
-"""UniFi USG gateway commands — stats, WAN, DNS, topology."""
+"""UniFi USG gateway commands: stats, WAN, DNS, topology."""
 
 import os
 import sys
@@ -26,7 +26,7 @@ def cmd_stats(s):
     site_id, site_name = get_site_id(s)
     devices = get(s, f"/sites/{site_id}/devices").get("data", [])
 
-    # Find gateway device (USG) — match by model prefix, then fall back to no uplink
+    # Find gateway device (USG): match by model prefix, then fall back to no uplink
     gw = next((d for d in devices if d.get("model", "").startswith(("USG", "UGW"))), None)
     if gw is None:
         gw = next((d for d in devices if not (d.get("uplink") or {}).get("deviceId")), None)

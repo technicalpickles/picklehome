@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-wifi-diag.py — Client-side WiFi and connectivity diagnostic
+wifi-diag.py: Client-side WiFi and connectivity diagnostic
 
 Run on any Mac in the home network to gather WiFi signal metrics, which AP
 you're connected to, local/internet latency, traceroute, and download speed.
@@ -82,7 +82,7 @@ def _snr_label(snr):
         return "good"
     elif snr >= 15:
         return "fair"
-    return "poor — expect retransmits"
+    return "poor, expect retransmits"
 
 
 def _rssi_label(rssi):
@@ -127,10 +127,10 @@ def _get_bssid_wdutil():
 
 
 def wifi_info(sp_data):
-    section("WiFi — Current Association")
+    section("WiFi: Current Association")
 
     if not sp_data:
-        print("  system_profiler failed — no WiFi info available")
+        print("  system_profiler failed: no WiFi info available")
         return
 
     try:
@@ -187,8 +187,8 @@ def wifi_info(sp_data):
 
 def visible_networks(profiler_data):
     """Show nearby networks from already-fetched system_profiler data."""
-    section("WiFi — Visible Networks (roaming candidates)")
-    print("  (RSSI in dBm — higher/less negative is stronger)")
+    section("WiFi: Visible Networks (roaming candidates)")
+    print("  (RSSI in dBm, higher/less negative is stronger)")
     print()
 
     try:
@@ -225,7 +225,7 @@ def visible_networks(profiler_data):
         except (ValueError, TypeError):
             return None, None
 
-    # Header — omit BSSID (macOS redacts it for neighboring networks)
+    # Header: omit BSSID (macOS redacts it for neighboring networks)
     print(f"  {'SSID':<32} {'RSSI':>5}  {'Noise':>6}  {'Channel':<16}  PHY")
     print(f"  {'─'*32} {'─'*5}  {'─'*6}  {'─'*16}  {'─'*16}")
     for net in sorted(others, key=lambda n: parse_rssi(n)[0] or -100, reverse=True):
@@ -241,10 +241,10 @@ def visible_networks(profiler_data):
 # ── IP / Gateway / DNS ────────────────────────────────────────────────────────
 
 def ip_info(iface):
-    section(f"Network — IP / Gateway / DNS  (interface: {iface})")
+    section(f"Network: IP / Gateway / DNS  (interface: {iface})")
 
     ip = run(["ipconfig", "getifaddr", iface])
-    print(f"  IP:       {ip.strip() if ip else '(none — not connected?)'}")
+    print(f"  IP:       {ip.strip() if ip else '(none, not connected?)'}")
 
     route = run(["route", "-n", "get", "default"])
     gw = "?"
@@ -316,7 +316,7 @@ def traceroute(target=INTERNET_TARGET):
 # ── Speed Test ────────────────────────────────────────────────────────────────
 
 def speed_test():
-    section("Speed — Internet Download  (Cloudflare, ~25 MB)")
+    section("Speed: Internet Download  (Cloudflare, ~25 MB)")
 
     try:
         print(f"  Downloading from {SPEED_URL} ...")
@@ -350,7 +350,7 @@ def main():
     if platform.system() != "Darwin":
         sys.exit("wifi-diag.py currently supports macOS only")
 
-    print(f"wifi-diag  —  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"wifi-diag  :  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Host:  {platform.node()}")
     print(f"macOS: {platform.mac_ver()[0]}")
 

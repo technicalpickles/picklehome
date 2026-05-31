@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AT&T BGW router diagnostic tool — pulls fiber status, broadband stats,
+AT&T BGW router diagnostic tool: pulls fiber status, broadband stats,
 and runs traceroute/ping/nslookup directly from the BGW WAN interface.
 
 Status commands use requests (fast, no browser needed).
@@ -143,7 +143,7 @@ def cmd_wifi():
         # Find the band section and extract SSID from it
         band_section = text[m.start():m.start() + 500] if m else text
         ssid_m = re.search(r"Network Name \(SSID\)\s+(\S+)", band_section)
-        ssid = ssid_m.group(1) if ssid_m else "—"
+        ssid = ssid_m.group(1) if ssid_m else "n/a"
 
         status_icon = "✓" if freq_status.lower() == "disabled" else "⚠"
         print(f"  {band:<8}  Radio: {freq_status:<10}  SSID: {ssid}  {status_icon}")

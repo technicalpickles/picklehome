@@ -14,7 +14,7 @@ echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/db" "$DATA_DIR/files"
-# Vikunja container runs as UID 1000 — files dir must be writable by it
+# Vikunja container runs as UID 1000: files dir must be writable by it
 sudo chown 1000:1000 "$DATA_DIR/files"
 
 echo "==> Configuring Tailscale serve for vikunja"

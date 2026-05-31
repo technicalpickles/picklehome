@@ -3,8 +3,8 @@
 # Run 'just climate-weather-discover' to find nearby stations.
 # Run 'just climate-weather' to see current outdoor temp.
 
-# Stations tried in order — first responding station wins.
-# MACs are sensitive (geolocatable) — store in 1Password, not here.
+# Stations tried in order; first responding station wins.
+# MACs are sensitive (geolocatable), store in 1Password, not here.
 # Set AMBIENT_STATION_MACS=mac1,mac2 via .env (see .env.template).
 stations: []
 

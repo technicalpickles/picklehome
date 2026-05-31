@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DNS resolution comparison tool — queries multiple nameservers directly
+DNS resolution comparison tool: queries multiple nameservers directly
 from the local machine and compares the IPs returned.
 
 Useful for diagnosing CDN routing differences between resolvers.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# network-diag.sh — Systematic ISP/routing diagnostic
+# network-diag.sh: Systematic ISP/routing diagnostic
 # Usage: ./network-diag.sh <domain>
 
 set -uo pipefail
@@ -36,19 +36,19 @@ run() {
 }
 
 echo
-echo -e "${BOLD}Network Diagnostic — ${DOMAIN}${NC}"
+echo -e "${BOLD}Network Diagnostic: ${DOMAIN}${NC}"
 echo -e "$(date)"
 echo -e "Nameserver: $(scutil --dns 2>/dev/null | awk '/nameserver/{print $3; exit}' || echo 'unknown')"
 
 # ─── 1. BASELINE ────────────────────────────────────────────────────────────
-section "1. Baseline — Can we reach anything?"
+section "1. Baseline: Can we reach anything?"
 
 for ip in 8.8.8.8 1.1.1.1; do
     if timeout $T_PING ping -c 3 -W 2000 "$ip" > /tmp/ping_out 2>&1; then
         rtt=$(grep -oE 'avg[^/]*/[0-9.]+' /tmp/ping_out | grep -oE '[0-9]+\.[0-9]+$' || echo '?')
         ok "ping $ip  (avg ${rtt}ms)"
     else
-        fail "ping $ip — no response"
+        fail "ping $ip: no response"
         cat /tmp/ping_out | sed 's/^/    /'
     fi
 done
@@ -58,7 +58,7 @@ timeout $T_CURL curl -s -o /dev/null -w "    HTTP %{http_code}  connect=%{time_c
     --max-time $T_CURL https://www.google.com || warn "curl google.com failed/timed out"
 
 # ─── 2. DNS ──────────────────────────────────────────────────────────────────
-section "2. DNS — Name resolution"
+section "2. DNS: Name resolution"
 
 for ns in "" "@8.8.8.8" "@1.1.1.1"; do
     label="dig $DOMAIN ${ns:-"(default DNS)"}"
@@ -71,7 +71,7 @@ for ns in "" "@8.8.8.8" "@1.1.1.1"; do
 done
 
 # ─── 3. TRACEROUTE ───────────────────────────────────────────────────────────
-section "3. Traceroute — Where does the path go?"
+section "3. Traceroute: Where does the path go?"
 
 info "Tracing to $DOMAIN (max 20 hops, 2s per hop)"
 timeout $T_TRACE traceroute -n -m 20 -w 2 "$DOMAIN" 2>&1 | sed 's/^/  /'
@@ -81,25 +81,25 @@ info "Tracing to google.com (baseline comparison)"
 timeout $T_TRACE traceroute -n -m 20 -w 2 google.com 2>&1 | sed 's/^/  /'
 
 # ─── 4. MTU ──────────────────────────────────────────────────────────────────
-section "4. MTU — Do large packets get through?"
+section "4. MTU: Do large packets get through?"
 
 # macOS: -D = set Don't Fragment bit, -s = payload size
-# 8.8.8.8 used (reliable, not the destination — isolates path to internet)
+# 8.8.8.8 used (reliable, not the destination, isolates path to internet)
 info "Testing Don't Fragment packets toward 8.8.8.8 (payload sizes: 1472, 1452, 1400, 1200)"
 for size in 1472 1452 1400 1200; do
     total=$((size + 28))
     result=$(timeout $T_PING ping -c 2 -W 2000 -D -s "$size" 8.8.8.8 2>&1)
     if echo "$result" | grep -q "2 packets transmitted, 2 packets received"; then
-        ok "size ${size} (${total} byte total) — passed"
+        ok "size ${size} (${total} byte total): passed"
     elif echo "$result" | grep -q "0 packets received"; then
-        fail "size ${size} (${total} byte total) — DROPPED (possible MTU black hole)"
+        fail "size ${size} (${total} byte total): DROPPED (possible MTU black hole)"
     else
-        warn "size ${size} (${total} byte total) — partial: $(echo "$result" | grep 'packets' | tail -1)"
+        warn "size ${size} (${total} byte total), partial: $(echo "$result" | grep 'packets' | tail -1)"
     fi
 done
 
 # ─── 5. TCP + TLS HANDSHAKE ──────────────────────────────────────────────────
-section "5. TCP/TLS — Where does the HTTPS connection stall?"
+section "5. TCP/TLS: Where does the HTTPS connection stall?"
 
 info "curl -v https://${DOMAIN} (watching connect vs. TLS vs. first-byte timing)"
 timeout $T_CURL curl -v -s -o /dev/null \
@@ -109,7 +109,7 @@ timeout $T_CURL curl -v -s -o /dev/null \
     | sed 's/^/  /'
 
 # ─── 6. IPv4 vs IPv6 ─────────────────────────────────────────────────────────
-section "6. IPv4 vs IPv6 — Is one protocol broken?"
+section "6. IPv4 vs IPv6: Is one protocol broken?"
 
 info "IPv6 connectivity check"
 if timeout $T_PING ping6 -c 2 2001:4860:4860::8888 > /dev/null 2>&1; then
@@ -131,7 +131,7 @@ for flag in "-4" "-6"; do
 done
 
 # ─── SUMMARY ─────────────────────────────────────────────────────────────────
-section "Summary — Interpretation hints"
+section "Summary: Interpretation hints"
 cat <<'EOF'
   Traceroute drops inside AT&T hops  → AT&T routing/peering issue, contact ISP
   Traceroute drops at peering point  → BGP dispute between AT&T and CDN provider

@@ -43,7 +43,7 @@ def test_format_status_basic():
     assert "speed 42%" in output
     assert "78% remaining" in output
     assert "LED: off" in output
-    # child_lock is False, germ_shield is None — neither should appear
+    # child_lock is False, germ_shield is None, neither should appear
     assert "Child Lock" not in output
     assert "Germ Shield" not in output
 

@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 
-# Credentials — never commit
+# Credentials: never commit
 .env
 **/.env
 **/.env.build
@@ -14,10 +14,10 @@ lighting/.certs/
 network/diag-results/
 network-diag-results/
 
-# Claude Code local state — personal memory and machine-specific settings
+# Claude Code local state: personal memory and machine-specific settings
 .claude/projects/
 .claude/settings.local.json
-# BMAD skills are sourced from _bmad/ — leave other local skills committable
+# BMAD skills are sourced from _bmad/; leave other local skills committable
 .claude/skills/bmad-*/
 
 # Vendor / reference repos

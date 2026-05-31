@@ -89,7 +89,7 @@ async def _fetch(lat: float, lon: float) -> AirQualityReading:
         except OSError as e:
             raise AirQualityError(f"network error: {e}") from e
 
-    # Extract UAQI index (Universal AQI — what Google reliably returns for all locations)
+    # Extract UAQI index (Universal AQI, what Google reliably returns for all locations)
     us_aqi = None
     us_aqi_category = None
     dominant_code = None

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/service-env — extract a subset of .env for a specific service
+# scripts/service-env: extract a subset of .env for a specific service
 # Usage: scripts/service-env <path/to/.env.vars> [--env <path/to/.env>]
 #
 # Reads the listed var names from .env.vars and outputs only those key=value

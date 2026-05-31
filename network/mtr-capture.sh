@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mtr-capture.sh — capture mtr reports to network/diag-results/mtr/
+# mtr-capture.sh: capture mtr reports to network/diag-results/mtr/
 # Run with sudo: sudo bash network/mtr-capture.sh
 
 OUTDIR="$(dirname "$0")/diag-results/mtr"

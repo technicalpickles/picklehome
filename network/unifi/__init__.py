@@ -19,7 +19,7 @@ def session() -> requests.Session:
     """Return an authenticated requests.Session for the UniFi CloudKey API."""
     api_key = os.environ.get("UNIFI_API_KEY")
     if not api_key:
-        sys.exit("UNIFI_API_KEY not set — add it to .env")
+        sys.exit("UNIFI_API_KEY not set: add it to .env")
     s = requests.Session()
     s.headers.update({"X-API-Key": api_key, "Accept": "application/json"})
     s.verify = False

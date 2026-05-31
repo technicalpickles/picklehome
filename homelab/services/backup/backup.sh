@@ -52,11 +52,11 @@ DUMP_FAILURES=0
 dump_postgres "vikunja" "vikunja" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 
 # --- Restic backup ---
-# Exclude raw postgres data dirs — the pg_dump SQL files are the authoritative
+# Exclude raw postgres data dirs: the pg_dump SQL files are the authoritative
 # database backup. Raw data dirs are large, owned by container UIDs (unreadable
 # by the backup user), and not consistent unless postgres is stopped.
 #
-# Exclude /srv/data/dev-home — that's the dev container's home directory,
+# Exclude /srv/data/dev-home: that's the dev container's home directory,
 # unrelated to homelab services. Has its own backup concerns.
 echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
@@ -65,7 +65,7 @@ restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
 RESTIC_EXIT=$?
 
 # Restic exit codes: 0 = success, 3 = partial (some files unreadable but snapshot saved).
-# Treat 3 as a warning — snapshot is still valid, we want to continue to the prune.
+# Treat 3 as a warning: snapshot is still valid, we want to continue to the prune.
 if [ "$RESTIC_EXIT" -ne 0 ] && [ "$RESTIC_EXIT" -ne 3 ]; then
     echo "ERROR: restic backup failed with exit $RESTIC_EXIT" >&2
     exit "$RESTIC_EXIT"
@@ -89,6 +89,6 @@ if [ "$DUMP_FAILURES" -gt 0 ]; then
     exit 1
 fi
 if [ "$RESTIC_EXIT" -eq 3 ]; then
-    echo "WARNING: restic backup had unreadable files (exit 3) — snapshot saved but incomplete" >&2
+    echo "WARNING: restic backup had unreadable files (exit 3): snapshot saved but incomplete" >&2
     exit 1
 fi

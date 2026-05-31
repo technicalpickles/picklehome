@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Network snapshot — captures a full point-in-time summary of the home network:
+Network snapshot: captures a full point-in-time summary of the home network:
   - BGW fiber signal and broadband status
   - USG WAN IP, gateway, DNS servers
   - USG dnsmasq forwarder config
@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 BGW = "http://192.168.8.254"
 CLOUDKEY = "https://192.168.1.57"
 
-# Cloudflare test IP (cfl.dropboxstatic.com — known affected during peering issues)
+# Cloudflare test IP (cfl.dropboxstatic.com, known affected during peering issues)
 CF_TEST_IP = "104.16.99.29"
 
 SEP = "─" * 60
@@ -220,7 +220,7 @@ def main():
     args = parser.parse_args()
 
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Network Snapshot  —  {ts}")
+    print(f"Network Snapshot  :  {ts}")
     print("=" * 60)
 
     section("BGW Fiber Signal")
@@ -239,10 +239,10 @@ def main():
     dns_check()
 
     if not args.no_trace:
-        section(f"Peering Health — traceroute to {CF_TEST_IP} (Cloudflare)")
+        section(f"Peering Health: traceroute to {CF_TEST_IP} (Cloudflare)")
         bgw_trace(CF_TEST_IP)
     else:
-        print("\n(traceroute skipped — use without --no-trace to include)")
+        print("\n(traceroute skipped: use without --no-trace to include)")
 
     print(f"\n{'=' * 60}")
     print("Snapshot complete.")

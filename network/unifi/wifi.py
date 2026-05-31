@@ -1,4 +1,4 @@
-"""UniFi WiFi commands — AP radio stats and client signal metrics."""
+"""UniFi WiFi commands: AP radio stats and client signal metrics."""
 
 from datetime import datetime, timezone
 
@@ -60,7 +60,7 @@ def kbps_to_mbps(kbps):
 # ── APs command ───────────────────────────────────────────────────────────────
 
 def cmd_aps(s, sort_by="name"):
-    section("Access Points — Radio Stats")
+    section("Access Points: Radio Stats")
 
     devices = get(s, "/stat/device")
     aps = [d for d in devices if d.get("type") == "uap"]
@@ -111,7 +111,7 @@ def cmd_aps(s, sort_by="name"):
             retries = stat.get("tx_retries_pct", None) if stat else None
             tx_pow  = stat.get("tx_power", "?") if stat else "?"
 
-            sat_str = f"{sat}" if sat >= 0 else "—"
+            sat_str = f"{sat}" if sat >= 0 else "n/a"
             ret_str = f"{retries:.1f}%" if retries is not None else "?"
 
             print(f"    {b:<7}  ch {channel:<5} {bw}MHz   "
@@ -123,7 +123,7 @@ def cmd_aps(s, sort_by="name"):
 # ── Clients command ───────────────────────────────────────────────────────────
 
 def cmd_clients(s):
-    section("WiFi Clients — All Connected")
+    section("WiFi Clients: All Connected")
 
     clients = get(s, "/stat/sta")
     # Only WiFi clients (wired devices can appear in /stat/sta if previously wireless)
@@ -151,7 +151,7 @@ def cmd_clients(s):
 
         sig_str = f"{sig}" if sig is not None else "?"
         snr_str = f"{sig - noise}" if sig is not None and noise is not None else "?"
-        sat_str = f"{sat}" if sat >= 0 else "—"
+        sat_str = f"{sat}" if sat >= 0 else "n/a"
         ret_str = f"{retries:.1f}" if retries is not None else "?"
 
         print(f"  {hostname:<28} {vendor:<22} {ip:<16} {ap_name:<24} {b:<6} {str(channel):>4}  {sig_str:>5}  {snr_str:>4}  {tx_rate:>7}  {sat_str:>4}  {ret_str:>7}")
@@ -160,7 +160,7 @@ def cmd_clients(s):
 # ── Single client command ─────────────────────────────────────────────────────
 
 def cmd_client(s, query):
-    section(f"Client Detail — {query}")
+    section(f"Client Detail: {query}")
 
     clients = get(s, "/stat/sta")
     q = query.lower()
@@ -176,7 +176,7 @@ def cmd_client(s, query):
 
     if not matches:
         print(f"  No connected client matching '{query}'")
-        print("  (client may be offline — use 'clients' to see all connected)")
+        print("  (client may be offline: use 'clients' to see all connected)")
         return
 
     for c in matches:
@@ -238,8 +238,8 @@ def cmd_client(s, query):
         print()
         if retries is not None:
             print(f"  TX Retries:    {retries:.1f}%  ({retry_label(retries)})")
-        sat_str = f"{sat}" if sat >= 0 else "—"
-        sat_now_str = f"{sat_now}" if sat_now >= 0 else "—"
+        sat_str = f"{sat}" if sat >= 0 else "n/a"
+        sat_now_str = f"{sat_now}" if sat_now >= 0 else "n/a"
         print(f"  Satisfaction:  {sat_str}  (now: {sat_now_str})")
         print()
         print(f"  Uptime:        {uptime_str}  (last assoc: {assoc_str})")
@@ -249,7 +249,7 @@ def cmd_client(s, query):
 # ── Config command ────────────────────────────────────────────────────────────
 
 def cmd_config(s):
-    section("WiFi Configuration — Roaming & Power-Save Settings")
+    section("WiFi Configuration: Roaming & Power-Save Settings")
 
     # SSID settings
     wlans = get(s, "/rest/wlanconf")
@@ -269,7 +269,7 @@ def cmd_config(s):
         print(f"    DTIM:            mode={dtim_mode}  2.4GHz={dtim_ng}  5GHz={dtim_na}  (wake interval for PSM clients)")
 
         min_rssi         = w.get('minrssi_enabled', False)
-        min_rssi_val     = w.get('minrssi', '—')
+        min_rssi_val     = w.get('minrssi', 'n/a')
         print(f"    Min RSSI:        enabled={min_rssi}  value={min_rssi_val}  (kicks clients below threshold)")
 
         minrate_na = w.get('minrate_na_enabled', False)
@@ -278,7 +278,7 @@ def cmd_config(s):
         minrate_ng_kbps = w.get('minrate_ng_data_rate_kbps', '?')
         print(f"    Min Rate:        5GHz={minrate_na} ({minrate_na_kbps} kbps)  2.4GHz={minrate_ng} ({minrate_ng_kbps} kbps)")
 
-        band_steering = w.get('band_steering_mode', w.get('no2ghz_oui', '—'))
+        band_steering = w.get('band_steering_mode', w.get('no2ghz_oui', 'n/a'))
         print(f"    Band Steering:   {band_steering}")
         print()
 
@@ -313,7 +313,7 @@ def cmd_config(s):
 # ── Roaming history command ───────────────────────────────────────────────────
 
 def cmd_roaming(s, query, num_sessions=1):
-    section(f"Roaming History — {query}")
+    section(f"Roaming History: {query}")
 
     # Resolve query to a MAC. Check currently connected clients first, then
     # all-user history so offline clients work too.
@@ -392,7 +392,7 @@ def cmd_roaming(s, query, num_sessions=1):
 # ── RF Scan command ───────────────────────────────────────────────────────────
 
 def cmd_rfscan(s, include_own=False, fresh_minutes=None, summary_only=False):
-    section("RF Scan — Neighboring APs (passive scan results)")
+    section("RF Scan: Neighboring APs (passive scan results)")
 
     neighbors = get(s, "/stat/rogueap")
     if not neighbors:
@@ -444,7 +444,7 @@ def cmd_rfscan(s, include_own=False, fresh_minutes=None, summary_only=False):
             ch = n.get("channel", "?")
             by_channel.setdefault(ch, []).append(n.get("signal", -100))
 
-        print(f"\n  {label} — channel congestion summary:")
+        print(f"\n  {label}: channel congestion summary:")
         for ch in sorted(by_channel, key=lambda x: (x == "?", x)):
             sigs = by_channel[ch]
             strongest = max(sigs)
@@ -455,7 +455,7 @@ def cmd_rfscan(s, include_own=False, fresh_minutes=None, summary_only=False):
 
         # Full neighbor table
         print()
-        print(f"  {label} — all neighbors:")
+        print(f"  {label}: all neighbors:")
         print(f"  {'SSID':<32} {'BSSID':<18} {'Ch':>4}  {'Sig':>5}  {'Last Seen':>9}  {'Heard by'}")
         print(f"  {'─'*32} {'─'*18} {'─'*4}  {'─'*5}  {'─'*9}  {'─'*24}")
 
@@ -487,7 +487,7 @@ def cmd_set_channel(s, ap_query, band, channel, yes=False):
         print(f"  Known APs: {', '.join(d.get('name', '?') for d in aps)}")
         return
     if len(matches) > 1:
-        print(f"  Ambiguous — '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
+        print(f"  Ambiguous: '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
         return
 
     ap = matches[0]
@@ -521,7 +521,7 @@ def cmd_set_channel(s, ap_query, band, channel, yes=False):
     result = r.json()
     meta = result.get("meta", {})
     if meta.get("rc") == "ok":
-        print(f"  Done — {name} {band_label} set to ch {channel}")
+        print(f"  Done: {name} {band_label} set to ch {channel}")
         print("  (AP radio restarting; clients will reconnect in ~5–15s)")
     else:
         print(f"  Error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
@@ -540,7 +540,7 @@ def cmd_locate(s, ap_query, duration=None):
         print(f"  Known APs: {', '.join(d.get('name', '?') for d in aps)}")
         return
     if len(matches) > 1:
-        print(f"  Ambiguous — '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
+        print(f"  Ambiguous: '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
         return
 
     ap = matches[0]
@@ -588,7 +588,7 @@ def cmd_set_power(s, ap_query, band, mode, tx_power=None, yes=False):
         print(f"  Known APs: {', '.join(d.get('name', '?') for d in aps)}")
         return
     if q != "all" and len(matches) > 1:
-        print(f"  Ambiguous — '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
+        print(f"  Ambiguous: '{ap_query}' matches: {', '.join(d.get('name') for d in matches)}")
         return
 
     band_label = "5 GHz" if band == "5" else "2.4 GHz"
@@ -634,4 +634,4 @@ def cmd_set_power(s, ap_query, band, mode, tx_power=None, yes=False):
         if meta.get("rc") == "ok":
             print(f"  {name}: done")
         else:
-            print(f"  {name}: error — {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")
+            print(f"  {name}: error: {meta.get('msg', 'unknown')} (rc={meta.get('rc')})")

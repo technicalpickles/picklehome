@@ -1,4 +1,4 @@
-"""Lutron Caseta commands — device listing, status, and control."""
+"""Lutron Caseta commands: device listing, status, and control."""
 
 from lighting import section
 
@@ -26,7 +26,7 @@ def _state_str(device):
         fan = device.get("fan_speed", None)
         return fan if fan else "?"
     if state == -1:
-        return "—"
+        return "n/a"
     if state == 0:
         return "off"
     if state == 100:
@@ -76,7 +76,7 @@ async def cmd_status(bridge):
         name = dev.get("name", "?")
         state = _state_str(dev)
         dtype = _type_label(dev.get("type", "?"))
-        indicator = "●" if state.lower() not in ("off", "—", "?") else "○"
+        indicator = "●" if state.lower() not in ("off", "n/a", "?") else "○"
         print(f"  {indicator} {name:<35} {state}")
 
 

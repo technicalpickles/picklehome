@@ -1,6 +1,6 @@
 # climate/config/purifiers.yaml
-# managed: true  — included in status and automation
-# managed: false — registered but excluded
+# managed: true  : included in status and automation
+# managed: false : registered but excluded
 
 purifiers:
   Bedroom Purifier:
