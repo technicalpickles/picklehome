@@ -111,6 +111,30 @@ Note: `Calibrated: false` is **not** a signal here. Every lock on this account
 Compare against a known-good lock before treating any single field as the
 smoking gun.
 
+### A displayed battery percentage can be a years-old cached reading
+
+The battery level the API returns is the last value the bridge successfully
+read over BLE, which can be ancient if the lock has been unreachable. A lock
+can show a healthy percentage while its batteries are actually flat.
+
+Observed: a lock displayed 97% before and after a battery swap that was in fact
+necessary to bring it back. The real tell was `batteryInfo.deathDate` ==
+`2022-07-12` (a projected death date already in the past) and an
+`infoUpdatedDate` years old. When a lock with an online bridge has gone stale
+(old `status_datetime`), do not trust the battery percentage on its own:
+
+- Check `batteryInfo.deathDate` -- if it is in the past, the reading is ancient.
+- Check `batteryInfo.infoUpdatedDate` for when the level was last actually read.
+
+Recovery for this case (online bridge, intact identity, stale status, the
+"unknown_error_during_connect" reason) was: power-cycle the *bridge* (unplug,
+wait, replug) **and** replace the lock's batteries. This is distinct from the
+wedged-lock case above (blank identity, lock power-cycle + master code).
+
+Note: `is_stale` keys only off bridge connectivity, so a lock on an online
+bridge with a stale `status_datetime` still renders its battery cell as live.
+The percentage shown there is the last read, not necessarily current.
+
 ### WiFi RSSI and SSID are not populated by the API
 
 The `wifiData` field on the raw lock detail payload is `null` on every lock
