@@ -37,26 +37,6 @@ Per-service hostname is stored in 1Password as `<SERVICE>_HOST` and pulled into 
 
 ## Service registry
 
-### vikunja
-
-Self-hosted task manager (Postgres + Vikunja app server).
-
-| | |
-|---|---|
-| **Purpose** | Task management, project tracking |
-| **Compose** | `/srv/containers/vikunja/` |
-| **Data** | `/srv/data/vikunja/` (Postgres data + file attachments) |
-| **Access** | `https://vikunja.<tailnet>.ts.net` (Tailscale Services, port 3456 internally) |
-| **Env vars** | `VIKUNJA_HOST`, `VIKUNJA_DB_PASSWORD`, `VIKUNJA_JWT_SECRET` |
-| **Backup** | Yes, nightly (`pg_dumpall` + file snapshots) |
-| **Restart** | `restart: unless-stopped` |
-
-Commands: `just deploy-vikunja`, `just vikunja-logs`, `just vikunja-logs-follow`, `just vikunja-validate`, `just vikunja-local-up`, `just vikunja-local-down`
-
-See [vikunja/README.md](vikunja/README.md) for full setup.
-
----
-
 ### climate-auto-switch
 
 Runs `climate comfort-switch auto` every 15 minutes. Checks outdoor temperature and switches between heat/cool comfort modes.

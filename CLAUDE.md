@@ -15,7 +15,7 @@ Client → USG (192.168.1.1) → AT&T BGW (192.168.8.254) → AT&T Fiber → Int
 
 - **Tailnet suffix:** `tail2023b7.ts.net` (verify with `tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix'`)
 - **Service hostnames:** `<service-name>.tail2023b7.ts.net`, fronted by Tailscale Services on picklelab. TLS terminated by `tailscaled`, proxied to a `127.0.0.1:<port>` container binding. No public DNS, no Caddy.
-- **Per-service hostname** is stored as `<SERVICE>_HOST` in 1Password (e.g. `op://picklehome/Vikunja/host`) and surfaced via `.env`.
+- **Per-service hostname** is stored as `<SERVICE>_HOST` in 1Password (e.g. `op://picklehome/TaskChampion Sync/host`) and surfaced via `.env`.
 
 ## Python Tooling
 

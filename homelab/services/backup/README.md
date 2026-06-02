@@ -8,8 +8,9 @@ Everything under `/srv/data`, except the raw Postgres data directories (backed u
 
 | Service | Captured | How |
 |---------|----------|-----|
-| [vikunja](../vikunja/README.md) | database + file attachments | `pg_dumpall` → `/srv/data/vikunja/dumps/pg_dumpall.sql`, then restic snapshots the whole `/srv/data/vikunja/` tree |
 | climate-auto-switch | OAuth tokens, last-state, run log | restic snapshots `/srv/data/climate-auto-switch/` directly (flat files, no database) |
+
+No Postgres-backed services are deployed right now, so no SQL dumps run. The dump machinery (`dump_postgres` in `backup.sh`) stays in place for when one returns; see [How Database Dumps Work](#how-database-dumps-work).
 
 ## Retention
 
@@ -65,7 +66,7 @@ just backup-logs         # last 50 lines of service journal
 The script uses `docker exec` with a container lookup via compose labels, rather than `docker compose exec`, so it doesn't need read access to service `.env` files:
 
 ```bash
-docker ps --filter "label=com.docker.compose.project=vikunja" \
+docker ps --filter "label=com.docker.compose.project=<service>" \
           --filter "label=com.docker.compose.service=db" \
           --format '{{.Names}}'
 ```
@@ -88,7 +89,7 @@ sudo -u backup -E restic restore latest --target /srv/data
 Database dumps inside the restored tree can be replayed into a fresh Postgres with:
 
 ```bash
-cat /srv/data/vikunja/dumps/pg_dumpall.sql | docker exec -i vikunja-db-1 psql -U vikunja
+cat /srv/data/<service>/dumps/pg_dumpall.sql | docker exec -i <service>-db-1 psql -U <db_user>
 ```
 
 ## Data Locations (on picklelab)

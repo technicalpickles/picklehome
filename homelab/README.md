@@ -36,9 +36,8 @@ service also has its own README with first-time setup and operations.
 
 | Service | What it is | Details |
 |---------|------------|---------|
-| vikunja | Self-hosted task manager (Postgres + Vikunja), Tailscale Services | [README](services/vikunja/README.md) |
 | climate-auto-switch | 15-min systemd timer running seasonal HVAC comfort switching | [README](services/climate-auto-switch/README.md) |
-| backup | Nightly restic backups of `/srv/data` with Postgres dumps (GFS retention) | [README](services/backup/README.md) |
+| backup | Nightly restic backups of `/srv/data` (GFS retention, Postgres dump support) | [README](services/backup/README.md) |
 | obsidian-sync | Headless Obsidian Sync clients keeping vaults on-host for agent access | [README](services/obsidian-sync/README.md) |
 | brineworks-server | FastAPI PRM backend (contacts/interactions), Tailscale Services | [README](services/brineworks-server/README.md) |
 | taskchampion-sync | Self-hosted Taskwarrior sync server (client-side encryption) | [README](services/taskchampion-sync/README.md) |

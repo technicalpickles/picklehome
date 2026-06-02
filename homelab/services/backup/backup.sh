@@ -48,19 +48,19 @@ dump_postgres() {
 }
 
 DUMP_FAILURES=0
-
-dump_postgres "vikunja" "vikunja" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
+# No Postgres services currently deployed, so nothing calls dump_postgres.
+# Add a `dump_postgres "<service>" "<db_user>"` line here when one returns.
 
 # --- Restic backup ---
-# Exclude raw postgres data dirs: the pg_dump SQL files are the authoritative
-# database backup. Raw data dirs are large, owned by container UIDs (unreadable
-# by the backup user), and not consistent unless postgres is stopped.
+# When a Postgres service is deployed, exclude its raw data dir here: the
+# pg_dump SQL files are the authoritative database backup. Raw data dirs are
+# large, owned by container UIDs (unreadable by the backup user), and not
+# consistent unless postgres is stopped. (None deployed currently.)
 #
 # Exclude /srv/data/dev-home: that's the dev container's home directory,
 # unrelated to homelab services. Has its own backup concerns.
 echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
-    --exclude "$DATA_DIR/vikunja/db" \
     --exclude "$DATA_DIR/dev-home"
 RESTIC_EXIT=$?
 

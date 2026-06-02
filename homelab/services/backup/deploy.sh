@@ -36,20 +36,16 @@ fi
 echo "==> Creating directories"
 sudo mkdir -p "$BACKUP_DIR" "$CACHE_DIR"
 sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR"
-# Pre-create dump directories so backup user can write to them
-for svc in vikunja; do
-    sudo mkdir -p "/srv/data/$svc/dumps"
-    sudo chown "$BACKUP_USER:$BACKUP_USER" "/srv/data/$svc/dumps"
-done
+# Pre-create dump directories so backup user can write to them.
+# No Postgres services currently deployed. When one returns, add it here:
+#   for svc in <service>; do
+#       sudo mkdir -p "/srv/data/$svc/dumps"
+#       sudo chown "$BACKUP_USER:$BACKUP_USER" "/srv/data/$svc/dumps"
+#   done
 
 echo "==> Granting backup user read ACLs on service data"
 # Ecobee tokens are seeded by the human user with mode 600
 sudo setfacl -m u:"$BACKUP_USER":r /srv/data/climate-auto-switch/ecobee-tokens.json
-
-# Vikunja files directory (attachments) - already owned by UID 1000, readable
-# by default if perms are sane, but add ACL to be safe
-sudo setfacl -R -m u:"$BACKUP_USER":rX /srv/data/vikunja/files 2>/dev/null || true
-sudo setfacl -R -d -m u:"$BACKUP_USER":rX /srv/data/vikunja/files 2>/dev/null || true
 
 echo "==> Initializing restic repo (if needed)"
 # Source the env file for RESTIC_REPOSITORY and RESTIC_PASSWORD.

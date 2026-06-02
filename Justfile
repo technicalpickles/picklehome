@@ -186,41 +186,6 @@ github-runner-logs host="picklelab":
 github-runner-status host="picklelab":
     ssh {{host}} "systemctl status github-actions-runner.service --no-pager && docker ps --filter name=github-actions-runner"
 
-# Deploy Vikunja to picklelab (idempotent: first setup or update)
-deploy-vikunja host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/vikunja/.env.vars > tmp/vikunja.env
-    scp tmp/vikunja.env {{host}}:/opt/homelab/homelab/services/vikunja/.env
-    rm tmp/vikunja.env
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/vikunja/deploy.sh"
-
-# Tail Vikunja container logs from picklelab
-vikunja-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/vikunja && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
-
-# Follow Vikunja container logs live from picklelab
-vikunja-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/vikunja && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
-
 # Deploy TaskChampion sync server to picklelab (idempotent: first setup or update)
 deploy-taskchampion host="picklelab":
     #!/usr/bin/env bash
@@ -311,24 +276,6 @@ brineworks-server-logs host="picklelab" lines="50":
 # Follow Brineworks server container logs live from picklelab
 brineworks-server-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
-
-# Validate Vikunja compose config (checks syntax + interpolation using local .env)
-vikunja-validate:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd homelab/services/vikunja
-    docker compose -f compose.yaml -f compose.local.yaml config --quiet
-    echo "compose config OK"
-
-# Start Vikunja stack locally (Postgres + Vikunja, no TLS)
-vikunja-local-up:
-    cd homelab/services/vikunja && \
-        docker compose -f compose.yaml -f compose.local.yaml up -d
-
-# Stop and remove local Vikunja stack
-vikunja-local-down:
-    cd homelab/services/vikunja && \
-        docker compose -f compose.yaml -f compose.local.yaml down
 
 # Tailscale VPN overlay: just tailscale [status]
 tailscale *ARGS:

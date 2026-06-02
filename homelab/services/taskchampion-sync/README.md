@@ -8,7 +8,7 @@ Design: [`docs/plans/2026-05-03-taskchampion-sync.md`](../../../docs/plans/2026-
 
 ## Prerequisites (one-time)
 
-1. **Tailscale admin** (skip if already done for vikunja/brineworks):
+1. **Tailscale admin** (skip if already done for brineworks):
    - HTTPS certs enabled at https://login.tailscale.com/admin/dns
    - `tag:server` applied to picklelab
    - Define a `taskchampion` Service at https://login.tailscale.com/admin/services with port `443`
