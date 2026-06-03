@@ -293,6 +293,10 @@ garage *ARGS:
 locks *ARGS:
     uv run python locks/locks_cli.py {{ARGS}}
 
+# Sonos speakers: just sonos status | roster | list
+sonos *ARGS:
+    uv run python sonos/sonos_cli.py {{ARGS}}
+
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
     #!/usr/bin/env bash

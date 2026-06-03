@@ -10,6 +10,9 @@ __pycache__/
 lighting/caseta-bridge.json
 lighting/.certs/
 
+# Sonos roster: uids embed device MACs (geolocatable via SonosNet); keep local
+sonos/config/speakers.yaml
+
 # Network diagnostic results contain public IPs, internal IPs, device names
 network/diag-results/
 network-diag-results/

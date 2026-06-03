@@ -135,6 +135,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `network/`: Network diagnostic and profiling scripts; see `network/CLAUDE.md`
 - `garage/`: Aladdin Connect garage door control; see `garage/README.md`
 - `locks/`: Yale Access smart locks; see `locks/README.md`
+- `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
 - `docs/plans/`: Design documents and implementation plans
 - `tests/`: pytest tests, mirroring source layout
@@ -156,3 +157,4 @@ Quick reference for all smart home and network integrations.
 | AT&T BGW | `network/` | Fiber gateway | Web scraping (no auth) | `just bgw *` |
 | Aladdin Connect | `garage/` | Garage door opener | Cloud API (Cognito) | `just garage *` |
 | Yale Access | `locks/` | Smart locks + bridges | Cloud API (user/pass) | `just locks *` |
+| Sonos | `sonos/` | Speakers | Local UPnP (no auth) | `just sonos *` |

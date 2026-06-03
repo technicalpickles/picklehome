@@ -1,0 +1,23 @@
+# Expected Sonos speakers (the roster).
+#
+# Discovery can only report what answers on the network; it cannot tell you a
+# speaker is *missing* unless it knows the speaker should exist. This file is
+# that list. A speaker absent from discovery but present here is reported OFFLINE.
+#
+# Generate your real roster (gitignored) from what's currently online:
+#
+#     just sonos roster > sonos/config/speakers.yaml
+#
+# Then hand-add any speaker that was offline at generation time (name only; its
+# uid gets matched once it reappears).
+#
+# `uid` is the stable identity (RINCON_...). It embeds the device MAC, which is
+# why the real speakers.yaml is gitignored. Matching prefers uid, falls back to
+# name (case-insensitive) when uid is omitted.
+speakers:
+  - name: Kitchen
+    uid: RINCON_XXXXXXXXXXXX01400
+  - name: Living Room
+    uid: RINCON_XXXXXXXXXXXX01400
+  # A speaker that's currently offline can be listed by name only:
+  - name: Alex's Room
