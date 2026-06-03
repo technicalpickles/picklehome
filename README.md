@@ -72,6 +72,16 @@ just locks status          # one line per lock, grouped by home
 just locks status <name>   # detail for one lock
 ```
 
+### `sonos/`: Speakers
+
+Checks that the Sonos speakers are actually online and not sitting there muted. No cloud and no login: it finds them on the local network the same way Home Assistant does, using the `soco` library that HA itself runs under the hood. It keeps an expected list of speakers so a missing one shows up as offline instead of just dropping off the list, which is how I found out the speaker in Alex's room had been unplugged.
+
+```bash
+just sonos status   # online/offline and muted state for every speaker
+just sonos list     # raw list of whatever's currently on the network
+just sonos roster   # print the online speakers as roster YAML
+```
+
 ### `homelab/`: Always-on services
 
 A single Intel NUC running the stuff that needs to stay up: a self-hosted task manager, nightly restic backups, Obsidian sync, and a couple of small APIs. Docker Compose per service, systemd to keep them running, Tailscale for access, all reproducible from this repo. See [`homelab/README.md`](homelab/README.md) for the service registry and host setup.
