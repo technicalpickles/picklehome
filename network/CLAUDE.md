@@ -2,6 +2,18 @@
 
 Network diagnostic tooling for investigating ISP/CDN connectivity issues.
 
+## When a site or service is slow or broken
+
+Diagnose **top-down**; stop at the layer that's actually failing. Don't open with `mtr`/`curl` just because a past investigation did.
+
+1. **Browser view first** — `just network-profile <url>` (run OUTSIDE the sandbox; uses a headless browser). Reports per-hostname latency, errors, and pending requests as a real browser sees them. A 403/401 plus hung `blob:` challenge requests is Cloudflare bot detection, not a network fault. Slow or pending *real* requests = keep going down.
+2. **TLS + TCP timing** — `curl -o /dev/null -w 'tcp=%{time_connect} tls=%{time_appconnect} total=%{time_total}\n' https://<host>` (run outside the sandbox; in-sandbox curl routes through the proxy and the timing is meaningless). Healthy TLS handshake is <100ms; seconds means a path problem.
+3. **Packet loss** — `ping -c 15 <ip>` to the destination IP plus a control (`8.8.8.8`). Loss to the target but not the control isolates the path.
+4. **Find the hop** — `sudo mtr --report --report-cycles 30 <ip>`, or `just bgw trace <ip>` / `just bgw ping <ip>` to test from the AT&T WAN side with the USG bypassed (also needs the sandbox off). Identifies where loss starts.
+5. **Peering / CDN health** — `just network-status` for Cloudflare status + AT&T↔Cloudflare (AS7018↔AS13335) Radar/BGP signals.
+
+**CDN fate-sharing:** Cloudflare-hosted sites (Canva, Claude.ai, Notion, Dropbox CDN, `1.1.1.1`) share a path. If one is slow on this connection, check whether a *non*-Cloudflare CDN is fine to isolate an AT&T↔Cloudflare peering problem, the exact failure mode in `investigations/cloudflare-peering-2026-03.md` (~47% loss at the peering hop, March 2026).
+
 ## Tailscale
 
 Tailscale mesh VPN is installed on joshs-macbook-pro, picklelab, and iphone182.

@@ -11,6 +11,12 @@ Client → USG (192.168.1.1) → AT&T BGW (192.168.8.254) → AT&T Fiber → Int
 - **ISP:** AT&T Fiber, AS7018, southeastern US (Atlanta area)
 - **Double-NAT:** BGW is NOT in IP passthrough mode; USG gets a private WAN IP
 
+## Connectivity Troubleshooting
+
+When a site or service is slow, timing out, or "broken" (especially Cloudflare-hosted ones: Canva, Claude.ai, Notion, Dropbox), the diagnostics live in `network/`. **Start with the browser profiler `just network-profile <url>`**, then drop to lower layers. See `network/CLAUDE.md` ("When a site or service is slow or broken") for the full top-down order. Past incidents are in `network/investigations/`.
+
+Note: the browser profiler and `just bgw *` use a headless browser that can't launch in the sandbox; see the Sandbox section.
+
 ## Tailscale
 
 - **Tailnet suffix:** `tail2023b7.ts.net` (verify with `tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix'`)
@@ -62,6 +68,8 @@ The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTT
 - **Python `aiohttp`**: defaults to `trust_env=False`, so you must pass `trust_env=True` when creating a `ClientSession`, or pass a pre-configured session to libraries that create their own
 - **New API integrations**: add the domain to `sandbox.network.allowedDomains` in `.claude/settings.local.json`, and verify the HTTP client respects the proxy
 - **Keychain access**: requires `~/Library/Keychains/` in `sandbox.filesystem.allowWrite`
+- **Headless browser (Playwright/Chromium)**: can't launch in the sandbox (fails with `bootstrap_check_in ... Permission denied`). Scripts that use it (`network/profile.py` / `just network-profile`, `network/bgw.py` / `just bgw *`) must run with the sandbox disabled.
+- **curl timing inside the sandbox is meaningless**: requests route through the local proxy, so `time_connect`/`time_appconnect` measure the proxy, not the real path. Run timing probes with the sandbox disabled.
 - **Debugging**: if `curl` works but Python doesn't, it's almost certainly a proxy issue, not a domain allowlist issue
 
 ## Backlog & Task Tracking
