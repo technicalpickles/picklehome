@@ -20,6 +20,26 @@ The agent needs the cryptfile keyring master password in the `picklehome` 1Passw
 
 `BRINEWORKS_API_KEY` is reused from the existing `Brineworks Server` item (the agent is a client of the same server). Add the `op://` reference for `KEYRING_CRYPTFILE_PASSWORD` to `.env.template` and run `just dotenv` (see the project [CLAUDE.md](../../../CLAUDE.md) "Secrets & Config").
 
+### Workspace deploy key (one-time)
+
+The agent clones and pushes the `technicalpickles/brineworks-workspace` repo (triage rules + session data) with a **scoped read-write deploy key** -- low blast radius (config data, no code), so AFK-capable push is acceptable (brineworks design doc).
+
+1. Generate an ed25519 keypair (no passphrase -- the container runs unattended):
+   ```bash
+   ssh-keygen -t ed25519 -f brineworks-workspace-deploy -C "brineworks-agent workspace deploy key" -N ""
+   ```
+2. Add the **public** key (`brineworks-workspace-deploy.pub`) to `technicalpickles/brineworks-workspace` -> Settings -> Deploy keys, **with "Allow write access" checked**.
+3. Store the **private** key base64-encoded in the `picklehome` 1Password vault, item `Brineworks Agent`, field `workspace_deploy_key_b64`:
+   ```bash
+   base64 < brineworks-workspace-deploy | pbcopy   # paste into the 1Password field
+   ```
+   (Base64 keeps it a single line so it survives `scripts/service-env`'s line-based filter; `deploy.sh` decodes it back to the key file on the volume.)
+4. Add the reference to `.env.template` (next to the other Brineworks vars) and re-run `just dotenv`:
+   ```
+   WORKSPACE_DEPLOY_KEY_B64={{ op://picklehome/Brineworks Agent/workspace_deploy_key_b64 }}
+   ```
+   `WORKSPACE_DEPLOY_KEY_B64` is already in `.env.vars`; until the `op://` reference exists it's skipped silently, and both `deploy.sh` and the entrypoint degrade to a bare workspace (no rules pipeline) with a warning. Delete the local keypair once it's in 1Password and on GitHub.
+
 Your phone's SSH client public key must be in your GitHub keys (`https://github.com/technicalpickles.keys`) -- the entrypoint fetches that into `authorized_keys` on first boot.
 
 ## First-time Setup
@@ -94,14 +114,16 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `PF_KEYCHAIN_PREFIX` | compose | `agent` (per-worktree macOS logic doesn't apply in-container) |
 | `KEYRING_CRYPTFILE_PASSWORD` | `.env` (1Password) | Master password for the cryptfile keyring |
 | `BRINEWORKS_API_KEY` | `.env` (1Password) | Bearer token for the prod server (same key as the server) |
+| `WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the workspace clone/push |
 
 ## Data Locations (on picklelab)
 
 ```
-/opt/brineworks/                         # brineworks repo clone (shared build input)
-/srv/data/brineworks-agent/ssh/host_keys # persistent sshd host keys
-/srv/data/brineworks-agent/keyring/      # cryptfile Gmail token keyring
-/srv/data/brineworks-agent/workspace/    # email session workspace + scratch
+/opt/brineworks/                              # brineworks repo clone (shared build input)
+/srv/data/brineworks-agent/ssh/host_keys      # persistent sshd host keys
+/srv/data/brineworks-agent/ssh/workspace_deploy_key  # scoped brineworks-workspace deploy key (0600, uid 1000)
+/srv/data/brineworks-agent/keyring/           # cryptfile Gmail token keyring
+/srv/data/brineworks-agent/workspace/         # brineworks-workspace checkout (triage rules + session data)
 ```
 
 The brineworks `agent/entrypoint.sh` also redirects durable user state onto the volume, so login and sessions survive redeploys:
@@ -112,7 +134,7 @@ The brineworks `agent/entrypoint.sh` also redirects durable user state onto the 
 /srv/data/brineworks-agent/tmux-resurrect # tmux-resurrect/continuum session saves
 ```
 
-It also symlinks the baked skills into the workspace (`workspace/.claude/skills`), mirroring the Mac workspace's `setup`, so `/process-email` resolves from the session. (Triage rules live in the Obsidian vault, not the repo, so there's no `email/config` to link.)
+On boot the entrypoint also clones (or fast-forward-pulls) the `brineworks-workspace` repo into `workspace/` via the scoped deploy key, so the triage rules at `email/config/triage-rules.yaml` are present and current for the pipeline. It symlinks the baked skills into the workspace (`workspace/.claude/skills`), mirroring the Mac workspace's `setup`, so `/process-email` resolves from the session. Without the deploy key it falls back to a bare `workspace/` (no rules pipeline).
 
 All of `/data` is backed up by picklehome's restic (once added to the backup service).
 
