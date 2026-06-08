@@ -1,0 +1,15 @@
+services:
+  agent:
+    image: brineworks-agent:local
+    restart: unless-stopped
+    # sshd host keys, the cryptfile keyring, the email session workspace, and
+    # ~/.claude all live on /data (mounted from the host in compose.picklelab.yaml).
+    # Non-secret config is set here; secrets come from the filtered .env via
+    # env_file in the picklelab overlay (never the master /opt/homelab/.env).
+    environment:
+      BRINEWORKS_ENV: production
+      BRINEWORKS_SERVER_URL: https://brineworks.tail2023b7.ts.net
+      BRINEWORKS_KEYRING_FILE: /data/keyring/cryptfile.cfg
+      BRINEWORKS_EMAIL_BASE_DIR: /data/workspace/email/sessions
+      # Fixed prefix: the per-worktree macOS keychain logic does not apply in-container.
+      PF_KEYCHAIN_PREFIX: agent

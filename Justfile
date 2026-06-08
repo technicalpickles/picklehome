@@ -277,6 +277,43 @@ brineworks-server-logs host="picklelab" lines="50":
 brineworks-server-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
+# Deploy Brineworks mobile agent to picklelab (idempotent: first setup or update)
+deploy-brineworks-agent host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Pulling on {{host}}"
+    ssh {{host}} "cd /opt/homelab && git pull"
+    echo "==> Copying .env to {{host}}"
+    mkdir -p tmp
+    scripts/service-env homelab/services/brineworks-agent/.env.vars > tmp/brineworks-agent.env
+    scp tmp/brineworks-agent.env {{host}}:/opt/homelab/homelab/services/brineworks-agent/.env
+    rm tmp/brineworks-agent.env
+    ssh {{host}} "cd /opt/homelab && homelab/services/brineworks-agent/deploy.sh"
+
+# Tail Brineworks agent container logs from picklelab
+brineworks-agent-logs host="picklelab" lines="50":
+    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+
+# Follow Brineworks agent container logs live from picklelab
+brineworks-agent-logs-follow host="picklelab":
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+
 # Tailscale VPN overlay: just tailscale [status]
 tailscale *ARGS:
     tailscale {{ if ARGS == "" { "status" } else { ARGS } }}

@@ -116,6 +116,29 @@ See [brineworks-server/README.md](brineworks-server/README.md) for full setup.
 
 ---
 
+### brineworks-agent
+
+Always-on, phone-reachable Claude Code session running the brineworks CLI against prod. SSH + tmux into a container over Tailscale.
+
+| | |
+|---|---|
+| **Purpose** | Mobile agent surface: reach a full Claude Code + `bw` session from a phone |
+| **Compose** | `/srv/containers/brineworks-agent/` |
+| **Data** | `/srv/data/brineworks-agent/` (sshd host keys, cryptfile keyring, session workspace) |
+| **Access** | `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net` (Tailscale Services, raw TCP to port 2222 internally) |
+| **Env vars** | `KEYRING_CRYPTFILE_PASSWORD`, `BRINEWORKS_API_KEY` (filtered `.env` only, never the master env) |
+| **Backup** | Not yet (needs adding to backup service) |
+| **Restart** | `restart: unless-stopped` |
+| **Source** | `technicalpickles/brineworks` (private repo), built from `/opt/brineworks` on host |
+
+The homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). Container internals copy `homelab/dev/`; deploy/orchestration shape copies `brineworks-server`.
+
+Commands: `just deploy-brineworks-agent`, `just brineworks-agent-logs`, `just brineworks-agent-logs-follow`
+
+See [brineworks-agent/README.md](brineworks-agent/README.md) for full setup.
+
+---
+
 ### taskchampion-sync
 
 Self-hosted Taskwarrior sync server. Replicates the Mac's `~/.task` to picklelab; encryption secret stays client-side, server only sees opaque blobs.

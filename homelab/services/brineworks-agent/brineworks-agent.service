@@ -1,0 +1,18 @@
+[Unit]
+Description=Brineworks mobile agent (SSH + tmux + Claude Code container)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/homelab/homelab/services/brineworks-agent
+# No EnvironmentFile: the compose files use no ${VAR} interpolation. Secrets
+# reach the container via env_file (.env, written by deploy.sh); non-secret
+# config is hardcoded in compose.yaml. So an empty systemd env is fine.
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build
+ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+
+[Install]
+WantedBy=multi-user.target
