@@ -41,6 +41,33 @@ sudo mkdir -p "$DATA_DIR/ssh/host_keys" "$DATA_DIR/keyring" "$DATA_DIR/workspace
 # root-created host keys fine (root can read uid-owned dirs).
 sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
 
+echo "==> Installing the workspace-repo deploy key (if provided)"
+# The agent clones/pushes the brineworks-workspace repo (triage rules + session
+# data) with a scoped read-write deploy key. It arrives base64-encoded in the
+# filtered .env (single line, so service-env's line-based filter keeps it whole)
+# and must land uid-owned 0600: ssh refuses a private key it does not own, and the
+# agent user both clones at boot and pushes interactively with it.
+# No Obsidian-vault mount is wired (grep -n 'pickled-knowledge\|obsidian'
+# compose.picklelab.yaml is empty); rules reach the agent via this clone, not a mount.
+ENV_FILE="$SERVICE_DIR/.env"
+DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
+KEY_B64=""
+if [ -f "$ENV_FILE" ]; then
+    KEY_B64=$(grep -m1 '^WORKSPACE_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
+fi
+if [ -n "$KEY_B64" ]; then
+    # install /dev/null first so the file is 0600 + uid-owned before any bytes land
+    # (never world-readable); tee then fills it without changing mode or owner.
+    sudo install -m 600 -o "$CONTAINER_UID" -g "$CONTAINER_GID" /dev/null "$DEPLOY_KEY_FILE"
+    echo "$KEY_B64" | base64 -d | sudo tee "$DEPLOY_KEY_FILE" > /dev/null
+    echo "    Wrote $DEPLOY_KEY_FILE (0600, uid $CONTAINER_UID)"
+else
+    echo "    WARNING: WORKSPACE_DEPLOY_KEY_B64 not in $ENV_FILE."
+    echo "    The agent can't clone or push brineworks-workspace, so the rules"
+    echo "    pipeline is unavailable. Add WORKSPACE_DEPLOY_KEY_B64 to .env.vars +"
+    echo "    .env.template (see README 'Prerequisites'), re-run 'just dotenv', redeploy."
+fi
+
 echo "==> Configuring Tailscale serve (TCP) for brineworks-agent"
 # Registers brineworks-agent.<tailnet>.ts.net:22, raw-TCP passthrough to the
 # loopback-published sshd (SSH does its own crypto -- no TLS termination).
