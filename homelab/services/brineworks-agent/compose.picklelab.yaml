@@ -1,0 +1,20 @@
+services:
+  agent:
+    build:
+      # Build context is the whole brineworks repo (the image bakes it into
+      # /opt/brineworks); the agent image lives at agent/Dockerfile. deploy.sh
+      # keeps /opt/brineworks fast-forwarded to main, lockstep with the server.
+      context: /opt/brineworks
+      dockerfile: agent/Dockerfile
+    # Filtered service secrets ONLY (KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY).
+    # Deliberately NOT /opt/homelab/.env: this container runs arbitrary Claude
+    # sessions, so it must not receive the whole homelab secret set
+    # (cf. github-actions-runner, homelab/services/README.md).
+    env_file:
+      - .env
+    ports:
+      # Loopback only -- tailscale serve (--tcp=22) proxies
+      # brineworks-agent.<tailnet>:22 to this. 2222 is internal, not user-facing.
+      - "127.0.0.1:2222:22"
+    volumes:
+      - /srv/data/brineworks-agent:/data
