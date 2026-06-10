@@ -34,14 +34,14 @@ The agent clones and pushes the `technicalpickles/brineworks-workspace` repo (tr
    ssh-keygen -t ed25519 -f brineworks-workspace-deploy -C "brineworks-agent workspace deploy key" -N ""
    ```
 2. Add the **public** key (`brineworks-workspace-deploy.pub`) to `technicalpickles/brineworks-workspace` -> Settings -> Deploy keys, **with "Allow write access" checked**.
-3. Store the **private** key base64-encoded in the `picklehome` 1Password vault, item `Brineworks Agent`, field `workspace_deploy_key_b64`:
+3. Store the key in the `picklehome` 1Password vault as an SSH-key item titled `Brineworks Agent` (drag the private key in, or `op` it). Then add a **custom text field** `workspace_deploy_key_b64` holding the **single-line base64** of the private key. The 1Password CLI cannot edit SSH-key items, so add the field in the app; copy the value with:
    ```bash
-   base64 < brineworks-workspace-deploy | pbcopy   # paste into the 1Password field
+   op read 'op://picklehome/Brineworks Agent/private key' | base64 | tr -d '\n' | pbcopy
    ```
-   (Base64 keeps it a single line so it survives `scripts/service-env`'s line-based filter; `deploy.sh` decodes it back to the key file on the volume.)
-4. Add the reference to `.env.template` (next to the other Brineworks vars) and re-run `just dotenv`:
+   (`tr -d '\n'` matters: macOS `base64` wraps at 76 cols, and a multi-line value breaks `scripts/service-env`'s line-based filter. Single line survives it; `deploy.sh` decodes it back to the key file on the volume.)
+4. Add the reference to `.env.template` (next to the other Brineworks vars) and re-run `just dotenv`. Custom fields on an SSH-key item nest under its `add more` section, so the ref carries that path:
    ```
-   WORKSPACE_DEPLOY_KEY_B64={{ op://picklehome/Brineworks Agent/workspace_deploy_key_b64 }}
+   WORKSPACE_DEPLOY_KEY_B64={{ op://picklehome/Brineworks Agent/add more/workspace_deploy_key_b64 }}
    ```
    `WORKSPACE_DEPLOY_KEY_B64` is already in `.env.vars`; until the `op://` reference exists it's skipped silently, and both `deploy.sh` and the entrypoint degrade to a bare workspace (no rules pipeline) with a warning. Delete the local keypair once it's in 1Password and on GitHub.
 
