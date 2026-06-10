@@ -56,10 +56,14 @@ if [ -f "$ENV_FILE" ]; then
     KEY_B64=$(grep -m1 '^WORKSPACE_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
 fi
 if [ -n "$KEY_B64" ]; then
-    # install /dev/null first so the file is 0600 + uid-owned before any bytes land
-    # (never world-readable); tee then fills it without changing mode or owner.
-    sudo install -m 600 -o "$CONTAINER_UID" -g "$CONTAINER_GID" /dev/null "$DEPLOY_KEY_FILE"
-    echo "$KEY_B64" | base64 -d | sudo tee "$DEPLOY_KEY_FILE" > /dev/null
+    # The chown -R above made $DATA_DIR (incl. ssh/) owned by uid $CONTAINER_UID,
+    # which is the deploy user's own uid -- the host<->container volume-sharing
+    # invariant this whole service relies on. So write the key unprivileged: no
+    # sudo, which keeps the narrow sudoers allowlist intact (install/tee are not
+    # allowlisted and would prompt for a password over non-interactive ssh).
+    # umask 077 makes the file 0600 the instant it is created, before any bytes
+    # land (never world-readable); the deploy user owns it, so it is uid-owned too.
+    ( umask 077; echo "$KEY_B64" | base64 -d > "$DEPLOY_KEY_FILE" )
     echo "    Wrote $DEPLOY_KEY_FILE (0600, uid $CONTAINER_UID)"
 else
     echo "    WARNING: WORKSPACE_DEPLOY_KEY_B64 not in $ENV_FILE."
