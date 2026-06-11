@@ -12,6 +12,11 @@ Modeled on `homelab/dev/` (the container internals: sshd, GitHub-keys auth, host
 
 ## Prerequisites (one-time)
 
+**Tailscale admin** (skip the first two if already done for brineworks/taskchampion):
+- HTTPS certs enabled at https://login.tailscale.com/admin/dns
+- `tag:server` applied to picklelab
+- Define a `brineworks-agent` Service at https://login.tailscale.com/admin/services with **TCP port `22`** (raw TCP, not HTTPS 443 like the other services). Without the service definition there is nothing for `tailscale serve --service` to advertise into, so the Services page stays empty and the host never appears as pending.
+
 The agent needs the cryptfile keyring master password in the `picklehome` 1Password vault, surfaced into the root `.env`:
 
 | Field | How to generate | Notes |
@@ -53,7 +58,7 @@ just deploy-brineworks-agent
 
 ### Approve the Tailscale service (first deploy only)
 
-This is the homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). On the first deploy the endpoint won't respond until you approve it:
+This is the homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). The service must already be defined in the admin console (see Prerequisites); without it nothing shows up here to approve. On the first deploy the endpoint won't respond until you approve it:
 
 1. Open [Tailscale Services](https://login.tailscale.com/admin/services)
 2. Find `brineworks-agent` and approve the pending host advertisement
