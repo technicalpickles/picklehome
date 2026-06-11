@@ -125,7 +125,7 @@ Always-on, phone-reachable Claude Code session running the brineworks CLI agains
 | **Purpose** | Mobile agent surface: reach a full Claude Code + `bw` session from a phone |
 | **Compose** | `/srv/containers/brineworks-agent/` |
 | **Data** | `/srv/data/brineworks-agent/` (sshd host keys, cryptfile keyring, session workspace) |
-| **Access** | `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net` (Tailscale Services, raw TCP to port 2222 internally) |
+| **Access** | `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net` (Tailscale Services, raw TCP to loopback `2223` internally) |
 | **Env vars** | `KEYRING_CRYPTFILE_PASSWORD`, `BRINEWORKS_API_KEY` (filtered `.env` only, never the master env) |
 | **Backup** | Not yet (needs adding to backup service) |
 | **Restart** | `restart: unless-stopped` |

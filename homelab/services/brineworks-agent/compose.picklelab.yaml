@@ -14,7 +14,9 @@ services:
       - .env
     ports:
       # Loopback only -- tailscale serve (--tcp=22) proxies
-      # brineworks-agent.<tailnet>:22 to this. 2222 is internal, not user-facing.
-      - "127.0.0.1:2222:22"
+      # brineworks-agent.<tailnet>:22 to this. 2223 is internal, not user-facing.
+      # 2223 (not 2222): homelab/dev publishes 2222 on 0.0.0.0, a superset of
+      # loopback, so a loopback 2222 here collides at container start.
+      - "127.0.0.1:2223:22"
     volumes:
       - /srv/data/brineworks-agent:/data

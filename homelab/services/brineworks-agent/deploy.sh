@@ -12,9 +12,10 @@ BRINEWORKS_REPO=/opt/brineworks
 # must be writable by this uid for the keyring and session workspace.
 CONTAINER_UID=1000
 CONTAINER_GID=1000
-# Internal sshd port (loopback-published by compose). tailscale serve maps the
-# service's public port 22 onto this.
-CONTAINER_SSH_PORT=2222
+# Host loopback port the container's sshd (:22) is published on. tailscale serve
+# maps the service's public port 22 onto this. 2223 (not 2222) avoids homelab/dev,
+# which already publishes 2222 on 0.0.0.0.
+CONTAINER_SSH_PORT=2223
 
 cd "$REPO_DIR"
 

@@ -61,11 +61,11 @@ This is the homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). On t
    ```bash
    sudo tailscale serve --service=svc:brineworks-agent --tcp=22 off
    sleep 2
-   sudo tailscale serve --service=svc:brineworks-agent --tcp=22 tcp://127.0.0.1:2222
+   sudo tailscale serve --service=svc:brineworks-agent --tcp=22 tcp://127.0.0.1:2223
    ```
 4. Verify: `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net`
 
-`deploy.sh` prints these steps if the endpoint isn't reachable. If raw-TCP serve turns out unsupported, the fallback is to bind the published port to the host's tailscale IP (in `compose.picklelab.yaml`) instead of loopback and reach it as `picklelab:2222`.
+`deploy.sh` prints these steps if the endpoint isn't reachable. If raw-TCP serve turns out unsupported, the fallback is to bind the published port to the host's tailscale IP (in `compose.picklelab.yaml`) instead of loopback and reach it as `picklelab:2223`.
 
 ## Gmail bootstrap (one-time)
 
@@ -99,7 +99,7 @@ Pulls latest `picklehome` and `brineworks`, rebuilds the image, restarts the ser
 - **Compose layering:** `compose.yaml` is the portable base (`image: brineworks-agent:local`, non-secret config). `compose.picklelab.yaml` adds the `build:` directive, the loopback port bind, the `/data` volume, and the filtered `env_file`.
 - **Code vs. state:** the image bakes the brineworks code (frozen at the build SHA -- the container's analog of the Mac workspace's `repo` symlink + editable install). All durable state lives on the `/data` volume. The container owns no source checkout; to do dev work on brineworks, clone it ad hoc, same as you would on the Mac.
 - **Secrets:** the container receives **only** its filtered `.env` (`KEYRING_CRYPTFILE_PASSWORD`, `BRINEWORKS_API_KEY`), never the master `/opt/homelab/.env`. It runs arbitrary Claude sessions, so it gets the github-actions-runner treatment (`homelab/services/README.md`).
-- **Networking:** sshd binds `127.0.0.1:2222` (loopback only). `tailscale serve --tcp=22` proxies `brineworks-agent.<tailnet>.ts.net:22` to it. Re-applied on every deploy; idempotent.
+- **Networking:** the container's sshd (`:22`) is published on `127.0.0.1:2223` (loopback only; `2223` avoids `homelab/dev`, which holds `2222` on `0.0.0.0`). `tailscale serve --tcp=22` proxies `brineworks-agent.<tailnet>.ts.net:22` to it. Re-applied on every deploy; idempotent.
 
 ## Environment Variables
 
