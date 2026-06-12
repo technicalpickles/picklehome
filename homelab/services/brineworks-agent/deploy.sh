@@ -37,7 +37,9 @@ echo "==> Creating data directories on the volume"
 # host_keys: sshd host keys (root-owned, written by the entrypoint).
 # keyring:   cryptfile keyring file (written by the agent as uid $CONTAINER_UID).
 # workspace: email session workspace + scratch (written by the agent).
-sudo mkdir -p "$DATA_DIR/ssh/host_keys" "$DATA_DIR/keyring" "$DATA_DIR/workspace"
+# config:    OAuth client-secrets JSON (app-credentials.json, copied during the
+#            Gmail bootstrap; PFA_APP_CREDENTIALS in compose points here).
+sudo mkdir -p "$DATA_DIR/ssh/host_keys" "$DATA_DIR/keyring" "$DATA_DIR/workspace" "$DATA_DIR/config"
 # Make the volume writable by the in-container user. sshd still reads its
 # root-created host keys fine (root can read uid-owned dirs).
 sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"

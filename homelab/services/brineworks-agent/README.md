@@ -70,12 +70,19 @@ This is the homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). The 
 
 ## Gmail bootstrap (one-time)
 
-The CLI reads its Gmail OAuth token from the cryptfile keyring on `/data`. Until `bw email auth --device` exists (brineworks M4), bootstrap is copy-the-token:
+The CLI reads its Gmail OAuth token from the cryptfile keyring on `/data`. Until `bw email auth --device` exists (brineworks M4), bootstrap is copy-the-token. Two artifacts go onto the volume:
 
-1. On the Mac, auth with MODIFY scopes so the stored token can apply labels.
-2. Copy the resulting keyring file onto the volume at `/srv/data/brineworks-agent/keyring/cryptfile.cfg`.
+1. **The token, re-keyed for the container.** The Mac token lives in the macOS Keychain under service `main/pf-email`, but the container looks up `agent/pf-email` (its `PF_KEYCHAIN_PREFIX` is `agent`). So a straight keychain export won't match: mint a cryptfile keyring on the Mac with `KEYRING_CRYPTFILE_PASSWORD` (from the `Brineworks Agent Keyring` item), write the token JSON under service `agent/pf-email`, account `gmail-oauth`, and copy the file to `/srv/data/brineworks-agent/keyring/cryptfile.cfg` (0600, uid 1000). The token must carry MODIFY scopes so the pipeline can apply labels.
+2. **The OAuth client-secrets JSON** (the `client_secret_*.json` from Google Cloud Console). The email CLI resolves it upfront (`load_config`) even when the stored token is valid, so `bw email search` fails without it; only `bw email auth --check` works token-only. Copy it to `/srv/data/brineworks-agent/config/app-credentials.json` (0600, uid 1000); `PFA_APP_CREDENTIALS` in `compose.yaml` points there.
 
 (The container can't run the interactive OAuth browser flow, so the token is minted on the Mac and dropped onto the volume.)
+
+Verify from any machine on the tailnet:
+
+```bash
+ssh technicalpickles@brineworks-agent.<tailnet>.ts.net 'bw email auth --check'   # token + keyring
+ssh technicalpickles@brineworks-agent.<tailnet>.ts.net 'bw email search "in:inbox newer_than:2d" --name verify'   # full pipeline reach
+```
 
 ## Connecting
 
@@ -113,6 +120,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `BRINEWORKS_KEYRING_FILE` | compose | `/data/keyring/cryptfile.cfg` |
 | `BRINEWORKS_EMAIL_BASE_DIR` | compose | `/data/workspace/email/sessions` |
 | `PF_KEYCHAIN_PREFIX` | compose | `agent` (per-worktree macOS logic doesn't apply in-container) |
+| `PFA_APP_CREDENTIALS` | compose | `/data/config/app-credentials.json` (OAuth client-secrets JSON, copied during the Gmail bootstrap) |
 | `KEYRING_CRYPTFILE_PASSWORD` | `.env` (1Password) | Master password for the cryptfile keyring |
 | `BRINEWORKS_API_KEY` | `.env` (1Password) | Bearer token for the prod server (same key as the server) |
 | `WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the workspace clone/push |
@@ -124,6 +132,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 /srv/data/brineworks-agent/ssh/host_keys      # persistent sshd host keys
 /srv/data/brineworks-agent/ssh/workspace_deploy_key  # scoped brineworks-workspace deploy key (0600, uid 1000)
 /srv/data/brineworks-agent/keyring/           # cryptfile Gmail token keyring
+/srv/data/brineworks-agent/config/            # OAuth client-secrets JSON (app-credentials.json)
 /srv/data/brineworks-agent/workspace/         # brineworks-workspace checkout (triage rules + session data)
 ```
 

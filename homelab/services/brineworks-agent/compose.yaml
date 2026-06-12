@@ -13,3 +13,6 @@ services:
       BRINEWORKS_EMAIL_BASE_DIR: /data/workspace/email/sessions
       # Fixed prefix: the per-worktree macOS keychain logic does not apply in-container.
       PF_KEYCHAIN_PREFIX: agent
+      # OAuth client-secrets JSON, dropped onto the volume during the Gmail
+      # bootstrap. The email CLI resolves this upfront even with a valid token.
+      PFA_APP_CREDENTIALS: /data/config/app-credentials.json
