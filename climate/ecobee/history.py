@@ -111,3 +111,11 @@ def summarize_hourly(series: dict) -> dict:
         key_fn=lambda ts: (ts.date(), ts.hour),
         label_fn=lambda k: f"{k[1]:02d}:00",
     )
+
+
+def summarize_daily(series: dict) -> dict:
+    return _summarize(
+        series,
+        key_fn=lambda ts: ts.date(),
+        label_fn=lambda k: k.isoformat(),
+    )

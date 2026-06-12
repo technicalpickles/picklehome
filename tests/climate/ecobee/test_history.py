@@ -80,3 +80,18 @@ def test_summarize_hourly_buckets_by_hour_with_occupied_minutes():
     assert summary["overall"]["min"] == 72.4
     assert summary["overall"]["max"] == 76.3
     assert summary["overall"]["occupied_min"] == 10
+
+
+from climate.ecobee.history import summarize_daily
+
+
+def test_summarize_daily_buckets_by_date():
+    tracy = _by_name(parse_sensor_series(REPORT))["Tracy Office"]
+    summary = summarize_daily(tracy)
+    buckets = {b["label"]: b for b in summary["buckets"]}
+    assert buckets["2026-06-11"]["min"] == 75.6
+    assert buckets["2026-06-11"]["max"] == 75.6
+    assert buckets["2026-06-11"]["occupied_min"] == 0
+    assert buckets["2026-06-12"]["min"] == 72.4
+    assert buckets["2026-06-12"]["max"] == 76.3
+    assert buckets["2026-06-12"]["occupied_min"] == 10
