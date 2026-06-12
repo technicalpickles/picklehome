@@ -13,6 +13,10 @@ climate-list:
 climate-status *ARGS:
     uv run python -m climate.sync status {{ARGS}}
 
+# Show room-sensor temperature and occupancy history
+climate-history *ARGS:
+    uv run python -m climate.sync history {{ARGS}}
+
 # Push schedule.yaml to Ecobee
 climate-sync *ARGS:
     uv run python -m climate.sync sync {{ARGS}}

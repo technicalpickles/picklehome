@@ -1,6 +1,7 @@
 import argparse
 import re
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 import yaml
@@ -8,7 +9,7 @@ import yaml
 # can fix. The only recovery is re-running the PIN auth flow (just climate-auth).
 from pyecobee.errors import InvalidTokenError
 
-from climate.ecobee import auth, comforts, schedule, status
+from climate.ecobee import auth, comforts, history, schedule, status
 from climate.ecobee.thermostats import load_thermostats, get_managed_thermostats
 from climate.ambient.client import DEFAULT_WEATHER_PATH
 
@@ -181,6 +182,60 @@ def cmd_status(args) -> None:
         print(json.dumps({"thermostats": statuses}, indent=2, default=str))
     else:
         print(status.format_status(statuses))
+
+
+def cmd_history(args) -> None:
+    ecobee = auth.make_ecobee()
+
+    registry = load_thermostats(args.thermostats)
+    managed = get_managed_thermostats(registry)
+    if args.thermostat:
+        managed = [(n, tid) for n, tid in managed if n == args.thermostat]
+        if not managed:
+            print(f"No managed thermostat named '{args.thermostat}'.")
+            sys.exit(1)
+
+    # A valid access token is needed for the report GET; get_thermostats()
+    # triggers pyecobee's refresh-if-expired, same as cmd_status.
+    if not ecobee.get_thermostats():
+        print("Failed to authenticate with Ecobee.")
+        sys.exit(1)
+    token = ecobee.access_token
+
+    end = date.today()
+    start = end - timedelta(days=args.days - 1)
+
+    if args.raw or args.json:
+        granularity = "raw"
+    elif args.days > 1:
+        granularity = "daily"
+    else:
+        granularity = "hourly"
+
+    json_out = []
+    blocks = []
+    for name, thermostat_id in managed:
+        report = history.fetch_runtime_report(
+            token, thermostat_id, start.isoformat(), end.isoformat()
+        )
+        series_list = history.parse_sensor_series(report)
+
+        if args.json:
+            json_out.append({"thermostat": name, "sensors": series_list})
+        elif args.raw:
+            blocks.append(history.format_raw(name, series_list))
+        elif granularity == "daily":
+            summaries = [history.summarize_daily(s) for s in series_list]
+            blocks.append(history.format_history(name, summaries, "daily"))
+        else:
+            summaries = [history.summarize_hourly(s) for s in series_list]
+            blocks.append(history.format_history(name, summaries, "hourly"))
+
+    if args.json:
+        import json as _json
+        print(_json.dumps(json_out, indent=2, default=str))
+    else:
+        print("\n\n".join(blocks))
 
 
 def cmd_comforts_capture(args) -> None:
@@ -738,6 +793,40 @@ def main() -> None:
         help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
     )
 
+    history_parser = subparsers.add_parser(
+        "history", help="Show room-sensor temperature and occupancy history"
+    )
+    history_parser.add_argument(
+        "--thermostat",
+        metavar="NAME",
+        default=None,
+        help="Only this managed thermostat (default: all)",
+    )
+    history_parser.add_argument(
+        "--days",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Number of calendar days back to include, ending today (default: 1)",
+    )
+    history_parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Print every 5-minute interval instead of summaries",
+    )
+    history_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output structured JSON (full granularity)",
+    )
+    history_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+
     discover_parser = subparsers.add_parser(
         "discover-stations", help="List nearby outdoor Ambient Weather stations"
     )
@@ -809,6 +898,7 @@ def main() -> None:
     subparsers.choices["sync"].set_defaults(func=cmd_sync)
     subparsers.choices["validate"].set_defaults(func=cmd_validate)
     subparsers.choices["status"].set_defaults(func=cmd_status)
+    subparsers.choices["history"].set_defaults(func=cmd_history)
     subparsers.choices["capture-comforts"].set_defaults(func=cmd_comforts_capture)
     subparsers.choices["sync-comforts"].set_defaults(func=cmd_comforts_sync)
     subparsers.choices["discover-stations"].set_defaults(func=cmd_weather_discover)
