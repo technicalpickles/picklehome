@@ -95,3 +95,31 @@ def test_summarize_daily_buckets_by_date():
     assert buckets["2026-06-12"]["min"] == 72.4
     assert buckets["2026-06-12"]["max"] == 76.3
     assert buckets["2026-06-12"]["occupied_min"] == 10
+
+
+from climate.ecobee.history import format_history, format_raw
+
+
+def test_format_history_single_day_has_hour_header_and_range():
+    tracy = _by_name(parse_sensor_series(REPORT))["Tracy Office"]
+    out = format_history("Downstairs", [summarize_hourly(tracy)], "hourly")
+    assert "=== Downstairs ===" in out
+    assert "Tracy Office" in out
+    assert "hour" in out
+    assert "09:00" in out
+    assert "72.4" in out and "76.3" in out
+    assert "10min" in out
+
+
+def test_format_history_multi_day_has_date_header():
+    tracy = _by_name(parse_sensor_series(REPORT))["Tracy Office"]
+    out = format_history("Downstairs", [summarize_daily(tracy)], "daily")
+    assert "date" in out
+    assert "2026-06-12" in out
+
+
+def test_format_raw_lists_intervals():
+    tracy = _by_name(parse_sensor_series(REPORT))["Tracy Office"]
+    out = format_raw("Downstairs", [tracy])
+    assert "2026-06-11 22:05:00" in out
+    assert "75.6" in out

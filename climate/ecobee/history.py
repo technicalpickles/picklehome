@@ -119,3 +119,42 @@ def summarize_daily(series: dict) -> dict:
         key_fn=lambda ts: ts.date(),
         label_fn=lambda k: k.isoformat(),
     )
+
+
+def _fmt_temp(v) -> str:
+    return f"{v:.1f}" if v is not None else "-"
+
+
+def format_history(thermostat_name: str, summaries: list[dict], granularity: str) -> str:
+    label_header = "hour" if granularity == "hourly" else "date"
+    col_width = 5 if granularity == "hourly" else 10
+    lines = [f"=== {thermostat_name} ==="]
+    for s in summaries:
+        lines.append(s["name"])
+        lines.append(f"  {label_header:<{col_width}}  avg   min   max   occupied")
+        for b in s["buckets"]:
+            lines.append(
+                f"  {b['label']:<{col_width}}  "
+                f"{_fmt_temp(b['avg']):<5} {_fmt_temp(b['min']):<5} {_fmt_temp(b['max']):<5} "
+                f"{b['occupied_min']}min"
+            )
+        o = s["overall"]
+        lines.append(
+            f"  range: {_fmt_temp(o['min'])}-{_fmt_temp(o['max'])}F   "
+            f"occupied {o['occupied_min']}min"
+        )
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+def format_raw(thermostat_name: str, series_list: list[dict]) -> str:
+    lines = [f"=== {thermostat_name} ==="]
+    for s in series_list:
+        lines.append(s["name"])
+        occ_by_ts = dict(s["occupancy"])
+        lines.append("  timestamp            temp   occ")
+        for ts, temp in s["temps"]:
+            occ = occ_by_ts.get(ts, "-")
+            lines.append(f"  {ts.isoformat(sep=' '):<20} {temp:<6} {occ}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
