@@ -15,6 +15,14 @@ Manages home climate systems: Ecobee thermostats, Ambient Weather outdoor sensor
 4. Authorize: `just climate-auth` (follows the Ecobee PIN flow, saves tokens to `~/.local/state/picklehome/ecobee-tokens.json`)
 5. Thermostats are registered in `config/thermostats.yaml`
 
+### Room sensors (SmartSensor)
+
+Ecobee SmartSensors (the wireless room pucks) only pair through the **mobile app**, not the thermostat screen. The on-device Settings → Sensors menu has no "add" option, so don't waste time looking for one there. In the app, open the thermostat, go to Sensors, and scan the QR code printed under the sensor's battery cover.
+
+If nothing gets detected, force the sensor into pairing mode: pull the battery, wait two full minutes, then reinsert it right next to the thermostat. If that still does nothing, seat the battery upside down (positive side down) for 30 seconds, then flip it back the right way, which forces it to re-advertise. A months-old coin cell is the usual culprit, so try a fresh CR-2032 before assuming the sensor is dead.
+
+Pairing alone doesn't change any temperatures. See the Ecobee API notes below for how sensor participation actually drives behavior.
+
 ### Ambient Weather
 
 Station MACs are sensitive (geolocatable), stored in 1Password, injected via `.env`. See `.env.template` for the `AMBIENT_STATION_MACS` variable.
@@ -90,6 +98,7 @@ All in `config/`:
 - **Token refresh:** The `FileTokenEcobee` subclass overrides `_write_config()` to persist refreshed tokens back to the JSON file automatically
 - **Schedule model:** Ecobee thermostats store a weekly program with time slots referencing "climates" (named comfort modes). We define ours in YAML and push them via the API.
 - **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2). smart1 and smart2 are swappable for seasonal switching: Comfort Heat targets 70°F from below, Comfort Cool from above.
+- **Room sensors:** A SmartSensor pairs to one thermostat and reports temperature and occupancy, but a paired sensor does nothing until it's enrolled in specific comfort settings. Enrollment is per-climate and set in the app, and the pairing wizard only offers Home/Away/Sleep, so custom climates like Comfort Cool (smart1) and Comfort Heat (smart2) have to be enabled separately or the sensor sits idle during the modes the schedule actually runs. When a sensor participates, the thermostat targets the **average** of all participating sensors, so adding a sensor that reads warmer than the thermostat makes the system cool more (and heat more), not less. `climate-status` requests sensor data (`includeSensors`) but the code does not parse it yet; inspect sensors through the API directly until it does.
 
 ### Ambient Weather API
 
