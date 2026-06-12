@@ -1,0 +1,64 @@
+from datetime import datetime
+
+from climate.ecobee.history import parse_sensor_series
+
+# Trimmed real runtimeReport sensorList entry. Columns:
+# date, time, rs2:100:1 (Tracy temp), rs2:100:2 (Tracy occ),
+# ei:0:1 (thermostat temp), ei:0:3 (thermostat motion), ei:0:5 (AQ monitor)
+REPORT = {
+    "thermostatIdentifier": "532572869586",
+    "sensors": [
+        {"sensorId": "rs2:100:1", "sensorName": "Tracy Office", "sensorType": "temperature", "sensorUsage": "indoor"},
+        {"sensorId": "rs2:100:2", "sensorName": "Tracy Office", "sensorType": "occupancy", "sensorUsage": "monitor"},
+        {"sensorId": "ei:0:1", "sensorName": "Thermostat Temperature", "sensorType": "temperature", "sensorUsage": "indoor"},
+        {"sensorId": "ei:0:3", "sensorName": "Thermostat Motion", "sensorType": "occupancy", "sensorUsage": "indoor"},
+        {"sensorId": "ei:0:5", "sensorName": "Thermostat AirQuality", "sensorType": "airQuality", "sensorUsage": "monitor"},
+    ],
+    "columns": ["date", "time", "rs2:100:1", "rs2:100:2", "ei:0:1", "ei:0:3", "ei:0:5"],
+    "data": [
+        "2026-06-11,22:00:00,,,73.2,1,49",       # Tracy blank (pre-pairing)
+        "2026-06-11,22:05:00,75.6,0,73.3,1,88",  # Tracy first reading
+        "2026-06-12,09:45:00,74.9,1,71.5,0,64",  # occupied
+        "2026-06-12,09:50:00,76.3,1,71.3,0,64",  # occupied
+        "2026-06-12,10:30:00,72.4,0,71.8,0,60",  # not occupied
+    ],
+}
+
+
+def _by_name(series_list):
+    return {s["name"]: s for s in series_list}
+
+
+def test_groups_remote_sensor_capabilities_by_id_prefix():
+    series = _by_name(parse_sensor_series(REPORT))
+    tracy = series["Tracy Office"]
+    assert tracy["temps"] == [
+        (datetime(2026, 6, 11, 22, 5), 75.6),
+        (datetime(2026, 6, 12, 9, 45), 74.9),
+        (datetime(2026, 6, 12, 9, 50), 76.3),
+        (datetime(2026, 6, 12, 10, 30), 72.4),
+    ]
+    assert tracy["occupancy"] == [
+        (datetime(2026, 6, 11, 22, 5), 0),
+        (datetime(2026, 6, 12, 9, 45), 1),
+        (datetime(2026, 6, 12, 9, 50), 1),
+        (datetime(2026, 6, 12, 10, 30), 0),
+    ]
+
+
+def test_thermostat_builtin_named_thermostat_and_joins_temp_with_motion():
+    series = _by_name(parse_sensor_series(REPORT))
+    assert "Thermostat" in series
+    thermo = series["Thermostat"]
+    assert thermo["temps"][0] == (datetime(2026, 6, 11, 22, 0), 73.2)
+    assert thermo["occupancy"][0] == (datetime(2026, 6, 11, 22, 0), 1)
+
+
+def test_temps_are_display_units_not_decidegrees():
+    tracy = _by_name(parse_sensor_series(REPORT))["Tracy Office"]
+    assert tracy["temps"][0][1] == 75.6
+
+
+def test_monitor_only_sensors_excluded():
+    names = {s["name"] for s in parse_sensor_series(REPORT)}
+    assert names == {"Tracy Office", "Thermostat"}
