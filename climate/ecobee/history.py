@@ -62,3 +62,52 @@ def parse_sensor_series(report: dict) -> list[dict]:
         series_list.append({"name": name, "temps": temps, "occupancy": occupancy})
 
     return series_list
+
+
+def _overall(temps: list, occupancy: list) -> dict:
+    vals = [t for _, t in temps]
+    return {
+        "min": min(vals) if vals else None,
+        "max": max(vals) if vals else None,
+        "occupied_min": sum(INTERVAL_MINUTES for _, v in occupancy if v == 1),
+    }
+
+
+def _summarize(series: dict, key_fn, label_fn) -> dict:
+    """Group a sensor's readings into buckets by key_fn(timestamp).
+
+    Groups by explicit dict bucketing (one pass over temps, one over
+    occupancy) rather than re-scanning with predicates, so there are no
+    closure/shadowing pitfalls. key_fn maps a datetime to a bucket key;
+    label_fn maps that key to its display label.
+    """
+    temps, occupancy = series["temps"], series["occupancy"]
+    temp_groups: dict = {}
+    occ_groups: dict = {}
+    for ts, t in temps:
+        temp_groups.setdefault(key_fn(ts), []).append(t)
+    for ts, v in occupancy:
+        occ_groups.setdefault(key_fn(ts), []).append(v)
+
+    buckets = []
+    for k in sorted(temp_groups):
+        vals = temp_groups[k]
+        occ = occ_groups.get(k, [])
+        buckets.append(
+            {
+                "label": label_fn(k),
+                "avg": round(sum(vals) / len(vals), 1),
+                "min": min(vals),
+                "max": max(vals),
+                "occupied_min": sum(INTERVAL_MINUTES for v in occ if v == 1),
+            }
+        )
+    return {"name": series["name"], "buckets": buckets, "overall": _overall(temps, occupancy)}
+
+
+def summarize_hourly(series: dict) -> dict:
+    return _summarize(
+        series,
+        key_fn=lambda ts: (ts.date(), ts.hour),
+        label_fn=lambda k: f"{k[1]:02d}:00",
+    )

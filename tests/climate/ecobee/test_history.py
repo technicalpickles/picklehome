@@ -62,3 +62,21 @@ def test_temps_are_display_units_not_decidegrees():
 def test_monitor_only_sensors_excluded():
     names = {s["name"] for s in parse_sensor_series(REPORT)}
     assert names == {"Tracy Office", "Thermostat"}
+
+
+from climate.ecobee.history import summarize_hourly
+
+
+def test_summarize_hourly_buckets_by_hour_with_occupied_minutes():
+    tracy = _by_name(parse_sensor_series(REPORT))["Tracy Office"]
+    summary = summarize_hourly(tracy)
+    assert summary["name"] == "Tracy Office"
+    buckets = {b["label"]: b for b in summary["buckets"]}
+    assert buckets["09:00"]["avg"] == 75.6
+    assert buckets["09:00"]["min"] == 74.9
+    assert buckets["09:00"]["max"] == 76.3
+    assert buckets["09:00"]["occupied_min"] == 10
+    assert buckets["10:00"]["occupied_min"] == 0
+    assert summary["overall"]["min"] == 72.4
+    assert summary["overall"]["max"] == 76.3
+    assert summary["overall"]["occupied_min"] == 10
