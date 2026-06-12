@@ -17,13 +17,9 @@ Modeled on `homelab/dev/` (the container internals: sshd, GitHub-keys auth, host
 - `tag:server` applied to picklelab
 - Define a `brineworks-agent` Service at https://login.tailscale.com/admin/services with **TCP port `22`** (raw TCP, not HTTPS 443 like the other services). Without the service definition there is nothing for `tailscale serve --service` to advertise into, so the Services page stays empty and the host never appears as pending.
 
-The agent needs the cryptfile keyring master password in the `picklehome` 1Password vault, surfaced into the root `.env`:
+The agent needs the cryptfile keyring master password in the `picklehome` 1Password vault, surfaced into the root `.env` as `KEYRING_CRYPTFILE_PASSWORD` (it unlocks the in-container Gmail token keyring). It lives in the `Brineworks Agent Keyring` password item (created with `op item create --generate-password`); `.env.template` carries the `op://` reference, so `just dotenv` picks it up (see the project [CLAUDE.md](../../../CLAUDE.md) "Secrets & Config").
 
-| Field | How to generate | Notes |
-|-------|-----------------|-------|
-| `KEYRING_CRYPTFILE_PASSWORD` | `openssl rand -base64 32` | Unlocks the in-container Gmail token keyring |
-
-`BRINEWORKS_API_KEY` is reused from the existing `Brineworks Server` item (the agent is a client of the same server). Add the `op://` reference for `KEYRING_CRYPTFILE_PASSWORD` to `.env.template` and run `just dotenv` (see the project [CLAUDE.md](../../../CLAUDE.md) "Secrets & Config").
+`BRINEWORKS_API_KEY` is reused from the existing `Brineworks Server` item (the agent is a client of the same server).
 
 ### Workspace deploy key (one-time)
 
