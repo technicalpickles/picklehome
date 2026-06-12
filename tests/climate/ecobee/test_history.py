@@ -123,3 +123,45 @@ def test_format_raw_lists_intervals():
     out = format_raw("Downstairs", [tracy])
     assert "2026-06-11 22:05:00" in out
     assert "75.6" in out
+
+
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from climate.ecobee.history import fetch_runtime_report
+
+
+def test_fetch_runtime_report_builds_request_and_returns_sensorlist_entry():
+    fake = {
+        "status": {"code": 0, "message": ""},
+        "sensorList": [{"thermostatIdentifier": "532572869586", "sensors": [], "columns": [], "data": []}],
+    }
+    resp = MagicMock(status_code=200)
+    resp.json.return_value = fake
+    with patch("climate.ecobee.history.requests.get", return_value=resp) as mock_get:
+        result = fetch_runtime_report("TOK", "532572869586", "2026-06-11", "2026-06-12")
+    assert result == fake["sensorList"][0]
+    _, kwargs = mock_get.call_args
+    assert kwargs["headers"]["Authorization"] == "Bearer TOK"
+    body = json.loads(kwargs["params"]["body"])
+    assert body["selection"]["selectionMatch"] == "532572869586"
+    assert body["startDate"] == "2026-06-11"
+    assert body["endDate"] == "2026-06-12"
+    assert body["includeSensors"] is True
+
+
+def test_fetch_runtime_report_raises_on_http_error():
+    resp = MagicMock(status_code=500, text="Internal Server Error")
+    with patch("climate.ecobee.history.requests.get", return_value=resp):
+        with pytest.raises(RuntimeError, match="runtimeReport"):
+            fetch_runtime_report("TOK", "532572869586", "2026-06-11", "2026-06-12")
+
+
+def test_fetch_runtime_report_raises_on_api_error_code():
+    resp = MagicMock(status_code=200)
+    resp.json.return_value = {"status": {"code": 4, "message": "bad"}, "sensorList": []}
+    with patch("climate.ecobee.history.requests.get", return_value=resp):
+        with pytest.raises(RuntimeError, match="bad"):
+            fetch_runtime_report("TOK", "532572869586", "2026-06-11", "2026-06-12")

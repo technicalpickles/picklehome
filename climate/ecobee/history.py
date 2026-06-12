@@ -6,6 +6,8 @@ runtimeReport temperatures are already in display units (e.g. "75.6" == 75.6F),
 so we must NOT apply decode_temp here.
 """
 
+import json
+import requests
 from datetime import datetime
 
 INTERVAL_MINUTES = 5
@@ -158,3 +160,50 @@ def format_raw(thermostat_name: str, series_list: list[dict]) -> str:
             lines.append(f"  {ts.isoformat(sep=' '):<20} {temp:<6} {occ}")
         lines.append("")
     return "\n".join(lines).rstrip()
+
+
+RUNTIME_REPORT_URL = "https://api.ecobee.com/1/runtimeReport"
+
+
+def fetch_runtime_report(
+    access_token: str, thermostat_id: str, start_date: str, end_date: str
+) -> dict:
+    """Fetch a runtimeReport sensorList entry for one thermostat.
+
+    Dates are "YYYY-MM-DD", inclusive. Raises RuntimeError with diagnostic
+    context on transport or API errors rather than returning None, so callers
+    can distinguish a real failure from empty data (per the repo's
+    don't-swallow-errors convention).
+    """
+    body = {
+        "startDate": start_date,
+        "endDate": end_date,
+        # columns is required by the API even though we read sensor data, not
+        # thermostat columns; zoneAveTemp is the cheapest valid choice.
+        "columns": "zoneAveTemp",
+        "selection": {"selectionType": "thermostats", "selectionMatch": thermostat_id},
+        "includeSensors": True,
+    }
+    resp = requests.get(
+        RUNTIME_REPORT_URL,
+        params={"format": "json", "body": json.dumps(body)},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"runtimeReport request failed ({resp.status_code}) for "
+            f"thermostat {thermostat_id}: {resp.text[:200]}"
+        )
+    payload = resp.json()
+    status = payload.get("status", {})
+    if status.get("code", 0) != 0:
+        raise RuntimeError(
+            f"runtimeReport API error for thermostat {thermostat_id}: "
+            f"{status.get('message', 'unknown')}"
+        )
+    sensor_list = payload.get("sensorList") or []
+    if not sensor_list:
+        raise RuntimeError(
+            f"runtimeReport returned no sensor data for thermostat {thermostat_id}"
+        )
+    return sensor_list[0]
