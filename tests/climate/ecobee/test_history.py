@@ -125,6 +125,16 @@ def test_format_raw_lists_intervals():
     assert "75.6" in out
 
 
+def test_format_raw_temps_are_one_decimal():
+    tracy = _by_name(parse_sensor_series(REPORT))["Tracy Office"]
+    out = format_raw("Downstairs", [tracy])
+    # every temperature reading renders with exactly one decimal place
+    assert "75.6" in out
+    assert "72.4" in out
+    # the occupancy "occupied" first reading (75.6 @ 22:05) shows occ 0
+    assert "2026-06-11 22:05:00" in out
+
+
 import json
 from unittest.mock import MagicMock, patch
 

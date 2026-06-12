@@ -157,7 +157,7 @@ def format_raw(thermostat_name: str, series_list: list[dict]) -> str:
         lines.append("  timestamp            temp   occ")
         for ts, temp in s["temps"]:
             occ = occ_by_ts.get(ts, "-")
-            lines.append(f"  {ts.isoformat(sep=' '):<20} {temp:<6} {occ}")
+            lines.append(f"  {ts.isoformat(sep=' '):<20} {_fmt_temp(temp):<6} {occ}")
         lines.append("")
     return "\n".join(lines).rstrip()
 
