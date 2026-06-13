@@ -1,4 +1,26 @@
 services:
+  # Tailscale node sidecar. Makes the agent a first-class tailnet node so mosh's
+  # UDP flows natively over WireGuard (tailscale serve is TCP-only and cannot
+  # carry it). Replaces the serve/Service/loopback wiring. Rationale + rejected
+  # alternatives: brineworks repo ADR 0006, and homelab/services/README.md
+  # "container-as-node".
+  ts-agent:
+    image: tailscale/tailscale:latest
+    hostname: brineworks-agent          # MagicDNS name -- same as the old Service
+    env_file:
+      - .env                            # supplies TS_AUTHKEY (filtered into .env)
+    environment:
+      - TS_STATE_DIR=/var/lib/tailscale  # node identity persists across recreates
+      - TS_USERSPACE=false               # kernel/TUN mode: required for mosh UDP
+      - TS_EXTRA_ARGS=--advertise-tags=tag:server
+    volumes:
+      - /srv/data/brineworks-agent/ts-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin                        # NET_ADMIN only, not --privileged
+    restart: unless-stopped
+
   agent:
     build:
       # Build context is the whole brineworks repo (the image bakes it into
@@ -6,17 +28,18 @@ services:
       # keeps /opt/brineworks fast-forwarded to main, lockstep with the server.
       context: /opt/brineworks
       dockerfile: agent/Dockerfile
+    # Share the ts-agent node's network namespace: the agent's sshd (:22) and
+    # mosh-server's UDP land on the node's tailnet interface directly. No `ports:`
+    # block -- nothing is published to the host; reach the agent at
+    # brineworks-agent.<tailnet> over the tailnet.
+    network_mode: service:ts-agent
+    depends_on:
+      - ts-agent
     # Filtered service secrets ONLY (KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY).
     # Deliberately NOT /opt/homelab/.env: this container runs arbitrary Claude
     # sessions, so it must not receive the whole homelab secret set
     # (cf. github-actions-runner, homelab/services/README.md).
     env_file:
       - .env
-    ports:
-      # Loopback only -- tailscale serve (--tcp=22) proxies
-      # brineworks-agent.<tailnet>:22 to this. 2223 is internal, not user-facing.
-      # 2223 (not 2222): homelab/dev publishes 2222 on 0.0.0.0, a superset of
-      # loopback, so a loopback 2222 here collides at container start.
-      - "127.0.0.1:2223:22"
     volumes:
       - /srv/data/brineworks-agent:/data

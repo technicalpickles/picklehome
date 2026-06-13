@@ -12,12 +12,19 @@ Modeled on `homelab/dev/` (the container internals: sshd, GitHub-keys auth, host
 
 ## Prerequisites (one-time)
 
-**Tailscale admin** (skip the first two if already done for brineworks/taskchampion):
-- HTTPS certs enabled at https://login.tailscale.com/admin/dns
-- `tag:server` applied to picklelab
-- Define a `brineworks-agent` Service at https://login.tailscale.com/admin/services with **TCP port `22`** (raw TCP, not HTTPS 443 like the other services). Without the service definition there is nothing for `tailscale serve --service` to advertise into, so the Services page stays empty and the host never appears as pending.
+**Tailscale admin** (skip the first if already done for brineworks/taskchampion):
+- `tag:server` applied to picklelab, and `tag:server` listed under `tagOwners` in the ACL so an auth key may advertise it.
+- Mint a **reusable, non-ephemeral auth key** at https://login.tailscale.com/admin/settings/keys, tagged `tag:server`. This authenticates the `ts-agent` node sidecar (the agent runs as its own tailnet node; see Architecture). Store it as `TS_AUTHKEY` (below). No Tailscale **Service** is needed anymore: the node advertises itself, so the old `svc:brineworks-agent` raw-TCP Service can be deleted.
 
 The agent needs the cryptfile keyring master password in the `picklehome` 1Password vault, surfaced into the root `.env` as `KEYRING_CRYPTFILE_PASSWORD` (it unlocks the in-container Gmail token keyring). It lives in the `Brineworks Agent Keyring` password item (created with `op item create --generate-password`); `.env.template` carries the `op://` reference, so `just dotenv` picks it up (see the project [CLAUDE.md](../../../CLAUDE.md) "Secrets & Config").
+
+The `ts-agent` sidecar joins the tailnet with `TS_AUTHKEY`. Store the minted key in the `picklehome` 1Password vault (e.g. a custom field `ts_authkey` on the `Brineworks Agent` item) and add the `op://` reference to `.env.template`:
+
+```
+TS_AUTHKEY={{ op://picklehome/Brineworks Agent/add more/ts_authkey }}
+```
+
+`TS_AUTHKEY` is already in `.env.vars`; until the reference exists it is skipped silently and the node cannot authenticate (the agent stays unreachable). Re-run `just dotenv` after adding it. A persisted node identity (`/data/ts-state`) means the key is used once at first join; rotating it later does not disturb a registered node.
 
 `BRINEWORKS_API_KEY` is reused from the existing `Brineworks Server` item (the agent is a client of the same server).
 
@@ -50,23 +57,18 @@ just dotenv          # pull secrets from 1Password (incl. KEYRING_CRYPTFILE_PASS
 just deploy-brineworks-agent
 ```
 
-`deploy.sh` ensures the brineworks source clone at `/opt/brineworks` (lockstep with the server), creates the `/data` volume directories, configures Tailscale serve, builds the image, and starts the systemd service.
+`deploy.sh` ensures the brineworks source clone at `/opt/brineworks` (lockstep with the server), creates the `/data` volume directories (including `ts-state`), builds the image, and starts the systemd service (the `ts-agent` node sidecar plus the agent).
 
-### Approve the Tailscale service (first deploy only)
+### Approve the node (first deploy only)
 
-This is the homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). The service must already be defined in the admin console (see Prerequisites); without it nothing shows up here to approve. On the first deploy the endpoint won't respond until you approve it:
+The agent joins the tailnet as its own node (`brineworks-agent`) via the `ts-agent` sidecar. If your tailnet requires device approval, the first deploy won't be reachable until you approve it:
 
-1. Open [Tailscale Services](https://login.tailscale.com/admin/services)
-2. Find `brineworks-agent` and approve the pending host advertisement
-3. Re-advertise (tailscaled doesn't auto-detect approval):
-   ```bash
-   sudo tailscale serve --service=svc:brineworks-agent --tcp=22 off
-   sleep 2
-   sudo tailscale serve --service=svc:brineworks-agent --tcp=22 tcp://127.0.0.1:2223
-   ```
-4. Verify: `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net`
+1. Open [Tailscale Machines](https://login.tailscale.com/admin/machines)
+2. Find `brineworks-agent` and approve / authorize it. Confirm it carries `tag:server`.
+3. If an old `svc:brineworks-agent` **Service** still exists at [Tailscale Services](https://login.tailscale.com/admin/services), delete it so its name doesn't collide with the node.
+4. Verify: `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net` (MagicDNS for a fresh node can lag a few seconds).
 
-`deploy.sh` prints these steps if the endpoint isn't reachable. If raw-TCP serve turns out unsupported, the fallback is to bind the published port to the host's tailscale IP (in `compose.picklelab.yaml`) instead of loopback and reach it as `picklelab:2223`.
+`deploy.sh` prints these steps if the node isn't reachable. If the `net_admin` + `/dev/net/tun` grant is ever unacceptable (`homelab_07`), the documented fallback is the host-node path (bind the published port to the host's tailscale IP, reach it as `picklelab`); plain SSH works there but mosh's UDP is fiddlier. See `homelab/services/README.md` "container-as-node".
 
 ## Gmail bootstrap (one-time)
 
@@ -104,10 +106,10 @@ Pulls latest `picklehome` and `brineworks`, rebuilds the image, restarts the ser
 ## Architecture
 
 - **Build from source:** the image builds from `/opt/brineworks` (whole repo, `agent/Dockerfile`) -- the same host clone the server builds from, kept fast-forwarded by `deploy.sh`. No published image.
-- **Compose layering:** `compose.yaml` is the portable base (`image: brineworks-agent:local`, non-secret config). `compose.picklelab.yaml` adds the `build:` directive, the loopback port bind, the `/data` volume, and the filtered `env_file`.
+- **Compose layering:** `compose.yaml` is the portable base (`image: brineworks-agent:local`, non-secret config). `compose.picklelab.yaml` adds the `build:` directive, the `ts-agent` Tailscale node sidecar, `network_mode: service:ts-agent` on the agent, the `/data` volume, and the filtered `env_file`.
 - **Code vs. state:** the image bakes the brineworks code (frozen at the build SHA -- the container's analog of the Mac workspace's `repo` symlink + editable install). All durable state lives on the `/data` volume. The container owns no source checkout; to do dev work on brineworks, clone it ad hoc, same as you would on the Mac.
 - **Secrets:** the container receives **only** its filtered `.env` (`KEYRING_CRYPTFILE_PASSWORD`, `BRINEWORKS_API_KEY`), never the master `/opt/homelab/.env`. It runs arbitrary Claude sessions, so it gets the github-actions-runner treatment (`homelab/services/README.md`).
-- **Networking:** the container's sshd (`:22`) is published on `127.0.0.1:2223` (loopback only; `2223` avoids `homelab/dev`, which holds `2222` on `0.0.0.0`). `tailscale serve --tcp=22` proxies `brineworks-agent.<tailnet>.ts.net:22` to it. Re-applied on every deploy; idempotent.
+- **Networking:** the agent runs as its own **Tailscale node** via the `ts-agent` sidecar (`tailscale/tailscale`, `TS_USERSPACE=false` kernel/TUN mode, `NET_ADMIN` + `/dev/net/tun`). The agent container shares the node's netns (`network_mode: service:ts-agent`), so its sshd (`:22`) and mosh-server's UDP land on the node's tailnet interface directly. Nothing is published to the host; reach the agent at `brineworks-agent.<tailnet>.ts.net`. This replaces the old `tailscale serve --tcp=22` Service (TCP-only, so it could not carry mosh's UDP). Rationale and rejected alternatives: brineworks [ADR 0006](https://github.com/technicalpickles/brineworks/blob/main/docs/decisions/0006-agent-tailnet-node-for-mosh.md); the reusable pattern is in `homelab/services/README.md` "container-as-node". The `net_admin` + tun grant lets the container manage its own interface, not the host: not `--privileged`, no docker socket, no host mount (consistent with `homelab_07`).
 
 ## Environment Variables
 
@@ -124,6 +126,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `KEYRING_CRYPTFILE_PASSWORD` | `.env` (1Password) | Master password for the cryptfile keyring |
 | `BRINEWORKS_API_KEY` | `.env` (1Password) | Bearer token for the prod server (same key as the server) |
 | `WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the workspace clone/push |
+| `TS_AUTHKEY` | `.env` (1Password) | Reusable, `tag:server` auth key the `ts-agent` sidecar uses to join the tailnet (used once; node identity then persists on `/data/ts-state`) |
 
 ## Data Locations (on picklelab)
 
@@ -134,6 +137,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 /srv/data/brineworks-agent/keyring/           # cryptfile Gmail token keyring
 /srv/data/brineworks-agent/config/            # OAuth client-secrets JSON (app-credentials.json)
 /srv/data/brineworks-agent/workspace/         # brineworks-workspace checkout (triage rules + session data)
+/srv/data/brineworks-agent/ts-state/          # ts-agent Tailscale node identity (TS_STATE_DIR)
 ```
 
 The brineworks `agent/entrypoint.sh` also redirects durable user state onto the volume, so login and sessions survive redeploys:
