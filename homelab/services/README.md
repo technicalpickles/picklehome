@@ -35,6 +35,43 @@ TLS and external access use **Tailscale Services**: `tailscaled` on the host ter
 
 Per-service hostname is stored in 1Password as `<SERVICE>_HOST` and pulled into `.env`. The tailnet suffix is documented in the project [CLAUDE.md](../../CLAUDE.md).
 
+### When the default doesn't fit: container-as-node (UDP, native node identity)
+
+Tailscale Services (host `tailscaled` + serve) is **TCP/HTTP only**. A service that needs **UDP** (e.g. mosh, WireGuard, game/voice protocols) or wants its own first-class tailnet identity cannot use the serve proxy: UDP aimed at a serve-proxied hostname has nowhere to land.
+
+For those, run a **`tailscale` sidecar** so the service container is its own tailnet node, and UDP flows natively over WireGuard:
+
+```yaml
+services:
+  ts-<name>:
+    image: tailscale/tailscale:latest
+    hostname: <name>                     # becomes the MagicDNS name
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}          # reusable, tagged auth key; in the filtered .env
+      - TS_STATE_DIR=/var/lib/tailscale   # node identity persists across recreates
+      - TS_USERSPACE=false                # kernel/TUN mode: required for arbitrary UDP
+      - TS_EXTRA_ARGS=--advertise-tags=tag:server
+    volumes:
+      - /srv/data/<name>/ts-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin                          # NET_ADMIN only, not --privileged
+    restart: unless-stopped
+
+  <name>:
+    network_mode: service:ts-<name>        # share the node's netns; drop the loopback ports: block
+```
+
+Tradeoffs to weigh before reaching for this:
+
+- **`TS_USERSPACE=false` is load-bearing.** Userspace mode (the zero-privilege default) only proxies TCP/HTTP, so it does *not* solve UDP. TUN mode is what carries UDP, and it costs a `/dev/net/tun` device + the `NET_ADMIN` capability.
+- **Privilege vs `homelab_07` (workload-not-ops).** `NET_ADMIN` + tun lets the container manage *its own* network interface, not the host. It is not `--privileged`, no docker socket, no sudo, no host mount, no host reach. Read as within the principle's spirit, but confirm per service. If you won't grant it, the fallback is to bind the published port(s) to the host's tailscale IP and reach the service as `picklelab` (fiddlier, and still no clean UDP for serve-style hostnames).
+- **Persist `TS_STATE_DIR`** on `/srv/data/<name>/` (restic-backed) so the node doesn't churn the tailnet device list on every recreate.
+- It **replaces** the serve/Service/loopback wiring for that service rather than adding to it.
+
+First user: `brineworks-agent` (mosh from a phone). Full rationale and rejected alternatives live in the brineworks repo at `docs/decisions/0006-agent-tailnet-node-for-mosh.md` and `docs/runbooks/phone-ssh-agent-setup.md` (Part B). Reference: [Tailscale in Docker](https://tailscale.com/docs/features/containers/docker).
+
 ## Service registry
 
 ### climate-auto-switch
