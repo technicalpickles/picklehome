@@ -93,6 +93,10 @@ The following should not be broadly exposed without a strong reason:
 
 These actions are not forbidden forever, but they should not be the default operating model.
 
+### Accepted exception: brineworks-agent NET_ADMIN for its own tailnet node (2026-06-13)
+
+The `brineworks-agent` service runs a `tailscale` sidecar with `NET_ADMIN` + `/dev/net/tun` so the container is its own tailnet node (kernel/TUN mode), which is what lets mosh's UDP reach it. Accepted under this principle: the grant lets the container manage *its own* network interface, not the host. It is not `--privileged`, grants no docker socket, no sudo, no `/opt/homelab` mount, no host reach. The principle guards against ops/host reach, which this does not introduce. See `homelab/services/README.md` "container-as-node" and the brineworks repo ADR 0006.
+
 ---
 
 ## Preferred Control Surface
