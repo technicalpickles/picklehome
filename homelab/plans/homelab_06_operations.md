@@ -139,9 +139,13 @@ sudo rsync -aHAX /var/lib/containerd/ /srv/containerd/
 #    preserving the rest of the config. (Step 6's grep confirms it took.)
 sudo sed -i 's|^#\?root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
 
-# 5. Park the old tree (rollback safety), then bring docker back
+# 5. Park the old tree (rollback safety), then bring the stack back.
 sudo mv /var/lib/containerd /var/lib/containerd.old
-sudo systemctl start containerd
+# Use `restart`, NOT `start`. If containerd is already running (docker pulls it up
+# as a dependency), `start` is a no-op and the new root never loads, so containerd
+# keeps using /var/lib/containerd and recreates it. This exact bug broke the
+# 2026-06-14 migration.
+sudo systemctl restart containerd
 sudo systemctl start docker
 
 # 5b. Restart the systemd-managed compose units. Stopping docker propagated a
@@ -151,12 +155,20 @@ sudo systemctl start docker
 sudo systemctl restart brineworks-agent.service brineworks-server.service \
   github-actions-runner.service obsidian-sync.service taskchampion-sync.service
 
-# 6. Verify: config points at /srv, images intact, containers running
-grep '^root' /etc/containerd/config.toml
-sudo ctr -n moby images ls | head
-docker ps
+# 6. SMOKE TEST, then verify. The smoke test is the check that actually catches a
+#    wrong/unapplied root: it forces containerd to create a NEW snapshot in its
+#    effective root. `docker ps` is NOT a smoke test, running containers ride on
+#    already-mounted kernel overlays and stay "Up" even when containerd cannot
+#    write a single snapshot (which is why 2026-06-14 looked fine three steps too
+#    long). See homelab_07 "Validation and Safety Checks".
+docker run --rm hello-world                        # MUST succeed (forces a fresh pull + snapshot)
+grep '^root' /etc/containerd/config.toml           # root = "/srv/containerd"
+test ! -e /var/lib/containerd && echo "OK: old root not recreated" \
+  || echo "WARN: /var/lib/containerd is back, config not applied"
+df -h / /srv                                       # data on /srv; / did not regrow
+docker ps                                          # all expected services up
 
-# 7. Once confident (services healthy), reclaim the ~14G on root
+# 7. Once the smoke test passes and services are healthy, reclaim the ~14G on root
 sudo rm -rf /var/lib/containerd.old
 df -h / /srv
 ```

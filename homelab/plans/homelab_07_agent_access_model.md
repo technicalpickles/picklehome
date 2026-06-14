@@ -231,6 +231,27 @@ Tools such as goss are a good fit for this layer.
 
 The goal is not just to apply changes, but to verify that the system still matches expectations afterward.
 
+### Smoke-test the changed path, don't just check that state looks alive
+
+Passive status checks (`docker ps`, "is the service running", "does the file say
+X") can pass on **stale or borrowed state** and give false confidence. Running
+containers ride on already-mounted kernel overlays, so they stay "Up" even after
+their backing store has been moved out from under them; a config file can say the
+right thing while the running daemon never reloaded it.
+
+So after a mutation, **exercise a fresh operation through the path you changed**,
+not the pre-existing state. Migrated containerd's storage? Don't check `docker ps`,
+run `docker run --rm hello-world` to force a new snapshot in the *effective* root.
+Changed a reverse-proxy route? Curl through the proxy, don't just confirm the
+service answers on localhost. Moved a data directory? Write a new file and read it
+back, don't just `ls` the old contents.
+
+This was learned the hard way in the 2026-06-14 containerd-to-`/srv` migration:
+every passive check passed while the daemon was silently still using the old root,
+and the breakage only surfaced on the next image pull, three steps later. The
+containerd migration runbook in `homelab_06_operations.md` now leads its
+verification with such a smoke test.
+
 ---
 
 ## Logging and Auditability
