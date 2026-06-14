@@ -57,9 +57,14 @@ _Caveat:_ the 4°F is approximate (ASHRAE's elevated-air-speed model may oversta
 
 Redirect the cold supply off her back with a **vent deflector**. Do not seal the register: on a single-zone central system, closing it raises duct static pressure past design (~0.5 iwc), can **freeze the evaporator coil and kill the compressor**, increases duct leakage, and doesn't reliably save energy (Energy Vanguard, GreenBuildingAdvisor both: "don't"). A deflector that redirects (not seals) is the safe version and pairs with the fan.
 
-### 4. Ecobee SmartSensor: monitor and trigger, don't control
+### 4. Ecobee SmartSensor: a data point, not a control lever
 
-Adding her hot sensor to the occupied **cooling** comfort profile backfires: Ecobee controls to the *average* of participating sensors, so an 80°F room pulls the control temp up, runs the AC harder, **overcools the rest of the house and worsens her draft**, while the AC still can't beat the solar load. Leave it out of the cooling profile. Better: use the sensor for **visibility and automation triggers** (e.g. drive a fan/smart plug off "Tracy Office > 76°F during work hours") rather than dragging the central system into an unwinnable fight. A cheap smart vent is a possible middle ground but carries the same static-pressure risk as #3, so it's lower priority.
+The sensor stays purely a **data point**, for visibility and to confirm whether the fixes above are working (it's how the overheat was found in the first place). It is explicitly **not** used to address temperature:
+
+- **Not for thermostat control.** Adding her hot sensor to the occupied cooling comfort profile backfires: Ecobee controls to the *average* of participating sensors, so an 80°F room pulls the control temp up, runs the AC harder, **overcools the rest of the house and worsens her draft**, while the AC still can't beat the solar load. Leave it out of the cooling profile.
+- **Not as an automation trigger.** No driving a fan, vent, or smart plug off its reading. The fixes are the physical ones above; the sensor just tells us if they helped.
+
+(A cheap smart vent was considered as a middle ground but carries the same static-pressure risk as #3 *and* would be using the room reading to push conditioning, so it's out of scope.)
 
 ### 5. Winter (separate problem, separate fixes)
 
@@ -72,10 +77,10 @@ Each item is tracked in taskwarrior (`project:picklehome.climate*`); UUIDs cited
 1. **Fan on her desk** (today, ~$30, cancels most of the overheat) — task `f8e4746f`
 2. **Exterior solar screen on the east glass** (the real fix; interior cellular shades if exterior isn't feasible) — task `3eecf3b8`
 3. **Vent deflector** to get the draft off her back — task `a78610fb`
-4. **Drop the whole-zone setpoint compensation** once 1–3 are in — task `b883f3fb`; and **repurpose her sensor as a monitor/automation trigger** — task `19803137`
+4. **Drop the whole-zone setpoint compensation** once 1–3 are in — task `b883f3fb`. Her sensor stays a **monitoring data point only**: no thermostat control, no temperature-driving automation.
 5. **Winter:** rug + pad + foot-level heat — task `0df75ea9`
 
-Related backlog: sensor participation is API-writable and wants a guarded command to enroll/remove a remote sensor per climate (task `3f72e752`); `climate-history`'s date window is filtered in UTC, not local time, so hourly rows are offset (task `bdcab9b7`); follow up with Tracy on comfort after the earlier ceiling change (task `4acc8608`).
+Related backlog: `climate-history`'s date window is filtered in UTC, not local time, so hourly rows are offset (task `bdcab9b7`); follow up with Tracy on comfort after the earlier ceiling change (task `4acc8608`).
 
 ## Open questions
 
