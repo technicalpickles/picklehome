@@ -66,7 +66,8 @@ The agent joins the tailnet as its own node (`brineworks-agent`) via the `ts-age
 1. Open [Tailscale Machines](https://login.tailscale.com/admin/machines)
 2. Find `brineworks-agent` and approve / authorize it. Confirm it carries `tag:server`.
 3. If an old `svc:brineworks-agent` **Service** still exists at [Tailscale Services](https://login.tailscale.com/admin/services), delete it so its name doesn't collide with the node.
-4. Verify: `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net` (MagicDNS for a fresh node can lag a few seconds).
+4. If the node registered *while* the Service (or any other device) held the name, Tailscale deduped it to `brineworks-agent-1` and will **not** auto-rename once the conflict clears. The tell: `ssh brineworks-agent.<tailnet>.ts.net` hangs (the bare name resolves to nothing real) while `brineworks-agent-1.<tailnet>.ts.net` works. Fix it in [Tailscale Machines](https://login.tailscale.com/admin/machines): edit the machine name back to `brineworks-agent` (or re-check "auto-generate from OS hostname", since the container's hostname is already `brineworks-agent`). The name sticks across redeploys because the node identity persists on the `ts-state` volume.
+5. Verify: `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net` (MagicDNS for a fresh node can lag a few seconds).
 
 `deploy.sh` prints these steps if the node isn't reachable. If the `net_admin` + `/dev/net/tun` grant is ever unacceptable (`homelab_07`), the documented fallback is the host-node path (bind the published port to the host's tailscale IP, reach it as `picklelab`); plain SSH works there but mosh's UDP is fiddlier. See `homelab/services/README.md` "container-as-node".
 
