@@ -20,7 +20,18 @@ echo "==> Adding $USER to docker group"
 sudo usermod -aG docker "$USER"
 
 echo "==> Creating /srv layout"
-sudo mkdir -p /srv/docker /srv/data /srv/containers
+sudo mkdir -p /srv/docker /srv/data /srv/containers /srv/containerd
+
+# Docker uses the containerd image store, so image layers live in containerd's
+# snapshotter (root = /var/lib/containerd by default), NOT under docker's
+# data-root. data-root only moves docker's containers/volumes/metadata, so
+# without this the root volume fills with images while /srv sits idle. Relocate
+# containerd's root to /srv too. Generate from the installed binary's default so
+# the config `version` always matches this containerd, then override just `root`.
+echo "==> Configuring containerd (root: /srv/containerd)"
+sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+sudo sed -i 's|^root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
+sudo systemctl restart containerd
 
 echo "==> Configuring Docker daemon (data-root: /srv/docker, log limits)"
 sudo tee /etc/docker/daemon.json > /dev/null <<'DAEMON'
@@ -39,6 +50,7 @@ sudo systemctl restart docker
 
 echo "==> Verifying"
 docker info | grep -E 'Docker Root Dir|Logging Driver'
+grep '^root' /etc/containerd/config.toml
 
 echo ""
 echo "Done! Log out and back in for docker group membership to take effect."

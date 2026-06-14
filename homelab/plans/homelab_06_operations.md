@@ -113,6 +113,50 @@ These are **live, in-use images** (the `moby` namespace, backing running contain
 
 **Headroom escape hatch.** VG `vg0` has ~49G free, so `sudo lvextend -r -L +20G /dev/vg0/root` grows root online (ext4, no unmount) when cleanup is deferred.
 
+### Migrating containerd to /srv (one-time, existing host)
+
+The durable fix for the leak above. Fresh hosts get this from `setup-docker.sh`; an
+already-running host needs to move the existing tree. **This stops docker and all
+services briefly** (a minute or two). All `sudo` here is interactive (not on the
+deploy-ops allowlist), so run it in a real shell on the host.
+
+```bash
+# 1. Pre-flight: confirm the hog and that /srv has room (needs ~14G headroom)
+df -h / /srv
+sudo du -sh /var/lib/containerd
+
+# 2. Stop docker (and its socket, or systemd re-activates it) then containerd
+sudo systemctl stop docker docker.socket
+sudo systemctl stop containerd
+
+# 3. Copy the tree to /srv (rsync preserves perms/xattrs/hardlinks). Source still
+#    on root, so / does not grow during the copy; /srv grows ~14G.
+sudo mkdir -p /srv/containerd
+sudo rsync -aHAX /var/lib/containerd/ /srv/containerd/
+
+# 4. Point containerd at the new root (version-correct: generate then override)
+sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+sudo sed -i 's|^root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
+
+# 5. Park the old tree (rollback safety), then bring services back
+sudo mv /var/lib/containerd /var/lib/containerd.old
+sudo systemctl start containerd
+sudo systemctl start docker
+
+# 6. Verify: config points at /srv, images intact, containers running
+grep '^root' /etc/containerd/config.toml
+sudo ctr -n moby images ls | head
+docker ps
+
+# 7. Once confident (services healthy), reclaim the ~14G on root
+sudo rm -rf /var/lib/containerd.old
+df -h / /srv
+```
+
+If anything looks wrong at step 6, roll back: stop docker+containerd, restore
+`root = "/var/lib/containerd"` in the config (or remove the override), `sudo mv
+/var/lib/containerd.old /var/lib/containerd`, restart.
+
 ---
 
 ## Docker Cleanup
