@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "==> Installing Docker Engine prerequisites"
-sudo apt install -y ca-certificates curl
+echo "==> Installing prerequisites (docker repo deps + rsync for the containerd-migration runbook)"
+sudo apt install -y ca-certificates curl rsync
 
 echo "==> Adding Docker GPG key"
 sudo install -m 0755 -d /etc/apt/keyrings
