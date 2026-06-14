@@ -16,6 +16,18 @@ then run `just climate-validate` to confirm the remote matches.
 
 ---
 
+## Tracy's office (known comfort problem)
+
+Tracy's office is a converted carport on the downstairs zone: a concrete slab on grade, floor-to-ceiling **east-facing** glass, and a supply register cut into brick that blows directly on her back. It is the worst comfort spot in the house and the two complaints below are seasonal and have **different root causes**, so they need different fixes.
+
+**Summer (cooling season): the room overheats, it does not run cold.** Room-sensor history (`just climate-history`) shows the office tracking the rest of downstairs (~72°F) overnight, then spiking to **77–82°F from ~9am–1pm**, exactly her morning work hours, while the downstairs thermostat sits at 72. The cause is east-facing solar gain (morning sun through the large glass), plus her body and computer load, plus an uninsulated slab/envelope that runs the room ~3°F warm even when empty. The central AC physically cannot beat that solar load in one remote room. What she feels is the paradox of a cold supply draft on her back inside a globally hot room.
+
+**Winter (heating season): the room feels cold and drafty.** This is radiant loss, not air temperature: skin radiates heat toward the cold glass, and the uninsulated slab is a cold radiative floor.
+
+**Strategy: fix the room, not the whole zone.** The historical compensation (bumping the entire downstairs setpoint) is the wrong lever, it over-conditions the main living space to chase one room and, in summer, the cooling-ceiling bump actually makes her overheating *worse*. The intended direction is room-level fixes (block the east sun before the glass, a personal/circulation fan, redirect the register off her back, rug + foot-level heat in winter) and to use her SmartSensor for **monitoring and automation triggers, not thermostat control** (adding a hot room to the cooling average just overcools the rest of the house). Full findings, evidence, and prioritized actions: `docs/plans/2026-06-13-tracy-office-thermal-comfort.md`.
+
+---
+
 ## Comfort mode semantics
 
 - **Comfort Heat**: primary occupied mode when it's cold out. Target ~70°F by heating. Active when outdoor temp < 60°F (threshold configurable in `climate/config/weather.yaml`).
@@ -80,8 +92,8 @@ Temperatures in °F. Minimum 5°F spread required between heat and cool.
 
 | Comfort      | Cool | Heat | Notes                                  |
 |--------------|------|------|----------------------------------------|
-| Comfort Cool | 72   | 65   | Primary occupied mode: outdoor temp > 65°F; ceiling set 1°F above upstairs so the AC stops cooling a degree sooner, since Tracy's office runs cold downstairs with the AC on |
-| Comfort Heat | 73   | 72   | Primary occupied mode: outdoor temp < 60°F; set higher than upstairs to compensate for Ecobee running cooler than Nest and remote offices (Josh's office, Tracy's office) feeling cold |
+| Comfort Cool | 72   | 65   | Primary occupied mode: outdoor temp > 65°F. Ceiling is 1°F above upstairs; this was meant to offset Tracy's office, but summer sensor data shows that room *overheats* (solar gain), so the bump is counterproductive and **under review** pending room-level fixes (see Tracy's office) |
+| Comfort Heat | 73   | 72   | Primary occupied mode: outdoor temp < 60°F; set higher than upstairs to compensate for Ecobee running cooler than Nest and remote offices (Josh's office, Tracy's office) feeling cold in winter (radiant loss, see Tracy's office) |
 | Eco          | 71   | 68   | Moderate setback: allow drift without full Away range |
 | Sleep        | 72   | 65   | Nighttime energy saving: wide enough to save, narrow enough for quick recovery |
 | Away         | 82   | 64   | Wide setback for unoccupied zones / extended absence |
