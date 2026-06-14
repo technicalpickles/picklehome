@@ -26,11 +26,14 @@ sudo mkdir -p /srv/docker /srv/data /srv/containers /srv/containerd
 # snapshotter (root = /var/lib/containerd by default), NOT under docker's
 # data-root. data-root only moves docker's containers/volumes/metadata, so
 # without this the root volume fills with images while /srv sits idle. Relocate
-# containerd's root to /srv too. Generate from the installed binary's default so
-# the config `version` always matches this containerd, then override just `root`.
+# containerd's root to /srv too. The containerd.io package ships config.toml with
+# `#root = "/var/lib/containerd"` commented out; uncomment it and repoint it,
+# editing in place to keep the rest of the shipped config (disabled_plugins etc.)
+# rather than clobbering it with a pinned-defaults dump. The `#\?` matches whether
+# the line is commented or not; the `grep` verify below fails the script (set -e)
+# if the substitution didn't take.
 echo "==> Configuring containerd (root: /srv/containerd)"
-sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
-sudo sed -i 's|^root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
+sudo sed -i 's|^#\?root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
 sudo systemctl restart containerd
 
 echo "==> Configuring Docker daemon (data-root: /srv/docker, log limits)"

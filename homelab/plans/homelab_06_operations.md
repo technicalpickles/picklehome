@@ -134,9 +134,10 @@ sudo systemctl stop containerd
 sudo mkdir -p /srv/containerd
 sudo rsync -aHAX /var/lib/containerd/ /srv/containerd/
 
-# 4. Point containerd at the new root (version-correct: generate then override)
-sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
-sudo sed -i 's|^root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
+# 4. Point containerd at the new root. The shipped config has `root` commented
+#    out (`#root = "/var/lib/containerd"`); this uncomments and repoints it,
+#    preserving the rest of the config. (Step 6's grep confirms it took.)
+sudo sed -i 's|^#\?root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
 
 # 5. Park the old tree (rollback safety), then bring services back
 sudo mv /var/lib/containerd /var/lib/containerd.old
