@@ -94,6 +94,25 @@ du -sh /srv/data/*
 ncdu /srv
 ```
 
+### Root Filesystem Growth (sudo required, interactive only)
+
+`du /srv/data/*` and `ncdu /srv` only cover `/srv`. If `df -h` shows the **root** volume (`/dev/mapper/vg0-root`, mounted `/`) filling while `/srv` stays healthy, the culprit is a root-owned directory an unprivileged `du` can't traverse: it reports a few KB and silently skips. Find it with:
+
+```
+sudo du -xh -d2 /var/lib /root 2>/dev/null | sort -rh | head -20
+```
+
+**Root offender: `/var/lib/containerd` (docker's containerd image store).** This host's docker uses the **containerd image store** (the containerd snapshotter), so docker's image layers live in the system containerd's overlayfs snapshotter under `/var/lib/containerd` on the **root** volume. The daemon's `data-root: /srv/docker` only relocates docker's containers/volumes/metadata; it does **not** move the containerd snapshotter, so images quietly fill `/`. Confirmed via `sudo ctr -n moby images ls` listing every service image, with `du` showing 14G (12G overlayfs snapshots + 2.8G content) on 2026-06-13.
+
+These are **live, in-use images** (the `moby` namespace, backing running containers), not leftover junk. Do **not** `rm -rf /var/lib/containerd`. Real fixes:
+
+- **Relocate containerd's root to `/srv`** (durable, honors the data-on-`/srv` design). Set `root = "/srv/containerd"` in `/etc/containerd/config.toml`, stop `docker` then `containerd`, move the existing tree onto `/srv`, restart. `setup-docker.sh` already creates `/srv/containers` but never wires containerd to it, this closes that gap.
+- **Prune unused images** to reclaim now: `docker image prune -a` *does* free real root space here (images are on root via containerd), at the cost of re-pulls for stopped services.
+
+**Sudo here is interactive.** Passwordless sudo on picklelab is scoped to the deploy-ops allowlist (`config/sudoers-deploy-ops` → `/etc/sudoers.d/deploy-ops`: `mkdir`, `ln`, `systemctl`, `chown`, `tailscale serve`, `setfacl`, `apt-get`, user management). Disk forensics (`du`, `rm`, `lvextend`) are **not** on it and prompt for a password. An agent driving the host over non-interactive ssh cannot answer that prompt: the command fails silently with no output. This includes Claude Code's `!` session prefix, which is also non-interactive. Hand these to a human to run in an interactive shell (or `ssh -t picklelab`).
+
+**Headroom escape hatch.** VG `vg0` has ~49G free, so `sudo lvextend -r -L +20G /dev/vg0/root` grows root online (ext4, no unmount) when cleanup is deferred.
+
 ---
 
 ## Docker Cleanup
