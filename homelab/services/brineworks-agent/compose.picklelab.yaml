@@ -5,14 +5,21 @@ services:
   # alternatives: brineworks repo ADR 0006, and homelab/services/README.md
   # "container-as-node".
   ts-agent:
-    image: tailscale/tailscale:latest
+    # Pinned, not :latest. A `docker rmi && pull` of :latest once drifted the
+    # image to a newer containerboot whose generated `tailscale up` no longer
+    # restated a non-default pref in the persisted node state, so `up` refused
+    # the partial reconfigure and the sidecar crash-looped. Bump deliberately.
+    image: tailscale/tailscale:v1.98.4
     hostname: brineworks-agent          # MagicDNS name -- same as the old Service
     env_file:
       - .env                            # supplies TS_AUTHKEY (filtered into .env)
     environment:
       - TS_STATE_DIR=/var/lib/tailscale  # node identity persists across recreates
       - TS_USERSPACE=false               # kernel/TUN mode: required for mosh UDP
-      - TS_EXTRA_ARGS=--advertise-tags=tag:server
+      # --reset makes `tailscale up` take the default for any flag not stated
+      # here, so a containerboot version bump can't deadlock on "must mention all
+      # non-default flags" against the persisted state. Idempotent across recreates.
+      - TS_EXTRA_ARGS=--reset --advertise-tags=tag:server
     volumes:
       - /srv/data/brineworks-agent/ts-state:/var/lib/tailscale
     devices:
