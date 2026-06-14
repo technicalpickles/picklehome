@@ -97,6 +97,16 @@ A second research pass (CBE Berkeley / ASHRAE-55, peer-reviewed draft studies, m
 
 An existing vortex circulator was found. The make-or-break property for the smart-plug path, **does it resume running when power is restored?**, was tested (unplug, wait, replug) and it **passed**: it spins back up on its own. It has a mechanical switch, so leaving the dial parked on LOW means the Hue plug can do all the on/off. Clean the grille/blades before it goes in (dust cuts airflow and can smell when the motor warms).
 
+### Placement and aim
+
+Room orientation (from her seat): the **big window wall (hot glass) is on her left**, the **vent/shelving is directly at her back** (blowing onto her), she **faces the exterior windowed door on her right**. So the only safe high-velocity zone is up at the window wall, as far from her back as the room allows.
+
+- **Primary: top-right corner** (window wall meets exterior-door wall), aimed **left, along the window wall**, tilted **up ~15–30°**, on **LOW**. This washes the hot glass end-to-end, runs the strong air up at the window away from her, and the gentle return loops down the far (vent) wall, entraining the cold supply instead of letting it jet her back.
+- **Backup: top-left corner**, aimed **right along the glass** (output pointed away from her, since this corner is near her back-left).
+- It can sit on a **low shelf** if floor space is tight, as long as it tracks the glass and isn't aimed at her.
+
+**Hard avoid:** the vent/left wall or anything aimed at her back (doubles the AC draft); high speed (small room). Bottom-right is unavailable (house-door swing + printer). Treat the corner as a starting point and let her nudge/re-tilt it over a few mornings, felt result beats the diagram.
+
 ### Control: Hue Smart Plug, not Caséta
 
 Caséta has no good indoor plug for a fan: its only indoor plug-in is the **PD-3PCL lamp *dimmer*** (never put a fan motor on a dimmer), and its on/off plug (PD-15OUT) is an outdoor weatherproof brick. The **Philips Hue Smart Plug** (US 552349) is the fit: simple on/off relay, 15A/1800W (a circulator's ~30–60W is trivial), Zigbee via the existing Hue bridge, and it enrolls as an on/off "light" so `just hue on/off "<name>"` controls it directly. Stays local, stays in the existing stack.
