@@ -5,10 +5,22 @@ services:
   # alternatives: brineworks repo ADR 0006, and homelab/services/README.md
   # "container-as-node".
   ts-agent:
-    # Pinned, not :latest. A `docker rmi && pull` of :latest once drifted the
+    # Pinned to an exact version, NOT :latest. `:latest` is a moving tag: any
+    # re-pull can silently swap the version. On 2026-06-14 a `docker rmi -f &&
+    # pull` of :latest (run to clear unrelated containerd corruption) drifted the
     # image to a newer containerboot whose generated `tailscale up` no longer
-    # restated a non-default pref in the persisted node state, so `up` refused
-    # the partial reconfigure and the sidecar crash-looped. Bump deliberately.
+    # restated a non-default pref held in the persisted node state, so tailscale
+    # refused the partial reconfigure ("must mention all non-default flags") and
+    # the sidecar crash-looped -- which took the agent off the tailnet entirely
+    # (shared netns). A pinned tag makes a re-pull reproducible, so that can't
+    # recur by accident.
+    #
+    # Tradeoff: pinning means no automatic tailscale bug/security updates -- you
+    # bump this number by hand. That's deliberate here: predictable beats
+    # auto-updating-and-occasionally-breaking for an infra sidecar whose breakage
+    # = no phone access. When bumping, just change the tag and redeploy; --reset
+    # below keeps the new version's `up` from deadlocking on the saved state.
+    # Full writeup: brineworks docs/runbooks/phone-ssh-agent-setup.md.
     image: tailscale/tailscale:v1.98.4
     hostname: brineworks-agent          # MagicDNS name -- same as the old Service
     env_file:
