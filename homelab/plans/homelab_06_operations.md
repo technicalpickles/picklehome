@@ -139,10 +139,17 @@ sudo rsync -aHAX /var/lib/containerd/ /srv/containerd/
 #    preserving the rest of the config. (Step 6's grep confirms it took.)
 sudo sed -i 's|^#\?root = .*|root = "/srv/containerd"|' /etc/containerd/config.toml
 
-# 5. Park the old tree (rollback safety), then bring services back
+# 5. Park the old tree (rollback safety), then bring docker back
 sudo mv /var/lib/containerd /var/lib/containerd.old
 sudo systemctl start containerd
 sudo systemctl start docker
+
+# 5b. Restart the systemd-managed compose units. Stopping docker propagated a
+#     STOP to each (Requires=docker.service), which ran its `compose down` and
+#     removed containers; starting docker does NOT restart them, so they stay
+#     dead until you do this (or reboot). See taskwarrior 407e9404 for a durable fix.
+sudo systemctl restart brineworks-agent.service brineworks-server.service \
+  github-actions-runner.service obsidian-sync.service taskchampion-sync.service
 
 # 6. Verify: config points at /srv, images intact, containers running
 grep '^root' /etc/containerd/config.toml
