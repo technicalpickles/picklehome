@@ -67,11 +67,15 @@ LBNL heating-comfort priorities: reduce cold radiative surfaces (cold floors esp
 
 ## Recommended order of operations
 
-1. **Fan on her desk** (today, ~$30, cancels most of the overheat)
-2. **Exterior solar screen on the east glass** (the real fix; interior cellular shades if exterior isn't feasible)
-3. **Vent deflector** to get the draft off her back
-4. **Drop the whole-zone setpoint compensation** once 1–3 are in, and **repurpose her sensor as a monitor/automation trigger**
-5. **Winter:** rug + pad + foot-level heat
+Each item is tracked in taskwarrior (`project:picklehome.climate*`); UUIDs cited so they survive ID reuse.
+
+1. **Fan on her desk** (today, ~$30, cancels most of the overheat) — task `f8e4746f`
+2. **Exterior solar screen on the east glass** (the real fix; interior cellular shades if exterior isn't feasible) — task `3eecf3b8`
+3. **Vent deflector** to get the draft off her back — task `a78610fb`
+4. **Drop the whole-zone setpoint compensation** once 1–3 are in — task `b883f3fb`; and **repurpose her sensor as a monitor/automation trigger** — task `19803137`
+5. **Winter:** rug + pad + foot-level heat — task `0df75ea9`
+
+Related backlog: sensor participation is API-writable and wants a guarded command to enroll/remove a remote sensor per climate (task `3f72e752`); `climate-history`'s date window is filtered in UTC, not local time, so hourly rows are offset (task `bdcab9b7`); follow up with Tracy on comfort after the earlier ceiling change (task `4acc8608`).
 
 ## Open questions
 
