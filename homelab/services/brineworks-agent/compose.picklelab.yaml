@@ -47,6 +47,12 @@ services:
       # keeps /opt/brineworks fast-forwarded to main, lockstep with the server.
       context: /opt/brineworks
       dockerfile: agent/Dockerfile
+      args:
+        # Build provenance baked into the image (ENV BRINEWORKS_GIT_SHA), shown in
+        # the agent's tmux status bar. The systemd unit computes BRINEWORKS_SHA from
+        # /opt/brineworks HEAD and exports it for this interpolation; "unknown" when
+        # absent (e.g. a manual `docker compose` run outside the unit).
+        GIT_SHA: ${BRINEWORKS_SHA:-unknown}
     # Share the ts-agent node's network namespace: the agent's sshd (:22) and
     # mosh-server's UDP land on the node's tailnet interface directly. No `ports:`
     # block -- nothing is published to the host; reach the agent at
