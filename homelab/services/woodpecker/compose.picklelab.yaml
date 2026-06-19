@@ -1,0 +1,13 @@
+services:
+  ts-woodpecker:
+    volumes:
+      - /srv/data/woodpecker/ts-state:/var/lib/tailscale   # persist node identity
+
+  woodpecker-server:
+    volumes:
+      - /srv/data/woodpecker/server:/var/lib/woodpecker     # SQLite DB
+
+  woodpecker-agent:
+    volumes:
+      # the rootless dockerd socket (owned by ci:ci) -> the path DOCKER_HOST expects
+      - /run/user/2000/docker.sock:/rootless/docker.sock
