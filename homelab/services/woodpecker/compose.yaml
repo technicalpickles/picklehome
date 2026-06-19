@@ -1,0 +1,44 @@
+services:
+  ts-woodpecker:
+    image: tailscale/tailscale:latest
+    hostname: woodpecker                       # -> woodpecker.tail2023b7.ts.net
+    environment:
+      - TS_AUTHKEY=${WOODPECKER_TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=true                       # HTTP-only Funnel: no NET_ADMIN, no tun
+      - TS_EXTRA_ARGS=--advertise-tags=tag:ci
+      - TS_SERVE_CONFIG=/config/funnel.json
+    volumes:
+      - ./funnel.json:/config/funnel.json:ro
+    restart: unless-stopped
+
+  woodpecker-server:
+    image: woodpeckerci/woodpecker-server:latest
+    network_mode: service:ts-woodpecker
+    depends_on: [ts-woodpecker]
+    env_file:
+      - .env
+    environment:
+      - WOODPECKER_HOST=https://woodpecker.tail2023b7.ts.net
+      - WOODPECKER_GITHUB=true
+      - WOODPECKER_GITHUB_CLIENT=${WOODPECKER_GITHUB_CLIENT}
+      - WOODPECKER_GITHUB_SECRET=${WOODPECKER_GITHUB_SECRET}
+      - WOODPECKER_AGENT_SECRET=${WOODPECKER_AGENT_SECRET}
+      - WOODPECKER_REPO_OWNERS=technicalpickles
+      - WOODPECKER_ADMIN=technicalpickles
+      - WOODPECKER_OPEN=false
+    restart: unless-stopped
+
+  woodpecker-agent:
+    image: woodpeckerci/woodpecker-agent:latest
+    network_mode: service:ts-woodpecker
+    depends_on: [woodpecker-server]
+    user: "2000:2000"                           # the ci uid, to access the rootless socket
+    env_file:
+      - .env
+    environment:
+      - WOODPECKER_SERVER=localhost:9000
+      - WOODPECKER_AGENT_SECRET=${WOODPECKER_AGENT_SECRET}
+      - WOODPECKER_MAX_WORKFLOWS=2
+      - DOCKER_HOST=unix:///rootless/docker.sock
+    restart: unless-stopped
