@@ -34,8 +34,25 @@ echo "==> Installing rootless prerequisites"
 sudo apt-get update
 sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras slirp4netns fuse-overlayfs
 
-echo "==> Enabling linger so the ${CI_USER} daemon survives logout/reboot"
+echo "==> Enabling linger + starting the ${CI_USER} systemd user manager"
+# enable-linger keeps the user manager (and the rootless daemon) running across
+# logout/reboot. We then START user@${CI_UID}.service explicitly so the per-user
+# DBus session bus exists NOW — the rootless setuptool detects systemd via that
+# bus, and without it falls back to "manual" mode and never installs the unit.
 sudo loginctl enable-linger "$CI_USER"
+sudo systemctl start "user@${CI_UID}.service"
+echo "    waiting for the user DBus session bus at ${RT}/bus"
+for i in $(seq 1 10); do
+    if sudo test -S "${RT}/bus"; then echo "    user bus up"; break; fi
+    [ "$i" -eq 10 ] && { echo "ERROR: ${RT}/bus never appeared (user manager didn't start)"; exit 1; }
+    sleep 1
+done
+
+# Run a command as ${CI_USER} with a FULL systemd --user session env (both
+# XDG_RUNTIME_DIR and the DBus bus address), so systemctl --user and the rootless
+# setuptool can talk to the user manager.
+DBUS_ADDR="unix:path=${RT}/bus"
+ci_sysd() { sudo -iu "$CI_USER" env XDG_RUNTIME_DIR="$RT" DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDR" "$@"; }
 
 echo "==> Creating rootless data-root at ${CI_DATA_ROOT}"
 sudo mkdir -p "$CI_DATA_ROOT"
@@ -52,10 +69,10 @@ sudo -u "$CI_USER" tee "/home/${CI_USER}/.config/docker/daemon.json" > /dev/null
 DAEMON
 
 echo "==> Installing the rootless docker daemon as ${CI_USER}"
-sudo -iu "$CI_USER" env XDG_RUNTIME_DIR="$RT" dockerd-rootless-setuptool.sh install
+ci_sysd dockerd-rootless-setuptool.sh install
 
 echo "==> Enabling + starting the rootless docker user service"
-sudo -iu "$CI_USER" env XDG_RUNTIME_DIR="$RT" systemctl --user enable --now docker
+ci_sysd systemctl --user enable --now docker
 
 echo "==> Waiting for the rootless socket"
 for i in 1 2 3 4 5; do
@@ -64,7 +81,7 @@ for i in 1 2 3 4 5; do
     sleep 2
 done
 
-run_ci() { sudo -iu "$CI_USER" env XDG_RUNTIME_DIR="$RT" DOCKER_HOST="unix://${RT}/docker.sock" "$@"; }
+run_ci() { ci_sysd env DOCKER_HOST="unix://${RT}/docker.sock" "$@"; }
 
 echo "==> Verify: hello-world runs on the rootless daemon"
 run_ci docker run --rm hello-world | grep -q "Hello from Docker" && echo "    hello-world OK"
