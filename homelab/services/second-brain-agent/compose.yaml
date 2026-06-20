@@ -1,0 +1,10 @@
+services:
+  agent:
+    image: second-brain-agent:local
+    restart: unless-stopped
+    # Non-secret config only. Secrets (TS_AUTHKEY) and volume mounts are in
+    # the picklelab overlay. The container has no app-specific secrets beyond
+    # Claude credentials, which live on the /data volume after first auth.
+    environment:
+      VAULT_DIR: /vault
+      GITHUB_USER: technicalpickles

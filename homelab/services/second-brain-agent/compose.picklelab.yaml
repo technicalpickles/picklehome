@@ -1,0 +1,45 @@
+services:
+  # Tailscale node sidecar. Makes the agent a first-class tailnet node so mosh's
+  # UDP flows natively over WireGuard (tailscale serve is TCP-only and cannot
+  # carry it). Same pattern as brineworks-agent; see homelab/services/README.md
+  # "container-as-node" for rationale and rejected alternatives.
+  ts-agent:
+    # Pinned to an exact version, NOT :latest. See brineworks-agent compose.picklelab.yaml
+    # for the full rationale (version drift can cause containerboot to crash-loop).
+    # Bump this tag by hand when you want a tailscale upgrade, then redeploy.
+    image: tailscale/tailscale:v1.98.4
+    hostname: second-brain-agent          # MagicDNS name on the tailnet
+    environment:
+      - TS_STATE_DIR=/var/lib/tailscale   # node identity persists across recreates
+      - TS_USERSPACE=false                # kernel/TUN mode: required for mosh UDP
+      - TS_EXTRA_ARGS=--reset --advertise-tags=tag:server
+      # Separate auth key from brineworks-agent (lower blast radius per service).
+      # SECOND_BRAIN_AGENT_TS_AUTHKEY is extracted from master .env by service-env
+      # and arrives in the filtered .env here; compose interpolates it as TS_AUTHKEY.
+      - TS_AUTHKEY=${SECOND_BRAIN_AGENT_TS_AUTHKEY}
+    volumes:
+      - /srv/data/second-brain-agent/ts-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin                         # NET_ADMIN only, not --privileged
+    restart: unless-stopped
+
+  agent:
+    build:
+      # Build context is the whole picklehome repo (Dockerfile lives inside it).
+      # deploy.sh ensures /opt/homelab is fast-forwarded before building.
+      context: /opt/homelab
+      dockerfile: homelab/services/second-brain-agent/Dockerfile
+    # Share the ts-agent node's network namespace: the agent's sshd (:22) and
+    # mosh-server's UDP land on the node's tailnet interface directly.
+    # Reach the agent at second-brain-agent.<tailnet>.ts.net over the tailnet.
+    network_mode: service:ts-agent
+    depends_on:
+      - ts-agent
+    volumes:
+      - /srv/data/second-brain-agent:/data
+      # pickled-knowledge vault (read-write): obsidian-sync keeps this in sync
+      # with the Obsidian cloud. The agent can read and write notes directly.
+      # obsidian-sync must be running for the vault to stay current.
+      - /srv/data/obsidian-sync/vaults/pickled-knowledge:/vault

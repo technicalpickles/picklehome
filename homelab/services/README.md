@@ -177,6 +177,30 @@ See [brineworks-agent/README.md](brineworks-agent/README.md) for full setup.
 
 ---
 
+### second-brain-agent
+
+Always-on Claude Code session with the `pickled-knowledge` Obsidian vault mounted read-write. SSH + tmux into a container over Tailscale; same Tailscale node-as-container pattern as brineworks-agent.
+
+| | |
+|---|---|
+| **Purpose** | Phone-reachable Claude Code session for reading and writing the pickled-knowledge vault |
+| **Compose** | `/srv/containers/second-brain-agent/` |
+| **Data** | `/srv/data/second-brain-agent/` (sshd host keys, Claude state, tmux sessions) |
+| **Vault** | `/srv/data/obsidian-sync/vaults/pickled-knowledge/` (mounted read-write at `/vault`) |
+| **Access** | `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net` (Tailscale node) |
+| **Env vars** | `SECOND_BRAIN_AGENT_TS_AUTHKEY` (filtered `.env` only, never the master env) |
+| **Backup** | Not yet |
+| **Restart** | `restart: unless-stopped` |
+| **Source** | Built from picklehome at `homelab/services/second-brain-agent/Dockerfile` (no external app repo) |
+
+Depends on `obsidian-sync` being running to keep the vault current; systemd `After=obsidian-sync.service` ensures ordering on boot.
+
+Commands: `just deploy-second-brain-agent`, `just second-brain-agent-logs`, `just second-brain-agent-logs-follow`
+
+See [second-brain-agent/README.md](second-brain-agent/README.md) for full setup.
+
+---
+
 ### taskchampion-sync
 
 Self-hosted Taskwarrior sync server. Replicates the Mac's `~/.task` to picklelab; encryption secret stays client-side, server only sees opaque blobs.
