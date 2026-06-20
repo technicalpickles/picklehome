@@ -10,6 +10,11 @@ technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p *
 # Symlink systemd units into place
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/ln -sf *
 
+# Pre-flight: verify the ci user's rootless docker socket (woodpecker deploy.sh).
+# /run/user/2000 is mode 0700 owned by ci, so the unprivileged deploy user can't
+# stat the socket; this lets the pre-check probe it from a root vantage. Read-only.
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/test -S /run/user/2000/docker.sock
+
 # Systemd lifecycle
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable *

@@ -181,7 +181,7 @@ Requires SSH agent forwarding, configured in `~/.ssh/config.d/hosts` on Mac (`Fo
 
 Scripted: `homelab/scripts/setup-deploy-access.sh`
 
-Installs a sudoers drop-in (`/etc/sudoers.d/deploy-ops`) granting `technicalpickles` passwordless sudo for the specific commands used by deploy scripts: `mkdir`, `ln`, `systemctl`, `chown`, `tailscale serve`, `setfacl`, `useradd`, `usermod`, `apt-get`, and running commands as the `backup` user.
+Installs a sudoers drop-in (`/etc/sudoers.d/deploy-ops`) granting `technicalpickles` passwordless sudo for the specific commands used by deploy scripts: `mkdir`, `ln`, `systemctl`, `chown`, `tailscale serve`, `setfacl`, `useradd`, `usermod`, `apt-get`, a read-only `test -S` on the `ci` rootless docker socket (woodpecker pre-flight), and running commands as the `backup` user.
 
 This enables non-interactive deploys from Mac (`ssh picklelab "..."` without `-t` flag).
 

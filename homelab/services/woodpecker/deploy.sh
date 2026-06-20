@@ -12,9 +12,14 @@ cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Checking rootless docker socket for the ci user"
-if [ ! -S /run/user/2000/docker.sock ]; then
+# /run/user/2000 is the ci user's XDG_RUNTIME_DIR (mode 0700, owned by ci), so the
+# deploy user (technicalpickles) can't stat the socket directly. Probe from a root
+# vantage via a narrow sudoers entry (/usr/bin/test -S /run/user/2000/docker.sock).
+# This only gates pre-flight; at runtime the agent reaches the socket fine because
+# the rootful daemon performs the bind-mount as root (root ignores the 0700 bits).
+if ! sudo test -S /run/user/2000/docker.sock; then
     echo "ERROR: /run/user/2000/docker.sock missing. Is the ci user's rootless dockerd running?"
-    echo "       sudo -iu ci bash -lc 'systemctl --user status docker'"
+    echo "       sudo -iu ci env XDG_RUNTIME_DIR=/run/user/2000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/2000/bus systemctl --user status docker"
     exit 1
 fi
 
