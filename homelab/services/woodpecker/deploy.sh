@@ -43,15 +43,19 @@ echo "==> Status"
 systemctl status woodpecker.service --no-pager
 
 echo ""
-echo "==> Checking local Woodpecker health endpoint"
+echo "==> Checking Woodpecker health endpoint"
+# The server shares the ts-woodpecker sidecar's network namespace (network_mode:
+# service:...), so :8000 only exists on THAT netns's loopback, not the host's.
+# Probe from inside the sidecar (busybox wget) rather than host curl.
+COMPOSE="docker compose -f compose.yaml -f compose.picklelab.yaml"
 for i in 1 2 3 4 5; do
-    if curl -sf "http://127.0.0.1:8000/healthz" > /dev/null 2>&1; then
-        echo "    Local health check passed"
+    if $COMPOSE exec -T ts-woodpecker wget -qO- "http://127.0.0.1:8000/healthz" > /dev/null 2>&1; then
+        echo "    Health check passed"
         break
     fi
     if [ "$i" -eq 5 ]; then
-        echo "    WARNING: local health check failed after 5 attempts"
-        echo "    Logs: docker compose -f compose.yaml -f compose.picklelab.yaml logs"
+        echo "    WARNING: health check failed after 5 attempts"
+        echo "    Logs: $COMPOSE logs woodpecker-server"
         exit 1
     fi
     echo "    Waiting for server to start (attempt $i/5)..."

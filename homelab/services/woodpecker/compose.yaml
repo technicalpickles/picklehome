@@ -13,7 +13,11 @@ services:
     restart: unless-stopped
 
   woodpecker-server:
-    image: woodpeckerci/woodpecker-server:latest
+    # Woodpecker removed the :latest tag deliberately (prevents accidental major
+    # upgrades). v3 = rolling latest-v3.x; with `up --pull always` we get patches
+    # and minors each deploy, never a major.
+    # https://woodpecker-ci.org/docs/administration/general#container-images
+    image: woodpeckerci/woodpecker-server:v3
     network_mode: service:ts-woodpecker
     depends_on: [ts-woodpecker]
     env_file:
@@ -30,7 +34,7 @@ services:
     restart: unless-stopped
 
   woodpecker-agent:
-    image: woodpeckerci/woodpecker-agent:latest
+    image: woodpeckerci/woodpecker-agent:v3        # keep in lockstep with the server major
     network_mode: service:ts-woodpecker
     depends_on: [woodpecker-server]
     user: "2000:2000"                           # the ci uid, to access the rootless socket
