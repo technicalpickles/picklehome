@@ -127,6 +127,23 @@ Installs Docker CE 29.3, Compose plugin, buildx from the official Docker apt rep
 - `/srv` directories: `/srv/docker`, `/srv/data`, `/srv/containers`
 - Adds current user to `docker` group (re-login required)
 
+### Rootless Docker for CI (the `ci` user)
+
+Scripted install: `homelab/scripts/setup-rootless-ci-docker.sh`
+
+A *second*, rootless Docker daemon running as a dedicated unprivileged `ci` user
+(uid 2000), used only by the Woodpecker agent to spawn CI step containers. This is
+the isolation boundary: a compromised CI step runs as `ci` and cannot read
+root-/`technicalpickles`-owned files, including the secret superset at
+`/opt/homelab/.env`. Configures:
+
+- `ci` user at fixed uid 2000 (socket path `/run/user/2000/docker.sock` is then deterministic)
+- subuid/subgid ranges + linger (daemon survives reboot)
+- `data-root: /srv/ci-docker`: keeps CI image layers off the root LV (same discipline as the main daemon)
+- Self-verifies isolation (rootless container is denied `/etc/shadow` and `/opt/homelab/.env`); exits non-zero if it fails
+
+Rationale: `docs/plans/2026-06-18-woodpecker-ci-design.md` (Section 4, Option D).
+
 ### Tailscale
 
 Scripted install: `homelab/scripts/setup-tailscale.sh`

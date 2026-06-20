@@ -137,57 +137,43 @@ Expected: shows a `ts_authkey` field.
 
 ## Task 3: Host — rootless Docker daemon as the `ci` user (Option D)
 
-This is the isolation boundary. (HUMAN-RUN: interactive sudo on picklelab.)
+This is the isolation boundary. Scripted (matches the `homelab/scripts/setup-*.sh`
+host-setup convention) rather than ad-hoc ssh commands, so it's reproducible from
+source control per `homelab_03`. (HUMAN-RUN: interactive sudo on picklelab.)
 
-**Files:** host-only; documented later in Task 15.
+**Files:**
+- Create: `homelab/scripts/setup-rootless-ci-docker.sh` (done)
+- Reference from: `homelab/plans/homelab_03_host_setup.md`
 
-- [ ] **Step 1: Create the dedicated `ci` user with fixed uid 2000**
+What the script does (idempotent): creates the `ci` user at fixed uid 2000, ensures
+subuid/subgid ranges, installs rootless prerequisites, enables linger, relocates
+the rootless data-root to `/srv/ci-docker` (keeps CI image layers off the root
+volume, matching `setup-docker.sh`'s `/srv` discipline), installs + starts the
+rootless daemon, then self-verifies: hello-world runs, data-root is on `/srv`, and
+the **isolation test** — a rootless container is denied `/etc/shadow` (and
+`/opt/homelab/.env` if present). The script exits non-zero if isolation fails.
 
-Run on picklelab:
+- [ ] **Step 1: Run the setup script on picklelab**
+
 ```bash
-sudo useradd --uid 2000 --create-home --shell /usr/bin/bash ci
-```
-The `ci` user owns nothing under `/opt/homelab` or `/srv` — that is the whole point.
-
-- [ ] **Step 2: Install rootless Docker prerequisites**
-
-Run on picklelab:
-```bash
-sudo apt-get update
-sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras slirp4netns
-```
-
-- [ ] **Step 3: Enable lingering so the ci user's daemon survives logout/reboot**
-
-Run on picklelab: `sudo loginctl enable-linger ci`
-
-- [ ] **Step 4: Install the rootless daemon as the ci user**
-
-Run on picklelab:
-```bash
-sudo -iu ci bash -lc 'export XDG_RUNTIME_DIR=/run/user/2000; dockerd-rootless-setuptool.sh install'
-sudo -iu ci bash -lc 'export XDG_RUNTIME_DIR=/run/user/2000; systemctl --user enable --now docker'
+# from /opt/homelab after `git pull` (or scp the script over):
+homelab/scripts/setup-rootless-ci-docker.sh
 ```
 
-- [ ] **Step 5: Verify the rootless socket exists and runs a container**
+- [ ] **Step 2: Confirm the success output**
 
-Run on picklelab:
-```bash
-sudo -iu ci bash -lc 'export DOCKER_HOST=unix:///run/user/2000/docker.sock; docker run --rm hello-world'
+Expected tail:
 ```
-Expected: the "Hello from Docker!" message. Confirms the rootless daemon works.
-
-- [ ] **Step 6: Verify the isolation boundary (the critical test)**
-
-Confirm the master env is locked down first:
-```bash
-ls -l /opt/homelab/.env    # expect mode -rw------- owner technicalpickles
+    PASS: rootless container denied /etc/shadow
+Done! Rootless docker for ci is running.
+  socket:    /run/user/2000/docker.sock
+  data-root: /srv/ci-docker
 ```
-Then attempt to read it from a rootless container bind-mounting the homelab dir:
-```bash
-sudo -iu ci bash -lc 'export DOCKER_HOST=unix:///run/user/2000/docker.sock; docker run --rm -v /opt/homelab:/host:ro alpine cat /host/.env'
-```
-Expected: **`cat: can't open '/host/.env': Permission denied`**. This proves a CI step on the rootless daemon cannot read the secret superset. If it instead prints the file, STOP — the isolation is not working (check that `.env` is mode 600 and that rootless userns remap is active via `docker info | grep -i rootless`).
+The `PASS: ... denied` line is the security thesis of Option D proven: a CI step
+on this daemon runs as uid 2000 (`ci`) and cannot read root-/`technicalpickles`-owned
+files, including `/opt/homelab/.env`. If the script exits non-zero on the isolation
+check, STOP and debug (`docker info | grep -i rootless`, the subuid/subgid mapping,
+and `.env` perms) before continuing.
 
 ---
 
@@ -752,7 +738,7 @@ Expected: the runner remains online; the auto-merge workflow is unaffected by re
 **Files:**
 - Modify: `homelab/services/README.md` (registry entry)
 - Create: `homelab/services/woodpecker/README.md`
-- Modify: `homelab/plans/homelab_03_host_setup.md` (rootless-docker-for-ci section)
+- Modify: `homelab/plans/homelab_03_host_setup.md` (rootless-docker-for-ci section — already added alongside Task 3's script; just confirm it's current)
 - Modify: `homelab/README.md` (services table row)
 
 - [ ] **Step 1: Verify Woodpecker data is on the restic path**
@@ -768,9 +754,11 @@ Cover (per docs/CONVENTIONS.md — README is reference for users): purpose; the 
 
 Add a `### woodpecker` section in the service registry table style (Purpose / Compose / Data / Access / Env vars / Backup / Restart) and a Commands line (`just deploy-woodpecker`, `just woodpecker-logs`, `just woodpecker-status`).
 
-- [ ] **Step 4: Add the rootless-docker section to `homelab_03_host_setup.md`**
+- [ ] **Step 4: Confirm the rootless-docker section in `homelab_03_host_setup.md`**
 
-Document the one-time host setup from Task 3 (create `ci` uid 2000, install rootless docker, enable linger, the isolation-verification command) so the host is reproducible from bare metal.
+Already added alongside Task 3's `setup-rootless-ci-docker.sh` (the "Rootless Docker
+for CI" subsection). Just confirm it still reflects the script (user, uid, data-root,
+isolation check) so the host stays reproducible from bare metal.
 
 - [ ] **Step 5: Add the services-table row to `homelab/README.md`**
 
