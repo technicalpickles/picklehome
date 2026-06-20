@@ -25,7 +25,13 @@ fi
 
 echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/ts-state" "$DATA_DIR/server"
-# woodpecker-server and the tailscale sidecar run as root in-container; root-owned dirs are writable.
+# The tailscale sidecar runs as root in-container, so ts-state can stay root-owned.
+# The v3 woodpecker-server image runs as its non-root `woodpecker` user, which is
+# uid 1000 (no userns-remap on the main daemon, so it maps 1:1 to host uid 1000);
+# verify with `docker top woodpecker-woodpecker-server-1 -o uid`. It must own its
+# data dir or it can't create the SQLite database (boot-loops on "unable to open
+# database file"). Only the server dir needs this; the agent uses no data volume.
+sudo chown 1000:1000 "$DATA_DIR/server"
 
 echo "==> Pulling images"
 cd "$SERVICE_DIR"
