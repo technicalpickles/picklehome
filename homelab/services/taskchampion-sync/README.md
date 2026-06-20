@@ -44,25 +44,23 @@ The deploy script prints these steps automatically if the Tailscale endpoint isn
 
 ## Mac-side setup
 
-Encryption secret never leaves the Mac. Materialize the three secrets into shell env via fnox (matches the existing fnox + keychain pattern in dotfiles):
+Mac-side config lives in the [dotfiles](https://github.com/technicalpickles/dotfiles) repo, not here. The encryption secret never leaves the Mac.
 
-```fish
-fnox set TASKCHAMPION_SYNC_SERVER_URL (op read "op://picklehome/TaskChampion Sync/host" | xargs -I{} echo "https://{}")
-fnox set TASKCHAMPION_SYNC_SERVER_CLIENT_ID (op read "op://picklehome/TaskChampion Sync/client_id")
-fnox set TASKCHAMPION_SYNC_ENCRYPTION_SECRET (op read "op://picklehome/TaskChampion Sync/encryption_secret")
-```
-
-Restart the shell so `fnox activate` exposes them.
-
-Add three lines to `~/.taskrc`:
+`~/.taskrc` (managed in `dotfiles/home/.taskrc`) ends with:
 
 ```
-sync.server.url=$TASKCHAMPION_SYNC_SERVER_URL
-sync.server.client_id=$TASKCHAMPION_SYNC_SERVER_CLIENT_ID
-sync.encryption_secret=$TASKCHAMPION_SYNC_ENCRYPTION_SECRET
+include ~/.config/task/sync.rc
 ```
 
-Taskwarrior expands `$VAR` from the environment, so `.taskrc` itself stays free of secrets.
+`~/.config/task/sync.rc` holds the three sync settings (`sync.server.url`, `sync.server.client_id`, `sync.encryption_secret`). It is generated from `op://picklehome/TaskChampion Sync` by `dotfiles/taskrc.sh`, which runs as part of the dotfiles install. The generated file lives outside any repo (0600), so the secret is structurally impossible to commit. This mirrors how `gitconfig.sh` generates `~/.gitconfig.local`.
+
+To set up (or regenerate) on a Mac:
+
+```bash
+cd ~/path/to/dotfiles && ./taskrc.sh
+```
+
+On machines where `taskrc.sh` can't write real creds (non-macOS, no 1Password CLI, or the item is missing), it writes a commented placeholder instead, so the `include` never warns.
 
 First sync uploads existing local task history:
 
@@ -106,13 +104,13 @@ Server-side (set in compose, mapped from `.env`):
 | `LISTEN` | `TASKCHAMPION_SYNC_PORT` | Bind address; always `0.0.0.0:<port>` inside the container |
 | `DATA_DIR` | (constant) | `/var/lib/taskchampion` inside the container |
 
-Mac-side (set via fnox, read by `~/.taskrc`):
+Mac-side: not env vars. `dotfiles/taskrc.sh` reads three fields from `op://picklehome/TaskChampion Sync` and writes them straight into `~/.config/task/sync.rc`:
 
-| Variable | Description |
-|----------|-------------|
-| `TASKCHAMPION_SYNC_SERVER_URL` | `https://taskchampion.<tailnet>.ts.net` |
-| `TASKCHAMPION_SYNC_SERVER_CLIENT_ID` | Same UUID as the server allowlist |
-| `TASKCHAMPION_SYNC_ENCRYPTION_SECRET` | base64; never leaves the Mac |
+| `sync.rc` setting | From 1Password field | Description |
+|-------------------|----------------------|-------------|
+| `sync.server.url` | `host` (with `https://` prepended) | `https://taskchampion.<tailnet>.ts.net` |
+| `sync.server.client_id` | `client_id` | Same UUID as the server allowlist |
+| `sync.encryption_secret` | `encryption_secret` | base64; never leaves the Mac |
 
 ## Data Locations (on picklelab)
 
