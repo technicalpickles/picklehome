@@ -19,10 +19,12 @@
 
 ## Task 1: Spike — prove userspace Funnel works (de-risk before building anything)
 
-The design's single riskiest assumption: that Tailscale Funnel works in **userspace** mode inside a container, proxying to a sibling container over a shared netns. Prove it with a throwaway before building the real service. (HUMAN-RUN: needs the Tailscale admin console + sudo on picklelab.)
+The design's single riskiest assumption: that Tailscale Funnel works in **userspace** mode inside a container, proxying to a sibling container over a shared netns. Prove it with a throwaway before building the real service.
+
+**Host-agnostic:** the funnel behavior lives entirely inside the container — the sidecar joins the tailnet as its *own* node regardless of which Docker host runs it. Run this anywhere with Docker + tailnet reach; the Mac (colima) is the easy throwaway and leaves no picklelab footprint. picklelab's actual environment gets exercised later at Task 12, not here.
 
 **Files:**
-- Create (throwaway, do not commit): `/tmp/funnel-spike/compose.yaml` on picklelab
+- Create (throwaway, do not commit): `<throwaway-dir>/compose.yaml` + `<throwaway-dir>/funnel.json` on any Docker host
 
 - [ ] **Step 1: Pre-grant tag + funnel in the tailnet ACL**
 
@@ -43,10 +45,10 @@ Save. (Funnel for the tailnet must already be enabled — it is, since HTTPS cer
 
 Admin console → Settings → Keys → Generate auth key. Reusable, ephemeral OK, **Tags: `tag:ci`**. Copy it.
 
-- [ ] **Step 3: Write the spike compose on picklelab**
+- [ ] **Step 3: Write the spike compose (any Docker host; Mac/colima is easiest)**
 
 ```yaml
-# /tmp/funnel-spike/compose.yaml
+# <throwaway-dir>/compose.yaml
 services:
   ts-spike:
     image: tailscale/tailscale:latest
@@ -66,7 +68,7 @@ services:
 ```
 
 ```json
-// /tmp/funnel-spike/funnel.json
+// <throwaway-dir>/funnel.json
 {
   "TCP": { "443": { "HTTPS": true } },
   "Web": {
@@ -80,7 +82,8 @@ services:
 
 - [ ] **Step 4: Bring it up**
 
-Run on picklelab: `cd /tmp/funnel-spike && TS_AUTHKEY=<key> docker compose up -d`
+Run in the throwaway dir: `TS_AUTHKEY=<key> docker compose up -d`
+(Pass the key inline so it never lands in a file or in chat history.)
 
 - [ ] **Step 5: Verify Funnel is serving and the cert provisioned**
 
@@ -93,9 +96,11 @@ From a network *off* the tailnet (phone on cellular, or any external host):
 Run: `curl -sS https://woodpecker-spike.tail2023b7.ts.net/`
 Expected: whoami response (Hostname/IP lines). This proves userspace Funnel + shared-netns proxy + public cert all work end to end.
 
+> **Why off-tailnet is mandatory:** both the agent's sandbox and picklelab are tailnet nodes, so a curl from either resolves over MagicDNS and routes *internally* — it would succeed even if Funnel were broken, proving nothing. This is the one step that cannot be delegated to ssh or the agent; it needs a genuine non-tailnet vantage point (phone on cellular).
+
 - [ ] **Step 7: Tear down**
 
-Run on picklelab: `cd /tmp/funnel-spike && docker compose down && cd / && rm -rf /tmp/funnel-spike`
+Run in the throwaway dir: `docker compose down` then remove the dir.
 Then in the admin console, delete the `woodpecker-spike` machine and the throwaway auth key.
 
 > **Gate:** if Step 6 fails, STOP and revisit Section 2 of the design (likely fixes: funnel only on ports 443/8443/10000; userspace proxy must point at `127.0.0.1:8000` which only resolves because of the shared netns). Do not proceed until this passes.
