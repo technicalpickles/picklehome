@@ -49,8 +49,8 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     echo "    Reachable at ${AGENT_HOST}:22"
     echo ""
     echo "Done! Connect with: ssh technicalpickles@${AGENT_HOST}"
-    echo "Then: tmux attach   (or tmux new -s main)"
-    echo "Phone (mosh): mosh technicalpickles@${AGENT_HOST} then tmux attach"
+    echo "  (you land straight in the persistent 'main' tmux session)"
+    echo "Phone (mosh): mosh technicalpickles@${AGENT_HOST}"
     exit 0
   fi
   echo "    Waiting for the node (attempt $i/10)..."

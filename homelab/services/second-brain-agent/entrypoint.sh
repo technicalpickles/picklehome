@@ -41,4 +41,10 @@ ln -sf /data/claude.json "$HOME_DIR/.claude.json"
 # Ensure home dir ownership is correct
 chown "$USERNAME:$USERNAME" "$HOME_DIR"
 
+# Start a detached `main` tmux session as the user, rooted in the vault, so there's
+# always a session to attach to (continuum auto-restores into it from /data). The
+# zz-tmux-autoattach.sh profile.d hook lands interactive logins straight here.
+# `|| true`: a failed start must not block sshd from coming up.
+su - "$USERNAME" -c "tmux new-session -d -s main -c '${VAULT_DIR:-/vault}' || true"
+
 exec /usr/sbin/sshd -D

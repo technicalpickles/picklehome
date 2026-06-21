@@ -43,6 +43,10 @@ RUN mkdir /var/run/sshd \
 COPY homelab/services/second-brain-agent/tmux.conf /home/$USERNAME/.tmux.conf
 RUN chown $USER_UID:$USER_GID /home/$USERNAME/.tmux.conf
 
+# Auto-attach interactive ssh/mosh logins to the persistent `main` tmux session.
+# zz- prefix sources it last in profile.d (after anything written at runtime).
+COPY homelab/services/second-brain-agent/tmux-autoattach.sh /etc/profile.d/zz-tmux-autoattach.sh
+
 COPY homelab/services/second-brain-agent/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
