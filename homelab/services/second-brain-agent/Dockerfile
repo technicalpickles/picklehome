@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     tmux \
     ripgrep \
+    mosh \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js 22 (for Claude Code)
