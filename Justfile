@@ -318,6 +318,43 @@ brineworks-agent-logs host="picklelab" lines="50":
 brineworks-agent-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
+# Deploy second-brain-agent to picklelab (idempotent: first setup or update)
+deploy-second-brain-agent host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Pulling on {{host}}"
+    ssh {{host}} "cd /opt/homelab && git pull"
+    echo "==> Copying .env to {{host}}"
+    mkdir -p tmp
+    scripts/service-env homelab/services/second-brain-agent/.env.vars > tmp/second-brain-agent.env
+    scp tmp/second-brain-agent.env {{host}}:/opt/homelab/homelab/services/second-brain-agent/.env
+    rm tmp/second-brain-agent.env
+    ssh {{host}} "cd /opt/homelab && homelab/services/second-brain-agent/deploy.sh"
+
+# Tail second-brain-agent container logs from picklelab
+second-brain-agent-logs host="picklelab" lines="50":
+    ssh {{host}} "cd /opt/homelab/homelab/services/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+
+# Follow second-brain-agent container logs live from picklelab
+second-brain-agent-logs-follow host="picklelab":
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+
 # Deploy Woodpecker CI to picklelab (idempotent: first setup or update)
 deploy-woodpecker host="picklelab":
     #!/usr/bin/env bash

@@ -1,0 +1,15 @@
+[Unit]
+Description=Second brain agent (SSH + tmux + Claude Code with Obsidian vault)
+After=network-online.target docker.service obsidian-sync.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/homelab/homelab/services/second-brain-agent
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build
+ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+
+[Install]
+WantedBy=multi-user.target
