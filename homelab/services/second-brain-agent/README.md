@@ -58,8 +58,13 @@ Credentials are now persisted at `/data/claude/.credentials.json`.
 
 ```bash
 ssh technicalpickles@second-brain-agent.<tailnet>.ts.net
-tmux attach            # or: tmux new -s main
 ```
+
+You land directly in the persistent `main` tmux session — a `/etc/profile.d` hook
+auto-attaches every interactive SSH/mosh login (the session is started detached at
+container boot, so it's always there). Detaching (`C-b d`) drops you to a plain shell;
+`tmux attach` gets you back in. Non-interactive channels (`scp`, `ssh host <cmd>`) are
+left alone.
 
 The vault is at `/vault/`. Use `claude` to start a session; ripgrep (`rg`) is available for full-text vault search.
 
