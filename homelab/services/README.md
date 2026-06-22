@@ -22,8 +22,8 @@ Each service directory in `homelab/services/<name>/` contains:
 | `deploy.sh` | Called by `just deploy-<name>`, handles scp + compose up + systemd |
 | `.env.vars` | Which env vars this service needs (filtered from master `.env` by `scripts/service-env`) |
 | `Dockerfile` | Custom image build (if applicable) |
-| `<name>.service` | systemd unit (timer-based services only) |
-| `<name>.timer` | systemd timer (if applicable) |
+| `<name>.service` | systemd unit (every service has one; long-lived services run a `oneshot`+`RemainAfterExit` unit, timer-based ones a triggered unit) |
+| `<name>.timer` | systemd timer (timer-based services only: `backup`, `climate-auto-switch`) |
 
 On picklelab, services land at:
 
@@ -240,6 +240,28 @@ Unlike other services, this one has **no `compose.picklelab.yaml`**: it only eve
 Commands: `just deploy-github-runner`, `just github-runner-logs`, `just github-runner-status`
 
 See [github-actions-runner/README.md](github-actions-runner/README.md) for the auth model and re-bootstrap procedure.
+
+---
+
+### woodpecker
+
+Self-hosted Woodpecker CI (server + agent + tailscale Funnel sidecar) for private GitHub repos. Test-only pipelines today. The one webhook-driven service, so it owns the homelab's only deliberate public ingress.
+
+| | |
+|---|---|
+| **Purpose** | Self-hosted CI for private GitHub repos (consolidates onto one system) |
+| **Compose** | `/opt/homelab/homelab/services/woodpecker/` |
+| **Data** | `/srv/data/woodpecker/` (`server/` SQLite, `ts-state/` node identity) |
+| **Access** | `https://woodpecker.<tailnet>.ts.net` (public via **Tailscale Funnel** on the sidecar's node, not host `tailscaled`) |
+| **Env vars** | `WOODPECKER_GITHUB_CLIENT`, `WOODPECKER_GITHUB_SECRET`, `WOODPECKER_AGENT_SECRET`, `WOODPECKER_TS_AUTHKEY` |
+| **Backup** | Yes, nightly (`/srv/data/woodpecker` picked up by restic; mostly rebuildable, `ts-state` is the bit worth keeping) |
+| **Restart** | `restart: unless-stopped` |
+
+CI steps run on a **rootless `dockerd` as a dedicated `ci` user** (uid 2000), so a compromised step can't read root/`technicalpickles`-owned secrets. Funnel uses userspace mode (HTTP-only, zero-priv); needs a one-time host setup (rootless docker for `ci`) and a Tailscale ACL granting `funnel` to `tag:ci`.
+
+Commands: `just deploy-woodpecker`, `just woodpecker-logs`, `just woodpecker-status`
+
+See [woodpecker/README.md](woodpecker/README.md) for full setup and the OAuth/Funnel prerequisites.
 
 ---
 

@@ -40,8 +40,11 @@ service also has its own README with first-time setup and operations.
 | backup | Nightly restic backups of `/srv/data` (GFS retention, Postgres dump support) | [README](services/backup/README.md) |
 | obsidian-sync | Headless Obsidian Sync clients keeping vaults on-host for agent access | [README](services/obsidian-sync/README.md) |
 | brineworks-server | FastAPI PRM backend (contacts/interactions), Tailscale Services | [README](services/brineworks-server/README.md) |
+| brineworks-agent | Phone-reachable Claude Code + `bw` session (SSH+tmux over Tailscale) | [README](services/brineworks-agent/README.md) |
+| second-brain-agent | Phone-reachable Claude Code session with `pickled-knowledge` vault mounted | [README](services/second-brain-agent/README.md) |
 | taskchampion-sync | Self-hosted Taskwarrior sync server (client-side encryption) | [README](services/taskchampion-sync/README.md) |
 | github-actions-runner | Self-hosted GitHub Actions runner for the pirpg repo | [README](services/github-actions-runner/README.md) |
+| woodpecker | Self-hosted Woodpecker CI for private GitHub repos (Funnel ingress) | [README](services/woodpecker/README.md) |
 
 All services deploy the same way from the Mac: `just dotenv` to refresh secrets, then
 `just deploy-<service>`. See the registry for the shared file layout and the per-service
