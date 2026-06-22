@@ -145,12 +145,13 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `locks/`: Yale Access smart locks; see `locks/README.md`
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
-  - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`
+  - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `climate-auto-switch`, `backup`, `github-actions-runner`, `woodpecker` (full list in the Homelab Services table below)
   - **Obsidian vaults on host:** `/srv/data/obsidian-sync/vaults/<vault>/` — `pickled-knowledge` is the personal knowledge base (second brain); `rpg` is campaign notes
   - `second-brain-agent` mounts `pickled-knowledge` read-write at `/vault`, reachable at `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net`
-- `docs/plans/`: Design documents and implementation plans
+- `docs/`: `plans/` (point-in-time design docs + implementation plans), `research/` (deep-dive findings), `CONVENTIONS.md`, `climate-setup.md`
 - `tests/`: pytest tests, mirroring source layout
 - `scripts/`: Shared utilities (`dotenv`, `service-env`, `quote-env-values`)
+- `_bmad/`, `_bmad-output/`: BMAD-method tooling and its output (not part of the home-automation code)
 
 ## Integrations
 
@@ -181,3 +182,7 @@ Always-on services on picklelab (NUC), managed via Docker Compose + systemd. See
 | brineworks-agent | `homelab/services/brineworks-agent/` | Always-on Claude Code session for email triage (SSH+mosh) | `just deploy-brineworks-agent` |
 | second-brain-agent | `homelab/services/second-brain-agent/` | Always-on Claude Code session with `pickled-knowledge` vault at `/vault` | `just deploy-second-brain-agent` |
 | taskchampion-sync | `homelab/services/taskchampion-sync/` | Self-hosted Taskwarrior sync server | `just deploy-taskchampion` |
+| climate-auto-switch | `homelab/services/climate-auto-switch/` | 15-min timer running seasonal HVAC comfort switching | `just deploy-climate`, `just climate-check`, `just climate-log` |
+| backup | `homelab/services/backup/` | Nightly restic backups of `/srv/data` (GFS retention) | `just deploy-backup`, `just backup-now`, `just backup-status` |
+| github-actions-runner | `homelab/services/github-actions-runner/` | Self-hosted GitHub Actions runner for the pirpg repo | `just deploy-github-runner`, `just github-runner-status` |
+| woodpecker | `homelab/services/woodpecker/` | Self-hosted Woodpecker CI for private repos (Funnel ingress) | `just deploy-woodpecker`, `just woodpecker-status` |

@@ -43,4 +43,4 @@ Scripts that talk to the CloudKey or Cloudflare require `.env` (generated via `j
 
 - `UNIFI_API_KEY`: UniFi CloudKey API key (Network → Integrations)
 - `CLOUDFLARE_RADAR_API_TOKEN`: Cloudflare dashboard → My Profile → API Tokens → `Account > Radar: Read`
-- `UNIFI_ADMIN_USERNAME` / `UNIFI_ADMIN_PASSWORD`: only needed for `just unifi usg dns` (SSH)
+- `UNIFI_ADMIN_USERNAME` / `UNIFI_ADMIN_PASSWORD`: needed for the SSH-based `just unifi usg dns` and `just unifi usg resolve`

@@ -78,4 +78,5 @@ lighting/
   caseta.py            # Caseta device commands (devices, status, on, off, set)
   hue_cli.py           # Hue CLI entry point
   hue.py               # Hue bridge connection + all Hue commands
+  .certs/              # Lutron Caseta TLS client cert, key, and CA (from pairing)
 ```

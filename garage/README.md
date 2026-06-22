@@ -13,7 +13,7 @@ Garage door status and control via the Aladdin Connect smart garage door opener.
      "email[text]=YOUR_EMAIL" \
      "password=YOUR_PASSWORD"
    ```
-2. Run `just dotenv` to inject credentials into `.env`
+2. Run `just dotenv` to inject credentials into `.env` (the `Aladdin Connect` item's `email`/`password` fields map to `ALADDIN_EMAIL` / `ALADDIN_PASSWORD`, which the CLI reads from the environment; see `.env.template`)
 3. Authenticate: `just garage auth`
 
 ## Commands

@@ -37,6 +37,7 @@ Uses `requests` for status pages, `playwright` for diag commands (which stream o
 ```bash
 just bgw fiber               # fiber signal / optical metrics
 just bgw broadband           # WAN connection status
+just bgw wifi                # BGW WiFi radio status (both bands)
 just bgw trace <ip>          # traceroute from BGW WAN
 just bgw ping <ip>           # ping from BGW WAN
 just bgw nslookup <host>
@@ -51,6 +52,22 @@ Visits a URL with a headless browser and reports per-hostname request stats (lat
 ```bash
 just network-profile https://example.com
 just network-profile https://example.com --slow-ms 1000 --timeout 15
+```
+
+### `snapshot.py`: full point-in-time network snapshot
+
+Captures BGW fiber + broadband, USG WAN, DNS, and traceroute in one shot.
+
+```bash
+just network-snapshot
+```
+
+### `resolve.py`: DNS resolution comparison
+
+Compares DNS resolution across Cloudflare, Google, BGW, and USG resolvers for a host.
+
+```bash
+just network-resolve <host>
 ```
 
 ### `isp_status.py`: ISP and CDN status checker
@@ -122,7 +139,7 @@ just unifi devices                        # all adopted devices with firmware ve
 just unifi topology                       # live device tree with uplink ports + radio state
 just unifi topology --format mermaid      # mermaid diagram for docs
 just unifi topology --format dot          # graphviz DOT
-just unifi rename <device> <new-name>     # rename a device
+just unifi rename <client> <new-name>     # set a friendly alias for a client device (by hostname/IP/MAC)
 
 # USG / gateway
 just unifi usg stats                      # USG CPU, memory, uplink rates

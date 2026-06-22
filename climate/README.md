@@ -138,13 +138,15 @@ The goal is always ~70°F in any actively occupied space. Comfort Heat and Comfo
 
 ```
 climate/
-  sync.py                  # Ecobee CLI entry point (argparse)
+  sync.py                  # Ecobee CLI (run as `python -m climate.sync`, argparse)
   blueair_cli.py           # BlueAir CLI entry point (argparse)
+  runlog.py                # Append-only JSONL run logging (used by auto-switch)
   ecobee/
     auth.py                # File-based OAuth (PIN flow, token refresh)
     schedule.py            # Schedule YAML loading, validation, sync
     comforts.py            # Comfort mode setpoint management
     status.py              # Live thermostat status extraction + formatting
+    history.py             # Room-sensor temp + occupancy history (climate-history)
     thermostats.py         # Thermostat registry loader
   ambient/
     client.py              # Outdoor temp fetching via Ambient Weather API
