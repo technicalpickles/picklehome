@@ -1,4 +1,5 @@
 [tools]
 go = "latest"
+just = "latest"
 python = "3.12"
 uv = "0.11.2"
