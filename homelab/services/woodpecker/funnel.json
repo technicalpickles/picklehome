@@ -1,0 +1,9 @@
+{
+  "TCP": { "443": { "HTTPS": true } },
+  "Web": {
+    "woodpecker.tail2023b7.ts.net:443": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:8000" } }
+    }
+  },
+  "AllowFunnel": { "woodpecker.tail2023b7.ts.net:443": true }
+}

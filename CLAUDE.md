@@ -145,6 +145,9 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `locks/`: Yale Access smart locks; see `locks/README.md`
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
+  - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`
+  - **Obsidian vaults on host:** `/srv/data/obsidian-sync/vaults/<vault>/` — `pickled-knowledge` is the personal knowledge base (second brain); `rpg` is campaign notes
+  - `second-brain-agent` mounts `pickled-knowledge` read-write at `/vault`, reachable at `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net`
 - `docs/plans/`: Design documents and implementation plans
 - `tests/`: pytest tests, mirroring source layout
 - `scripts/`: Shared utilities (`dotenv`, `service-env`, `quote-env-values`)
@@ -166,3 +169,15 @@ Quick reference for all smart home and network integrations.
 | Aladdin Connect | `garage/` | Garage door opener | Cloud API (Cognito) | `just garage *` |
 | Yale Access | `locks/` | Smart locks + bridges | Cloud API (user/pass) | `just locks *` |
 | Sonos | `sonos/` | Speakers | Local UPnP (no auth) | `just sonos *` |
+
+## Homelab Services
+
+Always-on services on picklelab (NUC), managed via Docker Compose + systemd. See `homelab/services/README.md` for the deployment pattern and per-service setup.
+
+| Service | Directory | Purpose | Commands |
+|---------|-----------|---------|----------|
+| obsidian-sync | `homelab/services/obsidian-sync/` | Sync Obsidian vaults (`rpg`, `pickled-knowledge`) to host from cloud | `just obsidian-sync-*` |
+| brineworks-server | `homelab/services/brineworks-server/` | PRM FastAPI backend (contacts, email triage) | `just deploy-brineworks-server` |
+| brineworks-agent | `homelab/services/brineworks-agent/` | Always-on Claude Code session for email triage (SSH+mosh) | `just deploy-brineworks-agent` |
+| second-brain-agent | `homelab/services/second-brain-agent/` | Always-on Claude Code session with `pickled-knowledge` vault at `/vault` | `just deploy-second-brain-agent` |
+| taskchampion-sync | `homelab/services/taskchampion-sync/` | Self-hosted Taskwarrior sync server | `just deploy-taskchampion` |
