@@ -2,18 +2,20 @@ services:
   rpg:
     image: obsidian-sync
     build: .
+    user: "1000:1000"
     init: true
     restart: unless-stopped
     volumes:
-      - ob-config-rpg:/root/.config
+      - ob-config-rpg:/home/node/.config
       - rpg:/vault
 
   pickled-knowledge:
     image: obsidian-sync
+    user: "1000:1000"
     init: true
     restart: unless-stopped
     volumes:
-      - ob-config-pickled-knowledge:/root/.config
+      - ob-config-pickled-knowledge:/home/node/.config
       - pickled-knowledge:/vault
 
 volumes:

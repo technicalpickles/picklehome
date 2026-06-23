@@ -19,6 +19,13 @@ sudo mkdir -p \
     "$DATA_DIR/vaults/rpg" \
     "$DATA_DIR/vaults/pickled-knowledge"
 
+echo "==> Fixing ownership: all vaults and configs → uid 1000"
+sudo chown -R 1000:1000 \
+    "$DATA_DIR/config/rpg" \
+    "$DATA_DIR/config/pickled-knowledge" \
+    "$DATA_DIR/vaults/rpg" \
+    "$DATA_DIR/vaults/pickled-knowledge"
+
 echo "==> Building image"
 cd "$SERVICE_DIR"
 docker compose -f compose.yaml -f compose.picklelab.yaml build
