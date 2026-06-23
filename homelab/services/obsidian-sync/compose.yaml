@@ -2,19 +2,15 @@ services:
   rpg:
     image: obsidian-sync
     build: .
+    user: "1000:1000"
     init: true
     restart: unless-stopped
-    # rpg vault is not shared with any other service; running as root is fine.
     volumes:
-      - ob-config-rpg:/root/.config
+      - ob-config-rpg:/home/node/.config
       - rpg:/vault
 
   pickled-knowledge:
     image: obsidian-sync
-    # Run as uid 1000 so vault files are owned by uid 1000, matching the
-    # second-brain-agent container's technicalpickles user. Uses explicit
-    # uid:gid rather than the named "node" user to avoid coupling to the
-    # image's internal user table.
     user: "1000:1000"
     init: true
     restart: unless-stopped

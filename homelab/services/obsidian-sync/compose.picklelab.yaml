@@ -1,7 +1,7 @@
 services:
   rpg:
     volumes:
-      - /srv/data/obsidian-sync/config/rpg:/root/.config
+      - /srv/data/obsidian-sync/config/rpg:/home/node/.config
       - /srv/data/obsidian-sync/vaults/rpg:/vault
 
   pickled-knowledge:

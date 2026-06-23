@@ -12,10 +12,9 @@ long-lived container continuously syncing against Obsidian's cloud.
   `pickled-knowledge`, each with two volumes:
   - config: Obsidian config + sync credentials (per-vault, so logins don't collide)
   - `/vault`: the synced vault files
-- **User model:** `pickled-knowledge` runs as uid 1000 (`user: "1000:1000"`) so the
-  second-brain-agent container (also uid 1000) can write vault files. Config mounts at
-  `/home/node/.config`. `rpg` runs as root (config at `/root/.config`) since it isn't
-  shared with any other service.
+- **User model:** all vault containers run as uid 1000 (`user: "1000:1000"`), with config
+  at `/home/node/.config`. This lets the second-brain-agent container (also uid 1000) write
+  to the pickled-knowledge vault.
 - **On-host data:** `compose.picklelab.yaml` maps those volumes to
   `/srv/data/obsidian-sync/config/<vault>` and `/srv/data/obsidian-sync/vaults/<vault>`.
 - **Service unit:** `obsidian-sync.service` is a `RemainAfterExit` oneshot that does
@@ -57,10 +56,8 @@ just deploy-obsidian-sync                        # redeploy (git pull + rebuild 
 
 ## Adding a vault
 
-1. Add a new service block (and its two volumes) to `compose.yaml`
-   - If the vault will be shared with another container (e.g. an agent), add `user: "1000:1000"`
-     and mount config at `/home/node/.config` instead of `/root/.config`
+1. Add a new service block (and its two volumes) to `compose.yaml`, following the `rpg` pattern:
+   `user: "1000:1000"`, config at `/home/node/.config`
 2. Add the on-host volume mounts to `compose.picklelab.yaml`
-3. Add the data dirs to the `mkdir -p` list in `deploy.sh`; if running as uid 1000, also add
-   a `chown -R 1000:1000` for that vault's config and vault dirs
+3. Add the data dirs to the `mkdir -p` and `chown -R 1000:1000` blocks in `deploy.sh`
 4. `just deploy-obsidian-sync`, then `just obsidian-sync-exec <vault> login` + `sync-setup`
