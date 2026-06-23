@@ -41,6 +41,10 @@ ln -sf /data/claude.json "$HOME_DIR/.claude.json"
 # Ensure home dir ownership is correct
 chown "$USERNAME:$USERNAME" "$HOME_DIR"
 
+# Fix vault ownership: obsidian-sync may have created files as root before the
+# user: "node" fix was deployed. Safe to run on every start — fast, idempotent.
+chown -R "$USERNAME:$USERNAME" "${VAULT_DIR:-/vault}"
+
 # Start a detached `main` tmux session as the user, rooted in the vault, so there's
 # always a session to attach to (continuum auto-restores into it from /data). The
 # zz-tmux-autoattach.sh profile.d hook lands interactive logins straight here.

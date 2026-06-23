@@ -10,10 +10,13 @@ services:
 
   pickled-knowledge:
     image: obsidian-sync
+    # Run as the node user (uid=1000) so vault files are owned by uid 1000,
+    # matching the second-brain-agent container's technicalpickles user.
+    user: "node"
     init: true
     restart: unless-stopped
     volumes:
-      - ob-config-pickled-knowledge:/root/.config
+      - ob-config-pickled-knowledge:/home/node/.config
       - pickled-knowledge:/vault
 
 volumes:

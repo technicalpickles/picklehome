@@ -6,5 +6,5 @@ services:
 
   pickled-knowledge:
     volumes:
-      - /srv/data/obsidian-sync/config/pickled-knowledge:/root/.config
+      - /srv/data/obsidian-sync/config/pickled-knowledge:/home/node/.config
       - /srv/data/obsidian-sync/vaults/pickled-knowledge:/vault
