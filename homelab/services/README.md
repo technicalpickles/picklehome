@@ -35,6 +35,38 @@ TLS and external access use **Tailscale Services**: `tailscaled` on the host ter
 
 Per-service hostname is stored in 1Password as `<SERVICE>_HOST` and pulled into `.env`. The tailnet suffix is documented in the project [CLAUDE.md](../../CLAUDE.md).
 
+### Container user model and bind-mount ownership
+
+Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root user whose uid matches the host file ownership**. This is the invariant that makes volume sharing work: Linux bind mounts expose the host inode ownership directly, so a container process can only write if its uid owns (or has group write on) the files.
+
+**How each piece enforces this:**
+
+| Where | What it does |
+|-------|--------------|
+| `compose.yaml` `user: "uid:gid"` | Sets the process uid inside the container. Use explicit `"uid:gid"` string (e.g. `"1000:1000"`), not a named user — named users couple the compose file to the image's internal `/etc/passwd`. |
+| `deploy.sh` `chown -R uid:gid /srv/data/<service>` | Fixes existing host files before the container restarts with a new uid. Pattern: chown immediately after `mkdir -p`, before `docker compose up`. |
+| Dockerfile `ARG USER_UID` / `useradd` | Custom images (second-brain-agent, brineworks-agent) create the user inside the image at the same uid. Required when the container process needs a real login shell, home directory, or sshd. Off-the-shelf images (obsidian-sync, woodpecker) use `user:` in compose instead — no Dockerfile change needed. |
+
+**Current uid assignments:**
+
+| Service | uid:gid | Set via |
+|---------|---------|---------|
+| second-brain-agent | 1000:1000 | Dockerfile `ARG USER_UID` + `compose.yaml` (implicit, Dockerfile sets it) |
+| brineworks-agent | 1000:1000 | Dockerfile in brineworks repo |
+| obsidian-sync (all vaults) | 1000:1000 | `compose.yaml` `user: "1000:1000"` |
+| woodpecker-server | 1000:1000 | Image default (woodpecker v3 ships uid 1000); `deploy.sh` chowns `/srv/data/woodpecker/server` |
+| woodpecker-agent | 2000:2000 | `compose.yaml` `user: "2000:2000"`; matches the `ci` system user that owns the rootless docker socket |
+| climate-auto-switch | root | No volume sharing; no write-access risk |
+| backup | `backup` system user | Systemd service user; uses `setfacl` for read access to other services' files |
+
+**Cross-service volume sharing** requires uid alignment at both ends:
+- **Producer** (the writer): set `user: "uid:gid"` in compose
+- **Consumer** (the reader/writer): set `user:` or build with matching uid in Dockerfile
+- **deploy.sh**: chown the shared path to the common uid as part of both services' deploy scripts
+- **Transition recovery**: if an entrypoint needs to chown a bind mount (e.g. files existed as root before the uid fix), gate it on a fast check (`stat -c %u`) so it doesn't recurse on every start once ownership is already correct
+
+Current cross-service share: obsidian-sync → second-brain-agent (both uid 1000, `/srv/data/obsidian-sync/vaults/pickled-knowledge`).
+
 ### When the default doesn't fit: container-as-node (UDP, native node identity)
 
 Tailscale Services (host `tailscaled` + serve) is **TCP/HTTP only**. A service that needs **UDP** (e.g. mosh, WireGuard, game/voice protocols) or wants its own first-class tailnet identity cannot use the serve proxy: UDP aimed at a serve-proxied hostname has nowhere to land.
