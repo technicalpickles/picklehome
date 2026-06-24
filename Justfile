@@ -1,6 +1,11 @@
 set dotenv-load
 set positional-arguments
 
+# Default target host for recipes that can't take `host` as a parameter because
+# they end in variadic `*ARGS` (positional binding would eat the first ob arg as
+# the host). Override per-call with `just host=otherhost <recipe> ...`.
+host := "picklelab"
+
 # First-time setup: PIN flow + thermostat discovery
 climate-auth:
     uv run python -m climate.sync auth
@@ -478,7 +483,7 @@ deploy-obsidian-sync host="picklelab":
     ssh {{host}} "cd /opt/homelab && git pull && homelab/services/obsidian-sync/deploy.sh"
 
 # Run ob CLI against a specific vault's container (e.g. "rpg sync-status")
-obsidian-sync-exec vault host="picklelab" *ARGS:
+obsidian-sync-exec vault *ARGS:
     ssh -t {{host}} "docker exec -it obsidian-sync-{{vault}}-1 ob {{ARGS}}"
 
 # Tail Obsidian Sync container logs from picklelab
