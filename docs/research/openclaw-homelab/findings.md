@@ -20,8 +20,10 @@ Public guides converge on a simple shape, though they disagree on specifics (Ope
 |---|---|---|
 | **Image** | Single official container image, Docker is the recommended deploy path | High |
 | **Port** | One HTTP port serving web UI + REST API + webhook callbacks. Default cited as **`18789`** most often; some guides show `3000` or `47981`. | Medium (number varies) |
-| **State dir** | Config dir bind-mount (`~/.openclaw` inside container — `/home/node/.openclaw` or `/root/.openclaw` depending on image user). Holds agent config, **memory**, **credentials**, a SQLite memory index, and **channel session tokens**. | High |
-| **Workspace dir** | Separate workspace mount where the agent reads/writes files | High |
+| **Base OS** | **Debian bookworm** (switched from Alpine in v2026.2.22 — [issue #27945](https://github.com/openclaw/openclaw/issues/27945)). glibc, `apt-get`. Matters: glibc/Go binaries (e.g. `gogcli`) just run; no musl gotchas. | High |
+| **State dir** | Config dir bind-mount (`~/.openclaw` inside container — `/home/node/.openclaw`; PATH also references `/root/.bun`, so the exact home is one of the spike's confirm items). Holds agent config, **memory**, **credentials**, a SQLite memory index, and **channel session tokens**. | High |
+| **Workspace dir** | `OPENCLAW_WORKSPACE_DIR` → `/home/node/.openclaw/workspace`; agent reads/writes files here, survives container replacement | High |
+| **Extension model** | **MCP-native** ([docs](https://docs.openclaw.ai/cli/mcp)) — MCP servers register as plugin-owned tools under `bundle-mcp`. Plus declarative tool/provider config ([config-tools](https://docs.openclaw.ai/gateway/config-tools)) and an `OPENCLAW_DOCKER_APT_PACKAGES` build arg for baked-in system packages. | High |
 | **LLM backends** | Anthropic, OpenAI, and Ollama (OpenClaw ships a [native Ollama provider](https://docs.openclaw.ai/providers/ollama)). Ollama can be a **local server or its cloud subscription** — same OpenAI-compatible API either way. | High |
 | **Auth secret** | An LLM API key via env; secrets in `.env`, referenced as `${VAR}`, never hardcoded | High |
 | **Resources** | ~4 GB RAM minimum to the container, **8 GB if the browser tool is enabled**; ~20 GB disk for image + state + growing memory files | Medium |
@@ -46,6 +48,39 @@ This part is the *good* news — the mechanics fit the existing pattern almost e
 - **Access / ingress — two paths depending on channel transport:**
   - **Outbound-only channels (Telegram long-polling):** no public ingress needed. The bot polls out; you reach the **web UI/REST over Tailscale Services** (`https://openclaw.<tailnet>.ts.net`, loopback bind `127.0.0.1:18789`). This is the clean, no-public-exposure path and matches the default homelab pattern.
   - **Webhook-driven channels (WhatsApp Cloud API, some Discord setups):** need inbound HTTPS, i.e. **Tailscale Funnel** like `woodpecker` does — the homelab's only deliberate public-ingress pattern. More surface, more care.
+
+## Mounts, version control, and adding tools
+
+### What's mounted vs. baked into the image
+
+The image is the *runtime* (Bun, the OpenClaw app, base Debian tools). Everything that's instance-specific lives in **bind mounts**, so it survives `docker compose down/up` and image upgrades:
+
+| Mount | Contents | Lives in | In git? |
+|---|---|---|---|
+| **Config/state dir** (`~/.openclaw`) | agent config **+** memory, SQLite index, credentials, channel session tokens | `/srv/data/openclaw/` | **No** — runtime state + secrets; restic-backed |
+| **Workspace dir** (`~/.openclaw/workspace`) | files the agent reads/writes | `/srv/data/openclaw/workspace/` | **No** — churning agent data |
+| **Tools/bin dir** (our addition) | extra CLIs we want the agent to call (see below) | `/srv/data/openclaw/bin/` mounted to a PATH dir | Manifest yes, binaries no |
+
+### What can be version-controlled
+
+The split mirrors every other homelab service: **declarative config → repo, runtime state → `/srv/data`, secrets → 1Password.** Specifically committable:
+
+- The **declarative tool/provider/channel config** (the [`config-tools`](https://docs.openclaw.ai/gateway/config-tools) layer + MCP server definitions), with secrets written as `${ENV}` refs, never literals. Ship it as a committed config file the container reads, or template it like `.env`.
+- compose files, `.env.vars`, `deploy.sh` — same as every service.
+
+The catch the spike must pin down (§2/§3): OpenClaw appears to **intermingle declarative config with runtime state in the same `~/.openclaw` dir**. If true, we either (a) mount the whole dir to `/srv/data` and treat the config file inside it as the source of truth that we *also* keep a committed copy of, or (b) find that config is separable (its own path / fully env-driven) and mount only state. Confirm which.
+
+### Adding tools without rebuilding/restarting (the `gogcli` question)
+
+Three tiers, fastest-iteration first. The goal is to **never rebuild the OpenClaw image just to try a tool**:
+
+1. **Bind-mounted bin dir on PATH — best for spiking arbitrary CLIs like `gogcli`.** Drop the binary into `/srv/data/openclaw/bin`, mount it into the container, prepend to `PATH`. Adding/updating a tool = copy the file in; the agent's **next shell invocation re-reads PATH**, so no rebuild and no restart. Because the base is now **Debian (glibc)**, static/Go binaries like `gogcli` run as-is. Keep a committed `tools/` manifest or fetch-script in the repo (binaries themselves stay out of git, fetched on deploy). *Spike must confirm PATH is env-overridable and pick the mount target.*
+2. **MCP server — best for structured/stateful ecosystem tools.** OpenClaw is MCP-native, so run a tool as an MCP server (stdio, or an HTTP/SSE **sidecar container**). Iterating that tool restarts only the sidecar, **never the OpenClaw container**, and the agent gets it as a first-class schema'd tool. MCP server list is declarative → committed. This is the most decoupled option and inherits the 200+ existing community MCP servers.
+3. **`OPENCLAW_DOCKER_APT_PACKAGES` / image rebuild — only for stable system deps.** Bakes apt packages in at build time (persists across container deletes). Reserve for the rarely-changing base (`git`, runtime libs); *don't* use it for tools under active iteration — that's the rebuild loop you want to avoid.
+
+**Recommendation:** tier 1 for CLIs you're spiking (`gogcli`), tier 2 (MCP) for anything worth exposing as a structured tool, tier 3 only for stable system packages. This keeps the image stable, the tool-iteration loop instant, and the tool list version-controlled (manifest + MCP config in the repo).
+
+Note the two senses of "tool": for the agent to *use* `gogcli` it only needs it on `PATH` with the shell tool enabled — the LLM shells out to it. Registering it as a first-class OpenClaw tool (schema, profiles) is the MCP/`config-tools` path. For a CLI you're experimenting with, PATH + shell is enough and simplest.
 
 ## Where it fits the agent model
 

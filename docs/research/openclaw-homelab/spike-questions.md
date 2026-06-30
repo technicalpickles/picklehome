@@ -59,6 +59,9 @@ Decide the minimum viable tool set; we widen later (trust-grows-with-capability)
 - **Can the browser tool be turned off** (and does that drop the RAM need from ~8 GB to ~4 GB)? → directly affects the 16 GB box budget. → disable it, watch RAM.
 - **Can shell/filesystem be scoped** to a workspace dir vs. the whole container? → shapes how much we trust it on the shared box. → test.
 - **Can it call external commands we'd want** — e.g. the existing `just` CLIs (climate/locks/etc.)? Is there a custom-tool / function mechanism? → this is the actual *use case* question: what do we want it to *do*. → try wiring one read-only command.
+- **Is `PATH` env-overridable, and does a binary dropped into a mounted dir get picked up live** (no restart)? → validates the tier-1 bind-mounted-bin pattern for spiking CLIs like `gogcli`. → mount a dir, prepend to PATH, drop a binary in *while running*, ask the bot to run it.
+- **Does an MCP server (stdio or HTTP/SSE sidecar) attach without rebuilding/restarting the OpenClaw container**, and is its config declarative/committable? → validates the tier-2 decoupled-tools path. → wire one MCP server per the `bundle-mcp` docs and confirm hot-add behavior.
+- **Are config and runtime state separable, or intermingled in one `~/.openclaw` dir?** → decides whether we can commit a clean config file or must treat a file inside the state mount as source-of-truth. → inspect the dir layout after setup (this is the §3 catch).
 
 ## 7. Resource footprint (does it fit the 16 GB NUC?)
 
