@@ -42,20 +42,20 @@ This is new and load-bearing — validate it actually works end to end before co
 
 ## 5. Channel / front-door auth (the real security boundary)
 
-This replaces the SSH key that gates the existing agents — get it exactly right.
+This replaces the SSH key that gates the existing agents — get it exactly right. **Documented:** four DM policies — Pairing (default, time-limited approval codes), **Allowlist** (what we want), Open (`"*"`), Disabled. So the mechanism is known; the spike just exercises it.
 
-- **How to allowlist** specific chat IDs / users, and the exact mechanism (config field? per-channel setting?) → this is *the* lockdown control. → set it, then confirm.
-- **What happens to a message from a non-allowlisted sender** (ignored? error? silently processed?) → confirms the door is actually closed. → message the bot from a second account / have someone else try.
+- **Set the Allowlist policy to our own chat IDs and confirm it sticks** across recreate. → configure, then verify.
+- **What happens to a message from a non-allowlisted sender** (the default Pairing flow vs. hard Allowlist reject) → confirms the door is actually closed. → message the bot from a second account / have someone else try.
 - **Telegram long-poll vs webhook** for the chosen channel → decides whether we need *zero* ingress (Tailscale Services for the UI only) or Funnel-style public ingress. → check how the spike's channel connects (outbound poll = no ingress).
 - **Does the bot require any inbound ports at all** in long-poll mode? → confirms the no-public-exposure path. → observe with `docker port` / netstat.
 
 ## 6. Tool surface / capabilities
 
-Decide the minimum viable tool set; we widen later (trust-grows-with-capability).
+Decide the minimum viable tool set; we widen later (trust-grows-with-capability). **Documented:** secure baseline already denies `group:runtime`/`group:fs`/`group:automation` + `exec: deny/ask:always`; profiles `minimal`/`coding`/`messaging`/`full` (onboarding → `coding`); `tools.allow`/`tools.deny` with deny-wins. So shaping the surface is a config exercise, not a discovery.
 
-- **What tools are enabled by default** (shell, filesystem, browser, etc.) → the day-one blast radius. → inspect config / ask the bot what it can do.
-- **Can the browser tool be turned off** (and does that drop the RAM need from ~8 GB to ~4 GB)? → directly affects the 16 GB box budget. → disable it, watch RAM.
-- **Can shell/filesystem be scoped** to a workspace dir vs. the whole container? → shapes how much we trust it on the shared box. → test.
+- **Confirm the spike's actual profile + effective tool list** (onboarding may have set `coding`, which is broader than we want) → the day-one blast radius. → inspect config / ask the bot what it can do; set to `minimal` + curated.
+- **Turn the browser tool off** and measure the RAM delta (claim: ~8 GB → ~4 GB). → `tools.deny: ["browser"]`, watch `docker stats`.
+- **Decide the sandbox stance:** tool-sandbox needs `docker.sock` (vs. our no-socket rule) — confirm whether we run gateway-containerized + default-deny instead, and whether `exec`/`fs` work acceptably without the Docker sandbox. → test a curated tool set with `sandbox.mode: off` inside the already-containerized gateway.
 - **Can it call external commands we'd want** — e.g. the existing `just` CLIs (climate/locks/etc.)? Is there a custom-tool / function mechanism? → this is the actual *use case* question: what do we want it to *do*. → try wiring one read-only command.
 - **Is `PATH` env-overridable, and does a binary dropped into a mounted dir get picked up live** (no restart)? → validates the tier-1 bind-mounted-bin pattern for spiking CLIs like `gogcli`. → mount a dir, prepend to PATH, drop a binary in *while running*, ask the bot to run it.
 - **Does an MCP server (stdio or HTTP/SSE sidecar) attach without rebuilding/restarting the OpenClaw container**, and is its config declarative/committable? → validates the tier-2 decoupled-tools path. → wire one MCP server per the `bundle-mcp` docs and confirm hot-add behavior.

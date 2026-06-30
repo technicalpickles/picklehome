@@ -40,7 +40,18 @@ Other official facts from the docker doc worth recording:
 NUC is a Celeron **J3455 (4 weak cores, no GPU), 16 GB RAM**.
 
 - **RAM:** 16 GB total, already running ~9 services. A 4 GB agent fits; an 8 GB browser-enabled agent is tight alongside everything else. Budget this explicitly.
-- **LLM runs off-box via an Ollama cloud subscription** (the chosen backend). This sidesteps the J3455 entirely — no local inference, which would be unusably slow on a GPU-less Celeron. Mechanically it's an [Ollama API key](https://ollama.com/settings/keys) pointed at the OpenAI-compatible endpoint `https://ollama.com/v1`, via OpenClaw's native Ollama provider. The key lives in 1Password → `.env` like every other secret. (Keeps inference off Anthropic/OpenAI billing; pick the cloud model from Ollama's catalog.)
+- **LLM runs off-box via an Ollama cloud subscription** (the chosen backend). This sidesteps the J3455 entirely — no local inference, which would be unusably slow on a GPU-less Celeron. Mechanically it's an [Ollama API key](https://ollama.com/settings/keys) pointed at the OpenAI-compatible endpoint `https://ollama.com/v1`. Per the official [`config-tools`](https://docs.openclaw.ai/gateway/config-tools) page, this is a `models.providers` entry (secret as `${ENV}` ref, committable):
+
+  ```json5
+  { models: { providers: { "ollama-cloud": {
+      baseUrl: "https://ollama.com/v1",
+      apiKey: "${OLLAMA_API_KEY}",
+      api: "openai-completions",
+      models: [{ id: "<pick-from-catalog>", contextWindow: 128000, maxTokens: 32000 }]
+  } } } }
+  ```
+
+  Setting `baseUrl` is, in OpenClaw's words, "the narrow network trust decision for model HTTP requests" — it allowlists that exact origin through the guarded fetch path. The key lives in 1Password → `.env` like every other secret. **Caveat (see security section):** the smaller/cheaper the Ollama model, the more susceptible to tool-misuse/prompt-injection — weigh model tier against how much tool access the agent gets.
 - **Disk:** 20 GB on the local SSD is fine; `/srv/data` is the home for state.
 
 ## How it maps onto homelab conventions
@@ -83,7 +94,7 @@ The catch (partly resolved by the official doc): **auth secrets are already in t
 1. **Extra bind-mounted bin dir on PATH — best for spiking arbitrary CLIs like `gogcli`.** Mount a host dir via the official `OPENCLAW_EXTRA_MOUNTS` hook, prepend it to `PATH`. Adding/updating a tool = copy the binary in; the agent's **next shell invocation re-reads PATH**, so no rebuild and no restart. Because the base is **`node:24-bookworm-slim` (Debian/glibc)**, static/Go binaries like `gogcli` run as-is. Keep a committed `tools/` manifest or fetch-script in the repo (binaries themselves stay out of git, fetched on deploy).
    - *Provenance:* the **mount mechanism is now official** (`OPENCLAW_EXTRA_MOUNTS` in the docker doc), and the Debian/glibc base is official (`node:24-bookworm-slim`). The remaining unverified bit is narrow: that PATH is overridable and a dropped binary is picked up **live without restart** — *our reasoning* about PATH + shell-spawn → spike §6 confirms.
 2. **MCP server — best for structured/stateful ecosystem tools.** OpenClaw is MCP-native, so run a tool as an MCP server (stdio, or an HTTP/SSE **sidecar container**). Iterating that tool restarts only the sidecar, **never the OpenClaw container**, and the agent gets it as a first-class schema'd tool. MCP server list is declarative → committed. This is the most decoupled option and inherits the 200+ existing community MCP servers.
-   - *Provenance:* MCP support is **documented** ([cli/mcp](https://docs.openclaw.ai/cli/mcp), [config-tools](https://docs.openclaw.ai/gateway/config-tools), `bundle-mcp` plugin id — these two pages are still **search summaries**, not yet a direct read). The **hot-add / sidecar-restart-only** decoupling is *our inference* (standard for out-of-process MCP) → confirm in spike §6.
+   - *Provenance:* now a **direct read** of [cli/mcp](https://docs.openclaw.ai/cli/mcp) + [config-tools](https://docs.openclaw.ai/gateway/config-tools). Confirmed: MCP servers live in the `mcp.servers` config block (stdio = `command`/`args`/`env`/`cwd`; remote = `url` + `transport: streamable-http|sse`, with OAuth/TLS/mTLS, `toolFilter.include/exclude`, `enabled:false`); exposed via `bundle-mcp` in the `coding`/`messaging` profiles. **Hot-add is real but partial:** `openclaw mcp add|configure|reload` adds/probes/reloads *in-process* runtimes, but the docs caveat that "gateway or agent processes in another process still need their own reload or restart path." So: restart the sidecar freely; registering a *new* server needs at least a gateway **reload** (not a full image rebuild). Better than my earlier "never touch OpenClaw" claim — adjust expectations to "reload, not rebuild."
 3. **`OPENCLAW_IMAGE_APT_PACKAGES` / `OPENCLAW_IMAGE_PIP_PACKAGES` (image rebuild) — only for stable system deps.** Bakes apt/pip packages in at build time (persists across container deletes). Reserve for the rarely-changing base (`git`, runtime libs); *don't* use it for tools under active iteration — that's the rebuild loop you want to avoid.
    - *Provenance:* **official docker doc** (both vars listed; earlier `OPENCLAW_DOCKER_APT_PACKAGES` from a third-party guide was the wrong name).
 
@@ -106,6 +117,21 @@ What that means concretely:
 
 The remaining judgment call: OpenClaw shares the box with climate control, locks, and the obsidian vaults. That argues for a deliberate, *minimal* tool surface to start (notifications + a couple of read-only `just` checks) and widening later — same trust-grows-with-capability path `homelab_07` describes — rather than wiring it to everything on day one.
 
+## Security & sandbox model (from the official `gateway/security` + `gateway/sandboxing` docs)
+
+These pages were read directly via raw GitHub. The headline: **OpenClaw's own threat model matches the framing above** — "a personal assistant model: one trusted operator per gateway… not a hostile multi-tenant security boundary." Its guiding line is *"Access control before intelligence. Decide who can talk to your bot, where it acts, and what it touches — then trust the model within those guardrails."* That's the same trusted-but-shaped posture as the existing agents, now vendor-endorsed.
+
+Concrete controls, mapped to our deploy:
+
+- **Gateway auth is on by default** — token mode (recommended; a bearer token the setup script writes to `.env`), password, or trusted-proxy. → route the token through `.env.vars`.
+- **Channel access policy** (`session`/DM gating) has four modes: **Pairing** (default — unknown senders get time-limited approval codes), **Allowlist** (explicit senders only), **Open** (requires explicit `"*"`), **Disabled**. → we use **Allowlist** with our own chat IDs. Default is already *not* open, which is reassuring. `session.dmScope: "per-channel-peer"` isolates senders if ever shared.
+- **Tools default-deny, which tempers the "shell-runner out of the box" worry.** The secure baseline **denies `group:runtime`, `group:fs`, `group:automation`** and sets `exec: { security: "deny", ask: "always" }`. So a default agent can't run shell/fs until you opt in via `tools.elevated`. Profiles: `minimal`/`coding`/`messaging`/`full` (onboarding defaults to `coding`); fine-grained `tools.allow`/`tools.deny` where **deny wins**. → start `minimal`/curated, widen deliberately.
+- **Sandbox vs. our "no docker socket" stance — a real tension to decide.** OpenClaw's *tool sandbox* (`sandbox.mode: non-main`/`all`) isolates tool execution in containers, but its Docker backend needs **`/var/run/docker.sock`** — exactly the privilege `homelab_07` says don't grant. Two clean resolutions: (a) **run the whole gateway containerized** (full-isolation model) and rely on **tool allow/deny + exec-deny** rather than the in-container Docker sandbox — no socket needed; or (b) grant a **scoped/rootless docker socket** like `woodpecker`'s `ci` user does. Default to (a) for the first deploy. Sandbox default network is `"none"` (no egress), and `workspaceAccess` is `none`/`ro`/`rw`.
+- **Bind-mount safety for our tools/bin dir.** Sandbox bind validation **blocks** `/etc`, `/proc`, `/sys`, `/dev`, the docker socket, and `~/.ssh`/`~/.config`/`~/.aws` etc., with symlink-escape resolution. `/srv/data/openclaw/bin` is well clear of those; mount sensitive paths `:ro`.
+- **Prompt injection is "not solved" by prompts — and model strength matters.** The docs warn *"smaller/cheaper models are generally more susceptible to tool misuse and instruction hijacking"* and to use the strongest tier for tool-enabled agents. **This is a direct tension with the cheap-Ollama-cloud plan:** a small Ollama model driving real tools is the riskiest combination. Mitigation: keep the tool surface tiny + `exec: ask: always` while on a small model, or use a stronger model for any tool-enabled profile. Flag for the design doc.
+- **Built-in hardening audit:** `openclaw security audit [--fix]` — run it post-deploy as the smoke-test/validation step (fits `homelab_07`'s "verify after mutation"). Credentials live under `~/.openclaw/credentials/` (perms 700/600); "assume anything under `~/.openclaw/` may contain secrets" → the whole config dir is sensitive, restic-backed, never committed.
+- **Bind mode:** the security doc says **loopback is the safe default and to "prefer Tailscale Serve over LAN binds"** (the docker quickstart's `lan` default is for convenience). → exactly our Tailscale Services pattern; force `127.0.0.1:18789`.
+
 ## Open questions to resolve before a plan
 
 - **Why / use case?** What do you actually want it to *do* (ops assistant? notifications? home-automation glue calling the existing `just` CLIs?). The use case decides how much host access it needs — which decides whether it's safe here at all.
@@ -120,7 +146,12 @@ A short spike: pull the official image, confirm the real port / volume paths / d
 
 ## Sources
 
-- [Docker · OpenClaw (official docs)](https://docs.openclaw.ai/install/docker) — **read directly** via the raw GitHub markdown ([openclaw/openclaw `docs/install/docker.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/install/docker.md)) after the rendered site 403'd. Source for the confirmed port/user/mounts/image/health/bind facts above.
+- **Official docs, all read directly via raw GitHub markdown** (the rendered `docs.openclaw.ai` site 403'd automated fetches):
+  - [`docs/install/docker.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/install/docker.md) → port/user/mounts/image/health/bind facts
+  - [`docs/cli/mcp.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/cli/mcp.md) → `mcp.servers` config, transports, hot-add commands
+  - [`docs/gateway/config-tools.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/gateway/config-tools.md) → tool profiles, allow/deny, `models.providers` (the Ollama-cloud snippet)
+  - [`docs/gateway/security/index.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/gateway/security/index.md) → trust model, channel policies, auth, default-deny tools, audit
+  - [`docs/gateway/sandboxing.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/gateway/sandboxing.md) → sandbox modes, Docker backend + `docker.sock`, bind validation, `workspaceAccess`
 - [Self-Host OpenClaw on Docker — Complete 2026 Guide (provision.ai)](https://provision.ai/openclaw-docker)
 - [Running OpenClaw in Docker — Simon Willison's TILs](https://til.simonwillison.net/llms/openclaw-docker)
 - [deepmehtait/openclaw-docker-secure (GitHub)](https://github.com/deepmehtait/openclaw-docker-secure) — Gluetun VPN egress, no-new-privileges, no public ports, LAN-only
