@@ -18,17 +18,22 @@ Public guides converge on a simple shape, though they disagree on specifics (Ope
 
 | Aspect | What the sources say | Confidence |
 |---|---|---|
-| **Image** | Single official container image, Docker is the recommended deploy path | High |
-| **Port** | One HTTP port serving web UI + REST API + webhook callbacks. Default cited as **`18789`** most often; some guides show `3000` or `47981`. | Medium (number varies) |
-| **Base OS** | **Debian bookworm** (switched from Alpine in v2026.2.22 — [issue #27945](https://github.com/openclaw/openclaw/issues/27945)). glibc, `apt-get`. Matters: glibc/Go binaries (e.g. `gogcli`) just run; no musl gotchas. | High |
-| **State dir** | Config dir bind-mount (`~/.openclaw` inside container — `/home/node/.openclaw`; PATH also references `/root/.bun`, so the exact home is one of the spike's confirm items). Holds agent config, **memory**, **credentials**, a SQLite memory index, and **channel session tokens**. | High |
-| **Workspace dir** | `OPENCLAW_WORKSPACE_DIR` → `/home/node/.openclaw/workspace`; agent reads/writes files here, survives container replacement | High |
-| **Extension model** | **MCP-native** ([docs](https://docs.openclaw.ai/cli/mcp)) — MCP servers register as plugin-owned tools under `bundle-mcp`. Plus declarative tool/provider config ([config-tools](https://docs.openclaw.ai/gateway/config-tools)) and an `OPENCLAW_DOCKER_APT_PACKAGES` build arg for baked-in system packages. | High |
-| **LLM backends** | Anthropic, OpenAI, and Ollama (OpenClaw ships a [native Ollama provider](https://docs.openclaw.ai/providers/ollama)). Ollama can be a **local server or its cloud subscription** — same OpenAI-compatible API either way. | High |
+| **Image** | `ghcr.io/openclaw/openclaw` (mirror `openclaw/openclaw` on Docker Hub); tags `latest`/`main`/`<version>`. Base **`node:24-bookworm-slim` + tini** init → Debian/glibc, `apt-get`, so glibc/Go binaries (e.g. `gogcli`) just run; no musl gotchas. | **High (official)** |
+| **Port** | **`18789`** — one HTTP port for web UI + REST API + webhooks. Confirmed from the official docker doc; the `3000`/`47981` figures in third-party guides are wrong/stale. | **High (official)** |
+| **User** | non-root **`node`, uid 1000**, home `/home/node`. (The `/root/.bun` PATH seen earlier was a stale Alpine-era artifact.) uid 1000 is the homelab's common non-sharing default and OpenClaw's data dir isn't shared, so we can keep 1000. | **High (official)** |
+| **Mounts (3 dirs)** | `OPENCLAW_CONFIG_DIR`=`/home/node/.openclaw` (agent config, **memory**, SQLite index, **channel tokens**); `OPENCLAW_WORKSPACE_DIR`=`/home/node/.openclaw/workspace` (agent's files); **separate** `OPENCLAW_AUTH_PROFILE_SECRET_DIR`=`/home/node/.config/openclaw` (auth secrets). All survive container replacement. | **High (official)** |
+| **Extension model** | **MCP-native** ([docs](https://docs.openclaw.ai/cli/mcp)) — MCP servers register as plugin-owned tools under `bundle-mcp`. Plus declarative tool/provider config ([config-tools](https://docs.openclaw.ai/gateway/config-tools)), an `OPENCLAW_EXTRA_MOUNTS` hook for extra bind mounts, and `OPENCLAW_IMAGE_APT_PACKAGES` / `OPENCLAW_IMAGE_PIP_PACKAGES` build args for baked-in packages. | **High (official)** |
+| **LLM backends** | Anthropic, OpenAI, and Ollama (OpenClaw ships a [native Ollama provider](https://docs.openclaw.ai/providers/ollama)). The docker doc's Ollama example is for a **local** server (`host.docker.internal:11434`); for the **cloud subscription** we point the base URL at `https://ollama.com/v1` instead. | High |
 | **Auth secret** | An LLM API key via env; secrets in `.env`, referenced as `${VAR}`, never hardcoded | High |
-| **Resources** | ~4 GB RAM minimum to the container, **8 GB if the browser tool is enabled**; ~20 GB disk for image + state + growing memory files | Medium |
+| **Resources** | Official doc states only **~2 GB RAM for image *builds*** (1 GB risks OOM/exit 137). Runtime footprint isn't given officially; community figures are ~4 GB, **~8 GB with the browser tool**. Disk ~20 GB for image + state + growing memory. | Mixed (build = official, runtime = community → spike §7) |
 
-Note on env precedence: provider env vars set in the shell (the documented case is the `ANTHROPIC_*` family, but the same pattern applies to the Ollama/OpenAI vars) **override** OpenClaw's own config files — a known footgun when debugging auth. Since we inject via `.env`, just be aware config-file values won't win over an env var of the same name.
+Other official facts from the docker doc worth recording:
+- **Health endpoints:** `/healthz` (liveness), `/readyz` (readiness) — drop-in for a goss smoke check.
+- **UI auth:** the setup script writes a **gateway token** to `.env`; the control UI at `127.0.0.1:18789/` is gated by it (so the UI is *not* a second open surface — there's a token).
+- **Default bind is `lan` mode** for host-browser access — it binds beyond loopback by default, so for the Tailscale Services pattern we must **force `127.0.0.1`** (compose port bind and/or an OpenClaw bind-mode setting).
+- **Docker socket override exists** (`OPENCLAW_DOCKER_SOCKET`) — a capability we deliberately **do not** grant (keeps it off the ops path; see the agent-model section).
+- **Onboarding is interactive by default**, skippable via `OPENCLAW_SKIP_ONBOARDING` — bears on how declarative the deploy can be.
+- **Env precedence footgun:** provider env vars set in the shell (documented for the `ANTHROPIC_*` family; same applies to Ollama/OpenAI vars) **override** config files. Since we inject via `.env`, config-file values won't win over an env var of the same name.
 
 ## Fit with picklelab hardware
 
@@ -57,9 +62,10 @@ The image is the *runtime* (Bun, the OpenClaw app, base Debian tools). Everythin
 
 | Mount | Contents | Lives in | In git? |
 |---|---|---|---|
-| **Config/state dir** (`~/.openclaw`) | agent config **+** memory, SQLite index, credentials, channel session tokens | `/srv/data/openclaw/` | **No** — runtime state + secrets; restic-backed |
-| **Workspace dir** (`~/.openclaw/workspace`) | files the agent reads/writes | `/srv/data/openclaw/workspace/` | **No** — churning agent data |
-| **Tools/bin dir** (our addition) | extra CLIs we want the agent to call (see below) | `/srv/data/openclaw/bin/` mounted to a PATH dir | Manifest yes, binaries no |
+| **Config dir** (`/home/node/.openclaw`) | agent config **+** memory, SQLite index, channel session tokens | `/srv/data/openclaw/config/` | **No** — config intermingled with runtime state + tokens; restic-backed |
+| **Workspace dir** (`/home/node/.openclaw/workspace`) | files the agent reads/writes | `/srv/data/openclaw/workspace/` | **No** — churning agent data |
+| **Auth-secret dir** (`/home/node/.config/openclaw`) | auth/profile secrets (separate dir, official) | `/srv/data/openclaw/auth/` | **No** — secrets |
+| **Tools/bin dir** (our addition, via `OPENCLAW_EXTRA_MOUNTS`) | extra CLIs we want the agent to call (see below) | `/srv/data/openclaw/bin/` on PATH | Manifest yes, binaries no |
 
 ### What can be version-controlled
 
@@ -68,18 +74,18 @@ The split mirrors every other homelab service: **declarative config → repo, ru
 - The **declarative tool/provider/channel config** (the [`config-tools`](https://docs.openclaw.ai/gateway/config-tools) layer + MCP server definitions), with secrets written as `${ENV}` refs, never literals. Ship it as a committed config file the container reads, or template it like `.env`.
 - compose files, `.env.vars`, `deploy.sh` — same as every service.
 
-The catch the spike must pin down (§2/§3): OpenClaw appears to **intermingle declarative config with runtime state in the same `~/.openclaw` dir**. If true, we either (a) mount the whole dir to `/srv/data` and treat the config file inside it as the source of truth that we *also* keep a committed copy of, or (b) find that config is separable (its own path / fully env-driven) and mount only state. Confirm which.
+The catch (partly resolved by the official doc): **auth secrets are already in their own dir** (`OPENCLAW_AUTH_PROFILE_SECRET_DIR`=`/home/node/.config/openclaw`), separate from config — good. But declarative config still lives in `/home/node/.openclaw` **alongside** memory + the SQLite index + channel tokens. So we can't cleanly mount "config in git, state on disk" as two dirs. Working plan: mount the whole config dir to `/srv/data` (restic-backed) and keep a **committed copy of just the config file** as source-of-truth, re-applied on deploy. Spike §3 confirms the exact config filename and whether it's fully env-overridable (which would let us skip the committed-file dance).
 
 ### Adding tools without rebuilding/restarting (the `gogcli` question)
 
-**Provenance note:** the three-tier framing below is **our synthesis** to answer "how do I add tools without rebuilds," *not* a workflow OpenClaw's docs prescribe. The ranking ("fastest-iteration first") is editorial judgment. The mechanisms each tier rests on have different backing, tagged inline. Where the backing is a docs page, note it's from **search-result summaries of those pages, not a direct read** (the docs site 403'd direct fetches), so treat as "the docs index says so," to be eyeballed when accessible. The goal is to **never rebuild the OpenClaw image just to try a tool**:
+**Provenance note:** the three-tier framing below is **our synthesis** to answer "how do I add tools without rebuilds," *not* a workflow OpenClaw's docs prescribe; the ranking ("fastest-iteration first") is editorial judgment. The underlying mechanisms are now backed by a **direct read of the official docker doc** (fetched via the raw GitHub markdown after the rendered docs site 403'd), tagged inline. The goal is to **never rebuild the OpenClaw image just to try a tool**:
 
-1. **Bind-mounted bin dir on PATH — best for spiking arbitrary CLIs like `gogcli`.** Drop the binary into `/srv/data/openclaw/bin`, mount it into the container, prepend to `PATH`. Adding/updating a tool = copy the file in; the agent's **next shell invocation re-reads PATH**, so no rebuild and no restart. Because the base is now **Debian (glibc)**, static/Go binaries like `gogcli` run as-is. Keep a committed `tools/` manifest or fetch-script in the repo (binaries themselves stay out of git, fetched on deploy).
-   - *Provenance:* **generic Docker pattern, not OpenClaw-specific.** Rests on two sourced facts — Debian/glibc base ([issue #27945](https://github.com/openclaw/openclaw/issues/27945)) and `PATH` set via `ENV` in the Dockerfile (`ENV PATH="/root/.bun/bin:${PATH}"`, search summary). The **live-pickup-without-restart** claim is *our reasoning* about PATH + shell-spawn, **unverified for OpenClaw** → spike §6 must confirm PATH is env-overridable and that a dropped binary is picked up live. **Lowest confidence of the three.**
+1. **Extra bind-mounted bin dir on PATH — best for spiking arbitrary CLIs like `gogcli`.** Mount a host dir via the official `OPENCLAW_EXTRA_MOUNTS` hook, prepend it to `PATH`. Adding/updating a tool = copy the binary in; the agent's **next shell invocation re-reads PATH**, so no rebuild and no restart. Because the base is **`node:24-bookworm-slim` (Debian/glibc)**, static/Go binaries like `gogcli` run as-is. Keep a committed `tools/` manifest or fetch-script in the repo (binaries themselves stay out of git, fetched on deploy).
+   - *Provenance:* the **mount mechanism is now official** (`OPENCLAW_EXTRA_MOUNTS` in the docker doc), and the Debian/glibc base is official (`node:24-bookworm-slim`). The remaining unverified bit is narrow: that PATH is overridable and a dropped binary is picked up **live without restart** — *our reasoning* about PATH + shell-spawn → spike §6 confirms.
 2. **MCP server — best for structured/stateful ecosystem tools.** OpenClaw is MCP-native, so run a tool as an MCP server (stdio, or an HTTP/SSE **sidecar container**). Iterating that tool restarts only the sidecar, **never the OpenClaw container**, and the agent gets it as a first-class schema'd tool. MCP server list is declarative → committed. This is the most decoupled option and inherits the 200+ existing community MCP servers.
-   - *Provenance:* MCP support is **documented** ([cli/mcp](https://docs.openclaw.ai/cli/mcp), [config-tools](https://docs.openclaw.ai/gateway/config-tools), `bundle-mcp` plugin id — search summaries). The **hot-add / sidecar-restart-only** decoupling is *our inference* (standard for out-of-process MCP) → confirm in spike §6.
-3. **`OPENCLAW_DOCKER_APT_PACKAGES` / image rebuild — only for stable system deps.** Bakes apt packages in at build time (persists across container deletes). Reserve for the rarely-changing base (`git`, runtime libs); *don't* use it for tools under active iteration — that's the rebuild loop you want to avoid.
-   - *Provenance:* **documented** in the official install flow (set the var before `docker-setup.sh`; packages persist across container deletes — search summary).
+   - *Provenance:* MCP support is **documented** ([cli/mcp](https://docs.openclaw.ai/cli/mcp), [config-tools](https://docs.openclaw.ai/gateway/config-tools), `bundle-mcp` plugin id — these two pages are still **search summaries**, not yet a direct read). The **hot-add / sidecar-restart-only** decoupling is *our inference* (standard for out-of-process MCP) → confirm in spike §6.
+3. **`OPENCLAW_IMAGE_APT_PACKAGES` / `OPENCLAW_IMAGE_PIP_PACKAGES` (image rebuild) — only for stable system deps.** Bakes apt/pip packages in at build time (persists across container deletes). Reserve for the rarely-changing base (`git`, runtime libs); *don't* use it for tools under active iteration — that's the rebuild loop you want to avoid.
+   - *Provenance:* **official docker doc** (both vars listed; earlier `OPENCLAW_DOCKER_APT_PACKAGES` from a third-party guide was the wrong name).
 
 **Recommendation (our judgment):** tier 1 for CLIs you're spiking (`gogcli`), tier 2 (MCP) for anything worth exposing as a structured tool, tier 3 only for stable system packages. This keeps the image stable, the tool-iteration loop instant, and the tool list version-controlled (manifest + MCP config in the repo).
 
@@ -114,7 +120,7 @@ A short spike: pull the official image, confirm the real port / volume paths / d
 
 ## Sources
 
-- [Docker · OpenClaw (official docs)](https://docs.openclaw.ai/install/docker) — *403'd to automated fetch; verify port/volumes/user here directly*
+- [Docker · OpenClaw (official docs)](https://docs.openclaw.ai/install/docker) — **read directly** via the raw GitHub markdown ([openclaw/openclaw `docs/install/docker.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/install/docker.md)) after the rendered site 403'd. Source for the confirmed port/user/mounts/image/health/bind facts above.
 - [Self-Host OpenClaw on Docker — Complete 2026 Guide (provision.ai)](https://provision.ai/openclaw-docker)
 - [Running OpenClaw in Docker — Simon Willison's TILs](https://til.simonwillison.net/llms/openclaw-docker)
 - [deepmehtait/openclaw-docker-secure (GitHub)](https://github.com/deepmehtait/openclaw-docker-secure) — Gluetun VPN egress, no-new-privileges, no public ports, LAN-only

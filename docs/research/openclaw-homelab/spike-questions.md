@@ -6,15 +6,13 @@ Each item: *what to learn → why it matters → how to observe it.*
 
 ---
 
-## 1. Image facts (resolve the guide disagreements)
+## 1. Image facts (mostly resolved by the official doc — just confirm against the running image)
 
-These are the unknowns the design doc can't be written without. The public guides cite `18789`, `3000`, and `47981` for the port and disagree on the in-container user.
+The official docker doc settled the disagreements: port **`18789`**, user **`node`/uid 1000**/`/home/node`, image **`ghcr.io/openclaw/openclaw`** on **`node:24-bookworm-slim`**, three mount dirs (config `/home/node/.openclaw`, workspace `…/workspace`, auth secrets `/home/node/.config/openclaw`). Remaining is just a sanity-check that the *running spike* matches:
 
-- **Exact image ref + tag** being run → so we pin it in compose, not `latest`. → `docker inspect --format '{{.Config.Image}}' <ctr>`; note the digest too.
-- **The real HTTP port** (UI + REST + webhooks) → drives the loopback bind + Tailscale Services config. → `docker port <ctr>` and confirm what the UI actually answers on.
-- **In-container user + home dir** (`node`/`/home/node` vs `root`/`/root`) → decides the uid we run as and where the state mount lands. → `docker exec <ctr> id` and `docker exec <ctr> env | grep -i home`.
-- **Canonical volume paths** the image expects (config dir, workspace dir, any auth/secret dir) → the bind-mount map for `/srv/data/openclaw`. → `docker inspect --format '{{json .Mounts}}' <ctr>` and `docker exec <ctr> ls -la <homedir>`.
-- **Image size** → disk budget sanity check (~20 GB claim). → `docker images`.
+- **Exact image ref + digest** being run → pin it in compose, not `latest`. → `docker inspect --format '{{.Config.Image}}' <ctr>`.
+- **Confirm port + user + mount paths** match the doc → no surprises before writing compose. → `docker port <ctr>`, `docker exec <ctr> id`, `docker inspect --format '{{json .Mounts}}' <ctr>`.
+- **Image size** → disk budget sanity (~20 GB claim). → `docker images`.
 
 ## 2. State & persistence
 
@@ -70,19 +68,19 @@ Decide the minimum viable tool set; we widen later (trust-grows-with-capability)
 
 ## 8. Networking / binding
 
-- **Does the container bind `0.0.0.0` by default?** → it must be `127.0.0.1:<port>` for the Tailscale Services pattern; note if compose needs to force the bind. → `docker port` + `ss`/`netstat`.
+- **Force loopback bind.** Official: gateway defaults to **`lan` mode** (binds beyond loopback). For Tailscale Services it must be `127.0.0.1:18789` → find the bind-mode setting and/or pin the compose port mapping. → set it, confirm with `docker port` + `ss`.
 - **Any second port / outbound connections we didn't expect** → egress awareness (it browses + calls an LLM; know where it talks). → watch connections during use.
 
 ## 9. Operations (deploy/monitor/update)
 
-- **Logging:** does it log to stdout cleanly (journald/`docker logs` friendly)? Any secrets leaked into logs? → confirms our standard logging works and nothing sensitive is printed. → `docker logs`.
-- **Health/readiness endpoint** for a goss-style smoke check → fits the `homelab_07` "smoke-test the changed path" requirement. → probe the HTTP port for a health route.
+- **Logging:** does it log to stdout cleanly (journald/`docker logs` friendly)? Any secrets leaked into logs? → confirms standard logging works and nothing sensitive is printed. → `docker logs`.
+- **Health endpoints confirmed** (`/healthz`, `/readyz`) — just wire them into the goss smoke check; nothing to discover. → curl both.
 - **Update path:** how do you move image versions, and does state survive it? → the `just deploy-openclaw` upgrade story. → pull a newer tag, recreate, confirm state intact.
 - **Crash/restart behavior** → confirms `restart: unless-stopped` + the oneshot systemd unit is the right shape. → kill it, watch recovery.
 
-## 10. Web UI / API auth
+## 10. Web UI / API auth — resolved
 
-- **Does the web UI / REST API have its own auth**, or is it open to anyone who can reach the port? → even behind Tailscale Services, know whether the UI is a second unauthenticated control surface. → hit the UI without credentials.
+Official: the setup script writes a **gateway token** to `.env` and the control UI is gated by it, so the UI is not a second open surface. Just confirm the token is enforced (hitting the UI without it is rejected) and route that token through our `.env.vars`. → curl the UI with and without the token.
 
 ---
 
