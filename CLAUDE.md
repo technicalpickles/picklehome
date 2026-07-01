@@ -57,6 +57,8 @@ Secrets are stored in 1Password and injected into `.env` via `op inject`. Most s
 
 The logic lives in `scripts/dotenv` (supports `--template`, `--output`, `--force`).
 
+**Gotcha:** 1Password field labels feeding `op inject` / `scripts/locations-filter.jq` must have no leading/trailing whitespace. A stray space (e.g. `" yale_houses"`) silently drops the field from the generated `.env` with no error, so a location value just quietly goes missing.
+
 Scripts load `.env` automatically via `python-dotenv` (or `just`'s `set dotenv-load`).
 
 ## Sandbox
@@ -144,6 +146,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `garage/`: Aladdin Connect garage door control; see `garage/README.md`
 - `locks/`: Yale Access smart locks; see `locks/README.md`
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
+- `picklehome/`: Shared cross-module code. `locations.py` is the canonical location registry (main house, beachhouse, ...) consumed by climate and locks; see `climate/README.md` and `locks/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
   - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `climate-auto-switch`, `backup`, `github-actions-runner`, `woodpecker` (full list in the Homelab Services table below)
   - **Obsidian vaults on host:** `/srv/data/obsidian-sync/vaults/<vault>/` — `pickled-knowledge` is the personal knowledge base (second brain); `rpg` is campaign notes
