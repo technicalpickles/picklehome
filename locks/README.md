@@ -7,20 +7,37 @@ bridge status across all homes on the account.
 ## Commands
 
 ```
-just locks auth            # login, cache tokens at ~/.local/state/picklehome/yale-tokens.json
-just locks status          # one-line summary per lock, grouped by home
-just locks status <name>   # detailed view (substring match; shows all matches)
+just locks auth                    # login, cache tokens at ~/.local/state/picklehome/yale-tokens.json
+just locks status                  # one-line summary per lock, grouped by location
+just locks status <name>           # detailed view (substring match; shows all matches)
+just locks status --location <slug>  # limit to one location (home, beachhouse, ...)
 ```
 
 Credentials come from 1Password (`picklehome` vault, `Yale Access` item) via
 `YALE_EMAIL` and `YALE_PASSWORD` in `.env`. See the project README for how
 `.env` is generated.
 
+## Locations
+
+`just locks status` groups locks by our canonical locations (main house,
+beachhouse, ...) from the shared [`picklehome/locations.py`](../picklehome/locations.py)
+registry, the same one climate uses. Yale returns each lock's home as a raw
+`house_name` string; to map those onto our slugs, add a `yale_houses` field
+(comma-separated Yale house names) to the location's `picklehome-location`
+1Password item, then run `just dotenv`. See
+[climate/README.md](../climate/README.md#locations-multi-address) for the full
+location item format.
+
+Mapping is optional and graceful: a home with no matching location (or no
+registry at all) still shows up grouped under its raw Yale name, sorted after
+the known locations. `--location <slug>` errors only on an unknown slug.
+
 ## Module layout
 
 ```
 locks/
 ├── locks_cli.py        # CLI: auth + status commands
+├── locations.py        # map Yale homes onto shared picklehome locations
 └── yale/
     ├── auth.py         # login flow, API key patch, token cache
     └── client.py       # data model (YaleLock, BridgeStatus) and API calls

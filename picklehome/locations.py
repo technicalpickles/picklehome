@@ -1,4 +1,8 @@
-"""Named locations (Atlanta main house, MA beachhouse, ...).
+"""Shared registry of named locations (Atlanta main house, MA beachhouse, ...).
+
+This is the canonical, cross-module location registry. Consumers so far: climate
+(weather + air quality, scoped by location) and locks (Yale homes grouped and
+filtered by location). Each consumer uses the subset of fields it needs.
 
 Locations are discovered from 1Password at `just dotenv` time: every item tagged
 `picklehome-location` is read and its fields snapshotted into the
@@ -28,6 +32,11 @@ class Location:
     # the beachhouse doesn't). Gates the comfort-mode recommendation in
     # `just climate-weather`, which is Ecobee-specific (smart1/smart2).
     comfort_mode: bool = False
+    # Yale API house names (the raw "HouseName" strings August/Yale returns) that
+    # belong to this location. Lets locks map its per-home locks onto our canonical
+    # slugs. Vendor-specific, like station_macs is to Ambient and comfort_mode to
+    # Ecobee; empty for locations with no Yale locks.
+    yale_houses: list[str] = field(default_factory=list)
 
 
 def load_locations() -> list[Location]:
@@ -96,6 +105,7 @@ def _from_dict(d: dict) -> Location:
         lon=float(d["lon"]),
         station_macs=list(d.get("station_macs", [])),
         comfort_mode=bool(d.get("comfort_mode", False)),
+        yale_houses=list(d.get("yale_houses", [])),
     )
 
 
