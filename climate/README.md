@@ -27,6 +27,16 @@ Pairing alone doesn't change any temperatures. See the Ecobee API notes below fo
 
 Station MACs are sensitive (geolocatable), stored in 1Password, injected via `.env`. See `.env.template` for the `AMBIENT_STATION_MACS` variable.
 
+### Locations (multi-address)
+
+Weather and air-quality commands are scoped by location (Atlanta main house, MA beachhouse, ...) and cover **all** configured locations by default, grouped in the output. Pass `--location <slug>` to limit to one.
+
+Each location is a 1Password item tagged `picklehome-location` with fields: `slug`, `label`, `latitude`, `longitude`, `station_macs` (comma-separated), and optional `comfort_mode` (`true` for a location whose thermostat this tooling manages). `just dotenv` discovers every tagged item and snapshots them into the `PICKLEHOME_LOCATIONS` JSON var in `.env` (via `scripts/locations-filter.jq`); `climate/locations.py` parses it at runtime. Add or edit an address in 1Password, then re-run `just dotenv` to pick it up.
+
+Only `comfort_mode` locations get the Ecobee comfort-mode recommendation in `just climate-weather` (the main house); weather-only locations like the beachhouse show outdoor temp alone. Comfort switching itself (`just climate-comfort-switch`) remains main-house-only.
+
+Coords and MACs are geolocatable, so they live only in the generated `.env`, never a checked-in file. When no tagged items exist, the commands fall back to the legacy single-home `HOME_LAT` / `HOME_LON` / `AMBIENT_STATION_MACS` vars. Run `just climate-locations` to see what's configured.
+
 ### BlueAir purifiers
 
 See [blueair/README.md](blueair/README.md).
@@ -37,7 +47,7 @@ Uses the Google Air Quality and Pollen APIs.
 
 1. Enable the Air Quality API and Pollen API in the [Google Cloud console](https://console.cloud.google.com)
 2. Store the key in 1Password (`Google Air Quality API` item, `api_key` field) and run `just dotenv`; it lands in `.env` as `GOOGLE_POLLEN_API_KEY` (one key covers both APIs)
-3. The lookup uses your home coordinates from `HOME_LAT` / `HOME_LON` (also in `.env`, sourced from the `Home` 1Password item)
+3. The lookup runs per location (see [Locations](#locations-multi-address)); with no tagged locations it falls back to `HOME_LAT` / `HOME_LON`
 
 ## Commands
 
@@ -57,14 +67,15 @@ just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # season
 ### Weather
 
 ```
-just climate-weather                     # outdoor temp + comfort mode recommendation
-just climate-weather-discover            # find nearby Ambient Weather stations
+just climate-locations                          # list configured locations (main house, beachhouse, ...)
+just climate-weather [--location SLUG]           # outdoor temp + comfort mode recommendation
+just climate-weather-discover [--location SLUG]  # find nearby Ambient Weather stations
 ```
 
 ### Air quality
 
 ```
-just climate-air-quality                 # current AQI, dominant pollutant, health rec + pollen forecast
+just climate-air-quality [--location SLUG]       # current AQI, dominant pollutant, health rec + pollen forecast
 ```
 
 ### BlueAir
