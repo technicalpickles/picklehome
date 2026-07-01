@@ -210,6 +210,60 @@ Live check (`openclaw sandbox explain`): `mode: off` — nothing has ever run sa
 
 Worth knowing before choosing `mode: "non-main"`: the classification (`src/agents/sandbox/runtime-status.ts`) is a literal string comparison, `sessionKey !== mainSessionKey`, where `mainSessionKey` is always exactly `"agent:main:main"`. On the running instance, **every Control UI dashboard connection gets its own random-UUID session key** (`agent:main:dashboard:<uuid>`) — never the literal main key — so `"non-main"` mode would sandbox the operator's own browser sessions right alongside Telegram, not just the channel traffic. It even sandboxes the heartbeat, whose session key (`agent:main:main:heartbeat`) fails the exact-string match by one suffix. In other words, `"non-main"` means "everything except one specific CLI-driven session," not "channels vs. me" — getting "Telegram sandboxed, my own dashboard use not" requires a per-agent/per-channel override (`agents.list[].sandbox`) instead of the built-in mode heuristic.
 
+### Sandbox vs nodes (different tools, small overlap)
+
+Sandboxing and OpenClaw **nodes** feel adjacent (both "isolate where code runs") but solve different
+problems, and only overlap on one narrow axis. Source: `docs/nodes/index.md`, `docs/cli/nodes.md`,
+`docs/gateway/sandboxing.md`, tag `v2026.6.10`; nodes exercised live on `pickleclaw`.
+
+A **node** is a separate paired device (macOS/iOS/Android/**headless** `openclaw node run`) that
+connects to the gateway WS with `role: "node"` and exposes a command surface; an **exec node**
+(`tools.exec.host=node`) forwards `system.run` to a node host that enforces its **own**
+`~/.openclaw/exec-approvals.json` and holds its **own** tool credentials. The gateway runs the
+model and routes the call; the node executes it and owns the authority.
+
+The single overlap: **both can make a tool call run off the gateway.** Sandbox's `ssh` backend runs
+the agent's own tools on a remote host; an exec node forwards `system.run` to a paired host. Squint
+at "the command ran on box B" and they match. Everything else diverges:
+
+| | **Sandbox** | **Node** |
+|---|---|---|
+| Purpose | **Contain** the agent's own tools | **Delegate/reach** to another machine |
+| Trust direction | Subtract power (protect host *from* agent) | Relocate + isolate power (protect creds, extend reach) |
+| What runs there | Agent's tools, seeded from image + workspace copy | Whatever that machine has installed |
+| Authority | Gateway creates and controls the box | Node owns its exec-approvals + creds; gateway **cannot** override them |
+| Identity | Cattle: per-agent/session/shared, disposable | Pet: durable paired device, persistent fs |
+| Trigger | Automatic (`mode: non-main`/`all`) | Explicit routing (`host=node`) |
+
+The distinction in one line: **sandbox = "run this somewhere with *less* power"; node = "run this
+somewhere with *different, self-owned* power."** Credential isolation (a node-side CLI's token never
+reaching the gateway) is a **node** property a sandbox can't give — a sandbox is still the gateway's
+agent running the gateway's tools, just boxed. Even the `ssh` backend is containment (seeded
+workspace, agent's own tools), not a peer with independent authority.
+
+**Fit with `homelab_07`:** this maps cleanly onto the access model.
+
+- **Sandbox is the demoted control** `homelab_07` already says it is ("useful for the agent runtime,
+  not the primary control mechanism"; "the main risk is not kernel escape, it is incorrect but fully
+  authorized changes to real system state"). The deploy plan's containment already comes from *the
+  gateway container itself* + default-deny tool policy, so the OpenClaw Docker sandbox is a redundant
+  second cage whose price (`/var/run/docker.sock`) the plan correctly declines.
+- **A node is the better-aligned tool for reach.** A node host's per-machine `exec-approvals.json` is
+  literally the "narrow operational interface" `homelab_07` wants: a human-editable, target-owned
+  allowlist of specific commands, no `docker.sock`, no privileged gateway. If the agent ever needs to
+  act on picklelab-the-host (not inside the container) or on another box, a node host there is a
+  tighter fit than widening the container's own tool policy, because the authority sits host-side
+  where a human audits it. That matches evolution-path steps 3-4 (wrapper commands, limited deploy
+  sudo).
+
+**Where they meet in config:** if sandboxing is ever turned on, `tools.elevated` with a `node` target
+is the documented escape hatch — sandbox-by-default, break out to one named node for one vetted
+operation. Useful pattern for the cheap-model-with-tools tension: caged agent, one auditable door.
+
+**Bottom line for this deploy:** not substitutes. Don't enable OpenClaw sandboxing (containment is
+already covered, and its cost is the socket we won't grant). Keep an **exec node** in reserve as the
+"trust grows with capability" mechanism for letting the agent act on the host or other boxes later.
+
 ## Open questions to resolve before a plan
 
 - **Why / use case?** What do you actually want it to *do* (ops assistant? notifications? home-automation glue calling the existing `just` CLIs?). The use case decides how much host access it needs — which decides whether it's safe here at all.

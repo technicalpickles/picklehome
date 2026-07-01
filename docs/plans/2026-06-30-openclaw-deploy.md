@@ -214,7 +214,7 @@ Maps the [official security model](../research/openclaw-homelab/findings.md#secu
 | Who can reach the UI | Tailscale Services (host-side loopback port mapping; app binds `lan` internally, see [Port & bind topology](#port--bind-topology)) + **gateway token** |
 | Who can drive the agent | Channel **allowlist** (our chat IDs); default Pairing is already not-open |
 | Shell/fs access | Default-deny (`group:runtime`/`group:fs` off, `exec: deny/ask:always`); widen per use case |
-| Tool sandbox vs. docker.sock | **No socket.** Gateway is containerized; rely on tool policy, not the in-container Docker sandbox. Revisit a rootless socket (woodpecker-style) only if a real need appears |
+| Tool sandbox vs. docker.sock | **No socket.** Gateway is containerized; rely on tool policy, not the in-container Docker sandbox. Revisit a rootless socket (woodpecker-style) only if a real need appears. For *reaching the host or other boxes*, an **exec node** (not the sandbox) is the aligned mechanism — see [findings §Sandbox vs nodes](../research/openclaw-homelab/findings.md#sandbox-vs-nodes-different-tools-small-overlap) |
 | Browser tool | Off (saves ~4 GB RAM, removes the biggest passive surface) |
 | Prompt injection × cheap model | Small Ollama model + tools is the riskiest combo; keep tools tiny + `ask:always` while on a small model, or use a stronger tier for any tool-enabled profile |
 | Egress | Outbound to `api.telegram.org` + `ollama.com` (+ MCP endpoints). Note in README; tighten later if warranted |
@@ -328,3 +328,4 @@ Still open — need the actual spike, not just source reading (see `spike-questi
 - **More tools / use cases.** Widen the tool profile as trust grows: read-only `just` checks → notifications → richer automation. Each widening is a config change, not a redeploy.
 - **Other channels.** WhatsApp/Discord-webhook would add public ingress (Funnel, like `woodpecker`) — a separate design.
 - **Rootless docker socket** for the real tool-sandbox, if a use case needs isolated execution — model on `woodpecker`'s `ci` user (uid 2000) rather than granting the root socket.
+- **Exec node on picklelab (or another box)** as the "trust grows with capability" path for letting the agent act *outside* its container — on the host itself, or a machine with tools/network the container lacks. A node host's own `exec-approvals.json` is the host-side "narrow interface" `homelab_07` prefers (no `docker.sock`, authority audited host-side). Distinct from sandboxing, which contains rather than extends — see [findings §Sandbox vs nodes](../research/openclaw-homelab/findings.md#sandbox-vs-nodes-different-tools-small-overlap).
