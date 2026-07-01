@@ -314,6 +314,7 @@ Resolved via source read (`v2026.6.10`) since the last pass — no longer open, 
 - ~~Config key names~~ — `channels.<channel>.dmPolicy`/`allowFrom` (not `session.dm.*`), `tools.*` shape, `gateway.bind` (`OPENCLAW_GATEWAY_BIND` env, value `lan` for Docker) all confirmed against source. Config **filename** (`openclaw.json`) confirmed via pickleclaw.
 - ~~Onboarding vs. skip~~ — `OPENCLAW_SKIP_ONBOARDING` is for re-running setup against an *already-onboarded* persisted volume, not initial bring-up; a fresh deploy always onboards once (scripted, non-interactive) then applies config patches. See the corrected bootstrap sequence above.
 - ~~Ollama provider wiring~~ — built-in `ollama-cloud` provider, native API, not a custom OpenAI-compatible entry hitting `/v1` (which would have broken tool calling).
+- ~~Update path~~ — bump `OPENCLAW_IMAGE_TAG`, `docker compose pull` + `up -d` to recreate; ClawDock's `git pull`+build update flow doesn't apply since this deploy pulls a pre-built image rather than building from source. State (config, auth-profiles, auth-secret dir, workspace, plugin roots) is fully host bind-mounted and confirmed to survive the image swap. Add a `docker compose run --rm openclaw-cli doctor` step after recreate, for config-schema migrations — not just "confirm state intact." See [findings.md](../research/openclaw-homelab/findings.md#update-path-moving-image-versions). Mechanism is source-confirmed; still needs a live test on picklelab.
 
 Still open — need the actual spike, not just source reading (see `spike-questions.md`):
 

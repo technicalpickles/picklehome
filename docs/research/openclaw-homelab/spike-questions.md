@@ -89,7 +89,7 @@ Decide the minimum viable tool set; we widen later (trust-grows-with-capability)
 
 - **Logging:** does it log to stdout cleanly (journald/`docker logs` friendly)? Any secrets leaked into logs? → confirms standard logging works and nothing sensitive is printed. → `docker logs`.
 - **Health endpoints confirmed** (`/healthz`, `/readyz`) — just wire them into the goss smoke check; nothing to discover. → curl both.
-- **Update path:** how do you move image versions, and does state survive it? → the `just deploy-openclaw` upgrade story. → pull a newer tag, recreate, confirm state intact.
+- **Update path** *(source-confirmed — see `findings.md` "Update path (moving image versions)")*: bump `OPENCLAW_IMAGE_TAG`, `docker compose pull` + `up -d` to recreate — all instance state (`openclaw.json`, auth-profiles, auth-secret dir, workspace, plugin package roots) is host bind-mounted and survives the swap. The ClawDock `git pull && docker compose build` update flow doesn't apply here — that's for source-built custom images, and this deploy pulls a pre-built `ghcr.io/openclaw/openclaw` tag. Run `doctor` after the swap (config-schema migrations, DM-policy audit). → still needs a live image-bump test on picklelab (source-derived, not yet exercised hands-on).
 - **Crash/restart behavior** → confirms `restart: unless-stopped` + the oneshot systemd unit is the right shape. → kill it, watch recovery.
 
 ## 10. Web UI / API auth — resolved (twice over)
