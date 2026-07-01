@@ -328,12 +328,17 @@ Not yet live-tested on picklelab (spike §9). The adjacent npm-install `update`�
 
 Need the actual spike, not just source reading (see `spike-questions.md`):
 
-- **Docker pull/recreate mechanism itself** *(spike §9)* — see [Update path](#update-path) above.
-- **`$include` exercised hands-on** *(spike §3)* — the committed-include-file architecture above is source-derived, not yet run against a real instance. Confirm a read-only-mounted include actually resolves, and that `config set --batch-json` for the pointing keys works as expected.
-- **PATH override + live pickup** *(spike §6)* — the tier-1 drop-in story assumes `PATH` is env-overridable and a dropped binary is picked up without restart. Confirm; if PATH isn't overridable, fall back to mounting onto an existing PATH dir.
-- **Runtime RAM** *(spike §7)* — budget against the 16 GB box; confirm browser-off lands near ~4 GB and idle is modest on the J3455.
-- **Ollama-cloud tool-calling quality, latency, rate limits** *(spike §4)* — the chosen model must reliably emit tool calls, and be strong enough to resist tool-misuse; the cheap-model-with-tools tension is real. Inherently live-test facts.
-- **Allowlist policy itself** *(spike §5)* — only the Pairing flow has been exercised hands-on (on pickleclaw); confirm a hard-reject for a non-allowlisted sender with `dmPolicy: "allowlist"` actually configured.
+- **Docker pull/recreate mechanism itself** *(spike §9)* — see [Update path](#update-path) above. Still requires a real Docker+NUC pass; not resolvable via more pickleclaw research.
+- **Runtime RAM/CPU on the actual J3455, and under real agentic load** *(spike §7)* — the budget side is now confirmed real (see below); what's left is OpenClaw's own footprint on the weak hardware itself, not a Mac, and with a working model driving genuine tool use rather than an unconfigured dev instance.
+- **Allowlist policy itself** *(spike §5)* — only the Pairing flow has been exercised hands-on (on pickleclaw); confirm a hard-reject for a non-allowlisted sender with `dmPolicy: "allowlist"` actually configured. In progress: config flipped to Allowlist on pickleclaw with the owner's chat ID preserved (confirmed still working); waiting on a message from a non-allowlisted sender to confirm the hard-reject.
+
+**Live-tested on pickleclaw / locally (2026-07-01), substantially answered:**
+
+- **Ollama-cloud tool-calling quality, latency, rate limits** *(spike §4)* — 3 agent turns exercising real `exec` tool calls against `ollama-cloud/glm-5.2`: 0 failures, correct results reported accurately. Latency 22–73s/turn; no throttling in a light back-to-back sample. Remaining gap: sustained always-on load and more complex multi-step tasks than simple shell commands.
+- **`$include` exercised hands-on** *(spike §3)* — confirmed `config get` resolves an included file's contents correctly. Two new gotchas: default `config patch` merges rather than replaces an already-populated key (so retrofitting `$include` onto a live section needs the include file written first, or the key nulled/cleared, not a bare patch); OpenClaw explicitly blocks flattening a `$include`-owned key via `--replace-path` once one exists. Neither blocks the deploy's fresh-onboard architecture, since target keys start empty.
+- **PATH override + live pickup** *(spike §6)* — confirmed on pickleclaw's real exec-tool `PATH` (not just the SSH shell's): dropped a new executable into an already-on-`PATH` dir while the gateway service stayed running, no restart, asked the agent to run it by name — worked first try. Answers the risky part of the tier-1 drop-in-bin-dir question (no OpenClaw-side restart or caching to fight); the narrower Docker-specific nuance (does a live `-v` bind-mount write propagate the same way) is unconfirmed but low-risk, since it's standard bind-mount behavior, not an OpenClaw quirk.
+- **Image facts** *(spike §1)* — pulled and ran the real `ghcr.io/openclaw/openclaw` image locally (Docker Desktop on the Mac, not picklelab). Port `18789`, `/healthz`, uid 1000/`node`, `/home/node`, and the `node:24-bookworm-slim` base all confirmed directly from the image, not just the docs. Real image size **1.53 GB**, correcting the community "~20 GB" claim.
+- **RAM budget** *(spike §7, partial)* — SSH'd into picklelab directly: 15Gi total RAM, **13Gi available** (not just "free"), existing ~9 services summing to ~1 GB via `docker stats`. OpenClaw's own idle footprint (measured locally, not on the NUC): ~573 MiB, with the browser tool's cost confirmed lazy (no browser process spawned until first use) rather than paid at idle. Budget looks comfortable; on-NUC and under-load numbers are the part still open (folded into the bullet above).
 
 ## Future
 
