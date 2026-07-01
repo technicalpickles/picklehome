@@ -4,8 +4,6 @@ Deploy OpenClaw (self-hosted AI gateway: chat → agent that can act) as a homel
 
 **Status:** design, pre-implementation. Depends on the laptop spike to confirm the values tagged *(spike)* below — see [`docs/research/openclaw-homelab/spike-questions.md`](../research/openclaw-homelab/spike-questions.md). Research backing this doc: [`docs/research/openclaw-homelab/findings.md`](../research/openclaw-homelab/findings.md).
 
-**Update (2026-06-30, same day):** cross-checked this doc's `(spike)`-tagged guesses against the running `pickleclaw` spike and a source read of its pinned `vendor/openclaw` clone (tag `v2026.6.10`). Several were wrong, not just unconfirmed — the config mount strategy, the Ollama provider wiring (would have broken tool calling), the bind env var/value, and the DM-policy config path. Corrected below; see `findings.md` and `spike-questions.md` for the full evidence trail.
-
 ## Goals
 
 - A phone-reachable agent surface (chat → OpenClaw), a sibling to `brineworks-agent` / `second-brain-agent`: trusted-but-shaped, deployed on purpose.
@@ -45,6 +43,7 @@ Phone / desktop (Telegram)            You (browser, control UI)
               restic-backed  (config + memory + tokens, credentials/, sessions/)
                                            |
                           Ollama cloud  ──>  https://ollama.com  (native /api/chat, outbound, ${OLLAMA_API_KEY})
+                          OpenRouter    ──>  https://openrouter.ai  (embeddings only, outbound, ${OPENROUTER_API_KEY})
 ```
 
 Two independent trust boundaries, both locked down:
@@ -72,13 +71,17 @@ Two independent trust boundaries, both locked down:
 ```yaml
 services:
   openclaw:
-    image: ghcr.io/openclaw/openclaw:${OPENCLAW_IMAGE_TAG:?pin a version}   # (spike) pin a real tag, not latest
+    image: ${OPENCLAW_IMAGE:?pin a version, e.g. ghcr.io/openclaw/openclaw:2026.6.11}   # full ref incl. tag
+    # No `build:` key on purpose: pairing `image:` with `build:` makes `docker compose pull`
+    # ambiguous about whether to pull or build. We don't ship a Dockerfile, so omitting `build:`
+    # keeps `docker compose pull` unambiguous — it only ever pulls the named image.
     restart: unless-stopped
     user: "1000:1000"                      # image default (node); data dir isn't shared, so 1000 is fine
     environment:
       OPENCLAW_GATEWAY_BIND: lan            # NOT loopback — see "Port & bind topology" below for why
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?required}
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:?required}          # ollama-cloud is a built-in provider, no custom config needed
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?required}  # embeddings only — Ollama Cloud doesn't support them
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required}
       OPENCLAW_ALLOWED_CHAT_IDS: ${OPENCLAW_ALLOWED_CHAT_IDS:?required}
       OPENCLAW_EXTRA_MOUNTS: "/srv/data/openclaw/bin:/opt/tools:ro"   # tools dir, read-only
@@ -118,11 +121,11 @@ services:
 
 Single HTTP port **`18789`** (UI + REST + webhooks), mapped to `127.0.0.1:18789`.
 
-**Correction (source-verified, `docs/install/docker.md` + `src/config/gateway-control-ui-origins.ts`): the app-internal bind mode should be `lan`, not `loopback`, for a Docker deploy.** Docker's default bridge networking means traffic from a published port (`-p 18789:18789`) arrives on the container's `eth0`, not its loopback interface — a gateway bound to `loopback` *inside* the container would be unreachable even from the host, breaking the whole deploy. `scripts/docker/setup.sh` defaults to `OPENCLAW_GATEWAY_BIND=lan` for exactly this reason (host access still works because Docker's port-publish only routes `eth0` traffic, and Docker doesn't publish `lo`). This is *not* a security regression: **the real loopback restriction is the compose port mapping** (`127.0.0.1:18789:18789`, host-side) — the app can bind `0.0.0.0` internally and still be unreachable from outside picklelab, because nothing besides the host's own `127.0.0.1` is ever published. `tailscaled`'s local proxy reaches it via that same host-side loopback binding; `tailscale serve` fronts it as `https://openclaw.tail2023b7.ts.net`.
+**The app-internal bind mode is `lan`, not `loopback`** (`docs/install/docker.md` + `src/config/gateway-control-ui-origins.ts`). Docker's default bridge networking means traffic from a published port (`-p 18789:18789`) arrives on the container's `eth0`, not its loopback interface — a gateway bound to `loopback` *inside* the container is unreachable even from the host. `scripts/docker/setup.sh` defaults to `OPENCLAW_GATEWAY_BIND=lan` for exactly this reason (host access still works because Docker's port-publish only routes `eth0` traffic, and Docker doesn't publish `lo`). This isn't a security regression: **the real loopback restriction is the compose port mapping** (`127.0.0.1:18789:18789`, host-side) — the app can bind `0.0.0.0` internally and still be unreachable from outside picklelab, because nothing besides the host's own `127.0.0.1` is ever published. `tailscaled`'s local proxy reaches it via that same host-side loopback binding; `tailscale serve` fronts it as `https://openclaw.tail2023b7.ts.net`.
 
 ## Declarative config
 
-**Corrected architecture (source-verified, `v2026.6.10`).** The original single-file, fully-read-only-mounted `openclaw.config.json5` doesn't match how OpenClaw actually manages config, on two counts:
+Config isn't a single file we can mount read-only wholesale; the architecture rests on two facts:
 
 1. **The root config file (`openclaw.json`) must stay writable.** It's created by `openclaw onboard` (which must actually run, at least once — see below) and holds things that can't be static: the gateway token, session-store paths, the auth-profile pointers. `OPENCLAW_SKIP_ONBOARDING=1` does **not** mean "boot from a mounted file instead" — source-confirmed (`src/docker-setup.e2e.test.ts`): even with it set, the setup script still runs `config set --batch-json` against an *existing* config, implying that flag is for **re-running setup against an already-onboarded persistent volume**, not a from-scratch bring-up.
 2. **`$include` is the real mechanism for "config in git, state on disk."** A config value can be `{ $include: "./relative/path.json5" }` — resolved from **inside** the config directory, single-file includes replace the whole containing key. So instead of mounting one big file over the whole config, mount small **committed include files** at `/home/node/.openclaw/includes/*.json5` (read-only) and have the writable root file `$include` specific sections from them.
@@ -177,18 +180,22 @@ docker compose up -d
 }
 ```
 
-### Ollama cloud — corrected, not just confirmed
+### Ollama cloud
 
-**The original plan's Ollama config was wrong and would likely have broken tool calling.** `ollama-cloud` is a **first-class built-in provider** (`docs/providers/ollama-cloud.md`) — there's no custom `models.providers` entry to write at all:
+`ollama-cloud` is a **first-class built-in provider** (`docs/providers/ollama-cloud.md`) — there's no custom `models.providers` entry to write at all:
 
 - Auth: `OLLAMA_API_KEY` env var (already in `.env`) — no `baseUrl`/`api` config needed.
-- **Do not point anything at `https://ollama.com/v1`.** The provider uses Ollama's native `/api/chat`, base URL `https://ollama.com` (no `/v1`). The docs are explicit: *"Do not use the `/v1` OpenAI-compatible URL... This breaks tool calling and models may output raw tool JSON as plain text."* The original plan's `baseUrl: "https://ollama.com/v1", api: "openai-completions"` snippet would have hit exactly this failure mode — and it would have looked like "this model is bad at tool calling" (spike §4's biggest worry) when the real bug was the endpoint shape.
+- **Do not point anything at `https://ollama.com/v1`.** The provider uses Ollama's native `/api/chat`, base URL `https://ollama.com` (no `/v1`). The docs are explicit: *"Do not use the `/v1` OpenAI-compatible URL... This breaks tool calling and models may output raw tool JSON as plain text."*
 - Model refs: `ollama-cloud/<id>` (e.g. `ollama-cloud/kimi-k2.6`); list the live hosted catalog with `openclaw models list --provider ollama-cloud`.
-- Still register the model in **both** `agents.defaults.model.primary` and `agents.defaults.models` (see the bootstrap `config set` above) — every official custom-provider example in `config-tools.md` pairs these, and pickleclaw independently hit the silent-fallback-to-an-expensive-model failure mode when this pairing is skipped.
+- Register the model in **both** `agents.defaults.model.primary` and `agents.defaults.models` (see the bootstrap `config set` above) — every official custom-provider example in `config-tools.md` pairs these; an unregistered fallback/heartbeat model silently falls through to an expensive default alias instead.
 
-### Channel front door — corrected key path
+### Embeddings — a second provider, OpenRouter
 
-The config path is **per-channel**, not a global `session.dm.*` key (source-confirmed, `src/config/types.channel-messaging-common.ts`/`types.base.ts`): `channels.telegram.dmPolicy: "allowlist"` + `channels.telegram.allowFrom: [...]` — see the bootstrap `config set` above. `session.dmScope` is a real but unrelated setting (session isolation, not the allow/deny policy).
+Ollama Cloud only serves chat; OpenClaw's memory-search feature (`agents.defaults.memorySearch`) needs its own embedding model, which Ollama Cloud doesn't offer. Keep **OpenRouter** configured as a second provider for embeddings only (`qwen/qwen3-embedding-8b`, 4096-dim, ~$0.01/M) — chat and heartbeat stay on `ollama-cloud`. `OPENROUTER_API_KEY` resolves through an `exec` SecretRef that reads OpenClaw's own stored auth-profile key, the same pattern the auth-profile store already uses elsewhere. This means the deploy carries two model-provider secrets, not one.
+
+### Channel front door
+
+The DM policy config path is **per-channel** (`src/config/types.channel-messaging-common.ts`/`types.base.ts`): `channels.telegram.dmPolicy: "allowlist"` + `channels.telegram.allowFrom: [...]` — see the bootstrap `config set` above. `session.dmScope` is a real but unrelated setting (session isolation, not the allow/deny policy).
 
 Notes:
 - **Gateway token** and **bot token** stay in env (`.env`), never in a committed file.
@@ -217,7 +224,7 @@ Maps the [official security model](../research/openclaw-homelab/findings.md#secu
 | Tool sandbox vs. docker.sock | **No socket.** Gateway is containerized; rely on tool policy, not the in-container Docker sandbox. Revisit a rootless socket (woodpecker-style) only if a real need appears. For *reaching the host or other boxes*, an **exec node** (not the sandbox) is the aligned mechanism — see [findings §Sandbox vs nodes](../research/openclaw-homelab/findings.md#sandbox-vs-nodes-different-tools-small-overlap) |
 | Browser tool | Off (saves ~4 GB RAM, removes the biggest passive surface) |
 | Prompt injection × cheap model | Small Ollama model + tools is the riskiest combo; keep tools tiny + `ask:always` while on a small model, or use a stronger tier for any tool-enabled profile |
-| Egress | Outbound to `api.telegram.org` + `ollama.com` (+ MCP endpoints). Note in README; tighten later if warranted |
+| Egress | Outbound to `api.telegram.org` + `ollama.com` + `openrouter.ai` (embeddings only) (+ MCP endpoints). Note in README; tighten later if warranted |
 
 ## Secrets
 
@@ -228,6 +235,7 @@ Maps the [official security model](../research/openclaw-homelab/findings.md#secu
 | `host` | `openclaw.tail2023b7.ts.net` |
 | `gateway_token` | `openssl rand -hex 32` |
 | `ollama_api_key` | from `ollama.com/settings/keys` |
+| `openrouter_api_key` | from `openrouter.ai/keys` — embeddings only, chat/heartbeat stay on Ollama Cloud |
 | `telegram_bot_token` | from @BotFather |
 | `allowed_chat_ids` | your Telegram numeric chat ID(s), comma-separated |
 
@@ -238,8 +246,10 @@ Maps the [official security model](../research/openclaw-homelab/findings.md#secu
 OPENCLAW_HOST={{ op://picklehome/OpenClaw/host }}
 # OPENCLAW_GATEWAY_TOKEN: control-UI/API bearer token
 OPENCLAW_GATEWAY_TOKEN={{ op://picklehome/OpenClaw/gateway_token }}
-# OLLAMA_API_KEY: Ollama cloud subscription key
+# OLLAMA_API_KEY: Ollama cloud subscription key (chat/heartbeat)
 OLLAMA_API_KEY={{ op://picklehome/OpenClaw/ollama_api_key }}
+# OPENROUTER_API_KEY: embeddings only — Ollama Cloud doesn't support them
+OPENROUTER_API_KEY={{ op://picklehome/OpenClaw/openrouter_api_key }}
 # TELEGRAM_BOT_TOKEN: bot identity
 TELEGRAM_BOT_TOKEN={{ op://picklehome/OpenClaw/telegram_bot_token }}
 # OPENCLAW_ALLOWED_CHAT_IDS: chat-id allowlist (the front door)
@@ -252,9 +262,10 @@ OPENCLAW_ALLOWED_CHAT_IDS={{ op://picklehome/OpenClaw/allowed_chat_ids }}
 OPENCLAW_HOST
 OPENCLAW_GATEWAY_TOKEN
 OLLAMA_API_KEY
+OPENROUTER_API_KEY
 TELEGRAM_BOT_TOKEN
 OPENCLAW_ALLOWED_CHAT_IDS
-OPENCLAW_IMAGE_TAG
+OPENCLAW_IMAGE
 ```
 
 `service-env` filters these from the master `.env` so picklelab gets only what OpenClaw needs — the master secret set never reaches a container that can run tools.
@@ -294,7 +305,7 @@ openclaw-logs-follow host="picklelab":
 
 1. Create the bot in @BotFather; note the token. Get your numeric chat ID.
 2. Create the `OpenClaw` item in 1Password (`picklehome` vault) with the fields above.
-3. Add `OPENCLAW_*` / `OLLAMA_API_KEY` / `TELEGRAM_BOT_TOKEN` lines to `.env.template`; `just dotenv`.
+3. Add `OPENCLAW_*` / `OLLAMA_API_KEY` / `OPENROUTER_API_KEY` / `TELEGRAM_BOT_TOKEN` lines to `.env.template`; `just dotenv`.
 4. Pick the Ollama model from the live catalog (`openclaw models list --provider ollama-cloud`); fill it into the bootstrap `config set --batch-json` step (see [Declarative config](#declarative-config)) and confirm the subscription tier covers expected volume.
 5. Tailscale admin prereqs (same as other HTTPS services): HTTPS enabled, `tag:server` on picklelab, `openclaw` Service defined.
 6. `just deploy-openclaw` — runs onboarding once (idempotent, skipped on redeploy if the root config already exists), then applies the `config set --batch-json` patch, then `docker compose up -d`.
@@ -307,21 +318,21 @@ openclaw-logs-follow host="picklelab":
 
 `/srv/data/openclaw/` is picked up by the existing nightly restic job — covers config, memory/SQLite, channel credentials, and the auth-secret dir. Restore = stop service, restore dir, start. The `bin/` dir is reproducible from the committed `tools/manifest`, so it's restic-covered but not load-bearing.
 
-## Risks & open questions
+## Update path
 
-Resolved via source read (`v2026.6.10`) since the last pass — no longer open, kept here for the record:
+The image is pinned via **`OPENCLAW_IMAGE`** (the full image reference, e.g. `ghcr.io/openclaw/openclaw:2026.6.11`). To update: bump it in `.env`, `docker compose pull`, `docker compose up -d` to recreate. This depends on our `compose.yaml` declaring no `build:` key (see the compose sketch above) — pairing `image:` with `build:` makes `docker compose pull` ambiguous, which is why the official `scripts/docker/setup.sh` instead runs a plain `docker pull <full-ref>` before `docker compose up -d`. ClawDock's update flow doesn't apply here, since this deploy pulls a pre-built image rather than building from source. Add a `docker compose run --rm openclaw-cli doctor` step after recreate, for config-schema migrations — not just "confirm state intact." Full detail in [findings.md](../research/openclaw-homelab/findings.md#update-path-moving-image-versions).
 
-- ~~Config key names~~ — `channels.<channel>.dmPolicy`/`allowFrom` (not `session.dm.*`), `tools.*` shape, `gateway.bind` (`OPENCLAW_GATEWAY_BIND` env, value `lan` for Docker) all confirmed against source. Config **filename** (`openclaw.json`) confirmed via pickleclaw.
-- ~~Onboarding vs. skip~~ — `OPENCLAW_SKIP_ONBOARDING` is for re-running setup against an *already-onboarded* persisted volume, not initial bring-up; a fresh deploy always onboards once (scripted, non-interactive) then applies config patches. See the corrected bootstrap sequence above.
-- ~~Ollama provider wiring~~ — built-in `ollama-cloud` provider, native API, not a custom OpenAI-compatible entry hitting `/v1` (which would have broken tool calling).
-- ~~Update path~~ — bump `OPENCLAW_IMAGE_TAG`, `docker compose pull` + `up -d` to recreate; ClawDock's `git pull`+build update flow doesn't apply since this deploy pulls a pre-built image rather than building from source. State (config, auth-profiles, auth-secret dir, workspace, plugin roots) is fully host bind-mounted and confirmed to survive the image swap. Add a `docker compose run --rm openclaw-cli doctor` step after recreate, for config-schema migrations — not just "confirm state intact." See [findings.md](../research/openclaw-homelab/findings.md#update-path-moving-image-versions). Mechanism is source-confirmed; still needs a live test on picklelab.
+Not yet live-tested on picklelab (spike §9). The adjacent npm-install `update`→`doctor`→`gateway restart` flow *was* live-tested on `pickleclaw` (2026-07-01, a real patch bump): config/memory/sessions/channel auth all survived, and a manual-recovery path (needed after an `EACCES` on that box's npm install) skipped an automatic "plugin sync" step that then had to be caught via `gateway status --deep`. That's a real gotcha for any install kind doing a manual recovery, but doesn't stand in for testing the Docker `docker pull` + `up -d` path itself.
 
-Still open — need the actual spike, not just source reading (see `spike-questions.md`):
+## Open questions
 
+Need the actual spike, not just source reading (see `spike-questions.md`):
+
+- **Docker pull/recreate mechanism itself** *(spike §9)* — see [Update path](#update-path) above.
 - **`$include` exercised hands-on** *(spike §3)* — the committed-include-file architecture above is source-derived, not yet run against a real instance. Confirm a read-only-mounted include actually resolves, and that `config set --batch-json` for the pointing keys works as expected.
 - **PATH override + live pickup** *(spike §6)* — the tier-1 drop-in story assumes `PATH` is env-overridable and a dropped binary is picked up without restart. Confirm; if PATH isn't overridable, fall back to mounting onto an existing PATH dir.
 - **Runtime RAM** *(spike §7)* — budget against the 16 GB box; confirm browser-off lands near ~4 GB and idle is modest on the J3455.
-- **Ollama-cloud tool-calling quality, latency, rate limits** *(spike §4)* — the chosen model must reliably emit tool calls, *and* be strong enough to resist tool-misuse; the cheap-model-with-tools tension is real. These are inherently live-test facts, not something a docs/source read can settle — and now that the endpoint bug is fixed, a live test actually measures model quality instead of a config error.
+- **Ollama-cloud tool-calling quality, latency, rate limits** *(spike §4)* — the chosen model must reliably emit tool calls, and be strong enough to resist tool-misuse; the cheap-model-with-tools tension is real. Inherently live-test facts.
 - **Allowlist policy itself** *(spike §5)* — only the Pairing flow has been exercised hands-on (on pickleclaw); confirm a hard-reject for a non-allowlisted sender with `dmPolicy: "allowlist"` actually configured.
 
 ## Future

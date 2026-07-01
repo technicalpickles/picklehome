@@ -61,6 +61,7 @@ NUC is a Celeron **J3455 (4 weak cores, no GPU), 16 GB RAM**.
   }
   ```
   `OLLAMA_API_KEY` comes from `.env` as a plain env var (the provider reads it directly per the doc's setup step) — no `${VAR}` templating needed in the config for this one. **Caveat (see security section):** the smaller/cheaper the Ollama model, the more susceptible to tool-misuse/prompt-injection — weigh model tier against how much tool access the agent gets.
+- **Embeddings need a second provider — Ollama Cloud only serves chat.** OpenClaw's memory-search feature (`agents.defaults.memorySearch`) needs its own embedding model, and Ollama Cloud doesn't offer one: hitting its hosted `/api/embed` returns `401 unauthorized` for every model tried (confirmed against six model names, ruling out a wrong model name or a proxy artifact), and Ollama's own docs list `/v1/embeddings` as "Coming soon." This isn't a key-scope problem to work around, it's a missing capability. Keep OpenRouter configured as a second provider for embeddings only (e.g. `qwen/qwen3-embedding-8b`, 4096-dim, ~$0.01/M) — chat/heartbeat stay on Ollama Cloud, embeddings route through OpenRouter's `exec` SecretRef reading its own stored auth-profile key. That means **two provider secrets** in the deploy (`OLLAMA_API_KEY` and an OpenRouter key), not one. Revisit if Ollama ships embeddings later.
 - **Disk:** 20 GB on the local SSD is fine; `/srv/data` is the home for state.
 
 ## How it maps onto homelab conventions
@@ -82,24 +83,33 @@ The image is the *runtime* (Bun, the OpenClaw app, base Debian tools). Everythin
 
 | Mount | Contents | Lives in | In git? |
 |---|---|---|---|
-| **Config dir** (`/home/node/.openclaw`) | agent config **+** memory, SQLite index, channel session tokens | `/srv/data/openclaw/config/` | **No** — config intermingled with runtime state + tokens; restic-backed |
-| **Workspace dir** (`/home/node/.openclaw/workspace`) | files the agent reads/writes | `/srv/data/openclaw/workspace/` | **No** — churning agent data |
+| **Config dir** (`/home/node/.openclaw`) | agent config, auth-profiles, channel credentials, session transcripts, the memory-search SQLite index | `/srv/data/openclaw/config/` | **No** — config intermingled with runtime state + tokens; restic-backed |
+| **Workspace dir** (`/home/node/.openclaw/workspace`) | agent identity/memory files (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `memory/*.md`, etc.) and files the agent reads/writes | `/srv/data/openclaw/workspace/` | **Yes** — OpenClaw's own docs recommend this as its own **private git repo**, separate from restic. See [Workspace git backup](#workspace-git-backup) below. |
 | **Auth-secret dir** (`/home/node/.config/openclaw`) | auth/profile secrets (separate dir, official) | `/srv/data/openclaw/auth/` | **No** — secrets |
 | **Tools/bin dir** (our addition, via `OPENCLAW_EXTRA_MOUNTS`) | extra CLIs we want the agent to call (see below) | `/srv/data/openclaw/bin/` on PATH | Manifest yes, binaries no |
 
 ### Update path (moving image versions)
 
-Source: `docs/install/docker.md`, `docs/install/docker-vm-runtime.md`, `docs/install/updating.md`, `docs/install/migrating.md`, `scripts/clawdock/clawdock-helpers.sh` (`clawdock-update`), tag `v2026.6.10`.
+Source: `docs/install/docker.md`, `docs/install/docker-vm-runtime.md`, `docs/install/updating.md`, `docs/install/hetzner.md`, `docs/install/gcp.md`, `docs/install/migrating.md`, `docker-compose.yml`, `scripts/docker/setup.sh`, `scripts/clawdock/clawdock-helpers.sh` (`clawdock-update`), tag `v2026.6.11`.
 
-This deploy pulls a **pre-built image** (`image: ghcr.io/openclaw/openclaw:${OPENCLAW_IMAGE_TAG}`, the `OPENCLAW_IMAGE` remote-image path in `docker.md`) — there's no local Dockerfile build, matching the plan's tier-1/tier-2 no-rebuild tool model above. That matters for *which* update flow applies:
+This deploy pulls a **pre-built image** — no local Dockerfile build, matching the plan's tier-1/tier-2 no-rebuild tool model above. The image is pinned via **`OPENCLAW_IMAGE`**, which holds the *full* image reference including tag (e.g. `ghcr.io/openclaw/openclaw:2026.6.11`) — confirmed in the bundled `docker-compose.yml` (`image: ${OPENCLAW_IMAGE:-openclaw:local}`), `scripts/docker/setup.sh`, and the `hetzner.md`/`gcp.md` VM-deploy guides.
 
-- **ClawDock's `clawdock-update` doesn't apply.** It runs `git pull` against a source checkout, then `docker compose build` — that's the `docker-vm-runtime.md` pattern for VMs baking custom binaries into their own Dockerfile (the `gogcli`/`goplaces`/`wacli` example). We don't build from source, so there's no repo to `git pull` and no image to rebuild.
-- **The actual mechanism for a pinned-tag pre-built image:** bump `OPENCLAW_IMAGE_TAG` in `.env` → `docker compose pull` → `docker compose up -d` to recreate the container with the new image. This *is* what "pull a newer tag, recreate" assumed — confirmed correct for this deploy shape, not a bug like the Ollama/bind/DM-policy corrections earlier in this doc.
-- **State survives, confirmed twice over.** `docker.md`'s "Storage and persistence" section and `docker-vm-runtime.md`'s "What persists where" table agree: `openclaw.json`, `.env`, `agents/<id>/agent/auth-profiles.json`, the auth-profile secret key dir, the workspace, and installed-plugin package roots are all host bind-mounts. The Docker container itself is explicitly documented as disposable ("Docker container | Ephemeral | Restartable | Safe to destroy"). Since none of that depends on whether the image was built locally or pulled, it applies here unchanged.
-- **One addition beyond "confirm state intact":** run `doctor` after the swap — `updating.md` says `openclaw doctor` "migrates config, audits DM policies, and checks gateway health," and `migrating.md`'s machine-move flow runs it for the same reason (apply config-schema migrations after a version change). For this Docker deploy that's the CLI sidecar form, `docker compose run --rm openclaw-cli doctor`, following the same pattern as every other post-start CLI command in `docker.md`. A version bump can carry a config migration the running container's old code never applied; skipping `doctor` risks the new image reading a config shape it expects `doctor` to have already migrated.
-- **Auto-updater is a non-issue here.** It exists (`update.auto.enabled` in `openclaw.json`) but only drives npm/git self-managed installs re-running their own updater; it has no mechanism to bump a Docker Compose image tag, so it's simply inert for this deploy shape rather than something to disable.
+- **ClawDock's `clawdock-update` doesn't apply.** It runs a full `docker compose build` against a source checkout — the pattern for VMs baking custom binaries into their own Dockerfile (the `gogcli`/`goplaces`/`wacli` example), and the same default pattern every official VM-deployment guide uses (`hetzner.md`, `gcp.md`, `docker-vm-runtime.md`'s own "Updates" section: `git pull && docker compose build && docker compose up -d`). None of them walk through a pinned-image-tag-bump workflow directly — it's a valid pattern the tooling supports, just not the one any guide documents end to end.
+- **The mechanism for this deploy:** bump `OPENCLAW_IMAGE` in `.env` → `docker compose pull` → `docker compose up -d` to recreate the container with the new image. This only works cleanly because our own `compose.yaml` (see the plan's compose sketch) declares no `build:` key. A service that pairs `image:` with `build:` — as the upstream bundled `docker-compose.yml` does — makes `docker compose pull` ambiguous (`docker compose pull --help` documents an `--ignore-buildable` flag specifically for this case), which is why `scripts/docker/setup.sh` instead runs a plain `docker pull <full-ref>` before `docker compose up -d`. Leaving `build:` out of our own compose file avoids that ambiguity, so `docker compose pull` there is safe to use directly.
+- **State survives, confirmed twice over.** `docker.md`'s "Storage and persistence" section and `docker-vm-runtime.md`'s "What persists where" table agree: `openclaw.json`, `.env`, `agents/<id>/agent/auth-profiles.json`, the auth-profile secret key dir, the workspace, and installed-plugin package roots are all host bind-mounts. The Docker container itself is explicitly documented as disposable ("Docker container | Ephemeral | Restartable | Safe to destroy").
+- **Run `doctor` after the swap** — `updating.md` says `openclaw doctor` "migrates config, audits DM policies, and checks gateway health," and `migrating.md`'s machine-move flow runs it for the same reason (apply config-schema migrations after a version change). For this Docker deploy that's the CLI sidecar form, `docker compose run --rm openclaw-cli doctor`, following the same pattern as every other post-start CLI command in `docker.md`. A version bump can carry a config migration the running container's old code never applied; skipping `doctor` risks the new image reading a config shape it expects `doctor` to have already migrated.
+- **The auto-updater is a non-issue here.** It exists (`update.auto.enabled` in `openclaw.json`) but only drives npm/git self-managed installs re-running their own updater; it has no mechanism to bump a Docker Compose image tag, so it's simply inert for this deploy shape rather than something to disable.
 
-**Confidence:** source-confirmed for the mechanism and the persistence claims (two independent docs agree, same volume architecture picklelab already assumes). **Not yet live-tested** — `pickleclaw` itself runs the npm/OrbStack install, not Docker, so there's no hands-on image-bump test to point to the way there was for Pairing or Ollama-cloud tool-calling. Flagged in `spike-questions.md` §9 as the next thing to validate on picklelab.
+**Confidence:** the persistence claims are source-confirmed (two independent docs agree, same volume architecture picklelab already assumes). The pull/recreate recipe above is derived directly from `scripts/docker/setup.sh`'s pull/build logic — no doc states it as a named workflow — and is **not yet live-tested**: `pickleclaw` runs the npm/OrbStack install, not Docker, so there's no hands-on image-bump test yet. Flagged in `spike-questions.md` §9 as the next thing to validate on picklelab.
+
+**Live test of the adjacent npm-install update flow (2026-07-01, on `pickleclaw`):** a real update (`2026.6.10` → `2026.6.11`, a registry patch bump) ran end-to-end via `openclaw update` → recovery → `openclaw doctor` → `openclaw gateway restart`. This confirms the *general* update/doctor/config-migration mechanics both install types share — command sequence, doctor-driven config migration, config/memory/sessions/channel auth surviving an update — but not the Docker-specific pull/recreate mechanism, since npm self-updates via `openclaw update` while Docker has no such self-updater.
+
+Findings from that run:
+- A **root-owned global npm install** (package installed via `sudo npm install -g`) blocks `openclaw update` with `EACCES`, since the CLI runs as a normal user and the update stages into a temp dir under the package root it can't write to. Recovery: `openclaw gateway stop` → `sudo npm i -g openclaw@latest` → `openclaw gateway install --force` → `openclaw gateway restart`.
+- **Failure handling is clean.** OpenClaw stops the gateway before attempting the package swap and automatically restarts it back to the working pre-update state on failure, with no state loss.
+- **A manual recovery (sudo npm install directly, rather than a clean `openclaw update` run) skips the "plugin update sync" step `update` normally runs automatically.** Check `openclaw gateway status --deep` after any manual recovery — it reports plugin version drift (an installed plugin still pinned to the old gateway version), fixed with `openclaw plugins update <name> && openclaw gateway restart`.
+- **The version bump carried a real, if minor, state migration**, not a no-op patch bump: `doctor`/`gateway restart` auto-migrated legacy `update-check` state into shared SQLite, archiving the old JSON file.
+- **Config, memory, sessions, and channel auth all survived unchanged:** all 13 pre-update sessions were still listed post-update; memory index unchanged (6/6 files, 12 chunks, not dirty); Telegram channel still `installed, configured, enabled`; a live chat smoke test (`openclaw agent --agent main -m "..."`) worked before and after, replying correctly via the same `ollama-cloud/glm-5.2` model pin.
 
 ### What can be version-controlled
 
@@ -108,9 +118,21 @@ The split mirrors every other homelab service: **declarative config → repo, ru
 - The **declarative tool/provider/channel config** (the [`config-tools`](https://docs.openclaw.ai/gateway/config-tools) layer + MCP server definitions), with secrets written as `${ENV}` refs, never literals. Ship it as a committed config file the container reads, or template it like `.env`.
 - compose files, `.env.vars`, `deploy.sh` — same as every service.
 
-The catch (partly resolved by the official doc): **auth secrets are already in their own dir** (`OPENCLAW_AUTH_PROFILE_SECRET_DIR`=`/home/node/.config/openclaw`), separate from config — good. But declarative config still lives in `/home/node/.openclaw` **alongside** memory + the SQLite index + channel tokens. So we can't cleanly mount "config in git, state on disk" as two dirs.
+The catch (partly resolved by the official doc): **auth secrets are already in their own dir** (`OPENCLAW_AUTH_PROFILE_SECRET_DIR`=`/home/node/.config/openclaw`), separate from config — good. But declarative config still lives in `/home/node/.openclaw` **alongside** session transcripts, auth-profiles, and the memory-search SQLite index (the workspace itself, including memory files, is a separate mount — see [Workspace git backup](#workspace-git-backup) below). So we can't cleanly mount "config in git, state on disk" as two dirs.
 
 **Refined plan, backed by a real mechanism (`$include`, verified in source — see below):** don't try to mount the whole root config file read-only; the root `openclaw.json` must stay **writable** (onboarding creates it, and it holds the gateway token / mainKey / session store paths that can't be static). Instead, bind-mount small **committed include files** read-only *inside* the config dir (`$include` targets must resolve inside the config directory), and have the writable root file `$include` specific top-level sections (`tools`, `mcp`, etc.) from them. Non-secret structure lives in git; the live root file is a thin, mostly-onboarding-generated shell that points at it. One caveat: OpenClaw's own `config set`/`config patch` **writes through** to a single-file-include target for that section — so a read-only-mounted include file blocks CLI writes to that section (fine for us: changes flow through git + redeploy, not live `config set`). Not yet exercised hands-on by any spike — flagged in `spike-questions.md` §3 as the next thing to validate.
+
+### Workspace git backup
+
+The workspace is a **separate** version-control story from the declarative config above — a different mount, a different reason to be in git. Source: `docs/concepts/agent-workspace.md`, tag `v2026.6.11`; live-tested on `pickleclaw` 2026-07-01.
+
+OpenClaw's own docs recommend git-backing the workspace **as its own private repo**, independent of whatever repo holds the deploy's declarative config. It's auto-initialized as a local git repo on first run (if git is installed), and `openclaw doctor` prints a backup nudge if it detects the workspace isn't under git yet.
+
+- **In the workspace (git-trackable):** `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `TOOLS.md`, `HEARTBEAT.md`, `BOOT.md`, `BOOTSTRAP.md`, `memory/YYYY-MM-DD.md`, `MEMORY.md`, workspace-level `skills/`, `canvas/`.
+- **Never in the workspace, never git-trackable even in a private repo** (the official doc is explicit about this list): `openclaw.json` (config), `agents/<id>/agent/auth-profiles.json`, `agents/<id>/agent/codex-home/`, `credentials/` (channel/provider state), `agents/<id>/sessions/` (transcripts), the managed `~/.openclaw/skills/`. All of that lives under the config-dir mount, not the workspace mount, so it's structurally separate — but worth stating explicitly since "memory" is easy to conflate: the *raw* memory markdown files live in the workspace (trackable); the *SQLite vector index* built from them for memory search lives in the config dir (not trackable, regenerable).
+- **Live-tested on `pickleclaw`:** the workspace already existed as an uncommitted local repo (zero commits, no remote). Backed it with a new private repo, authenticated via a repo-scoped SSH deploy key (write access, not a personal token) so the VM can push on its own. Initial commit + push succeeded with no secrets present (checked before committing).
+
+**For the picklelab Docker deploy:** this is an open design question, not yet resolved in the plan — `/srv/data/openclaw/workspace/` is already restic-backed, but restic and "clone it to a new machine / branch history" are different recovery properties. Worth deciding whether the picklelab workspace also gets its own private git repo (mirroring this pattern) or whether restic-only is sufficient given it's a single always-on deploy, not something regularly moved between machines.
 
 ### Adding tools without rebuilding/restarting (the `gogcli` question)
 
@@ -159,7 +181,7 @@ Concrete controls, mapped to our deploy:
 
 ## Verified against the pickleclaw spike (non-docker)
 
-This is the same "spike already running on the laptop" that [`spike-questions.md`](spike-questions.md) was written to interrogate — [`pickleclaw`](https://github.com/technicalpickles/pickleclaw) (sibling repo, not in this tree), running since 2026-06-25. It diverged from that checklist's assumptions in two ways: OpenClaw installed via `npm install -g` (not Docker) in an OrbStack Ubuntu VM, backed by **OpenRouter** (not Ollama cloud), with Telegram wired up. So it does **not** validate the docker-image, Ollama-provider, or NUC-hardware items (spike-questions §1, §4, §7) — those still need their own pass — but it's hands-on confirmation of the **application-level mechanics** (config format, secrets, channel auth, tool plugins, UI auth) that transfer regardless of how/where OpenClaw runs.
+This is the same "spike already running on the laptop" that [`spike-questions.md`](spike-questions.md) was written to interrogate — [`pickleclaw`](https://github.com/technicalpickles/pickleclaw) (sibling repo, not in this tree), running since 2026-06-25. It diverged from that checklist's assumptions in two ways: OpenClaw installed via `npm install -g` (not Docker) in an OrbStack Ubuntu VM, and originally backed by OpenRouter — **since switched to Ollama Cloud for chat/heartbeat on 2026-07-01** (OpenRouter kept for embeddings only, which Ollama Cloud doesn't yet support), with Telegram wired up. So it does **not** validate the docker-image or NUC-hardware items (spike-questions §1, §7) — those still need their own pass — and while the Ollama-provider item (§4) now has a live wiring + basic-chat confirmation, its actual load-bearing question (tool-calling quality/latency/rate-limits) is still untested. This section is hands-on confirmation of the **application-level mechanics** (config format, secrets, channel auth, tool plugins, UI auth) that transfer regardless of how/where OpenClaw runs.
 
 - **Config file + editing:** `~/.openclaw/openclaw.json` (json5). Safe edits via `openclaw config get|set|patch|validate` (validated writes), or hand-edit + `openclaw config validate`. **Hot-reloads confirmed** for `agents.defaults.*` (model/heartbeat changes take effect with no gateway restart).
 - **First-run setup, precisely:** `openclaw onboard` is interactive by default but fully scriptable non-interactively (`--non-interactive --accept-risk --auth-choice openrouter-api-key --gateway-bind loopback --install-daemon --skip-channels`), reading the API key from an env var so it never hits argv/shell history. So the deploy story for day one is **"scripted onboarding flags + scripted `config set/patch` calls afterward,"** not literally "drop in a committed json file and start" — onboarding writes the file, our automation patches it from there.
@@ -228,7 +250,8 @@ Worth knowing before choosing `mode: "non-main"`: the classification (`src/agent
 
 Sandboxing and OpenClaw **nodes** feel adjacent (both "isolate where code runs") but solve different
 problems, and only overlap on one narrow axis. Source: `docs/nodes/index.md`, `docs/cli/nodes.md`,
-`docs/gateway/sandboxing.md`, tag `v2026.6.10`; nodes exercised live on `pickleclaw`.
+`docs/gateway/sandboxing.md`, tag `v2026.6.11`; the peripheral-capability side of nodes is live-tested
+on `pickleclaw` (a paired Mac), the exec/host-reach side is not (see below).
 
 A **node** is a separate paired device (macOS/iOS/Android/**headless** `openclaw node run`) that
 connects to the gateway WS with `role: "node"` and exposes a command surface; an **exec node**
@@ -274,9 +297,44 @@ workspace, agent's own tools), not a peer with independent authority.
 is the documented escape hatch — sandbox-by-default, break out to one named node for one vetted
 operation. Useful pattern for the cheap-model-with-tools tension: caged agent, one auditable door.
 
-**Bottom line for this deploy:** not substitutes. Don't enable OpenClaw sandboxing (containment is
-already covered, and its cost is the socket we won't grant). Keep an **exec node** in reserve as the
-"trust grows with capability" mechanism for letting the agent act on the host or other boxes later.
+### Nodes, live-tested on `pickleclaw` — peripheral capabilities, not exec/host reach
+
+A **device** is the identity + pairing + role grant (`devices/paired.json`); a **node** is just a
+device whose granted roles include `node` — it's a role, not a separate object. `openclaw devices
+list` is the full auth table; `openclaw nodes list` is the `node`-role slice of it. One device can
+hold both `node` and `operator` roles (e.g. a paired Mac is both a peripheral the agent can reach
+and a dashboard operator), so it shows up in both lists. Duplicate entries accumulate as each new
+enrollment (browser tab, incognito session, CLI token, reinstall) mints a fresh record; since each
+`operator` device is a live admin credential, pruning stale ones is security hygiene, not tidying.
+
+Every node command must pass **two gates** before it runs: the node's own declared capability
+(its WS `connect.commands` list) and the gateway's `gateway.nodes` allow/deny policy. `system.run`
+specifically has a **third** gate on the node itself — its own `~/.openclaw/exec-approvals.json`
+(or the equivalent app setting) — frozen before the command crosses the wire, so nothing between
+approval and execution can change what runs.
+
+**A capability can be gated by an app-level setting distinct from the OS permission behind it.**
+On the live test, `openclaw nodes location get` failed with "node does not support location.get"
+even though the OS Location Services permission was already granted. The node only advertises
+`location.get` when the macOS app's own **Location Access** setting (Off/While Using/Always,
+defaulting to **Off**) is not Off — the OS grant is necessary but not sufficient. Fixed by setting
+it to While Using in the app; the node re-advertised the capability on its next connect handshake.
+Worth knowing generically: when a node "doesn't support" a command it plausibly should, check the
+node-side capability toggle before assuming a missing feature.
+
+**What this does and doesn't validate for this deploy:** the live test covers nodes as
+peripheral-capability delegation (a companion device exposing canvas/screen/location/etc. to the
+agent) — a different use case from the **exec node** (`tools.exec.host=node`) this deploy is
+interested in for reaching picklelab-the-host or another box. `pickleclaw`'s node is paired for
+capabilities only; `tools.exec` is unset there, so nothing routes shell execution to a node yet.
+The device/node role model, the two/three-gate authorization flow, and the capability-vs-permission
+distinction all transfer conceptually, but exec-forwarding itself remains source-derived only.
+
+**Bottom line for this deploy:** sandboxing and nodes are not substitutes. Don't enable OpenClaw
+sandboxing (containment is already covered, and its cost is the socket we won't grant). Keep an
+**exec node** in reserve as the "trust grows with capability" mechanism for letting the agent act
+on the host or other boxes later — the node role model above is confirmed live, but exec-forwarding
+through it specifically still needs its own test.
 
 ## Open questions to resolve before a plan
 
