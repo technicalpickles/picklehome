@@ -11,11 +11,12 @@ Usage:
 import argparse
 import asyncio
 import sys
-from collections import defaultdict
 from datetime import datetime, timezone
 
+from locks.locations import group_locks
 from locks.yale.auth import get_credentials, login
 from locks.yale.client import HealthSeverity, YaleLock, get_locks
+from picklehome.locations import resolve_locations
 from yalexs.lock import LockDoorStatus, LockStatus
 
 
@@ -256,7 +257,7 @@ async def cmd_auth() -> None:
         print("\nNo locks found on this account.")
 
 
-async def cmd_status(name_filter: str | None) -> None:
+async def cmd_status(name_filter: str | None, location_slug: str | None) -> None:
     locks = await get_locks()
     if not locks:
         print("No locks found.")
@@ -273,20 +274,32 @@ async def cmd_status(name_filter: str | None) -> None:
             _print_detail(lock)
         return
 
-    _print_summary(locks)
+    if location_slug:
+        try:
+            loc = resolve_locations(location_slug)[0]
+        except RuntimeError as e:
+            print(e)
+            sys.exit(1)
+        houses = {h.strip().lower() for h in loc.yale_houses}
+        matches = [l for l in locks if l.house_name.strip().lower() in houses]
+        if not matches:
+            # Valid slug, just no locks there -- not an error.
+            print(f"No locks at {loc.label}.")
+            return
+        _print_summary(matches)
+        _print_home_section(loc.label, matches)
+        return
 
-    by_home: dict[str, list[YaleLock]] = defaultdict(list)
-    for lock in locks:
-        by_home[lock.house_name].append(lock)
-    for home_name in sorted(by_home.keys()):
-        _print_home_section(home_name, by_home[home_name])
+    _print_summary(locks)
+    for group in group_locks(locks):
+        _print_home_section(group.label, group.locks)
 
 
 async def run(args) -> None:
     if args.command == "auth":
         await cmd_auth()
     elif args.command == "status":
-        await cmd_status(args.name)
+        await cmd_status(args.name, args.location)
 
 
 def main() -> None:
@@ -296,6 +309,12 @@ def main() -> None:
     sub.add_parser("auth", help="Login and save tokens")
     status = sub.add_parser("status", help="Show lock status")
     status.add_argument("name", nargs="?", help="Show detailed view for a lock (substring match on name)")
+    status.add_argument(
+        "--location",
+        metavar="SLUG",
+        default=None,
+        help="Limit to one location by slug (default: all locations, grouped)",
+    )
 
     args = parser.parse_args()
     asyncio.run(run(args))

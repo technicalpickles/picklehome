@@ -4,8 +4,9 @@
 # Each 1Password item tagged `picklehome-location` contributes one location.
 # Custom fields are matched by label: slug, label, latitude, longitude,
 # station_macs (comma-separated), comfort_mode ("true" if this location has a
-# thermostat this tooling manages). latitude/longitude are required; items
-# missing either are skipped.
+# thermostat this tooling manages), yale_houses (comma-separated Yale API house
+# names, used by locks to map its homes onto this location). latitude/longitude
+# are required; items missing either are skipped.
 #
 # Run over the slurped stream: jq -sc -f scripts/locations-filter.jq
 map(
@@ -22,7 +23,13 @@ map(
         | map(gsub("^\\s+|\\s+$"; ""))
         | map(select(length > 0))
       ),
-      comfort_mode: (($m.comfort_mode // "") | ascii_downcase == "true")
+      comfort_mode: (($m.comfort_mode // "") | ascii_downcase == "true"),
+      yale_houses: (
+        ($m.yale_houses // "")
+        | split(",")
+        | map(gsub("^\\s+|\\s+$"; ""))
+        | map(select(length > 0))
+      )
     }
   # Strip single quotes so the value is safe inside a single-quoted .env line.
   | walk(if type == "string" then gsub("'"; "") else . end)

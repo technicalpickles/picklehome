@@ -346,7 +346,7 @@ def cmd_comforts_sync(args) -> None:
 
 
 def cmd_locations(args) -> None:
-    from climate.locations import resolve_locations
+    from picklehome.locations import resolve_locations
 
     try:
         locations = resolve_locations(args.location)
@@ -397,7 +397,7 @@ def _discover_at(loc, radius: float) -> None:
 
 
 def cmd_weather_discover(args) -> None:
-    from climate.locations import resolve_locations
+    from picklehome.locations import resolve_locations
 
     try:
         locations = resolve_locations(args.location)
@@ -417,7 +417,7 @@ def cmd_weather_discover(args) -> None:
 
 def cmd_weather(args) -> None:
     from climate.ambient.client import load_weather_config, get_outdoor_temp_from_stations
-    from climate.locations import resolve_locations
+    from picklehome.locations import resolve_locations
 
     # Thresholds are location-agnostic; stations now come per-location.
     config = load_weather_config(args.weather)
@@ -672,7 +672,7 @@ def cmd_air_quality(args) -> None:
     from climate.outdoor_air.pollen import PollenError, format_pollen, get_api_key
     from climate.outdoor_air import client as aq_client
     from climate.outdoor_air import pollen as pollen_client
-    from climate.locations import resolve_locations
+    from picklehome.locations import resolve_locations
 
     try:
         locations = resolve_locations(args.location)

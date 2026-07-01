@@ -1,10 +1,10 @@
-"""Tests for climate.locations: PICKLEHOME_LOCATIONS parsing + legacy fallback."""
+"""Tests for picklehome.locations: PICKLEHOME_LOCATIONS parsing + legacy fallback."""
 
 import json
 
 import pytest
 
-from climate.locations import Location, load_locations, resolve_locations
+from picklehome.locations import Location, load_locations, resolve_locations
 
 
 @pytest.fixture(autouse=True)
@@ -21,15 +21,30 @@ def _set_locations(monkeypatch, data):
 def test_json_path_parses_all_fields(monkeypatch):
     _set_locations(monkeypatch, [
         {"slug": "home", "label": "Main House", "lat": 33.77, "lon": -84.38,
-         "station_macs": ["AA:BB"], "comfort_mode": True},
+         "station_macs": ["AA:BB"], "comfort_mode": True,
+         "yale_houses": ["Home", "Main House"]},
     ])
     locs = load_locations()
-    assert locs == [Location("home", "Main House", 33.77, -84.38, ["AA:BB"], comfort_mode=True)]
+    assert locs == [Location("home", "Main House", 33.77, -84.38, ["AA:BB"],
+                             comfort_mode=True, yale_houses=["Home", "Main House"])]
 
 
 def test_comfort_mode_defaults_false(monkeypatch):
     _set_locations(monkeypatch, [{"slug": "beachhouse", "lat": 41.9, "lon": -70.6}])
     assert load_locations()[0].comfort_mode is False
+
+
+def test_yale_houses_defaults_empty(monkeypatch):
+    _set_locations(monkeypatch, [{"slug": "beachhouse", "lat": 41.9, "lon": -70.6}])
+    assert load_locations()[0].yale_houses == []
+
+
+def test_yale_houses_parsed(monkeypatch):
+    _set_locations(monkeypatch, [
+        {"slug": "beachhouse", "lat": 41.9, "lon": -70.6,
+         "yale_houses": ["Beach House"]},
+    ])
+    assert load_locations()[0].yale_houses == ["Beach House"]
 
 
 def test_label_defaults_to_slug(monkeypatch):
