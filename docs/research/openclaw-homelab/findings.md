@@ -40,18 +40,27 @@ Other official facts from the docker doc worth recording:
 NUC is a Celeron **J3455 (4 weak cores, no GPU), 16 GB RAM**.
 
 - **RAM:** 16 GB total, already running ~9 services. A 4 GB agent fits; an 8 GB browser-enabled agent is tight alongside everything else. Budget this explicitly.
-- **LLM runs off-box via an Ollama cloud subscription** (the chosen backend). This sidesteps the J3455 entirely — no local inference, which would be unusably slow on a GPU-less Celeron. Mechanically it's an [Ollama API key](https://ollama.com/settings/keys) pointed at the OpenAI-compatible endpoint `https://ollama.com/v1`. Per the official [`config-tools`](https://docs.openclaw.ai/gateway/config-tools) page, this is a `models.providers` entry (secret as `${ENV}` ref, committable):
+- **LLM runs off-box via an Ollama cloud subscription** (the chosen backend). This sidesteps the J3455 entirely — no local inference, which would be unusably slow on a GPU-less Celeron.
 
+  **Correction (verified against the OpenClaw source, `docs/providers/ollama-cloud.md`, tag `v2026.6.10` — see [pickleclaw vendor clone](#verified-against-the-pickleclaw-spike-non-docker)):** the original plan of hand-rolling a custom `models.providers` entry pointed at the OpenAI-compatible `https://ollama.com/v1` endpoint is **wrong and would likely break tool calling**. `ollama-cloud` is a **first-class built-in provider id** — no custom provider config needed at all:
+
+  - Onboard directly: `openclaw onboard --auth-choice ollama-cloud`, or just export `OLLAMA_API_KEY`.
+  - Base URL is `https://ollama.com` (no `/v1`) — the provider speaks Ollama's **native `/api/chat`**, not the OpenAI-compatible route. The doc is explicit: *"Do not use the `/v1` OpenAI-compatible URL... This breaks tool calling and models may output raw tool JSON as plain text."* This is exactly the failure mode spike item §4 is most worried about ("does the model do tool calling well") — using the wrong endpoint shape would look like a bad model when it's actually a wrong URL.
+  - Model refs look like `ollama-cloud/kimi-k2.6`; list the live hosted catalog with `openclaw models list --provider ollama-cloud`.
+  - Still register the chosen model in `agents.defaults.models` and set it as `agents.defaults.model.primary` (or a fallback/heartbeat) — the official `config-tools.md` examples always pair a custom/hosted provider with this registration, and pickleclaw independently hit the failure mode when it's skipped (see below).
+
+  Corrected config sketch:
   ```json5
-  { models: { providers: { "ollama-cloud": {
-      baseUrl: "https://ollama.com/v1",
-      apiKey: "${OLLAMA_API_KEY}",
-      api: "openai-completions",
-      models: [{ id: "<pick-from-catalog>", contextWindow: 128000, maxTokens: 32000 }]
-  } } } }
+  {
+    agents: {
+      defaults: {
+        model: { primary: "ollama-cloud/<pick-from-catalog>" },
+        models: { "ollama-cloud/<pick-from-catalog>": {} },
+      },
+    },
+  }
   ```
-
-  Setting `baseUrl` is, in OpenClaw's words, "the narrow network trust decision for model HTTP requests" — it allowlists that exact origin through the guarded fetch path. The key lives in 1Password → `.env` like every other secret. **Caveat (see security section):** the smaller/cheaper the Ollama model, the more susceptible to tool-misuse/prompt-injection — weigh model tier against how much tool access the agent gets.
+  `OLLAMA_API_KEY` comes from `.env` as a plain env var (the provider reads it directly per the doc's setup step) — no `${VAR}` templating needed in the config for this one. **Caveat (see security section):** the smaller/cheaper the Ollama model, the more susceptible to tool-misuse/prompt-injection — weigh model tier against how much tool access the agent gets.
 - **Disk:** 20 GB on the local SSD is fine; `/srv/data` is the home for state.
 
 ## How it maps onto homelab conventions
@@ -85,7 +94,9 @@ The split mirrors every other homelab service: **declarative config → repo, ru
 - The **declarative tool/provider/channel config** (the [`config-tools`](https://docs.openclaw.ai/gateway/config-tools) layer + MCP server definitions), with secrets written as `${ENV}` refs, never literals. Ship it as a committed config file the container reads, or template it like `.env`.
 - compose files, `.env.vars`, `deploy.sh` — same as every service.
 
-The catch (partly resolved by the official doc): **auth secrets are already in their own dir** (`OPENCLAW_AUTH_PROFILE_SECRET_DIR`=`/home/node/.config/openclaw`), separate from config — good. But declarative config still lives in `/home/node/.openclaw` **alongside** memory + the SQLite index + channel tokens. So we can't cleanly mount "config in git, state on disk" as two dirs. Working plan: mount the whole config dir to `/srv/data` (restic-backed) and keep a **committed copy of just the config file** as source-of-truth, re-applied on deploy. Spike §3 confirms the exact config filename and whether it's fully env-overridable (which would let us skip the committed-file dance).
+The catch (partly resolved by the official doc): **auth secrets are already in their own dir** (`OPENCLAW_AUTH_PROFILE_SECRET_DIR`=`/home/node/.config/openclaw`), separate from config — good. But declarative config still lives in `/home/node/.openclaw` **alongside** memory + the SQLite index + channel tokens. So we can't cleanly mount "config in git, state on disk" as two dirs.
+
+**Refined plan, backed by a real mechanism (`$include`, verified in source — see below):** don't try to mount the whole root config file read-only; the root `openclaw.json` must stay **writable** (onboarding creates it, and it holds the gateway token / mainKey / session store paths that can't be static). Instead, bind-mount small **committed include files** read-only *inside* the config dir (`$include` targets must resolve inside the config directory), and have the writable root file `$include` specific top-level sections (`tools`, `mcp`, etc.) from them. Non-secret structure lives in git; the live root file is a thin, mostly-onboarding-generated shell that points at it. One caveat: OpenClaw's own `config set`/`config patch` **writes through** to a single-file-include target for that section — so a read-only-mounted include file blocks CLI writes to that section (fine for us: changes flow through git + redeploy, not live `config set`). Not yet exercised hands-on by any spike — flagged in `spike-questions.md` §3 as the next thing to validate.
 
 ### Adding tools without rebuilding/restarting (the `gogcli` question)
 
@@ -150,6 +161,17 @@ This is the same "spike already running on the laptop" that [`spike-questions.md
 - **Loopback bind, the actual mechanism:** `--gateway-bind loopback` at onboarding time — confirmed via `ss -ltnp` showing only `127.0.0.1:18789` / `[::1]:18789`, no LAN exposure. It's an onboarding flag (and presumably a `gateway.bind` config key for changing post-hoc), not something to discover by trial and error.
 - **UI/API auth, end-to-end:** `gateway.auth.mode: "token"`, token stored at `gateway.auth.token` in the config file, and the Control UI's connect form genuinely requires both the WebSocket URL *and* that token — no anonymous access observed. Matches the official doc's claim.
 
+## Verified against OpenClaw source (`pickleclaw`'s vendor clone, tag `v2026.6.10`)
+
+`pickleclaw` keeps a gitignored clone of the OpenClaw repo at the exact tag matching its installed CLI (`vendor/openclaw`, per its `CLAUDE.md`). That clone answers several questions neither the pickleclaw runtime spike (different provider) nor the raw-GitHub docs fetch (main branch, docs-only) could pin down precisely — this is a straight source read, not docs summary or inference:
+
+- **The plan's `OPENCLAW_BIND: loopback` env var is wrong on two counts.** The real var is `OPENCLAW_GATEWAY_BIND`, and for the **docker** deploy the value should be `lan`, not `loopback`. Reason (from `docs/install/docker.md`): Docker's default bridge networking means traffic from a published port (`-p 18789:18789`) arrives on the container's `eth0`, not its loopback interface — a `loopback`-bound gateway *inside* a bridged container is unreachable even from the host. `scripts/docker/setup.sh` defaults to `OPENCLAW_GATEWAY_BIND=lan` specifically so host access works. **The security boundary is the compose port mapping** (`127.0.0.1:18789:18789`, host-side), not the app's internal bind mode — setting `gateway.bind: loopback` inside the container would break the deploy, not make it safer.
+- **Channel DM policy is per-channel, not a global `session.*` key.** Source (`src/config/types.channel-messaging-common.ts`, `types.base.ts`): `dmPolicy: "pairing" | "allowlist" | "open" | "disabled"` and `allowFrom: Array<string | number>` are both **per-channel** fields (e.g. `channels.telegram.dmPolicy` / `channels.telegram.allowFrom`), matching pickleclaw's actual working Telegram config. `session.dmScope` is a real but *different* setting (session isolation scope: `"main"` vs `"per-account-channel-peer"`, etc.) — don't confuse the two.
+- **`${VAR}` env-secret templating is real**, confirmed in source (`src/config/types.secrets.ts`: `ENV_SECRET_TEMPLATE_RE`, a third `"env"` SecretRef source alongside the `exec`/`file` forms pickleclaw exercised hands-on). So the plan's `apiKey: "${OLLAMA_API_KEY}"`-style shorthand is legitimate for provider config it just isn't the mechanism pickleclaw itself tested.
+- **The model-registration pairing (provider entry + `agents.defaults.models` + `model.primary`) is the *official documented pattern***, not just our inference from a cost incident. Every custom-provider example in `docs/gateway/config-tools.md` (Cerebras, Kimi, etc.) pairs `models.providers.<id>` with both `agents.defaults.model.primary` *and* an `agents.defaults.models` registration entry. Skipping the registration is what caused pickleclaw's silent-fallback-to-expensive-model incident — the docs don't call this failure mode out explicitly, but they never show the registration as optional either.
+- **`$include` is a real, documented config mechanism** (`docs/gateway/configuration-reference.md`): a config value can be `{ $include: "./file.json5" }` (or an array of files, deep-merged), and OpenClaw resolves it into the containing key. Constraints: include paths must resolve **inside** the top-level config directory; a single-file include **replaces** the whole containing key (so one include file can't back two differently-shaped sections); `openclaw`-owned writes (`config set`, `plugins install`, etc.) write through to a single-file include target, so a read-only-mounted include blocks CLI writes to that section. This is the real mechanism to resolve the version-control catch above.
+- **Fresh bring-up needs onboarding to run at least once — `OPENCLAW_SKIP_ONBOARDING` is for re-runs, not initial setup.** Confirmed via the docker setup script's own test suite (`src/docker-setup.e2e.test.ts`): with `OPENCLAW_SKIP_ONBOARDING=1`, the script still runs `config set --batch-json` for `gateway.mode`/`gateway.bind` — implying a config file must already exist to patch. The **manual flow** in `docs/install/docker.md` confirms the real sequence: `onboard --mode local --no-install-daemon` (with docker-specific flags: `--gateway-auth token --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN --skip-ui --suppress-gateway-token-output`) → `config set --batch-json [...]` → `docker compose up -d`. This is the same shape as pickleclaw's own bare-metal approach (scripted onboarding flags, then `config set`/`patch` calls) — **not** "skip onboarding entirely and boot from a static mounted file."
+
 ## Open questions to resolve before a plan
 
 - **Why / use case?** What do you actually want it to *do* (ops assistant? notifications? home-automation glue calling the existing `just` CLIs?). The use case decides how much host access it needs — which decides whether it's safe here at all.
@@ -165,6 +187,7 @@ A short spike: pull the official image, confirm the real port / volume paths / d
 ## Sources
 
 - **`pickleclaw`** (sibling repo, `~/github.com/technicalpickles/pickleclaw`) — the running spike referenced throughout [`spike-questions.md`](spike-questions.md), diverged to npm/OrbStack/OpenRouter instead of docker/Ollama. See `docs/setup-notes.md` and `CLAUDE.md` there for the full log; this doc only pulls the facts that transfer to the docker/Ollama/picklelab deploy.
+- **OpenClaw source** — `pickleclaw`'s gitignored `vendor/openclaw` clone, pinned to tag `v2026.6.10` (matching its installed CLI version). Used to verify config schema/mechanism questions the runtime spike and docs summaries couldn't settle: `src/config/types.*.ts` (dmPolicy/allowFrom shape), `src/config/types.secrets.ts` (SecretRef `env` source), `docs/install/docker.md` + `src/docker-setup.e2e.test.ts` (bind-mode env var, onboarding-vs-skip sequencing), `docs/providers/ollama-cloud.md` (built-in provider, native-API-vs-`/v1` warning), `docs/gateway/configuration-reference.md` (`$include`).
 - **Official docs, all read directly via raw GitHub markdown** (the rendered `docs.openclaw.ai` site 403'd automated fetches):
   - [`docs/install/docker.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/install/docker.md) → port/user/mounts/image/health/bind facts
   - [`docs/cli/mcp.md`](https://raw.githubusercontent.com/openclaw/openclaw/main/docs/cli/mcp.md) → `mcp.servers` config, transports, hot-add commands
