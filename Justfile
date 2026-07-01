@@ -54,9 +54,13 @@ climate-weather-discover *ARGS:
 climate-weather *ARGS:
     uv run python -m climate.sync weather {{ARGS}}
 
+# List configured locations (main house, beachhouse, ...)
+climate-locations *ARGS:
+    uv run python -m climate.sync locations {{ARGS}}
+
 # Show current outdoor air quality and pollen
-climate-air-quality:
-    uv run python -m climate.sync air-quality
+climate-air-quality *ARGS:
+    uv run python -m climate.sync air-quality {{ARGS}}
 
 # Switch schedule comfort mode: heat | cool | auto
 climate-comfort-switch MODE *ARGS:

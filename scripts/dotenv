@@ -36,6 +36,26 @@ op inject -f -i "$TEMPLATE" -o "$tmp"
 # Wrap multiline/space-containing values in double quotes so python-dotenv can parse them.
 scripts/quote-env-values "$tmp"
 
+# Discover named locations: every 1Password item tagged `picklehome-location`
+# becomes one entry in the PICKLEHOME_LOCATIONS JSON array (climate/locations.py
+# parses it). This can't be an op:// template ref because the item set is dynamic,
+# so we query by tag here, mirroring the Lutron cert loop below.
+# Appended after quote-env-values (which would mangle the embedded JSON) and
+# single-quoted by hand; the jq filter strips single quotes to keep that safe.
+LOCATION_TAG="picklehome-location"
+locations_json="[]"
+if item_list=$(op item list --tags "$LOCATION_TAG" --format json 2>/dev/null) \
+   && [[ "$(echo "$item_list" | jq 'length')" -gt 0 ]]; then
+    items_tmp=$(mktemp)
+    for id in $(echo "$item_list" | jq -r '.[].id'); do
+        op item get "$id" --format json >> "$items_tmp"
+    done
+    locations_json=$(jq -sc -f scripts/locations-filter.jq "$items_tmp")
+    rm -f "$items_tmp"
+    echo "Discovered $(echo "$locations_json" | jq 'length') location(s) tagged '$LOCATION_TAG'"
+fi
+printf "PICKLEHOME_LOCATIONS='%s'\n" "$locations_json" >> "$tmp"
+
 # Verify no keys disappeared before clobbering the real file
 if [[ -n "$old_keys" ]]; then
     new_keys=$(grep -v '^#' "$tmp" | grep -v '^[[:space:]]*$' | cut -d= -f1 | sort)

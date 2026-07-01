@@ -345,37 +345,42 @@ def cmd_comforts_sync(args) -> None:
         sys.exit(1)
 
 
-def cmd_weather_discover(args) -> None:
-    import os
+def cmd_locations(args) -> None:
+    from climate.locations import resolve_locations
+
+    try:
+        locations = resolve_locations(args.location)
+    except RuntimeError as e:
+        print(e)
+        sys.exit(1)
+
+    print(f"{len(locations)} location(s) configured:\n")
+    for loc in locations:
+        macs = ", ".join(loc.station_macs) if loc.station_macs else "(none)"
+        print(f"  {loc.slug}  {loc.label}")
+        print(f"      coords:   ({loc.lat:.4f}, {loc.lon:.4f})")
+        print(f"      stations: {macs}")
+
+
+def _discover_at(loc, radius: float) -> None:
+    """Discover and print nearby outdoor stations for one location."""
     from climate.ambient.client import discover_stations_sync
 
-    lat_str = os.environ.get("HOME_LAT", "")
-    lon_str = os.environ.get("HOME_LON", "")
-    if not lat_str or not lon_str:
-        print("HOME_LAT and HOME_LON must be set. Run 'just dotenv'.")
-        sys.exit(1)
+    print(f"Searching within {radius} mile(s) of ({loc.lat:.4f}, {loc.lon:.4f})...")
     try:
-        lat, lon = float(lat_str), float(lon_str)
-    except ValueError:
-        print(f"HOME_LAT/HOME_LON are not valid floats: {lat_str!r}, {lon_str!r}")
-        sys.exit(1)
-
-    print(f"Searching within {args.radius} mile(s) of ({lat:.4f}, {lon:.4f})...")
-    try:
-        stations = discover_stations_sync(lat, lon, radius_miles=args.radius)
+        stations = discover_stations_sync(loc.lat, loc.lon, radius_miles=radius)
     except RuntimeError as e:
         print(f"Discovery failed: {e}")
-        sys.exit(1)
+        return
 
     if not stations:
         print("No outdoor stations found. Try --radius 1 or larger.")
-        sys.exit(1)
+        return
 
-    from climate.ambient.client import is_temp_plausible
     temps = [s.get("lastData", {}).get("tempf") for s in stations if s.get("lastData", {}).get("tempf") is not None]
     median_temp = sorted(temps)[len(temps) // 2] if temps else None
 
-    print(f"\nFound {len(stations)} outdoor station(s):\n")
+    print(f"Found {len(stations)} outdoor station(s):\n")
     for s in stations:
         mac = s.get("macAddress", "unknown")
         name = (s.get("info", {}).get("name")
@@ -388,40 +393,76 @@ def cmd_weather_discover(args) -> None:
         else:
             temp_str = f"{temp}°F"
         print(f"  {mac}  {name}  ({temp_str})")
-    print("\nStore chosen MACs in 1Password → AMBIENT_STATION_MACS in .env (see .env.template).")
+
+
+def cmd_weather_discover(args) -> None:
+    from climate.locations import resolve_locations
+
+    try:
+        locations = resolve_locations(args.location)
+    except RuntimeError as e:
+        print(e)
+        sys.exit(1)
+
+    multi = len(locations) > 1
+    for loc in locations:
+        if multi:
+            print(f"\n=== {loc.label} ===")
+        _discover_at(loc, args.radius)
+
+    print("\nStore chosen MACs on the location's 1Password item (station_macs field), "
+          "then run 'just dotenv'. Legacy single-home setups: set AMBIENT_STATION_MACS in .env.")
 
 
 def cmd_weather(args) -> None:
-    from climate.ambient.client import load_weather_config, get_configured_macs, get_outdoor_temp_from_stations
+    from climate.ambient.client import load_weather_config, get_outdoor_temp_from_stations
+    from climate.locations import resolve_locations
 
+    # Thresholds are location-agnostic; stations now come per-location.
     config = load_weather_config(args.weather)
-    macs = get_configured_macs(config)
-
-    if not macs:
-        print("No stations configured. Run 'just climate-weather-discover', then set AMBIENT_STATION_MACS in .env.")
-        sys.exit(1)
-
-    result = get_outdoor_temp_from_stations(macs)
-    if result is None:
-        print("Could not read a fresh, plausible outdoor temp from any configured station.")
-        sys.exit(1)
-
-    mac, temp, age_minutes = result
-    age_str = f"{age_minutes:.0f} min old"
-
     thresholds = config.get("thresholds", {})
     heat_below = thresholds.get("heat_below", 60)
     cool_above = thresholds.get("cool_above", 65)
 
-    if temp < heat_below:
-        mode = f"heat  → Comfort Heat (smart2)"
-    elif temp > cool_above:
-        mode = f"cool  → Comfort Cool (smart1)"
-    else:
-        mode = f"neutral  (between {heat_below}°F–{cool_above}°F, no change recommended)"
+    try:
+        locations = resolve_locations(args.location)
+    except RuntimeError as e:
+        print(e)
+        sys.exit(1)
 
-    print(f"Outdoor temp: {temp}°F  ({age_str}, {mac})")
-    print(f"Comfort mode: {mode}")
+    multi = len(locations) > 1
+    any_error = False
+    for loc in locations:
+        if multi:
+            print(f"\n=== {loc.label} ===")
+
+        if not loc.station_macs:
+            print("No stations configured for this location. Run "
+                  "'just climate-weather-discover', then add station_macs in 1Password.")
+            any_error = True
+            continue
+
+        result = get_outdoor_temp_from_stations(loc.station_macs)
+        if result is None:
+            print("Could not read a fresh, plausible outdoor temp from any configured station.")
+            any_error = True
+            continue
+
+        mac, temp, age_minutes = result
+        age_str = f"{age_minutes:.0f} min old"
+
+        if temp < heat_below:
+            mode = "heat  → Comfort Heat (smart2)"
+        elif temp > cool_above:
+            mode = "cool  → Comfort Cool (smart1)"
+        else:
+            mode = f"neutral  (between {heat_below}°F–{cool_above}°F, no change recommended)"
+
+        print(f"Outdoor temp: {temp}°F  ({age_str}, {mac})")
+        print(f"Comfort mode: {mode}")
+
+    if any_error:
+        sys.exit(1)
 
 
 def _apply_comfort_mode(schedule_text: str, mode: str) -> str:
@@ -622,60 +663,59 @@ def cmd_comfort_switch(args) -> None:
 
 def cmd_air_quality(args) -> None:
     import asyncio
-    import os
     from climate.outdoor_air.client import AirQualityError, format_air_quality
     from climate.outdoor_air.pollen import PollenError, format_pollen, get_api_key
     from climate.outdoor_air import client as aq_client
     from climate.outdoor_air import pollen as pollen_client
+    from climate.locations import resolve_locations
 
-    lat_str = os.environ.get("HOME_LAT", "")
-    lon_str = os.environ.get("HOME_LON", "")
-    if not lat_str or not lon_str:
-        print("HOME_LAT and HOME_LON must be set. Run 'just dotenv'.")
-        sys.exit(1)
     try:
-        lat, lon = float(lat_str), float(lon_str)
-    except ValueError:
-        print(f"HOME_LAT/HOME_LON are not valid floats: {lat_str!r}, {lon_str!r}")
+        locations = resolve_locations(args.location)
+    except RuntimeError as e:
+        print(e)
         sys.exit(1)
 
-    # Check for pollen API key before kicking off fetches
+    # Check for pollen API key once before kicking off fetches
     try:
         api_key = get_api_key()
     except PollenError as e:
         api_key = None
         pollen_warning = str(e)
 
-    async def fetch_all():
+    async def fetch_all(lat: float, lon: float):
         tasks = [aq_client._fetch(lat, lon)]
         if api_key:
             tasks.append(pollen_client._fetch(lat, lon, api_key))
         return await asyncio.gather(*tasks, return_exceptions=True)
 
-    results = asyncio.run(fetch_all())
-    aq_result = results[0]
-    pollen_result = results[1] if api_key else None
-
+    multi = len(locations) > 1
     any_error = False
+    for loc in locations:
+        if multi:
+            print(f"\n=== {loc.label} ===")
 
-    if isinstance(aq_result, AirQualityError):
-        print(f"Air quality unavailable: {aq_result}", file=sys.stderr)
-        any_error = True
-    elif isinstance(aq_result, Exception):
-        print(f"Unexpected error fetching air quality: {aq_result}", file=sys.stderr)
-        any_error = True
-    else:
-        print(format_air_quality(aq_result))
+        results = asyncio.run(fetch_all(loc.lat, loc.lon))
+        aq_result = results[0]
+        pollen_result = results[1] if api_key else None
 
-    if api_key is None:
-        print(f"\n(pollen skipped: {pollen_warning})")
-    elif isinstance(pollen_result, PollenError):
-        print(f"\nPollen unavailable: {pollen_result}", file=sys.stderr)
-    elif isinstance(pollen_result, Exception):
-        print(f"\nUnexpected error fetching pollen: {pollen_result}", file=sys.stderr)
-    else:
-        print()
-        print(format_pollen(pollen_result))
+        if isinstance(aq_result, AirQualityError):
+            print(f"Air quality unavailable: {aq_result}", file=sys.stderr)
+            any_error = True
+        elif isinstance(aq_result, Exception):
+            print(f"Unexpected error fetching air quality: {aq_result}", file=sys.stderr)
+            any_error = True
+        else:
+            print(format_air_quality(aq_result))
+
+        if api_key is None:
+            print(f"\n(pollen skipped: {pollen_warning})")
+        elif isinstance(pollen_result, PollenError):
+            print(f"\nPollen unavailable: {pollen_result}", file=sys.stderr)
+        elif isinstance(pollen_result, Exception):
+            print(f"\nUnexpected error fetching pollen: {pollen_result}", file=sys.stderr)
+        else:
+            print()
+            print(format_pollen(pollen_result))
 
     if any_error:
         sys.exit(1)
@@ -827,6 +867,15 @@ def main() -> None:
         help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
     )
 
+    subparsers.add_parser(
+        "locations", help="List configured locations (main house, beachhouse, ...)"
+    ).add_argument(
+        "--location",
+        metavar="SLUG",
+        default=None,
+        help="Limit to one location by slug (default: all)",
+    )
+
     discover_parser = subparsers.add_parser(
         "discover-stations", help="List nearby outdoor Ambient Weather stations"
     )
@@ -836,6 +885,12 @@ def main() -> None:
         default=0.5,
         metavar="N",
         help="Search radius in miles (default: 0.5)",
+    )
+    discover_parser.add_argument(
+        "--location",
+        metavar="SLUG",
+        default=None,
+        help="Limit to one location by slug (default: all configured locations)",
     )
 
     weather_parser = subparsers.add_parser(
@@ -847,6 +902,12 @@ def main() -> None:
         default=DEFAULT_WEATHER_PATH,
         metavar="PATH",
         help="Path to weather YAML (default: climate/config/weather.yaml)",
+    )
+    weather_parser.add_argument(
+        "--location",
+        metavar="SLUG",
+        default=None,
+        help="Limit to one location by slug (default: all configured locations)",
     )
 
     comfort_switch_parser = subparsers.add_parser(
@@ -892,6 +953,12 @@ def main() -> None:
     air_quality_parser = subparsers.add_parser(
         "air-quality", help="Show current outdoor air quality, UV index, and pollen"
     )
+    air_quality_parser.add_argument(
+        "--location",
+        metavar="SLUG",
+        default=None,
+        help="Limit to one location by slug (default: all configured locations)",
+    )
 
     subparsers.choices["auth"].set_defaults(func=cmd_auth)
     subparsers.choices["list"].set_defaults(func=cmd_list)
@@ -901,6 +968,7 @@ def main() -> None:
     subparsers.choices["history"].set_defaults(func=cmd_history)
     subparsers.choices["capture-comforts"].set_defaults(func=cmd_comforts_capture)
     subparsers.choices["sync-comforts"].set_defaults(func=cmd_comforts_sync)
+    subparsers.choices["locations"].set_defaults(func=cmd_locations)
     subparsers.choices["discover-stations"].set_defaults(func=cmd_weather_discover)
     subparsers.choices["weather"].set_defaults(func=cmd_weather)
     subparsers.choices["comfort-switch"].set_defaults(func=cmd_comfort_switch)
