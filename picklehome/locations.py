@@ -37,6 +37,11 @@ class Location:
     # slugs. Vendor-specific, like station_macs is to Ambient and comfort_mode to
     # Ecobee; empty for locations with no Yale locks.
     yale_houses: list[str] = field(default_factory=list)
+    # SDM structure custom names (set in the Google Home app) that belong to this
+    # location. Lets nest map its per-structure devices onto our canonical slugs,
+    # the same way yale_houses does for locks. Empty for locations with no Nest
+    # devices.
+    nest_structures: list[str] = field(default_factory=list)
 
 
 def load_locations() -> list[Location]:
@@ -106,6 +111,7 @@ def _from_dict(d: dict) -> Location:
         station_macs=list(d.get("station_macs", [])),
         comfort_mode=bool(d.get("comfort_mode", False)),
         yale_houses=list(d.get("yale_houses", [])),
+        nest_structures=list(d.get("nest_structures", [])),
     )
 
 

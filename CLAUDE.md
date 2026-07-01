@@ -92,6 +92,7 @@ All integrations use the same general pattern: credentials in 1Password, injecte
 |-------|---------|---------------|-------|
 | API key (static) | UniFi, Cloudflare Radar, Google APIs | `.env` only | No refresh needed |
 | OAuth token (refreshable) | Ecobee | `~/.local/state/picklehome/ecobee-tokens.json` | PIN flow, auto-refresh on use |
+| OAuth token (refreshable) | Nest | `~/.local/state/picklehome/nest-tokens.json` | Loopback browser flow via Device Access "partner connections"; auto-refresh on use |
 | Username/password to session token | Yale, Aladdin, BlueAir | `~/.local/state/picklehome/<service>-tokens.json` | Token cached, re-auth on expiry |
 | TLS client cert | Lutron Caseta | `lighting/.certs/` (key, cert, CA) | One-time pairing, certs don't expire |
 
@@ -143,6 +144,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `network/`: Network diagnostic and profiling scripts; see `network/CLAUDE.md`
 - `garage/`: Aladdin Connect garage door control; see `garage/README.md`
 - `locks/`: Yale Access smart locks; see `locks/README.md`
+- `nest/`: Nest thermostats + cameras via Google SDM; see `nest/README.md`
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
   - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `climate-auto-switch`, `backup`, `github-actions-runner`, `woodpecker` (full list in the Homelab Services table below)
@@ -169,6 +171,7 @@ Quick reference for all smart home and network integrations.
 | AT&T BGW | `network/` | Fiber gateway | Web scraping (no auth) | `just bgw *` |
 | Aladdin Connect | `garage/` | Garage door opener | Cloud API (Cognito) | `just garage *` |
 | Yale Access | `locks/` | Smart locks + bridges | Cloud API (user/pass) | `just locks *` |
+| Nest | `nest/` | Thermostats + cameras (SDM) | Cloud API (OAuth) | `just nest *` |
 | Sonos | `sonos/` | Speakers | Local UPnP (no auth) | `just sonos *` |
 
 ## Homelab Services

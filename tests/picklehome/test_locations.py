@@ -22,11 +22,25 @@ def test_json_path_parses_all_fields(monkeypatch):
     _set_locations(monkeypatch, [
         {"slug": "home", "label": "Main House", "lat": 33.77, "lon": -84.38,
          "station_macs": ["AA:BB"], "comfort_mode": True,
-         "yale_houses": ["Home", "Main House"]},
+         "yale_houses": ["Home", "Main House"], "nest_structures": ["Atlanta"]},
     ])
     locs = load_locations()
     assert locs == [Location("home", "Main House", 33.77, -84.38, ["AA:BB"],
-                             comfort_mode=True, yale_houses=["Home", "Main House"])]
+                             comfort_mode=True, yale_houses=["Home", "Main House"],
+                             nest_structures=["Atlanta"])]
+
+
+def test_nest_structures_defaults_empty(monkeypatch):
+    _set_locations(monkeypatch, [{"slug": "beachhouse", "lat": 41.9, "lon": -70.6}])
+    assert load_locations()[0].nest_structures == []
+
+
+def test_nest_structures_parsed(monkeypatch):
+    _set_locations(monkeypatch, [
+        {"slug": "beachhouse", "lat": 41.9, "lon": -70.6,
+         "nest_structures": ["8 Hacker St"]},
+    ])
+    assert load_locations()[0].nest_structures == ["8 Hacker St"]
 
 
 def test_comfort_mode_defaults_false(monkeypatch):
