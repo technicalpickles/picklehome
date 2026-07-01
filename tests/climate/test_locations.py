@@ -20,10 +20,16 @@ def _set_locations(monkeypatch, data):
 
 def test_json_path_parses_all_fields(monkeypatch):
     _set_locations(monkeypatch, [
-        {"slug": "home", "label": "Main House", "lat": 33.77, "lon": -84.38, "station_macs": ["AA:BB"]},
+        {"slug": "home", "label": "Main House", "lat": 33.77, "lon": -84.38,
+         "station_macs": ["AA:BB"], "comfort_mode": True},
     ])
     locs = load_locations()
-    assert locs == [Location("home", "Main House", 33.77, -84.38, ["AA:BB"])]
+    assert locs == [Location("home", "Main House", 33.77, -84.38, ["AA:BB"], comfort_mode=True)]
+
+
+def test_comfort_mode_defaults_false(monkeypatch):
+    _set_locations(monkeypatch, [{"slug": "beachhouse", "lat": 41.9, "lon": -70.6}])
+    assert load_locations()[0].comfort_mode is False
 
 
 def test_label_defaults_to_slug(monkeypatch):
@@ -42,7 +48,7 @@ def test_legacy_fallback_synthesizes_home(monkeypatch):
     monkeypatch.setenv("HOME_LON", "-84.38")
     monkeypatch.setenv("AMBIENT_STATION_MACS", "AA:BB, CC:DD")
     locs = load_locations()
-    assert locs == [Location("home", "Home", 33.77, -84.38, ["AA:BB", "CC:DD"])]
+    assert locs == [Location("home", "Home", 33.77, -84.38, ["AA:BB", "CC:DD"], comfort_mode=True)]
 
 
 def test_empty_json_array_falls_back_to_legacy(monkeypatch):

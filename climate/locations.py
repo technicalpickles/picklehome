@@ -24,6 +24,10 @@ class Location:
     lat: float
     lon: float
     station_macs: list[str] = field(default_factory=list)
+    # Whether this location has a thermostat this tooling manages (Atlanta does,
+    # the beachhouse doesn't). Gates the comfort-mode recommendation in
+    # `just climate-weather`, which is Ecobee-specific (smart1/smart2).
+    comfort_mode: bool = False
 
 
 def load_locations() -> list[Location]:
@@ -55,7 +59,9 @@ def load_locations() -> list[Location]:
                 f"HOME_LAT/HOME_LON are not valid floats: {lat_str!r}, {lon_str!r}"
             ) from e
         macs = _split_macs(os.environ.get("AMBIENT_STATION_MACS", ""))
-        return [Location(slug="home", label="Home", lat=lat, lon=lon, station_macs=macs)]
+        # Legacy single-home == the Atlanta thermostat setup, so it manages comfort.
+        return [Location(slug="home", label="Home", lat=lat, lon=lon,
+                         station_macs=macs, comfort_mode=True)]
 
     return []
 
@@ -89,6 +95,7 @@ def _from_dict(d: dict) -> Location:
         lat=float(d["lat"]),
         lon=float(d["lon"]),
         station_macs=list(d.get("station_macs", [])),
+        comfort_mode=bool(d.get("comfort_mode", False)),
     )
 
 

@@ -31,7 +31,9 @@ Station MACs are sensitive (geolocatable), stored in 1Password, injected via `.e
 
 Weather and air-quality commands are scoped by location (Atlanta main house, MA beachhouse, ...) and cover **all** configured locations by default, grouped in the output. Pass `--location <slug>` to limit to one.
 
-Each location is a 1Password item tagged `picklehome-location` with fields: `slug`, `label`, `latitude`, `longitude`, `station_macs` (comma-separated). `just dotenv` discovers every tagged item and snapshots them into the `PICKLEHOME_LOCATIONS` JSON var in `.env` (via `scripts/locations-filter.jq`); `climate/locations.py` parses it at runtime. Add or edit an address in 1Password, then re-run `just dotenv` to pick it up.
+Each location is a 1Password item tagged `picklehome-location` with fields: `slug`, `label`, `latitude`, `longitude`, `station_macs` (comma-separated), and optional `comfort_mode` (`true` for a location whose thermostat this tooling manages). `just dotenv` discovers every tagged item and snapshots them into the `PICKLEHOME_LOCATIONS` JSON var in `.env` (via `scripts/locations-filter.jq`); `climate/locations.py` parses it at runtime. Add or edit an address in 1Password, then re-run `just dotenv` to pick it up.
+
+Only `comfort_mode` locations get the Ecobee comfort-mode recommendation in `just climate-weather` (the main house); weather-only locations like the beachhouse show outdoor temp alone. Comfort switching itself (`just climate-comfort-switch`) remains main-house-only.
 
 Coords and MACs are geolocatable, so they live only in the generated `.env`, never a checked-in file. When no tagged items exist, the commands fall back to the legacy single-home `HOME_LAT` / `HOME_LON` / `AMBIENT_STATION_MACS` vars. Run `just climate-locations` to see what's configured.
 

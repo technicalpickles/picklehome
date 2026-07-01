@@ -360,6 +360,7 @@ def cmd_locations(args) -> None:
         print(f"  {loc.slug}  {loc.label}")
         print(f"      coords:   ({loc.lat:.4f}, {loc.lon:.4f})")
         print(f"      stations: {macs}")
+        print(f"      comfort:  {'managed (comfort-mode recommendation)' if loc.comfort_mode else 'weather-only'}")
 
 
 def _discover_at(loc, radius: float) -> None:
@@ -450,6 +451,12 @@ def cmd_weather(args) -> None:
 
         mac, temp, age_minutes = result
         age_str = f"{age_minutes:.0f} min old"
+        print(f"Outdoor temp: {temp}°F  ({age_str}, {mac})")
+
+        # The comfort-mode line is an Ecobee-specific (smart1/smart2) recommendation,
+        # only meaningful for a location whose thermostat this tooling manages.
+        if not loc.comfort_mode:
+            continue
 
         if temp < heat_below:
             mode = "heat  → Comfort Heat (smart2)"
@@ -457,8 +464,6 @@ def cmd_weather(args) -> None:
             mode = "cool  → Comfort Cool (smart1)"
         else:
             mode = f"neutral  (between {heat_below}°F–{cool_above}°F, no change recommended)"
-
-        print(f"Outdoor temp: {temp}°F  ({age_str}, {mac})")
         print(f"Comfort mode: {mode}")
 
     if any_error:
