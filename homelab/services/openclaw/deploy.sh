@@ -83,9 +83,18 @@ echo "==> Onboarding (first deploy only)"
 # actually run once to create the writable root config, auth store, and gateway token.
 # Gated on the root config file so redeploys don't re-onboard an already-live service.
 if [ ! -f "$DATA_DIR/config/openclaw.json" ]; then
-    $RUN_CLI onboard --mode local --no-install-daemon \
+    # --non-interactive requires --accept-risk (the "agents are powerful, full
+    # system access is risky" prompt) -- deploy.sh runs over non-interactive ssh,
+    # so there's no TTY to answer it and it would otherwise hang forever.
+    # --skip-health: this onboard runs as a one-off `docker compose run` before the
+    # real gateway is up (`compose up -d` happens below), so the built-in "wait for
+    # an already-running gateway" health check has nothing to reach and errors out
+    # (non-interactive mode won't fall back to starting one without --install-daemon,
+    # which we don't want here -- systemd owns the long-lived container).
+    # Verified against the same CLI version in a throwaway --dev profile.
+    $RUN_CLI onboard --mode local --no-install-daemon --non-interactive --accept-risk \
         --gateway-auth token --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN \
-        --skip-ui --suppress-gateway-token-output
+        --skip-ui --suppress-gateway-token-output --skip-health
 
     echo "==> Setting channels.telegram.enabled=false (first-onboard only, see below)"
     # Bundled into the one-time onboarding step, NOT the self-healing config-set below:
