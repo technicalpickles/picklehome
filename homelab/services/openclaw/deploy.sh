@@ -142,18 +142,22 @@ $RUN_CLI config set --batch-json '[
 echo "==> Doctor (catches config-schema migrations after an image bump)"
 $RUN_CLI doctor || echo "    WARNING: doctor reported an issue — check output above"
 
-echo "==> Bringing the service up"
-$COMPOSE up -d
-
 echo "==> Configuring Tailscale serve for openclaw"
 sudo tailscale serve --service=svc:openclaw --https=443 http://127.0.0.1:18789
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/openclaw.service" /etc/systemd/system/
 
-echo "==> Reloading systemd and enabling service"
+echo "==> Reloading systemd and starting service"
+# Bring the container up THROUGH systemd (systemctl restart runs the unit's
+# ExecStart = compose up -d), not with a direct `compose up -d` call -- otherwise
+# the container runs fine but systemd never learns about it and shows the unit as
+# inactive/dead despite a healthy container (RemainAfterExit only tracks state
+# systemd itself started). Same pattern as every other service's deploy.sh
+# (taskchampion-sync, woodpecker, second-brain-agent, brineworks-agent).
 sudo systemctl daemon-reload
 sudo systemctl enable openclaw.service
+sudo systemctl restart openclaw.service
 
 echo "==> Status"
 systemctl status openclaw.service --no-pager || true

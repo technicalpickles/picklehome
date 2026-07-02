@@ -548,7 +548,9 @@ openclaw-status host="picklelab":
     #!/usr/bin/env bash
     set -uo pipefail
     echo "==> systemd unit on {{host}}"
-    ssh {{host}} "sudo systemctl status openclaw.service --no-pager" || true
+    # No sudo -- systemctl status is read-only and doesn't need root, and isn't
+    # in the passwordless sudoers allowlist anyway (unlike enable/restart/start).
+    ssh {{host}} "systemctl status openclaw.service --no-pager" || true
     echo ""
     echo "==> loopback health on {{host}}"
     ssh {{host}} "curl -fsS http://127.0.0.1:18789/healthz -o /dev/null -w 'healthz HTTP %{http_code}\n'" || echo "loopback FAILED"
@@ -562,7 +564,10 @@ openclaw-status host="picklelab":
     fi
     echo ""
     echo "==> openclaw security audit"
-    ssh {{host}} "docker exec openclaw openclaw security audit" || true
+    # Container name is the compose project-service pattern (openclaw-openclaw-1),
+    # not the bare service name -- compose derives the project name from the
+    # directory (homelab/services/openclaw), which collides with the service name.
+    ssh {{host}} "docker exec openclaw-openclaw-1 openclaw security audit" || true
 
 # Tail OpenClaw container logs from picklelab
 openclaw-logs host="picklelab" lines="50":
