@@ -328,9 +328,9 @@ The adjacent npm-install `update`→`doctor`→`gateway restart` flow *was also*
 
 ## Open questions
 
-Only one genuinely open item left in the entire spike:
+**Spike phase called done (2026-07-01).** One item is accepted as a residual unknown rather than pursued further:
 
-- **RAM/CPU under real agentic load, with the browser tool actually invoked** *(spike §7, last remaining gap)* — idle numbers are now measured directly on the J3455 (see below); what's left is a working model actually driving tool calls on that hardware, not an unconfigured `--dev` instance.
+- **RAM/CPU under real agentic load, with the browser tool actually invoked** *(spike §7)* — idle numbers are measured directly on the J3455 (see below); honestly testing under real load needs a working provider key, a live channel, and a sustained multi-step task — that's really "deploy it and watch," not another spike. Idle numbers already fit comfortably in the ~13 GB available headroom, and even the community's own worst-case estimate (~8 GB while browsing) fits; treat the real number as something to confirm after deploy, not a pre-deploy blocker.
 
 **Live-tested on pickleclaw / locally / directly on picklelab (2026-07-01), substantially answered:**
 
