@@ -102,22 +102,32 @@ if [ ! -f "$DATA_DIR/config/openclaw.json" ]; then
         --gateway-auth token --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN \
         --skip-ui --suppress-gateway-token-output --skip-health
 
-    echo "==> Setting channels.telegram.enabled=false (first-onboard only, see below)"
+    echo "==> Setting $include-owned + first-boot-only keys (onboard only, see below)"
     # Bundled into the one-time onboarding step, NOT the self-healing config-set below:
-    # once the Telegram bot cutover (README) flips this to true, a redeploy re-running
-    # this key would silently take the live bot back offline. The self-healing batch
-    # deliberately excludes it so redeploys can't undo a cutover.
+    # - channels.telegram.enabled: once the Telegram bot cutover (README) flips this
+    #   to true, a redeploy re-running this key would silently take the live bot
+    #   back offline.
+    # - tools/mcp $include pointers: setting an object value at a path that's
+    #   ALREADY $include-owned errors with "Config write would flatten $include-owned
+    #   config" (confirmed live on the second real deploy) -- the design doc's known
+    #   gotcha ("$include is now exercised hands-on" section) bites the moment you
+    #   retrofit an $include onto an already-configured section, which is exactly
+    #   what re-running this every deploy would do after the first one sets it. The
+    #   pointer only needs setting once; content changes flow through the include
+    #   file itself (redeployed via scp), not through re-running config set.
     $RUN_CLI config set --batch-json '[
-        {"path":"channels.telegram.enabled","value":false}
+        {"path":"channels.telegram.enabled","value":false},
+        {"path":"tools","value":{"$include":"./includes/tools.json5"}},
+        {"path":"mcp","value":{"$include":"./includes/mcp.json5"}}
     ]'
 else
     echo "    Root config already exists, skipping onboard"
 fi
 
-echo "==> Applying declarative config (includes, model chain, channel policy)"
-# Re-run on every deploy so config drift self-heals from the version-controlled
-# source (mostly the private pickleclaw repo's include files, see README). Excludes
-# channels.telegram.enabled on purpose — see the onboarding step above.
+echo "==> Applying declarative config (model chain, channel policy, hardening)"
+# Re-run on every deploy so config drift self-heals from these plain scalar/array
+# values. Excludes channels.telegram.enabled and the tools/mcp $include pointers
+# on purpose — see the onboarding step above.
 # OPENCLAW_ALLOWED_CHAT_IDS is comma-separated (README/.env.template); turn it into
 # a proper JSON array of strings rather than one string containing commas.
 ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | jq -R . | jq -sc .)
@@ -130,8 +140,6 @@ $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
-    {"path":"tools","value":{"$include":"./includes/tools.json5"}},
-    {"path":"mcp","value":{"$include":"./includes/mcp.json5"}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
