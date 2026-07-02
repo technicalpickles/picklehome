@@ -142,6 +142,8 @@ $RUN_CLI config set --batch-json '[
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
+    {"path":"channels.telegram.execApprovals.enabled","value":true},
+    {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
     {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-4.7"]},
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},

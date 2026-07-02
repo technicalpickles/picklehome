@@ -12,6 +12,7 @@ services:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:?required}          # ollama-cloud is a built-in provider, no custom config needed
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?required}  # embeddings only — Ollama Cloud doesn't support them
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?required}          # web_search (gemini provider) — see openclaw.tools.json5
       OPENCLAW_ALLOWED_CHAT_IDS: ${OPENCLAW_ALLOWED_CHAT_IDS:?required}
       OPENCLAW_EXTRA_MOUNTS: "/srv/data/openclaw/bin:/opt/tools:ro"   # tools dir, read-only
       PATH: "/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  # live-tested: PATH additions picked up with no gateway restart

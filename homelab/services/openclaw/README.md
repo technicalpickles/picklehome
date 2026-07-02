@@ -119,6 +119,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `OLLAMA_API_KEY` | `.env` (1Password) | Ollama Cloud subscription key (chat/heartbeat) |
 | `OPENROUTER_API_KEY` | `.env` (1Password) | Embeddings only — Ollama Cloud doesn't support them |
 | `TELEGRAM_BOT_TOKEN` | `.env` (1Password) | Bot identity (same bot as `pickleclaw`) |
+| `GEMINI_API_KEY` | `.env` (1Password) | `web_search` (gemini provider) — reused from `pickleclaw` |
 | `OPENCLAW_ALLOWED_CHAT_IDS` | `.env` (1Password) | Comma-separated chat-ID allowlist — the front door |
 | `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the one-time workspace clone |
 | `OPENCLAW_IMAGE` | `.env` | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.6.11` |
@@ -139,7 +140,9 @@ All of `/srv/data/openclaw` is picked up by the nightly restic job. `bin/` is re
 
 ## Security
 
-Day-one tool profile is `minimal` (browser/canvas/automation denied, `exec: deny/ask:always`) — see `openclaw.tools.json5` in the private `pickleclaw` repo. No `docker.sock` grant; the gateway is containerized and relies on tool policy rather than the in-container Docker sandbox. Full rationale in the design doc's "Security decisions".
+Tool profile is `minimal` (browser/canvas/automation denied) — see `openclaw.tools.json5` in the private `pickleclaw` repo. No `docker.sock` grant; the gateway is containerized and relies on tool policy rather than the in-container Docker sandbox. Full rationale in the design doc's "Security decisions".
+
+**Exec and web search were widened past the original day-one plan** (2026-07-02, first day of real use): `exec: { security: "full", ask: "always" }` — exec is capable, not hard-denied, but every single call requires live approval (Telegram's native exec-approval flow — inline buttons, `extensions/telegram/src/exec-approvals.ts` in the vendor clone) before it runs. Approvers come from `commands.ownerAllowFrom` (set to `OPENCLAW_ALLOWED_CHAT_IDS` by `deploy.sh`, same trusted-operator chat ID as the DM allowlist). Web search reuses pickleclaw's proven Gemini wiring (`tools.web.search.provider: "gemini"`, `GEMINI_API_KEY` env var, no plugin install needed — it's a stock extension). Reasoning: pickleclaw's own effective exec policy turned out to be `security=full, ask=off` (fully unrestricted, an unreviewed default, not a deliberate choice) — picklelab deliberately does not copy that; `ask: "always"` is the actual behavior wanted ("capable, not fully denied, but never unattended").
 
 ## Logs
 
