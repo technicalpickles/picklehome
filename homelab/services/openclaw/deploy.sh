@@ -74,6 +74,12 @@ fi
 
 cd "$SERVICE_DIR"
 
+# docker compose auto-loads .env for interpolation inside compose files, but this
+# script's own shell logic below (OPENCLAW_ALLOWED_CHAT_IDS) needs it exported too.
+set -a
+source "$SERVICE_DIR/.env"
+set +a
+
 echo "==> Pulling image"
 $COMPOSE pull
 
