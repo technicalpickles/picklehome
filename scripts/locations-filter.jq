@@ -5,8 +5,10 @@
 # Custom fields are matched by label: slug, label, latitude, longitude,
 # station_macs (comma-separated), comfort_mode ("true" if this location has a
 # thermostat this tooling manages), yale_houses (comma-separated Yale API house
-# names, used by locks to map its homes onto this location). latitude/longitude
-# are required; items missing either are skipped.
+# names, used by locks to map its homes onto this location), nest_structures
+# (comma-separated SDM structure custom names, used by nest to map its
+# structures onto this location). latitude/longitude are required; items
+# missing either are skipped.
 #
 # Run over the slurped stream: jq -sc -f scripts/locations-filter.jq
 map(
@@ -26,6 +28,12 @@ map(
       comfort_mode: (($m.comfort_mode // "") | ascii_downcase == "true"),
       yale_houses: (
         ($m.yale_houses // "")
+        | split(",")
+        | map(gsub("^\\s+|\\s+$"; ""))
+        | map(select(length > 0))
+      ),
+      nest_structures: (
+        ($m.nest_structures // "")
         | split(",")
         | map(gsub("^\\s+|\\s+$"; ""))
         | map(select(length > 0))

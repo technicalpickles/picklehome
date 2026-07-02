@@ -417,6 +417,10 @@ garage *ARGS:
 locks *ARGS:
     uv run python locks/locks_cli.py {{ARGS}}
 
+# Nest/Google SDM devices: just nest auth | status
+nest *ARGS:
+    uv run python nest/nest_cli.py {{ARGS}}
+
 # Sonos speakers: just sonos status | roster | list
 sonos *ARGS:
     uv run python sonos/sonos_cli.py {{ARGS}}
