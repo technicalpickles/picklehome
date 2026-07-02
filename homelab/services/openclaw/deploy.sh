@@ -121,8 +121,15 @@ echo "==> Applying declarative config (includes, model chain, channel policy)"
 # OPENCLAW_ALLOWED_CHAT_IDS is comma-separated (README/.env.template); turn it into
 # a proper JSON array of strings rather than one string containing commas.
 ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | jq -R . | jq -sc .)
+# gateway.bind=lan is non-loopback, which `openclaw security audit` flags twice if
+# left at defaults: Control UI needs an explicit origin allowlist (else it falls
+# back to trusting the Host header), and auth needs a rate limit (else brute-force
+# attempts on the gateway token aren't mitigated). Found live via the first real
+# `just openclaw-status` run, not anticipated in the original design doc.
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
+    {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
+    {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
     {"path":"tools","value":{"$include":"./includes/tools.json5"}},
     {"path":"mcp","value":{"$include":"./includes/mcp.json5"}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},

@@ -541,6 +541,10 @@ deploy-openclaw host="picklelab":
     echo "==> Copying include files (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/openclaw.tools.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.tools.json5
     scp homelab/services/openclaw/openclaw.mcp.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.mcp.json5
+    # scp lands these world-readable (644); they can contain tokens (mcp.json5 esp.),
+    # and `openclaw security audit` flags exactly this -- tighten before deploy.sh
+    # bind-mounts them into the container (bind mounts carry host perms through).
+    ssh {{host}} "chmod 600 /opt/homelab/homelab/services/openclaw/openclaw.tools.json5 /opt/homelab/homelab/services/openclaw/openclaw.mcp.json5"
     ssh {{host}} "cd /opt/homelab && homelab/services/openclaw/deploy.sh"
 
 # Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit
