@@ -150,7 +150,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `picklehome/`: Shared cross-module code. `locations.py` is the canonical location registry (main house, beachhouse, ...) consumed by climate and locks; see `climate/README.md` and `locks/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
-  - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `climate-auto-switch`, `backup`, `github-actions-runner`, `woodpecker` (full list in the Homelab Services table below)
+  - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `climate-auto-switch`, `backup`, `github-actions-runner`, `woodpecker`, `openclaw` (full list in the Homelab Services table below)
   - **Obsidian vaults on host:** `/srv/data/obsidian-sync/vaults/<vault>/` — `pickled-knowledge` is the personal knowledge base (second brain); `rpg` is campaign notes
   - `second-brain-agent` mounts `pickled-knowledge` read-write at `/vault`, reachable at `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net`
 - `docs/`: `plans/` (point-in-time design docs + implementation plans), `research/` (deep-dive findings), `CONVENTIONS.md`, `climate-setup.md`
@@ -192,3 +192,4 @@ Always-on services on picklelab (NUC), managed via Docker Compose + systemd. See
 | backup | `homelab/services/backup/` | Nightly restic backups of `/srv/data` (GFS retention) | `just deploy-backup`, `just backup-now`, `just backup-status` |
 | github-actions-runner | `homelab/services/github-actions-runner/` | Self-hosted GitHub Actions runner for the pirpg repo | `just deploy-github-runner`, `just github-runner-status` |
 | woodpecker | `homelab/services/woodpecker/` | Self-hosted Woodpecker CI for private repos (Funnel ingress) | `just deploy-woodpecker`, `just woodpecker-status` |
+| openclaw | `homelab/services/openclaw/` | Self-hosted OpenClaw agent gateway (Telegram + Tailscale UI), migrated from the `pickleclaw` spike | `just deploy-openclaw`, `just openclaw-status` |

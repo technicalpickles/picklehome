@@ -1,0 +1,30 @@
+services:
+  openclaw:
+    image: ${OPENCLAW_IMAGE:?pin a version, e.g. ghcr.io/openclaw/openclaw:2026.6.11}   # full ref incl. tag
+    # No `build:` key on purpose: pairing `image:` with `build:` makes `docker compose pull`
+    # ambiguous about whether to pull or build. We don't ship a Dockerfile, so omitting `build:`
+    # keeps `docker compose pull` unambiguous — it only ever pulls the named image.
+    restart: unless-stopped
+    user: "1000:1000"                      # image default (node); data dir isn't shared, so 1000 is fine
+    environment:
+      OPENCLAW_GATEWAY_BIND: lan            # NOT loopback — see homelab/services/openclaw/README.md "Port & bind topology"
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?required}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:?required}          # ollama-cloud is a built-in provider, no custom config needed
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?required}  # embeddings only — Ollama Cloud doesn't support them
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required}
+      OPENCLAW_ALLOWED_CHAT_IDS: ${OPENCLAW_ALLOWED_CHAT_IDS:?required}
+      OPENCLAW_EXTRA_MOUNTS: "/srv/data/openclaw/bin:/opt/tools:ro"   # tools dir, read-only
+      PATH: "/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  # live-tested: PATH additions picked up with no gateway restart
+    ports:
+      - "127.0.0.1:18789:18789"
+    volumes:
+      - config:/home/node/.openclaw                                            # writable — onboarding creates openclaw.json here
+      - workspace:/home/node/.openclaw/workspace
+      - auth:/home/node/.config/openclaw
+      - ./openclaw.tools.json5:/home/node/.openclaw/includes/tools.json5:ro     # symlinked from the private pickleclaw repo, not committed here
+      - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro         # symlinked from the private pickleclaw repo, not committed here
+
+volumes:
+  config:
+  workspace:
+  auth:

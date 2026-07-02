@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Deploy OpenClaw on picklelab.
+# Idempotent: safe to run on first setup or any subsequent deploy.
+# Run from the repo root on the target host.
+set -euo pipefail
+
+REPO_DIR=/opt/homelab
+SERVICE_DIR="$REPO_DIR/homelab/services/openclaw"
+DATA_DIR=/srv/data/openclaw
+WORKSPACE_REPO_URL="git@github.com:technicalpickles/openclaw-workspace.git"
+# Image default (node user) — see homelab/services/README.md "Container user model".
+CONTAINER_UID=1000
+CONTAINER_GID=1000
+
+COMPOSE="docker compose -f compose.yaml -f compose.picklelab.yaml"
+RUN_CLI="$COMPOSE run --rm --no-deps --entrypoint node openclaw dist/index.js"
+
+cd "$REPO_DIR"
+echo "==> Deploying commit $(git rev-parse --short HEAD)"
+
+echo "==> Creating data directories on the volume"
+# config:    writable root config (openclaw.json), created by `onboard`, plus memory/sessions/credentials
+# workspace: agent's identity/memory repo (openclaw-workspace), cloned below
+# auth:      OpenClaw's own auth-profile store
+# bin:       drop-in CLIs, bind-mounted read-only to /opt/tools in-container
+# ssh:       the workspace deploy key, written below
+sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh"
+
+echo "==> Installing the workspace-repo deploy key (if provided)"
+# The workspace (github.com/technicalpickles/openclaw-workspace) is cloned host-side,
+# once, using a scoped write deploy key. It arrives base64-encoded in the filtered
+# .env (single line, so service-env's line-based filter keeps it whole) and must land
+# 0600: ssh refuses a private key with looser permissions. Same pattern as
+# brineworks-agent's WORKSPACE_DEPLOY_KEY_B64, different var name (each service's
+# deploy key is scoped to a different repo, so they can't share one .env key name).
+ENV_FILE="$SERVICE_DIR/.env"
+DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
+KEY_B64=""
+if [ -f "$ENV_FILE" ]; then
+    KEY_B64=$(grep -m1 '^OPENCLAW_WORKSPACE_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
+fi
+if [ -n "$KEY_B64" ]; then
+    ( umask 077; echo "$KEY_B64" | base64 -d | sudo tee "$DEPLOY_KEY_FILE" > /dev/null )
+    sudo chmod 600 "$DEPLOY_KEY_FILE"
+    echo "    Wrote $DEPLOY_KEY_FILE (0600)"
+else
+    echo "    WARNING: OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 not in $ENV_FILE."
+    echo "    Can't clone openclaw-workspace, so the agent starts with an empty"
+    echo "    workspace instead of its migrated memory/identity. Add the var to"
+    echo "    .env.vars + .env.template (see README), re-run 'just dotenv', redeploy."
+fi
+
+echo "==> Cloning the workspace repo (if not already present)"
+if [ -f "$DEPLOY_KEY_FILE" ] && [ ! -d "$DATA_DIR/workspace/.git" ]; then
+    # Migration from pickleclaw: this is meant to continue the existing workspace
+    # repo's history, not auto-init a fresh one — see docs/plans/2026-06-30-openclaw-deploy.md
+    # "Migration from pickleclaw" > "What carries over".
+    sudo GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+        git clone "$WORKSPACE_REPO_URL" "$DATA_DIR/workspace"
+    echo "    Cloned $WORKSPACE_REPO_URL"
+elif [ -d "$DATA_DIR/workspace/.git" ]; then
+    echo "    Workspace already cloned, leaving it alone (ongoing sync is a manual git pull/push in-place)"
+else
+    echo "    Skipping clone (no deploy key)"
+fi
+
+echo "==> Fixing data directory ownership"
+sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
+
+cd "$SERVICE_DIR"
+
+echo "==> Pulling image"
+$COMPOSE pull
+
+echo "==> Onboarding (first deploy only)"
+# OPENCLAW_SKIP_ONBOARDING does NOT mean "boot from a mounted file instead" — even with
+# it set, setup still runs `config set` against an *existing* config. Onboard must
+# actually run once to create the writable root config, auth store, and gateway token.
+# Gated on the root config file so redeploys don't re-onboard an already-live service.
+if [ ! -f "$DATA_DIR/config/openclaw.json" ]; then
+    $RUN_CLI onboard --mode local --no-install-daemon \
+        --gateway-auth token --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN \
+        --skip-ui --suppress-gateway-token-output
+
+    echo "==> Setting channels.telegram.enabled=false (first-onboard only, see below)"
+    # Bundled into the one-time onboarding step, NOT the self-healing config-set below:
+    # once the Telegram bot cutover (README) flips this to true, a redeploy re-running
+    # this key would silently take the live bot back offline. The self-healing batch
+    # deliberately excludes it so redeploys can't undo a cutover.
+    $RUN_CLI config set --batch-json '[
+        {"path":"channels.telegram.enabled","value":false}
+    ]'
+else
+    echo "    Root config already exists, skipping onboard"
+fi
+
+echo "==> Applying declarative config (includes, model chain, channel policy)"
+# Re-run on every deploy so config drift self-heals from the version-controlled
+# source (mostly the private pickleclaw repo's include files, see README). Excludes
+# channels.telegram.enabled on purpose — see the onboarding step above.
+$RUN_CLI config set --batch-json '[
+    {"path":"gateway.bind","value":"lan"},
+    {"path":"tools","value":{"$include":"./includes/tools.json5"}},
+    {"path":"mcp","value":{"$include":"./includes/mcp.json5"}},
+    {"path":"channels.telegram.dmPolicy","value":"allowlist"},
+    {"path":"channels.telegram.allowFrom","value":["'"${OPENCLAW_ALLOWED_CHAT_IDS:?required}"'"]},
+    {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
+    {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-4.7"]},
+    {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
+    {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
+    {"path":"agents.defaults.heartbeat.lightContext","value":true},
+    {"path":"agents.defaults.models","value":{
+        "ollama-cloud/glm-5.2":{},
+        "ollama-cloud/glm-4.7":{},
+        "ollama-cloud/gpt-oss:20b":{}
+    }}
+]'
+
+echo "==> Doctor (catches config-schema migrations after an image bump)"
+$RUN_CLI doctor || echo "    WARNING: doctor reported an issue — check output above"
+
+echo "==> Bringing the service up"
+$COMPOSE up -d
+
+echo "==> Configuring Tailscale serve for openclaw"
+sudo tailscale serve --service=svc:openclaw --https=443 http://127.0.0.1:18789
+
+echo "==> Linking systemd unit"
+sudo ln -sf "$SERVICE_DIR/openclaw.service" /etc/systemd/system/
+
+echo "==> Reloading systemd and enabling service"
+sudo systemctl daemon-reload
+sudo systemctl enable openclaw.service
+
+echo "==> Status"
+systemctl status openclaw.service --no-pager || true
+
+echo ""
+echo "==> Checking local health endpoint"
+for i in 1 2 3 4 5; do
+    if curl -fsS http://127.0.0.1:18789/healthz -o /dev/null 2>&1; then
+        echo "    Local health check passed"
+        break
+    fi
+    if [ "$i" -eq 5 ]; then
+        echo "    WARNING: local health check failed after 5 attempts"
+        echo "    Logs: $COMPOSE logs"
+        exit 1
+    fi
+    echo "    Waiting for the gateway to start (attempt $i/5)..."
+    sleep 3
+done
+
+TAILNET=$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix')
+echo ""
+echo "Done! OpenClaw should be reachable at https://openclaw.${TAILNET}"
+echo "Telegram channel is disabled until the cutover — see README 'Telegram bot cutover'."
+echo "Run 'just openclaw-status' for the full self-test (systemd + tailscale + security audit)."

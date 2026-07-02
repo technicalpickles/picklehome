@@ -505,3 +505,69 @@ obsidian-sync-logs-follow host="picklelab":
 # Show Obsidian Sync service status on picklelab
 obsidian-sync-status host="picklelab":
     ssh {{host}} "systemctl status obsidian-sync.service --no-pager"
+
+# Deploy OpenClaw to picklelab (idempotent: first setup or update)
+deploy-openclaw host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    if [ ! -e homelab/services/openclaw/openclaw.tools.json5 ] || [ ! -e homelab/services/openclaw/openclaw.mcp.json5 ]; then
+        echo "ERROR: openclaw.tools.json5 / openclaw.mcp.json5 missing. Symlink them from the"
+        echo "       private pickleclaw repo first -- see homelab/services/openclaw/README.md."
+        exit 1
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Pulling on {{host}}"
+    ssh {{host}} "cd /opt/homelab && git pull"
+    echo "==> Copying .env to {{host}}"
+    mkdir -p tmp
+    scripts/service-env homelab/services/openclaw/.env.vars > tmp/openclaw.env
+    scp tmp/openclaw.env {{host}}:/opt/homelab/homelab/services/openclaw/.env
+    rm tmp/openclaw.env
+    echo "==> Copying include files (private pickleclaw repo, gitignored here) to {{host}}"
+    scp homelab/services/openclaw/openclaw.tools.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.tools.json5
+    scp homelab/services/openclaw/openclaw.mcp.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.mcp.json5
+    ssh {{host}} "cd /opt/homelab && homelab/services/openclaw/deploy.sh"
+
+# Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit
+openclaw-status host="picklelab":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "==> systemd unit on {{host}}"
+    ssh {{host}} "sudo systemctl status openclaw.service --no-pager" || true
+    echo ""
+    echo "==> loopback health on {{host}}"
+    ssh {{host}} "curl -fsS http://127.0.0.1:18789/healthz -o /dev/null -w 'healthz HTTP %{http_code}\n'" || echo "loopback FAILED"
+    ssh {{host}} "curl -fsS http://127.0.0.1:18789/readyz  -o /dev/null -w 'readyz  HTTP %{http_code}\n'" || true
+    echo ""
+    echo "==> tailscale routing (from this machine)"
+    if [ -z "${OPENCLAW_HOST:-}" ]; then
+        echo "OPENCLAW_HOST not set in shell env"
+    else
+        curl -fsS "https://${OPENCLAW_HOST}/healthz" -o /dev/null -w "HTTP %{http_code}\n" || echo "tailscale routing FAILED"
+    fi
+    echo ""
+    echo "==> openclaw security audit"
+    ssh {{host}} "docker exec openclaw openclaw security audit" || true
+
+# Tail OpenClaw container logs from picklelab
+openclaw-logs host="picklelab" lines="50":
+    ssh {{host}} "sudo journalctl -u openclaw.service --no-pager -n {{lines}}"
+
+# Follow OpenClaw container logs live from picklelab
+openclaw-logs-follow host="picklelab":
+    ssh -t {{host}} "sudo journalctl -u openclaw.service -f"

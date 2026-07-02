@@ -58,6 +58,7 @@ Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root 
 | woodpecker-agent | 2000:2000 | `compose.yaml` `user: "2000:2000"`; matches the `ci` system user that owns the rootless docker socket |
 | climate-auto-switch | root | No volume sharing; no write-access risk |
 | backup | `backup` system user | Systemd service user; uses `setfacl` for read access to other services' files |
+| openclaw | 1000:1000 | Image default (node); `compose.yaml` `user: "1000:1000"` |
 
 **Cross-service volume sharing** requires uid alignment at both ends:
 - **Producer** (the writer): set `user: "uid:gid"` in compose
@@ -294,6 +295,28 @@ CI steps run on a **rootless `dockerd` as a dedicated `ci` user** (uid 2000), so
 Commands: `just deploy-woodpecker`, `just woodpecker-logs`, `just woodpecker-status`
 
 See [woodpecker/README.md](woodpecker/README.md) for full setup and the OAuth/Funnel prerequisites.
+
+---
+
+### openclaw
+
+Self-hosted OpenClaw gateway (chat -> agent that can act), reached via Telegram and a Tailscale-only control UI. A migration from the `pickleclaw` OrbStack-VM spike, not a from-scratch bring-up.
+
+| | |
+|---|---|
+| **Purpose** | Phone-reachable agent surface, sibling to `brineworks-agent` / `second-brain-agent` |
+| **Compose** | `/opt/homelab/homelab/services/openclaw/` |
+| **Data** | `/srv/data/openclaw/` (config, workspace/memory repo, auth-profile store, drop-in CLI dir) |
+| **Access** | `https://openclaw.<tailnet>.ts.net` (Tailscale Services, port 18789 internally) + gateway token; Telegram bot gated by a chat-ID allowlist |
+| **Env vars** | `OPENCLAW_HOST`, `OPENCLAW_GATEWAY_TOKEN`, `OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, `TELEGRAM_BOT_TOKEN`, `OPENCLAW_ALLOWED_CHAT_IDS`, `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64`, `OPENCLAW_IMAGE` |
+| **Backup** | Yes, nightly (`/srv/data/openclaw` picked up by restic) |
+| **Restart** | `restart: unless-stopped` |
+
+Off-box inference only (Ollama Cloud, no local model — not viable on the J3455). Tool policy starts `minimal` (no `docker.sock`, browser/canvas/automation denied); widened deliberately as trust grows. Two config sections (`openclaw.tools.json5`, `openclaw.mcp.json5`) live in the private `pickleclaw` repo and are symlinked in, not committed here — the MCP one would leak real server names into a public repo.
+
+Commands: `just deploy-openclaw`, `just openclaw-status`, `just openclaw-logs`, `just openclaw-logs-follow`
+
+See [openclaw/README.md](openclaw/README.md) for full setup and the Telegram bot cutover procedure; [docs/plans/2026-06-30-openclaw-deploy.md](../../docs/plans/2026-06-30-openclaw-deploy.md) for design rationale.
 
 ---
 

@@ -1,0 +1,9 @@
+services:
+  openclaw:
+    volumes:
+      - /srv/data/openclaw/config:/home/node/.openclaw
+      - /srv/data/openclaw/workspace:/home/node/.openclaw/workspace
+      - /srv/data/openclaw/auth:/home/node/.config/openclaw
+      - /srv/data/openclaw/bin:/opt/tools:ro
+      - ./openclaw.tools.json5:/home/node/.openclaw/includes/tools.json5:ro
+      - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro
