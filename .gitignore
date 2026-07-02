@@ -9,6 +9,10 @@ __pycache__/
 **/.env.build
 lighting/caseta-bridge.json
 lighting/.certs/
+# OpenClaw tool/MCP config would reveal internal server names/commands; kept in the
+# private pickleclaw repo instead, symlinked in here for compose to find at deploy time
+homelab/services/openclaw/openclaw.tools.json5
+homelab/services/openclaw/openclaw.mcp.json5
 
 # Sonos roster: uids embed device MACs (geolocatable via SonosNet); keep local
 sonos/config/speakers.yaml

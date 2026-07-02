@@ -2,7 +2,7 @@
 
 Deploy OpenClaw (self-hosted AI gateway: chat → agent that can act) as a homelab service, following the standard Compose + systemd + Tailscale Services + 1Password pattern.
 
-**Status:** design, pre-implementation. Depends on the laptop spike to confirm the values tagged *(spike)* below — see [`docs/research/openclaw-homelab/spike-questions.md`](../research/openclaw-homelab/spike-questions.md). Research backing this doc: [`docs/research/openclaw-homelab/findings.md`](../research/openclaw-homelab/findings.md).
+**Status:** ready to implement. The spike phase — see [`docs/research/openclaw-homelab/spike-questions.md`](../research/openclaw-homelab/spike-questions.md) — is done: §1–§10 resolved or substantially live-tested, most directly on picklelab itself, not just the laptop spike. One item is accepted as a residual unknown rather than a pre-deploy blocker (RAM/CPU under real agentic load — see [Open questions](#open-questions)). Research backing this doc: [`docs/research/openclaw-homelab/findings.md`](../research/openclaw-homelab/findings.md).
 
 ## Goals
 
@@ -38,7 +38,7 @@ Phone / desktop (Telegram)            You (browser, control UI)
                                            |
                   +------------------------+------------------------+------------------+
                   v            v             v                      v                  v
-        /srv/data/openclaw/  config/     workspace/   auth/      bin/  (tools on PATH)  includes/*.json5 (committed, ro)
+        /srv/data/openclaw/  config/     workspace/   auth/      bin/  (tools on PATH)  includes/*.json5 (from private pickleclaw repo, ro)
                   |            |             |          |
               restic-backed  (config + memory + tokens, credentials/, sessions/)
                                            |
@@ -61,8 +61,8 @@ Two independent trust boundaries, both locked down:
 | `compose.picklelab.yaml` | Prod overrides: bind mounts to `/srv/data/openclaw/{config,workspace,auth,bin}` |
 | `deploy.sh` | scp + `mkdir -p`/`chown` data dirs + onboard-if-needed + `config set --batch-json` + systemd install + `tailscale serve` |
 | `.env.vars` | Var names this service needs (filtered from master `.env`) |
-| `openclaw.tools.json5` | **Committed** `$include` target for the `tools` section (profile, allow/deny, exec policy) |
-| `openclaw.mcp.json5` | **Committed** `$include` target for the `mcp.servers` section |
+| `openclaw.tools.json5` | `$include` target for the `tools` section (profile, allow/deny, exec policy). **Not committed here** — symlinked from the private `pickleclaw` repo, see [Where the include files actually live](#where-the-include-files-actually-live) |
+| `openclaw.mcp.json5` | `$include` target for the `mcp.servers` section. **Not committed here** — same as above; this one would otherwise leak MCP server names/commands into a public repo |
 | `openclaw.service` | systemd unit (long-lived oneshot + `RemainAfterExit`) |
 | `README.md` | Service-specific setup |
 
@@ -85,15 +85,15 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required}
       OPENCLAW_ALLOWED_CHAT_IDS: ${OPENCLAW_ALLOWED_CHAT_IDS:?required}
       OPENCLAW_EXTRA_MOUNTS: "/srv/data/openclaw/bin:/opt/tools:ro"   # tools dir, read-only
-      PATH: "/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  # (spike) confirm PATH override
+      PATH: "/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  # live-tested (spike §6): PATH additions picked up with no gateway restart
     ports:
       - "127.0.0.1:18789:18789"
     volumes:
       - config:/home/node/.openclaw                                            # writable — onboarding creates openclaw.json here
       - workspace:/home/node/.openclaw/workspace
       - auth:/home/node/.config/openclaw
-      - ./openclaw.tools.json5:/home/node/.openclaw/includes/tools.json5:ro     # committed, $include target (spike: exercise hands-on)
-      - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro         # committed, $include target
+      - ./openclaw.tools.json5:/home/node/.openclaw/includes/tools.json5:ro     # symlinked from pickleclaw (private repo), not committed here — $include mechanism exercised hands-on, spike §3
+      - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro         # symlinked from pickleclaw (private repo), not committed here — see "Where the include files actually live"
 
 volumes:
   config:
@@ -128,7 +128,7 @@ Single HTTP port **`18789`** (UI + REST + webhooks), mapped to `127.0.0.1:18789`
 Config isn't a single file we can mount read-only wholesale; the architecture rests on two facts:
 
 1. **The root config file (`openclaw.json`) must stay writable.** It's created by `openclaw onboard` (which must actually run, at least once — see below) and holds things that can't be static: the gateway token, session-store paths, the auth-profile pointers. `OPENCLAW_SKIP_ONBOARDING=1` does **not** mean "boot from a mounted file instead" — source-confirmed (`src/docker-setup.e2e.test.ts`): even with it set, the setup script still runs `config set --batch-json` against an *existing* config, implying that flag is for **re-running setup against an already-onboarded persistent volume**, not a from-scratch bring-up.
-2. **`$include` is the real mechanism for "config in git, state on disk."** A config value can be `{ $include: "./relative/path.json5" }` — resolved from **inside** the config directory, single-file includes replace the whole containing key. So instead of mounting one big file over the whole config, mount small **committed include files** at `/home/node/.openclaw/includes/*.json5` (read-only) and have the writable root file `$include` specific sections from them.
+2. **`$include` is the real mechanism for "config in git, state on disk."** A config value can be `{ $include: "./relative/path.json5" }` — resolved from **inside** the config directory, single-file includes replace the whole containing key. So instead of mounting one big file over the whole config, mount small **version-controlled include files** at `/home/node/.openclaw/includes/*.json5` (read-only) and have the writable root file `$include` specific sections from them. "Version-controlled" here means the private `pickleclaw` repo, not this one — see [Where the include files actually live](#where-the-include-files-actually-live) below.
 
 ### Bootstrap sequence (per service, mirrors the official Docker manual flow)
 
@@ -139,27 +139,54 @@ docker compose run --rm --no-deps --entrypoint node openclaw \
     --gateway-auth token --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN \
     --skip-ui --suppress-gateway-token-output
 
-# 2. Wire the includes + provider/channel settings that aren't onboarding flags
+# 2. Wire the includes + provider/channel settings that aren't onboarding flags.
+#    Model chain and channel policy are pickleclaw's already-validated values, not fresh
+#    picks — see "Migration from pickleclaw". channels.telegram.enabled stays false until
+#    the Telegram bot cutover.
 docker compose run --rm --no-deps --entrypoint node openclaw \
   dist/index.js config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"tools","value":{"$include":"./includes/tools.json5"}},
     {"path":"mcp","value":{"$include":"./includes/mcp.json5"}},
+    {"path":"channels.telegram.enabled","value":false},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":["<chat-id>"]},
-    {"path":"agents.defaults.model.primary","value":"ollama-cloud/<pick-from-catalog>"},
-    {"path":"agents.defaults.models","value":{"ollama-cloud/<pick-from-catalog>":{}}}
+    {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
+    {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-4.7"]},
+    {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
+    {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
+    {"path":"agents.defaults.heartbeat.lightContext","value":true},
+    {"path":"agents.defaults.models","value":{
+      "ollama-cloud/glm-5.2":{},
+      "ollama-cloud/glm-4.7":{},
+      "ollama-cloud/gpt-oss:20b":{}
+    }}
   ]'
 
-# 3. Bring the service up for real
+# 3. Bring the service up for real (channel still disabled — see Telegram bot cutover)
 docker compose up -d
 ```
 
-`deploy.sh` makes step 1 idempotent (skip if the root config already exists on the persisted volume) and re-runs step 2 on every deploy so config drift self-heals from the committed source.
+`deploy.sh` makes step 1 idempotent (skip if the root config already exists on the persisted volume, and clones the migrated workspace repo before it — see [Migration from pickleclaw](#migration-from-pickleclaw)) and re-runs step 2 on every deploy so config drift self-heals from the version-controlled source (partly `picklehome`, partly the private `pickleclaw` repo — see [Where the include files actually live](#where-the-include-files-actually-live)).
 
-### Committed include files
+### Where the include files actually live
 
-`openclaw.tools.json5` (mounted read-only at `includes/tools.json5`):
+`picklehome` is a **public** GitHub repo. `openclaw.tools.json5` is generic policy (profile name, a deny list) and is harmless to publish, but `openclaw.mcp.json5` would list actual MCP server names/commands/URLs — real information about what's wired into the homelab, not something to put in a public repo.
+
+Both files instead live in the **private** `pickleclaw` repo (`~/github.com/technicalpickles/pickleclaw`), which already holds the config layer "above" the workspace — setup notes, `provision.sh` — as distinct from `openclaw-workspace` (the agent's own memory/identity repo, migrated separately, see [Migration from pickleclaw](#migration-from-pickleclaw)). Suggested location: `pickleclaw/openclaw-config/{tools,mcp}.json5`.
+
+`homelab/services/openclaw/openclaw.tools.json5` and `openclaw.mcp.json5` are **gitignored** in `picklehome` (see `.gitignore`) and symlinked from the `pickleclaw` checkout as a one-time local setup step:
+
+```bash
+ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/tools.json5 \
+  homelab/services/openclaw/openclaw.tools.json5
+ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/mcp.json5 \
+  homelab/services/openclaw/openclaw.mcp.json5
+```
+
+That keeps the compose files' `./openclaw.tools.json5` / `./openclaw.mcp.json5` relative paths unchanged for both local dev and `deploy.sh`'s scp step — they just resolve through the symlink to the real, private, version-controlled source. `deploy.sh` doesn't need its own deploy key for `pickleclaw`: it runs from the Mac, where the repo is already cloned with the operator's own GitHub access — `git pull` it before deploying, same as keeping any dependency current.
+
+`openclaw.tools.json5` content:
 
 ```json5
 // Minimal blast radius: deny runtime/fs by default, ask on exec, no browser
@@ -170,12 +197,12 @@ docker compose up -d
 }
 ```
 
-`openclaw.mcp.json5` (mounted read-only at `includes/mcp.json5`):
+`openclaw.mcp.json5` content (day one — see [Future](#future) for what widens this):
 
 ```json5
 {
   servers: {
-    // example: a read-only homelab MCP, or community servers; add per docs/cli/mcp
+    // none day one; add per docs/cli/mcp as tool needs are decided
   },
 }
 ```
@@ -200,14 +227,14 @@ The DM policy config path is **per-channel** (`src/config/types.channel-messagin
 Notes:
 - **Gateway token** and **bot token** stay in env (`.env`), never in a committed file.
 - The config dir intermingles the writable root file with memory/tokens/credentials, so the *whole* `/srv/data/openclaw/config` is sensitive and restic-backed regardless.
-- *(spike)* `$include` and the onboard-then-patch sequence above are source-derived, not yet exercised hands-on by any spike — top candidate for the next validation pass (see `spike-questions.md` §3).
+- `$include` is now exercised hands-on (spike §3): `config get` correctly resolves an included file's contents. The two gotchas found there — default `config patch` merging rather than replacing an already-populated key, and `--replace-path` refusing to flatten a `$include`-owned key — only bite when *retrofitting* `$include` onto an already-configured section. This deploy's bootstrap sequence above targets brand-new keys on a fresh onboard, so neither gotcha applies here.
 
 ## Tools / extension model
 
 Two paths, neither requires rebuilding the image (full rationale in [findings.md](../research/openclaw-homelab/findings.md#mounts-version-control-and-adding-tools)):
 
 1. **Drop-in CLIs (`gogcli`, etc.)** — `/srv/data/openclaw/bin` is bind-mounted to `/opt/tools` (`OPENCLAW_EXTRA_MOUNTS`, official) and prepended to `PATH`. Add a tool = copy the binary in; the agent's next shell call picks it up, no restart. Base is Debian/glibc so static/Go binaries run as-is. A committed `homelab/services/openclaw/tools/manifest` (name → source URL/version) documents what should be there; `deploy.sh` fetches them onto the host. Binaries themselves stay out of git.
-2. **MCP servers (structured tools)** — declared in `mcp.servers` (committed, via the `openclaw.mcp.json5` include). stdio servers run in-process; HTTP/SSE servers run as **sidecar containers**. Iterating a sidecar restarts only the sidecar; registering a *new* server needs a gateway **reload** (`openclaw mcp reload`), not an image rebuild.
+2. **MCP servers (structured tools)** — declared in `mcp.servers` via the `openclaw.mcp.json5` include, version-controlled in the private `pickleclaw` repo (see [Where the include files actually live](#where-the-include-files-actually-live)) rather than this public one. stdio servers run in-process; HTTP/SSE servers run as **sidecar containers**. Iterating a sidecar restarts only the sidecar; registering a *new* server needs a gateway **reload** (`openclaw mcp reload`), not an image rebuild.
 3. **ClawHub plugins** — before hand-writing an MCP server, check OpenClaw's own package registry (`openclaw plugins search "<capability>"`) for a ready-made one; pickleclaw found this covers web search (Brave, Gemini) with zero custom code. Installing a plugin **needs a gateway restart to load** (not hot-add like MCP) — budget for that when adding one.
 
 Stable system packages only (e.g. `git`) go via `OPENCLAW_IMAGE_APT_PACKAGES` at build time — not the iteration path.
@@ -233,11 +260,11 @@ Maps the [official security model](../research/openclaw-homelab/findings.md#secu
 | field | value |
 |-------|-------|
 | `host` | `openclaw.tail2023b7.ts.net` |
-| `gateway_token` | `openssl rand -hex 32` |
-| `ollama_api_key` | from `ollama.com/settings/keys` |
-| `openrouter_api_key` | from `openrouter.ai/keys` — embeddings only, chat/heartbeat stay on Ollama Cloud |
-| `telegram_bot_token` | from @BotFather |
-| `allowed_chat_ids` | your Telegram numeric chat ID(s), comma-separated |
+| `gateway_token` | `openssl rand -hex 32` — picklelab's own, not shared with `pickleclaw` |
+| `ollama_api_key` | reuse `pickleclaw`'s existing key (see [Migration from pickleclaw](#migration-from-pickleclaw)), not a new one from `ollama.com/settings/keys` |
+| `openrouter_api_key` | reuse `pickleclaw`'s existing key — embeddings only, chat/heartbeat stay on Ollama Cloud |
+| `telegram_bot_token` | `pickleclaw`'s existing bot token — not a new @BotFather bot |
+| `allowed_chat_ids` | same numeric Telegram chat ID(s) `pickleclaw` already allowlists, comma-separated |
 
 ### `.env.template` additions
 
@@ -269,6 +296,52 @@ OPENCLAW_IMAGE
 ```
 
 `service-env` filters these from the master `.env` so picklelab gets only what OpenClaw needs — the master secret set never reaches a container that can run tools.
+
+## Migration from pickleclaw
+
+`pickleclaw` (sibling repo, OrbStack VM on the Mac, running since 2026-06-25) isn't left behind wholesale — it's the source of the agent's accumulated identity/memory, its Telegram bot identity, and its validated model chain. This deploy is a **migration + cutover**, not a from-scratch bring-up that merely reuses lessons learned. Decided: bring over workspace/memory, the Telegram bot, and the model/provider config; leave behind session transcripts, the auth-profile store, the paired node, and the web-search plugins (fast-follow, not day one); decommission `pickleclaw` once picklelab is confirmed stable.
+
+### What carries over
+
+- **Workspace / memory.** `pickleclaw`'s workspace is already its own private repo — `github.com/technicalpickles/openclaw-workspace` (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `TOOLS.md`, `HEARTBEAT.md`, `memory/*.md`, `MEMORY.md`, `projects/`, `skills/`). Clone that repo directly into `/srv/data/openclaw/workspace/` as the *initial* content instead of letting OpenClaw auto-init an empty one — this resolves the open question in [findings.md](../research/openclaw-homelab/findings.md#workspace-git-backup): the picklelab workspace doesn't get a *new* repo, it continues *this* one.
+- **Telegram bot identity.** Same @BotFather bot/token as `pickleclaw` — continuity in the user's Telegram app, no re-adding a bot. Same `dmPolicy: allowlist` + chat-ID allowlist `pickleclaw` already runs (already this plan's day-one default — see [Channel front door](#channel-front-door)).
+- **Model / provider chain.** The validated pin from `pickleclaw`'s `CLAUDE.md`: primary `ollama-cloud/glm-5.2`, fallback `ollama-cloud/glm-4.7`, heartbeat `ollama-cloud/gpt-oss:20b` (`isolatedSession: true`, `lightContext: true`), all three registered in `agents.defaults.models` per the registration trap ([findings.md](../research/openclaw-homelab/findings.md#verified-against-the-pickleclaw-spike-non-docker)). No catalog re-pick needed — this exact chain already has real tool-calling mileage (spike §4). Same two provider subscriptions (Ollama Cloud, OpenRouter for embeddings): pull the live key values from `pickleclaw`'s existing storage into the `picklehome` 1Password vault rather than minting new keys.
+
+### What does NOT carry over
+
+- **Session transcripts.** Ephemeral per-run state; npm and Docker installs don't share a session store, and there's nothing worth replaying.
+- **Auth-profile store / credentials dir.** `pickleclaw`'s OpenRouter key lives in OpenClaw's own sqlite auth-profile store (the bare-metal `exec`-SecretRef mechanism). The Docker deploy re-provisions secrets fresh through its own `file` SecretRefs sourced from `/srv/data/openclaw/auth/`, not a copy of that store.
+- **Memory-search SQLite index.** Regenerable from the migrated workspace markdown; don't copy the index file itself — it lives in the config dir and is tied to the old install's paths.
+- **Paired node** (the Mac; canvas/screen/location capabilities — spike-questions.md §6). Spike-specific pairing to a laptop that isn't part of this deploy. Re-pair a device fresh later if node capabilities are wanted — nothing to migrate here.
+- **Web search (Brave + Gemini/`google` plugin)**, both wired up on `pickleclaw`. Beyond this plan's day-one `minimal` tool profile (browser/canvas/automation denied — see [Security decisions](#security-decisions)). "Bring everything over" shouldn't silently widen the attack surface; treat it as a fast-follow once the deploy is stable (see [Future](#future)), provisioned the same way `pickleclaw` did it (`file` SecretRefs, ClawHub plugin install + gateway restart for Brave).
+
+### Workspace migration steps
+
+1. Generate a **new** repo-scoped SSH deploy key (write access) for `github.com/technicalpickles/openclaw-workspace`, scoped to picklelab — don't reuse `pickleclaw`'s Mac-side private key material across hosts, same as every other per-service credential in this repo.
+2. `deploy.sh` clones the repo into `/srv/data/openclaw/workspace/` (using that key) before the first `docker compose up -d`, then `chown -R` to the container's uid — instead of leaving OpenClaw to auto-init a fresh empty workspace repo.
+3. Confirm nothing secret landed in the workspace files (`openclaw secrets audit` post-boot) — belt-and-suspenders, since [findings.md](../research/openclaw-homelab/findings.md#workspace-git-backup) already establishes structurally that the workspace can't hold auth material.
+4. Ongoing backup is unchanged from `pickleclaw`'s pattern: `git add . && git commit && git push` from inside the workspace mount, now against the same repo from the new host.
+
+### Include-file setup
+
+`openclaw.tools.json5` and `openclaw.mcp.json5` aren't migrated *from* `pickleclaw` (it never had a Docker deploy to source them from) — they're authored fresh, but deliberately kept in the private `pickleclaw` repo rather than the public `picklehome` one. See [Where the include files actually live](#where-the-include-files-actually-live) for the full rationale and the symlink setup.
+
+### Telegram bot cutover
+
+Telegram allows only **one** active long-poller per bot token — running `pickleclaw`'s gateway and the picklelab deploy against the same token at once causes `409 Conflict` on both sides, not a graceful handoff. Sequence:
+
+1. Stand up picklelab's OpenClaw fully (onboard, config, workspace clone, real secrets already in place) with `channels.telegram.enabled: false`, *before* touching the live bot.
+2. Verify `just openclaw-status` (healthz/readyz + security audit) clean on that state.
+3. In one short window: stop `pickleclaw`'s gateway (`systemctl --user stop openclaw-gateway` inside the OrbStack VM) → flip picklelab to `channels.telegram.enabled: true` via `config set` → confirm `openclaw channels status` on picklelab shows `running, connected, mode:polling`. Hot-reload is confirmed for `agents.defaults.*` config, not independently confirmed for channel enablement — budget for a `docker compose restart openclaw` in this window if the flip doesn't take effect live.
+4. Message the bot from the allowlisted chat; confirm it responds. Only after this is confirmed working, move to decommissioning.
+
+### Decommissioning `pickleclaw`
+
+Once picklelab's OpenClaw is confirmed stable under real Telegram traffic (not just the cutover smoke test — give it a day or two):
+
+- Stop and remove the OrbStack VM, retire the `openclaw-gateway` systemd user unit.
+- `github.com/technicalpickles/openclaw-workspace` stays — it's picklelab's backup target now, not `pickleclaw`'s. Revoke `pickleclaw`'s old deploy key from that repo (`gh repo deploy-key delete`), leaving only picklelab's.
+- The `pickleclaw` repo itself is **not just historical after this** — it keeps an active role as the private home of `openclaw.tools.json5`/`openclaw.mcp.json5` (see [Where the include files actually live](#where-the-include-files-actually-live)). Its setup notes, `provision.sh`, and vendor clone stay too, as research history — only the VM/spike instance gets torn down, not the repo.
 
 ## Justfile recipes
 
@@ -303,16 +376,19 @@ openclaw-logs-follow host="picklelab":
 
 ## Bootstrap order
 
-1. Create the bot in @BotFather; note the token. Get your numeric chat ID.
-2. Create the `OpenClaw` item in 1Password (`picklehome` vault) with the fields above.
-3. Add `OPENCLAW_*` / `OLLAMA_API_KEY` / `OPENROUTER_API_KEY` / `TELEGRAM_BOT_TOKEN` lines to `.env.template`; `just dotenv`.
-4. Pick the Ollama model from the live catalog (`openclaw models list --provider ollama-cloud`); fill it into the bootstrap `config set --batch-json` step (see [Declarative config](#declarative-config)) and confirm the subscription tier covers expected volume.
-5. Tailscale admin prereqs (same as other HTTPS services): HTTPS enabled, `tag:server` on picklelab, `openclaw` Service defined.
-6. `just deploy-openclaw` — runs onboarding once (idempotent, skipped on redeploy if the root config already exists), then applies the `config set --batch-json` patch, then `docker compose up -d`.
-7. `just openclaw-status`: expect healthz/readyz OK + clean security audit.
-8. Message the bot from your allowlisted account; confirm a non-allowlisted account is rejected.
-9. Smoke-test a multi-step task to validate Ollama-cloud tool-calling (now that the endpoint/wiring bug is fixed, this actually tests model quality rather than a config error).
-10. Add the service to `homelab/services/README.md` + the project `CLAUDE.md` Homelab Services table.
+1. Generate a new SSH deploy key (write access) for `github.com/technicalpickles/openclaw-workspace`, scoped to picklelab — see [Migration from pickleclaw](#migration-from-pickleclaw).
+2. Author `openclaw.tools.json5` / `openclaw.mcp.json5` in the private `pickleclaw` repo and symlink them into `homelab/services/openclaw/` — see [Where the include files actually live](#where-the-include-files-actually-live).
+3. Create the `OpenClaw` item in 1Password (`picklehome` vault) with the fields above — pull `ollama_api_key`, `openrouter_api_key`, and `telegram_bot_token` from `pickleclaw`'s existing values (no new bot, no new subscription keys) and reuse its existing chat-ID allowlist for `allowed_chat_ids`.
+4. Add `OPENCLAW_*` / `OLLAMA_API_KEY` / `OPENROUTER_API_KEY` / `TELEGRAM_BOT_TOKEN` lines to `.env.template`; `just dotenv`.
+5. Fill the pinned, already-validated model chain (`ollama-cloud/glm-5.2` primary, `glm-4.7` fallback, `gpt-oss:20b` heartbeat) into the bootstrap `config set --batch-json` step (see [Declarative config](#declarative-config)) — no catalog re-pick needed, this chain is already proven on `pickleclaw`.
+6. Tailscale admin prereqs (same as other HTTPS services): HTTPS enabled, `tag:server` on picklelab, `openclaw` Service defined.
+7. `just deploy-openclaw` — clones the workspace repo, runs onboarding once (idempotent, skipped on redeploy if the root config already exists), applies the `config set --batch-json` patch with `channels.telegram.enabled: false`, then `docker compose up -d`.
+8. `just openclaw-status`: expect healthz/readyz OK + clean security audit, with the channel still not live.
+9. Run the [Telegram bot cutover](#telegram-bot-cutover): stop `pickleclaw`'s gateway, flip picklelab to the real bot, confirm polling.
+10. Message the bot from your allowlisted account; confirm a non-allowlisted account is rejected.
+11. Smoke-test a multi-step task to confirm Ollama-cloud tool-calling on the new deploy (already proven on `pickleclaw` — this is a deploy-specific confirmation, not a fresh quality check).
+12. Add the service to `homelab/services/README.md` + the project `CLAUDE.md` Homelab Services table.
+13. After a day or two of stable real traffic, [decommission `pickleclaw`](#decommissioning-pickleclaw).
 
 ## Backups
 
@@ -344,7 +420,7 @@ The adjacent npm-install `update`→`doctor`→`gateway restart` flow *was also*
 
 ## Future
 
-- **More tools / use cases.** Widen the tool profile as trust grows: read-only `just` checks → notifications → richer automation. Each widening is a config change, not a redeploy.
+- **More tools / use cases.** Widen the tool profile as trust grows: read-only `just` checks → notifications → richer automation. Each widening is a config change, not a redeploy. First candidate: bring over `pickleclaw`'s web-search wiring (Gemini/`google` plugin as primary, Brave installed as standby) — left out of the day-one migration on purpose (see [Migration from pickleclaw](#migration-from-pickleclaw)), provisioned the same way (`file` SecretRefs, ClawHub install + gateway restart for Brave).
 - **Other channels.** WhatsApp/Discord-webhook would add public ingress (Funnel, like `woodpecker`) — a separate design.
 - **Rootless docker socket** for the real tool-sandbox, if a use case needs isolated execution — model on `woodpecker`'s `ci` user (uid 2000) rather than granting the root socket.
 - **Exec node on picklelab (or another box)** as the "trust grows with capability" path for letting the agent act *outside* its container — on the host itself, or a machine with tools/network the container lacks. A node host's own `exec-approvals.json` is the host-side "narrow interface" `homelab_07` prefers (no `docker.sock`, authority audited host-side). Distinct from sandboxing, which contains rather than extends — see [findings §Sandbox vs nodes](../research/openclaw-homelab/findings.md#sandbox-vs-nodes-different-tools-small-overlap).
