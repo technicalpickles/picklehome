@@ -12,7 +12,7 @@ This deploy is a **migration** from `pickleclaw` (an OrbStack-VM spike on the Ma
 
 - `tag:server` applied to picklelab (same as the other HTTPS services).
 - HTTPS enabled on the tailnet.
-- An `openclaw` **Service** defined at [Tailscale Services](https://login.tailscale.com/admin/services) (same pattern as `taskchampion`).
+- **Define the Service before the first deploy** — `tailscale serve --service=svc:openclaw` on the host has nothing to attach a pending-host-approval to until the Service exists in the admin console; it won't create one for you. At [Tailscale Services](https://login.tailscale.com/admin/services), click "Define Service": Name `openclaw`, Ports `443`. Same gotcha as `taskchampion`'s original setup — see its README/impl doc if this needs re-deriving later.
 
 ### 1Password item: `picklehome/OpenClaw`
 

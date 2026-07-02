@@ -179,7 +179,28 @@ for i in 1 2 3 4 5; do
 done
 
 TAILNET=$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix')
+OPENCLAW_URL="https://openclaw.${TAILNET}"
+
 echo ""
-echo "Done! OpenClaw should be reachable at https://openclaw.${TAILNET}"
+echo "==> Checking Tailscale endpoint"
+if curl -fsS "${OPENCLAW_URL}/healthz" -o /dev/null 2>&1; then
+    echo "    Tailscale health check passed"
+    echo ""
+    echo "Done! OpenClaw is reachable at ${OPENCLAW_URL}"
+else
+    echo "    WARNING: Tailscale endpoint not responding at ${OPENCLAW_URL}"
+    echo ""
+    echo "    If this is the first deploy, the Service likely doesn't exist yet --"
+    echo "    tailscale serve has nothing to attach a pending-host-approval to"
+    echo "    until it's defined (same gotcha taskchampion-sync hit):"
+    echo "    1. Open https://login.tailscale.com/admin/services"
+    echo "    2. Click 'Define Service': Name 'openclaw', Ports '443'"
+    echo "    3. Re-advertise (tailscaled doesn't auto-detect a newly-defined service):"
+    echo "       sudo tailscale serve --service=svc:openclaw --https=443 off"
+    echo "       sleep 2"
+    echo "       sudo tailscale serve --service=svc:openclaw --https=443 http://127.0.0.1:18789"
+    echo "    4. Find 'openclaw' at https://login.tailscale.com/admin/services and approve the pending host"
+    echo "    5. Verify: curl ${OPENCLAW_URL}/healthz"
+fi
 echo "Telegram channel is disabled until the cutover — see README 'Telegram bot cutover'."
 echo "Run 'just openclaw-status' for the full self-test (systemd + tailscale + security audit)."
