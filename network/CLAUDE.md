@@ -202,7 +202,7 @@ Shell script for curl-based TCP connect timing to a list of hosts. No dependenci
 
 ### `mtr-capture.sh`: mtr batch capture
 
-Runs mtr to multiple targets and saves results to `network-diag-results/mtr/`.
+Runs mtr to multiple targets and saves results to `network/diag-results/mtr/`.
 
 ## Reference
 

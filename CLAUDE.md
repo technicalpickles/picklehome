@@ -193,3 +193,5 @@ Always-on services on picklelab (NUC), managed via Docker Compose + systemd. See
 | github-actions-runner | `homelab/services/github-actions-runner/` | Self-hosted GitHub Actions runner for the pirpg repo | `just deploy-github-runner`, `just github-runner-status` |
 | woodpecker | `homelab/services/woodpecker/` | Self-hosted Woodpecker CI for private repos (Funnel ingress) | `just deploy-woodpecker`, `just woodpecker-status` |
 | openclaw | `homelab/services/openclaw/` | Self-hosted OpenClaw agent gateway (Telegram + Tailscale UI), migrated from the `pickleclaw` spike | `just deploy-openclaw`, `just openclaw-status` |
+
+**pickleclaw vs. openclaw:** "OpenClaw" is the open-source self-hosted chat-to-agent gateway ([docs.openclaw.ai](https://docs.openclaw.ai/)). `pickleclaw` is a separate sibling repo (`technicalpickles/pickleclaw`) — the original local OrbStack-VM spike running it. `homelab/services/openclaw/` here is the productionized deploy of that same setup on picklelab; its config partly symlinks from the `pickleclaw` repo (see that service's README).
