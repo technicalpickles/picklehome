@@ -124,6 +124,13 @@ else
     echo "    Root config already exists, skipping onboard"
 fi
 
+# memorySearch: without this, it defaults to provider "openai", which has no key
+# in this deploy (only OLLAMA_API_KEY/OPENROUTER_API_KEY are wired) -- vector recall
+# stays paused forever ("Provider: openai (requested: openai)" in `memory status`,
+# 0/N files indexed). Same OpenRouter embedding model pickleclaw validated
+# (docs/setup-notes.md in that repo), but apiKey reads OPENROUTER_API_KEY directly
+# since it's already a plain env var here, not the exec-secretref trick pickleclaw
+# needed to dedupe against its own auth store.
 echo "==> Applying declarative config (model chain, channel policy, hardening)"
 # Re-run on every deploy so config drift self-heals from these plain scalar/array
 # values. Excludes channels.telegram.enabled and the tools/mcp $include pointers
@@ -153,6 +160,14 @@ $RUN_CLI config set --batch-json '[
         "ollama-cloud/glm-5.2":{},
         "ollama-cloud/glm-4.7":{},
         "ollama-cloud/gpt-oss:20b":{}
+    }},
+    {"path":"agents.defaults.memorySearch","value":{
+        "provider":"openai-compatible",
+        "model":"qwen/qwen3-embedding-8b",
+        "remote":{
+            "baseUrl":"https://openrouter.ai/api/v1/",
+            "apiKey":{"source":"env","provider":"default","id":"OPENROUTER_API_KEY"}
+        }
     }}
 ]'
 
