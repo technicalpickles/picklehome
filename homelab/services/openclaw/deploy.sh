@@ -26,6 +26,15 @@ echo "==> Creating data directories on the volume"
 # ssh:       the workspace deploy key, written below
 sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh"
 
+echo "==> Fixing data directory ownership"
+# Do this now, right after mkdir, not at the end: it makes $DATA_DIR owned by uid
+# $CONTAINER_UID, which is also the deploy user's own uid on picklelab (both 1000)
+# -- the host<->container volume-sharing invariant this service relies on. That
+# lets the deploy-key write and workspace clone below run unprivileged (no sudo),
+# same trick brineworks-agent uses: `tee`/git-as-root aren't in the narrow sudoers
+# allowlist and would prompt for a password over non-interactive ssh.
+sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
+
 echo "==> Installing the workspace-repo deploy key (if provided)"
 # The workspace (github.com/technicalpickles/openclaw-workspace) is cloned host-side,
 # once, using a scoped write deploy key. It arrives base64-encoded in the filtered
@@ -40,9 +49,8 @@ if [ -f "$ENV_FILE" ]; then
     KEY_B64=$(grep -m1 '^OPENCLAW_WORKSPACE_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
 fi
 if [ -n "$KEY_B64" ]; then
-    ( umask 077; echo "$KEY_B64" | base64 -d | sudo tee "$DEPLOY_KEY_FILE" > /dev/null )
-    sudo chmod 600 "$DEPLOY_KEY_FILE"
-    echo "    Wrote $DEPLOY_KEY_FILE (0600)"
+    ( umask 077; echo "$KEY_B64" | base64 -d > "$DEPLOY_KEY_FILE" )
+    echo "    Wrote $DEPLOY_KEY_FILE (0600, uid $CONTAINER_UID)"
 else
     echo "    WARNING: OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 not in $ENV_FILE."
     echo "    Can't clone openclaw-workspace, so the agent starts with an empty"
@@ -55,7 +63,7 @@ if [ -f "$DEPLOY_KEY_FILE" ] && [ ! -d "$DATA_DIR/workspace/.git" ]; then
     # Migration from pickleclaw: this is meant to continue the existing workspace
     # repo's history, not auto-init a fresh one — see docs/plans/2026-06-30-openclaw-deploy.md
     # "Migration from pickleclaw" > "What carries over".
-    sudo GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+    GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
         git clone "$WORKSPACE_REPO_URL" "$DATA_DIR/workspace"
     echo "    Cloned $WORKSPACE_REPO_URL"
 elif [ -d "$DATA_DIR/workspace/.git" ]; then
@@ -63,9 +71,6 @@ elif [ -d "$DATA_DIR/workspace/.git" ]; then
 else
     echo "    Skipping clone (no deploy key)"
 fi
-
-echo "==> Fixing data directory ownership"
-sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
 
 cd "$SERVICE_DIR"
 
@@ -98,12 +103,15 @@ echo "==> Applying declarative config (includes, model chain, channel policy)"
 # Re-run on every deploy so config drift self-heals from the version-controlled
 # source (mostly the private pickleclaw repo's include files, see README). Excludes
 # channels.telegram.enabled on purpose — see the onboarding step above.
+# OPENCLAW_ALLOWED_CHAT_IDS is comma-separated (README/.env.template); turn it into
+# a proper JSON array of strings rather than one string containing commas.
+ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | jq -R . | jq -sc .)
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"tools","value":{"$include":"./includes/tools.json5"}},
     {"path":"mcp","value":{"$include":"./includes/mcp.json5"}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
-    {"path":"channels.telegram.allowFrom","value":["'"${OPENCLAW_ALLOWED_CHAT_IDS:?required}"'"]},
+    {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
     {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-4.7"]},
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
