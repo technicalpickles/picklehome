@@ -34,7 +34,10 @@ class NestDevice:
     device_type: str  # "THERMOSTAT", "CAMERA", or "DOORBELL" (from sdm.devices.types.*)
     custom_name: str
     structure_id: str
-    connectivity: str | None = None  # "ONLINE" / "OFFLINE"
+    # "ONLINE" / "OFFLINE". SDM only returns this trait for thermostats -- it's
+    # always None for cameras/doorbells (API limitation, not a parsing gap; see
+    # nest/README.md "Findings").
+    connectivity: str | None = None
     # Thermostat-specific (sdm.devices.traits.ThermostatMode / Temperature / ThermostatTemperatureSetpoint / Humidity)
     mode: str | None = None  # HEAT / COOL / HEATCOOL / OFF
     ambient_temperature_c: float | None = None
