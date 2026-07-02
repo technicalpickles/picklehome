@@ -181,17 +181,22 @@ systemctl status openclaw.service --no-pager || true
 
 echo ""
 echo "==> Checking local health endpoint"
-for i in 1 2 3 4 5; do
+# 10 attempts, not 5: the port accepts-then-resets for a few seconds after Docker
+# reports the container Started (loading plugins, initializing Telegram polling,
+# etc. -- ~4s of startup log between "starting HTTP server" and "ready" alone) --
+# observed "Recv failure: Connection reset by peer" fail the tighter 5x3s loop
+# twice on real deploys even though the container came up healthy moments later.
+for i in 1 2 3 4 5 6 7 8 9 10; do
     if curl -fsS http://127.0.0.1:18789/healthz -o /dev/null 2>&1; then
         echo "    Local health check passed"
         break
     fi
-    if [ "$i" -eq 5 ]; then
-        echo "    WARNING: local health check failed after 5 attempts"
+    if [ "$i" -eq 10 ]; then
+        echo "    WARNING: local health check failed after 10 attempts"
         echo "    Logs: $COMPOSE logs"
         exit 1
     fi
-    echo "    Waiting for the gateway to start (attempt $i/5)..."
+    echo "    Waiting for the gateway to start (attempt $i/10)..."
     sleep 3
 done
 
