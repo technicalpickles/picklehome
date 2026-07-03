@@ -35,6 +35,10 @@ TLS and external access use **Tailscale Services**: `tailscaled` on the host ter
 
 Per-service hostname is stored in 1Password as `<SERVICE>_HOST` and pulled into `.env`. The tailnet suffix is documented in the project [CLAUDE.md](../../CLAUDE.md).
 
+**Debugging a Tailscale Service (`svc:<name>`):**
+- `tailscale serve status` (no flags) only shows node-owned serve routes — a Service's routes are missing from that output even when correctly configured. Use `tailscale serve status --json` (look under `.Services["svc:<name>"]`) to see it.
+- Testing `https://<name>.<tailnet>.ts.net` by curling from the picklelab host itself can fail/hang (self-connect/hairpin) even when the Service is fine. Test from a different tailnet node (e.g. the Mac) before concluding it's broken.
+
 ### Container user model and bind-mount ownership
 
 Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root user whose uid matches the host file ownership**. This is the invariant that makes volume sharing work: Linux bind mounts expose the host inode ownership directly, so a container process can only write if its uid owns (or has group write on) the files.
