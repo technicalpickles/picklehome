@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly docker prune (Saturday 04:00, after nightly backup)
+
+[Timer]
+OnCalendar=Sat *-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

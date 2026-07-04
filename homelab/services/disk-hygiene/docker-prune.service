@@ -1,0 +1,9 @@
+[Unit]
+Description=Prune dangling docker images + build cache on both docker roots
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/homelab/homelab/services/disk-hygiene/docker-prune.sh
