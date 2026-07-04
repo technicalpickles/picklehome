@@ -38,7 +38,7 @@ if ! [[ "$USE" =~ ^[0-9]+$ ]]; then
 fi
 echo
 if [ "$USE" -gt "$THRESHOLD" ]; then
-    echo "WARNING: /srv still at ${USE}% (> ${THRESHOLD}%) after prune" >&2
+    echo "WARNING: /srv still at ${USE}% (> ${THRESHOLD}%) after prune (may be non-docker growth — run: sudo disk-report)" >&2
     exit 1
 fi
 echo "/srv at ${USE}% after prune — healthy"

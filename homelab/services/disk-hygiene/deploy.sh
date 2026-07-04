@@ -25,6 +25,8 @@ fi
 rm -f "$TMP_SUDOERS"
 sudo install -o root -g root -m 0440 "$SERVICE_DIR/docker-prune.sudoers" /etc/sudoers.d/docker-prune
 
+# Ordered after the disk-report/sudoers install on purpose: if the ci daemon is
+# broken you still get a working disk-report, and a re-run completes the timer.
 echo "==> Verifying rootless ci docker is reachable (prune must cover both roots)"
 if ! sudo -iu ci docker version >/dev/null 2>&1; then
     echo "ERROR: rootless ci docker unreachable ('sudo -iu ci docker version' failed)." >&2
