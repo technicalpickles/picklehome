@@ -32,6 +32,10 @@ echo "### disk-report AFTER ###"
 # Guard: surface a still-full disk instead of letting the prune quietly fall
 # behind until we're back at 100%. df --output=pcent is GNU coreutils (Ubuntu).
 USE=$(df --output=pcent /srv | tail -1 | tr -dc '0-9')
+if ! [[ "$USE" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: could not read /srv usage after prune (df gave: '${USE}')" >&2
+    exit 1
+fi
 echo
 if [ "$USE" -gt "$THRESHOLD" ]; then
     echo "WARNING: /srv still at ${USE}% (> ${THRESHOLD}%) after prune" >&2
