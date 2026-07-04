@@ -16,7 +16,7 @@ reaping it:
 
 This Docker uses the containerd image store (`Storage Driver: overlayfs`,
 `driver-type: io.containerd.snapshotter.v1`), so images live in
-`/srv/containerd`, not `/srv/docker`. There is no separate volume for Docker —
+`/srv/containerd`, not `/srv/docker`. There is no separate volume for Docker:
 it shares `vg0-srv` with everything else.
 
 Two independent Docker daemons (main + rootless `ci`) both accumulate dangling
@@ -48,7 +48,7 @@ the same time.
 
 ## Design
 
-### Part 1 — `docker-prune` systemd timer
+### Part 1: `docker-prune` systemd timer
 
 Mirrors the `backup` service exactly: host-level systemd oneshot + timer + shell
 script. No container, no `.env` (no secrets).
@@ -58,7 +58,7 @@ script. No container, no `.env` (no secrets).
 disk-report                       # log the before picture (shared util, see Part 2)
 # main dockerd
 docker builder prune -f
-docker image prune -f             # DANGLING ONLY — never -a, never --volumes
+docker image prune -f             # DANGLING ONLY; never -a, never --volumes
 # rootless ci dockerd (uid 2000)
 sudo -iu ci docker builder prune -f
 sudo -iu ci docker image prune -f
@@ -72,10 +72,10 @@ Design points:
   the main one directly, and the ci rootless one via `sudo -iu ci docker …`
   against its socket at `/run/user/2000/docker.sock`.
 - **Dangling + cache only.** The deployed image keeps its tag; dangling prune
-  reaps the *previous* build (now `<none>`). No keep-list needed — the tag is the
+  reaps the *previous* build (now `<none>`). No keep-list needed: the tag is the
   keep marker and Docker already tracks it. Hardcoded, never `-a`/`--volumes`.
 - **The "still full" guard.** Script exits non-zero if `/srv` is above 85% after
-  the prune, so systemd marks the run failed and it surfaces — instead of the
+  the prune, so systemd marks the run failed and it surfaces; instead of the
   prune quietly falling behind until we're back at 100%.
 
 **`docker-prune.timer`**: weekly, **Saturday 04:00** (after the 3am nightly
@@ -85,7 +85,7 @@ asleep fires on next boot.
 **`docker-prune.service`**: `Type=oneshot`, `User=root`,
 `ExecStart=/opt/homelab/homelab/services/disk-hygiene/docker-prune.sh`.
 
-### Part 2 — `disk-report` utility + passwordless sudo
+### Part 2: `disk-report` utility + passwordless sudo
 
 A single **root-owned** script installed to `/usr/local/sbin/disk-report`
 (root:root, `0755`, **not** writable by `technicalpickles`), running the fixed
@@ -105,7 +105,7 @@ Investigating disk = `sudo disk-report`. One command, no prompt, no chaining.
 
 **Why a fixed root-owned script, not per-binary NOPASSWD:** pinning one script
 that root controls locks down *what* runs as root. It must be installed
-root-owned and non-user-writable — if it lived writable in the repo checkout,
+root-owned and non-user-writable; if it lived writable in the repo checkout,
 NOPASSWD on it would be a clean root escalation (edit the script, run anything).
 So `deploy.sh` installs it to `/usr/local/sbin` with root ownership, separate
 from the repo. Rejected NOPASSWD on `du`/`vgs`/`lvs` individually: broader
@@ -132,7 +132,7 @@ homelab/services/disk-hygiene/
 
 The dir is named `disk-hygiene` (broader than `docker-prune`) because it houses
 both the prune timer *and* the general `disk-report` investigation utility. The
-systemd unit inside is still named `docker-prune.timer`/`.service` — the dir is
+systemd unit inside is still named `docker-prune.timer`/`.service`; the dir is
 the category, the unit is the specific job.
 
 ### Deploy (`deploy.sh`)
@@ -143,7 +143,7 @@ Mirrors `backup/deploy.sh`. Steps:
    `chmod 0755`.
 2. Install `docker-prune.sudoers` → `/etc/sudoers.d/docker-prune`, `chmod 0440`,
    validate with `visudo -cf` before activating (a broken sudoers file can lock
-   out sudo — validate or bail).
+   out sudo; validate or bail).
 3. **Verify the ci rootless socket is reachable** (`sudo -iu ci docker version`).
    Fail loudly if not, rather than silently pruning only half the box. (Depends
    on `ci` lingering, set up by the woodpecker rootless-docker install.)
@@ -154,10 +154,10 @@ Mirrors `backup/deploy.sh`. Steps:
 ### `just` commands (mirror `backup`)
 
 - `just deploy-docker-prune`
-- `just docker-prune-now` — trigger the service once
-- `just docker-prune-status` — timer + last-run status
-- `just docker-prune-logs` — journal for the unit
-- `just disk-report` — run `sudo disk-report` on picklelab over SSH
+- `just docker-prune-now`: trigger the service once
+- `just docker-prune-status`: timer + last-run status
+- `just docker-prune-logs`: journal for the unit
+- `just disk-report`: run `sudo disk-report` on picklelab over SSH
 
 ## Testing / verification
 
@@ -172,6 +172,6 @@ Mirrors `backup/deploy.sh`. Steps:
 
 ## Followups (already in taskwarrior)
 
-- **247** (`picklehome.homelab.backup`) — this work.
-- **248** (`picklehome.homelab`) — dedicated Docker LVM volume (structural fix,
+- **247** (`picklehome.homelab.backup`): this work.
+- **248** (`picklehome.homelab`): dedicated Docker LVM volume (structural fix,
   needs a maintenance window).
