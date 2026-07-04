@@ -4,7 +4,7 @@
 #
 # Dangling-only: never -a, never --volumes. A deployed image keeps its tag, so
 # dangling prune only reaps the PREVIOUS build (now <none>) and never a running
-# service's image. No keep-list needed — the tag is the keep marker.
+# service's image. No keep-list needed: the tag is the keep marker.
 #
 # Runs as root via docker-prune.service. root reaches the main daemon directly
 # and the rootless ci daemon via `sudo -iu ci` (no password: it's root).
@@ -38,7 +38,7 @@ if ! [[ "$USE" =~ ^[0-9]+$ ]]; then
 fi
 echo
 if [ "$USE" -gt "$THRESHOLD" ]; then
-    echo "WARNING: /srv still at ${USE}% (> ${THRESHOLD}%) after prune (may be non-docker growth — run: sudo disk-report)" >&2
+    echo "WARNING: /srv still at ${USE}% (> ${THRESHOLD}%) after prune (may be non-docker growth; run: sudo disk-report)" >&2
     exit 1
 fi
-echo "/srv at ${USE}% after prune — healthy"
+echo "/srv at ${USE}% after prune: healthy"
