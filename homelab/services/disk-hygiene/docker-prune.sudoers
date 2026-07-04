@@ -1,0 +1,6 @@
+# Allow technicalpickles to run the read-only disk-report diagnostic as root
+# without a password. disk-report is installed root-owned and NOT user-writable,
+# so pinning this exact path locks down what runs as root (unlike NOPASSWD on
+# du/vgs/lvs, which would be an unpinnable whole-filesystem read primitive).
+# Installed to /etc/sudoers.d/docker-prune (mode 0440) by deploy.sh.
+technicalpickles ALL=(root) NOPASSWD: /usr/local/sbin/disk-report
