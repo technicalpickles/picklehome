@@ -468,6 +468,44 @@ backup-status host="picklelab":
 backup-logs host="picklelab" lines="50":
     ssh {{host}} "journalctl -u backup.service --no-pager -n {{lines}}"
 
+# Deploy disk-hygiene (docker-prune timer + disk-report utility) to picklelab
+deploy-disk-hygiene host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/disk-hygiene/deploy.sh"
+
+# Run docker prune now (triggers the systemd service, then shows its log)
+docker-prune-now host="picklelab":
+    ssh {{host}} "sudo systemctl start docker-prune.service && journalctl -u docker-prune.service -n 60 --no-pager"
+
+# Show docker-prune timer + last-run status
+docker-prune-status host="picklelab":
+    ssh {{host}} "systemctl status docker-prune.timer --no-pager; echo; systemctl list-timers docker-prune.timer --no-pager"
+
+# Tail docker-prune logs from picklelab
+docker-prune-logs host="picklelab" lines="60":
+    ssh {{host}} "journalctl -u docker-prune.service -n {{lines}} --no-pager"
+
+# Run the read-only disk-report diagnostic on picklelab (passwordless sudo)
+disk-report host="picklelab":
+    ssh {{host}} "sudo disk-report"
+
 # Deploy Obsidian Sync to picklelab (idempotent: first setup or update)
 deploy-obsidian-sync host="picklelab":
     #!/usr/bin/env bash

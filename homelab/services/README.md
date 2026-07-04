@@ -152,6 +152,28 @@ See [backup/README.md](backup/README.md) for what's captured and restore procedu
 
 ---
 
+### disk-hygiene
+
+Weekly docker prune (both roots) + a passwordless `disk-report` diagnostic. Keeps `/srv` from silently filling.
+
+| | |
+|---|---|
+| **Purpose** | Reap docker build churn; one-command disk investigation |
+| **Compose** | N/A (host systemd timer + scripts, no container) |
+| **Data** | None (operates on `/srv/containerd`, `/srv/ci-docker`) |
+| **Access** | No UI. systemd timer at Sat 04:00. |
+| **Env vars** | None |
+| **Backup** | N/A |
+| **Restart** | N/A (runs on timer) |
+
+Prunes dangling images + build cache on the main dockerd and the rootless `ci` dockerd. Ships a root-owned `disk-report` at `/usr/local/sbin`, passwordless-sudo-able via a pinned `/etc/sudoers.d/docker-prune`.
+
+Commands: `just deploy-disk-hygiene`, `just docker-prune-now`, `just docker-prune-status`, `just docker-prune-logs`, `just disk-report`
+
+See [disk-hygiene/README.md](disk-hygiene/README.md).
+
+---
+
 ### obsidian-sync
 
 Headless Obsidian Sync client that keeps vault files on picklelab in sync with the Obsidian cloud.
