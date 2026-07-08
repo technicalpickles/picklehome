@@ -44,3 +44,4 @@ tmp/
 # Claude
 /.claude/worktrees/
 /.claude/settings.local.json
+.superpowers/
