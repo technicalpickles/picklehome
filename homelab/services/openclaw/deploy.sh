@@ -98,10 +98,11 @@ set +a
 echo "==> Pulling image"
 $COMPOSE pull
 
-echo "==> Building goplaces-node (picks up any Dockerfile/entrypoint changes; this is the
-only service in this stack built from source rather than pulled, so it needs its own
-rebuild step -- 'pull' above skips it, and 'up -d' won't rebuild an existing image on its
-own even if the Dockerfile changed)"
+# goplaces-node is the only service in this stack built from source rather than
+# pulled -- 'pull' above skips build-only services, and 'up -d' won't rebuild an
+# existing image on its own even if the Dockerfile changed, so it needs this
+# explicit rebuild step to pick up Dockerfile/entrypoint edits.
+echo "==> Building goplaces-node"
 $COMPOSE build goplaces-node
 
 echo "==> Onboarding (first deploy only)"
