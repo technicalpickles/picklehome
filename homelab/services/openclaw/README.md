@@ -59,6 +59,23 @@ The workspace (`github.com/technicalpickles/openclaw-workspace` — `AGENTS.md`,
    ```
    Until the ref exists it's skipped silently and `deploy.sh` degrades to an empty workspace with a warning. Delete the local keypair once it's in 1Password and on GitHub.
 
+### Google Places API key (one-time, for the goplaces second node)
+
+Powers the `goplaces-node` compose service — an isolated container that holds
+`GOOGLE_PLACES_API_KEY` separately from every other secret this deploy uses (inference
+keys, Telegram token). Full design/verification history:
+`docs/superpowers/plans/2026-07-07-goplaces-node-picklelab-deploy.md` and
+`docs/setup-notes.md`'s "goplaces node" section, both in the `pickleclaw` repo.
+
+1. Create (or reuse) a GCP project, enable **Places API (New)** and **Routes API**,
+   generate an API key, and restrict it to those two APIs — same steps documented in
+   the bundled `goplaces` skill's own `SKILL.md` install instructions.
+2. Add a custom text field `google_places_api_key` to the existing `picklehome/OpenClaw`
+   1Password item (same item as `host`/`gateway_token`/`allowed_chat_ids` — this is
+   another picklelab-specific value, not shared with `pickleclaw`'s own testing key).
+3. `.env.template` already references it (`{{ op://picklehome/OpenClaw/google_places_api_key }}`)
+   — running `just dotenv` after step 2 pulls it into `.env` automatically.
+
 ### Include-file setup (one-time, per dev machine)
 
 `openclaw.tools.json5` (tool policy) and `openclaw.mcp.json5` (MCP server config) aren't committed to this **public** repo — the MCP file would leak real server names/commands. Both live in the private `pickleclaw` repo instead, symlinked in:
@@ -121,6 +138,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `TELEGRAM_BOT_TOKEN` | `.env` (1Password) | Bot identity (same bot as `pickleclaw`) |
 | `GEMINI_API_KEY` | `.env` (1Password) | `web_search` (gemini provider) — reused from `pickleclaw` |
 | `OPENCLAW_ALLOWED_CHAT_IDS` | `.env` (1Password) | Comma-separated chat-ID allowlist — the front door |
+| `GOOGLE_PLACES_API_KEY` | `.env` (1Password) | Real key for the isolated `goplaces-node` service only — the `openclaw` service itself gets a hardcoded placeholder, never this value |
 | `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the one-time workspace clone |
 | `OPENCLAW_IMAGE` | `.env` | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.6.11` |
 

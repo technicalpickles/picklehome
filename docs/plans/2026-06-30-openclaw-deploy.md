@@ -421,6 +421,12 @@ The adjacent npm-install `update`→`doctor`→`gateway restart` flow *was also*
 ## Future
 
 - **More tools / use cases.** Widen the tool profile as trust grows: read-only `just` checks → notifications → richer automation. Each widening is a config change, not a redeploy. First candidate: bring over `pickleclaw`'s web-search wiring (Gemini/`google` plugin as primary, Brave installed as standby) — left out of the day-one migration on purpose (see [Migration from pickleclaw](#migration-from-pickleclaw)), provisioned the same way (`file` SecretRefs, ClawHub install + gateway restart for Brave).
+- **goplaces second node.** Implemented via
+  `docs/superpowers/plans/2026-07-07-goplaces-node-picklelab-deploy.md` (pickleclaw repo)
+  — a credential-isolated compose sibling service for the Google Places CLI, proving the
+  "exec node for a capability the gateway shouldn't hold credentials for" pattern
+  mentioned in [findings §Sandbox vs nodes](../research/openclaw-homelab/findings.md#sandbox-vs-nodes-different-tools-small-overlap)
+  concretely, not just aspirationally.
 - **Other channels.** WhatsApp/Discord-webhook would add public ingress (Funnel, like `woodpecker`) — a separate design.
 - **Rootless docker socket** for the real tool-sandbox, if a use case needs isolated execution — model on `woodpecker`'s `ci` user (uid 2000) rather than granting the root socket.
 - **Exec node on picklelab (or another box)** as the "trust grows with capability" path for letting the agent act *outside* its container — on the host itself, or a machine with tools/network the container lacks. A node host's own `exec-approvals.json` is the host-side "narrow interface" `homelab_07` prefers (no `docker.sock`, authority audited host-side). Distinct from sandboxing, which contains rather than extends — see [findings §Sandbox vs nodes](../research/openclaw-homelab/findings.md#sandbox-vs-nodes-different-tools-small-overlap).
