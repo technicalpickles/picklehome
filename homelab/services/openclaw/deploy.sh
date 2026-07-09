@@ -35,6 +35,21 @@ echo "==> Fixing data directory ownership"
 # allowlist and would prompt for a password over non-interactive ssh.
 sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
 
+echo "==> Installing goplaces gateway-side visibility stub (idempotent)"
+# Bundled goplaces skill's bin-presence gate is evaluated gateway-host-only (a
+# Linux/Docker node's binary isn't visible to it -- see docs/setup-notes.md's
+# "goplaces node" section in the pickleclaw repo). This stub satisfies that gate
+# without ever holding the real binary or a real API key on the gateway itself;
+# the real goplaces + real GOOGLE_PLACES_API_KEY live only in the goplaces-node
+# container. Re-written on every deploy so it self-heals from drift, same as the
+# declarative config-set step below.
+cat > "$DATA_DIR/bin/goplaces" << 'STUB'
+#!/usr/bin/env bash
+echo "goplaces is node-only on this gateway -- retry via: /exec host=node node=goplaces-node goplaces $*" >&2
+exit 1
+STUB
+chmod +x "$DATA_DIR/bin/goplaces"
+
 echo "==> Installing the workspace-repo deploy key (if provided)"
 # The workspace (github.com/technicalpickles/openclaw-workspace) is cloned host-side,
 # once, using a scoped write deploy key. It arrives base64-encoded in the filtered

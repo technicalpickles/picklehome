@@ -14,6 +14,11 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required}
       GEMINI_API_KEY: ${GEMINI_API_KEY:?required}          # web_search (gemini provider) — see openclaw.tools.json5
       OPENCLAW_ALLOWED_CHAT_IDS: ${OPENCLAW_ALLOWED_CHAT_IDS:?required}
+      # Placeholder only -- satisfies the bundled goplaces skill's env-presence gate,
+      # which is evaluated gateway-host-only (see docs/setup-notes.md's "goplaces
+      # node" section in the pickleclaw repo). The real key lives only in the
+      # goplaces-node service's own environment.
+      GOOGLE_PLACES_API_KEY: "placeholder-real-key-lives-on-goplaces-node"
       OPENCLAW_EXTRA_MOUNTS: "/srv/data/openclaw/bin:/opt/tools:ro"   # tools dir, read-only
       PATH: "/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  # live-tested: PATH additions picked up with no gateway restart
     ports:
