@@ -45,7 +45,7 @@ echo "==> Installing goplaces gateway-side visibility stub (idempotent)"
 # declarative config-set step below.
 cat > "$DATA_DIR/bin/goplaces" << 'STUB'
 #!/usr/bin/env bash
-echo "goplaces is node-only on this gateway -- retry via: /exec host=node node=goplaces-node goplaces $*" >&2
+echo "goplaces is node-only on this gateway -- retry via: exec host=node node=goplaces-node goplaces $*" >&2
 exit 1
 STUB
 chmod +x "$DATA_DIR/bin/goplaces"
@@ -97,6 +97,12 @@ set +a
 
 echo "==> Pulling image"
 $COMPOSE pull
+
+echo "==> Building goplaces-node (picks up any Dockerfile/entrypoint changes; this is the
+only service in this stack built from source rather than pulled, so it needs its own
+rebuild step -- 'pull' above skips it, and 'up -d' won't rebuild an existing image on its
+own even if the Dockerfile changed)"
+$COMPOSE build goplaces-node
 
 echo "==> Onboarding (first deploy only)"
 # OPENCLAW_SKIP_ONBOARDING does NOT mean "boot from a mounted file instead" — even with

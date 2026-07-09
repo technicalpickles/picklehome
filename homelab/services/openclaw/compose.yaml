@@ -34,6 +34,8 @@ services:
     build:
       context: ./goplaces-node
     restart: unless-stopped
+    # Start-order only, not a readiness guarantee -- the node retries its own
+    # connection (restart: unless-stopped) until the gateway's actually up.
     depends_on:
       - openclaw
     environment:
