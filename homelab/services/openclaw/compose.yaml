@@ -25,7 +25,20 @@ services:
       - ./openclaw.tools.json5:/home/node/.openclaw/includes/tools.json5:ro     # symlinked from the private pickleclaw repo, not committed here
       - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro         # symlinked from the private pickleclaw repo, not committed here
 
+  goplaces-node:
+    build:
+      context: ./goplaces-node
+    restart: unless-stopped
+    depends_on:
+      - openclaw
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?required}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:?required}
+    volumes:
+      - goplaces_node_state:/root/.openclaw
+
 volumes:
   config:
   workspace:
   auth:
+  goplaces_node_state:
