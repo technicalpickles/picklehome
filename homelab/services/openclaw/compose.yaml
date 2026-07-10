@@ -29,6 +29,18 @@ services:
       - auth:/home/node/.config/openclaw
       - ./openclaw.tools.json5:/home/node/.openclaw/includes/tools.json5:ro     # symlinked from the private pickleclaw repo, not committed here
       - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro         # symlinked from the private pickleclaw repo, not committed here
+    networks:
+      default:
+        # OpenClaw's node client refuses plaintext ws:// to a bare compose
+        # service name (no DNS resolution is performed to check if it's
+        # actually private -- see vendor/openclaw's isTrustedPlaintextWebSocketHost
+        # in the pickleclaw repo's vendored source, src/gateway/net.ts). A
+        # hostname ending in .local is trusted without needing the
+        # OPENCLAW_ALLOW_INSECURE_PRIVATE_WS break-glass env var -- same
+        # mechanism that let the dev-VM's openclaw.orb.local connect over
+        # plain ws:// with no extra flag.
+        aliases:
+          - openclaw.local
 
   goplaces-node:
     build:
@@ -41,6 +53,10 @@ services:
     environment:
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?required}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:?required}
+      # Overrides the Dockerfile's baked-in default (plain "openclaw") -- see
+      # the openclaw service's own "networks" comment above for why the
+      # .local suffix matters here.
+      OPENCLAW_NODE_HOST: openclaw.local
     volumes:
       - goplaces_node_state:/root/.openclaw
 
