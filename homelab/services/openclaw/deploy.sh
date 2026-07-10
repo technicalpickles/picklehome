@@ -165,6 +165,13 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # back to trusting the Host header), and auth needs a rate limit (else brute-force
 # attempts on the gateway token aren't mitigated). Found live via the first real
 # `just openclaw-status` run, not anticipated in the original design doc.
+#
+# skills.entries.goplaces.enabled: most bundled skills ship disabled by default
+# (this onboard's own baseline leaves ~40 of them off). The goplaces-node stub
+# and env placeholder above only satisfy the skill's own bins/env visibility
+# gate -- this is a separate, independent enable flag that gates it regardless.
+# Discovered live on the first goplaces-node deploy (2026-07-09/10) -- see
+# docs/setup-notes.md's "goplaces node" section in the pickleclaw repo.
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
@@ -173,6 +180,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"channels.telegram.execApprovals.enabled","value":true},
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
+    {"path":"skills.entries.goplaces.enabled","value":true},
     {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
     {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-4.7"]},
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
