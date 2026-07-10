@@ -583,6 +583,8 @@ deploy-openclaw host="picklelab":
     # and `openclaw security audit` flags exactly this -- tighten before deploy.sh
     # bind-mounts them into the container (bind mounts carry host perms through).
     ssh {{host}} "chmod 600 /opt/homelab/homelab/services/openclaw/openclaw.tools.json5 /opt/homelab/homelab/services/openclaw/openclaw.mcp.json5"
+    echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
+    scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
     ssh {{host}} "cd /opt/homelab && homelab/services/openclaw/deploy.sh"
 
 # Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit

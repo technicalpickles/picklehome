@@ -156,7 +156,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 
 All of `/srv/data/openclaw` is picked up by the nightly restic job. `bin/` is reproducible from a future committed manifest, so it's covered but not load-bearing.
 
-**Ongoing workspace sync** is a manual `git add . && git commit && git push` from inside `/srv/data/openclaw/workspace/` on picklelab (same pattern `pickleclaw` used) — not automated by the container or `deploy.sh` on day one.
+**Ongoing workspace sync** is automated via an in-container `openclaw cron` job (`workspace-git-sync`, hourly): commits local changes, `git pull --rebase`, pushes; a real rebase conflict escalates to an `openclaw agent` call for judgment rather than guessing. Registered idempotently by `deploy.sh`. Git auth is HTTPS + a fine-grained PAT (`OPENCLAW_WORKSPACE_GITHUB_TOKEN`) via a `GIT_ASKPASS` helper, not the SSH deploy key above — the container image has no ssh client. See `docs/plans/2026-07-04-workspace-git-sync-picklelab-rollout.md` and `pickleclaw`'s `scripts/workspace-git-sync.sh` / `docs/setup-notes.md` "Workspace git backup".
 
 ## Security
 

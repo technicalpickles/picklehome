@@ -13,6 +13,9 @@ lighting/.certs/
 # private pickleclaw repo instead, symlinked in here for compose to find at deploy time
 homelab/services/openclaw/openclaw.tools.json5
 homelab/services/openclaw/openclaw.mcp.json5
+# Same pattern: kept in the private pickleclaw repo, symlinked in here so
+# `just deploy-openclaw` can scp it to picklelab.
+homelab/services/openclaw/workspace-git-sync.sh
 
 # Sonos roster: uids embed device MACs (geolocatable via SonosNet); keep local
 sonos/config/speakers.yaml

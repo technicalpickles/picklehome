@@ -82,9 +82,58 @@ if [ -f "$DEPLOY_KEY_FILE" ] && [ ! -d "$DATA_DIR/workspace/.git" ]; then
         git clone "$WORKSPACE_REPO_URL" "$DATA_DIR/workspace"
     echo "    Cloned $WORKSPACE_REPO_URL"
 elif [ -d "$DATA_DIR/workspace/.git" ]; then
-    echo "    Workspace already cloned, leaving it alone (ongoing sync is a manual git pull/push in-place)"
+    echo "    Workspace already cloned, leaving it alone (ongoing sync: workspace-git-sync cron job below)"
 else
     echo "    Skipping clone (no deploy key)"
+fi
+
+echo "==> Shipping workspace-git-sync.sh (idempotent)"
+# Lands in the same $DATA_DIR/bin dir the goplaces stub uses above -- already
+# bind-mounted read-only to /opt/tools in-container, no new mount needed.
+if [ -f "$SERVICE_DIR/workspace-git-sync.sh" ]; then
+    cp "$SERVICE_DIR/workspace-git-sync.sh" "$DATA_DIR/bin/workspace-git-sync.sh"
+    chmod +x "$DATA_DIR/bin/workspace-git-sync.sh"
+    echo "    Installed $DATA_DIR/bin/workspace-git-sync.sh (appears at /opt/tools/workspace-git-sync.sh in-container)"
+else
+    echo "    WARNING: $SERVICE_DIR/workspace-git-sync.sh missing -- symlink it from pickleclaw first (see README)."
+fi
+
+echo "==> Wiring workspace git auth for in-container sync (HTTPS + PAT)"
+# See docs/plans/2026-07-04-workspace-git-sync-picklelab-rollout.md for why HTTPS+PAT
+# instead of reusing the SSH deploy key above: node:24-bookworm-slim ships no ssh
+# client, so SSH-based git auth is unreachable *inside* the container, which is
+# where the workspace-git-sync cron job (registered near the end of this script,
+# once the gateway is actually up) runs.
+if [ -d "$DATA_DIR/workspace/.git" ] && [ -n "${OPENCLAW_WORKSPACE_GITHUB_TOKEN:-}" ]; then
+    CURRENT_ORIGIN=$(git -C "$DATA_DIR/workspace" remote get-url origin)
+    if [[ "$CURRENT_ORIGIN" == git@github.com:* ]]; then
+        git -C "$DATA_DIR/workspace" remote set-url origin "https://github.com/technicalpickles/openclaw-workspace.git"
+        echo "    Switched workspace origin remote to HTTPS"
+    else
+        echo "    Workspace origin already HTTPS, leaving it alone"
+    fi
+    # GIT_ASKPASS helper: git invokes this once for the username prompt, once for
+    # the password prompt. Any non-empty username works with a PAT; the token
+    # itself is the password. core.askPass is set to the *in-container* path
+    # (/opt/tools/...) since only the in-container cron job ever needs it -- this
+    # script itself doesn't fetch/pull from the host side.
+    cat > "$DATA_DIR/bin/workspace-git-askpass.sh" << 'ASKPASS'
+#!/usr/bin/env bash
+case "$1" in
+    Username*) echo "x-access-token" ;;
+    Password*) echo "$OPENCLAW_WORKSPACE_GITHUB_TOKEN" ;;
+esac
+ASKPASS
+    chmod +x "$DATA_DIR/bin/workspace-git-askpass.sh"
+    git -C "$DATA_DIR/workspace" config core.askPass "/opt/tools/workspace-git-askpass.sh"
+    echo "    Wrote workspace-git-askpass.sh and set core.askPass"
+elif [ -d "$DATA_DIR/workspace/.git" ]; then
+    echo "    WARNING: OPENCLAW_WORKSPACE_GITHUB_TOKEN not in $ENV_FILE."
+    echo "    Skipping git auth wiring -- the workspace-git-sync cron job would fail to"
+    echo "    push/pull. Add the var to .env.vars + .env.template (see README), re-run"
+    echo "    'just dotenv', redeploy."
+else
+    echo "    Skipping (workspace not cloned yet)"
 fi
 
 cd "$SERVICE_DIR"
@@ -189,7 +238,8 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.models","value":{
         "ollama-cloud/glm-5.2":{},
         "ollama-cloud/glm-4.7":{},
-        "ollama-cloud/gpt-oss:20b":{}
+        "ollama-cloud/gpt-oss:20b":{},
+        "ollama-cloud/kimi-k2.7-code":{}
     }},
     {"path":"agents.defaults.memorySearch","value":{
         "provider":"openai-compatible",
@@ -244,6 +294,25 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     echo "    Waiting for the gateway to start (attempt $i/10)..."
     sleep 3
 done
+
+echo "==> Registering workspace-git-sync cron job (idempotent)"
+# Needs the live gateway (docker exec into the running container), not the
+# pre-start $RUN_CLI one-off used for config/doctor above -- cron registration
+# talks to the running scheduler, not just the shared state dir.
+if [ -d "$DATA_DIR/workspace/.git" ] && [ -n "${OPENCLAW_WORKSPACE_GITHUB_TOKEN:-}" ]; then
+    if docker exec openclaw-openclaw-1 openclaw cron list --json 2>/dev/null \
+        | jq -e '.jobs[]? | select(.name == "workspace-git-sync")' > /dev/null 2>&1; then
+        echo "    workspace-git-sync cron job already registered, leaving it alone"
+    else
+        docker exec openclaw-openclaw-1 openclaw cron add workspace-git-sync --every 1h \
+            --command "/opt/tools/workspace-git-sync.sh" \
+            --command-cwd "/home/node/.openclaw/workspace" \
+            --no-deliver
+        echo "    Registered workspace-git-sync (every 1h, no-deliver)"
+    fi
+else
+    echo "    Skipping (needs the workspace cloned + OPENCLAW_WORKSPACE_GITHUB_TOKEN wired above)"
+fi
 
 TAILNET=$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix')
 OPENCLAW_URL="https://openclaw.${TAILNET}"
