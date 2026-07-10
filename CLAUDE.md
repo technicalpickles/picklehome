@@ -22,6 +22,7 @@ Note: the browser profiler and `just bgw *` use a headless browser that can't la
 - **Tailnet suffix:** `tail2023b7.ts.net` (verify with `tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix'`)
 - **Service hostnames:** `<service-name>.tail2023b7.ts.net`, fronted by Tailscale Services on picklelab. TLS terminated by `tailscaled`, proxied to a `127.0.0.1:<port>` container binding. No public DNS, no Caddy.
 - **Per-service hostname** is stored as `<SERVICE>_HOST` in 1Password (e.g. `op://picklehome/TaskChampion Sync/host`) and surfaced via `.env`.
+- **Debugging `tailscale`/`serve`/Services** (status looks wrong, `ping` fails, sudo prompts hang): use the `tailscale-cli` skill before re-deriving these from scratch.
 
 ## Python Tooling
 
