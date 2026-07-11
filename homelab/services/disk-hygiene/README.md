@@ -44,6 +44,16 @@ sudoers drop-in with `visudo -cf` before activating it, verifies the rootless
 | `just docker-prune-logs` | Tail the prune log |
 | `just disk-report` | Run the disk diagnostic (passwordless) |
 
+## Logging
+
+Prune results are logged to `/var/log/docker-prune.log` with:
+- Before/after disk usage
+- Amount freed (delta %)
+- Full disk-report output before and after
+- Success/failure status
+
+View with `just docker-prune-logs` or check the summary in the systemd journal.
+
 ## Safety notes
 
 - **`disk-report` must stay read-only.** It's pinned in sudoers, so anything it

@@ -94,6 +94,14 @@ def get_top_paths():
     return output.strip().split("\n")
 
 
+def get_disk_report():
+    """Get full disk-report diagnostic output."""
+    output = ssh_command("sudo disk-report")
+    if not output:
+        return None
+    return output
+
+
 def load_history():
     """Load CSV history, return list of {timestamp, mount, used_pct, used_gb}."""
     if not CSV_PATH.exists():
@@ -163,7 +171,7 @@ def estimate_time_to_full(usage, rate_gb_per_day):
     return free_gb / rate_gb_per_day
 
 
-def build_alert(usage, history, top_paths):
+def build_alert(usage, history, top_paths, disk_report=None):
     """Build alert message with context."""
     lines = ["🚨 Picklelab Disk Alert\n"]
     
@@ -193,8 +201,15 @@ def build_alert(usage, history, top_paths):
         lines.append("Top /srv paths:")
         for path in top_paths:
             lines.append(f"  {path}")
+        lines.append("")
     
-    lines.append(f"\nRun: just disk-report")
+    if disk_report:
+        lines.append("Full disk-report:")
+        lines.append("```")
+        lines.append(disk_report)
+        lines.append("```")
+    else:
+        lines.append("\nRun: just disk-report")
     
     return "\n".join(lines)
 
@@ -239,7 +254,8 @@ def main():
         return 0
     
     top_paths = get_top_paths()
-    message = build_alert(usage, history, top_paths)
+    disk_report = get_disk_report()
+    message = build_alert(usage, history, top_paths, disk_report)
     
     # Print alert to stdout — Hermes cron job delivers to configured target
     print(message)

@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from homelab.services.disk_monitor.disk_monitor import (
+    build_alert,
     calculate_rate,
     estimate_time_to_full,
     parse_df,
@@ -164,6 +165,20 @@ class TestShouldAlert:
         ]
 
         assert should_alert(usage, history) is True
+
+    def test_build_alert_includes_disk_report(self):
+        usage = {"/": {"used_pct": 85, "used_gb": 25.5, "avail_gb": 4.5}}
+        history = []
+        top_paths = ["25G /srv/data", "10G /srv/containerd"]
+        disk_report = "=== Filesystem usage ===\nFilesystem..."
+
+        message = build_alert(usage, history, top_paths, disk_report)
+
+        assert "🚨 Picklelab Disk Alert" in message
+        assert "⚠️ WARNING /" in message
+        assert "25G /srv/data" in message
+        assert "Full disk-report:" in message
+        assert "=== Filesystem usage ===" in message
 
     def test_alert_on_time_to_full(self):
         # 10GB free, filling at 3GB over 12h = 6GB/day, ~1.67 days to full < 7 day threshold

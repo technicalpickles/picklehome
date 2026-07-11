@@ -10,35 +10,59 @@
 # and the rootless ci daemon via `sudo -iu ci` (no password: it's root).
 set -uo pipefail
 
-THRESHOLD=85   # fail the unit if /srv is still above this % after pruning
+THRESHOLD=85   # fail the unit if /srv is still above this % after prune
+LOGFILE="/var/log/docker-prune.log"
 
-echo "### disk-report BEFORE ###"
-/usr/local/sbin/disk-report
+log() {
+    echo "[$(date -Iseconds)] $*" | tee -a "$LOGFILE"
+}
 
-echo
-echo "### Pruning main dockerd ###"
-docker builder prune -f
-docker image prune -f
+log "=== Docker prune started ==="
 
-echo
-echo "### Pruning rootless ci dockerd (uid 2000) ###"
-sudo -iu ci docker builder prune -f
-sudo -iu ci docker image prune -f
+log "### disk-report BEFORE ###"
+/usr/local/sbin/disk-report | tee -a "$LOGFILE"
 
-echo
-echo "### disk-report AFTER ###"
-/usr/local/sbin/disk-report
+# Capture before usage for delta calculation
+BEFORE_USE=$(df --output=pcent /srv | tail -1 | tr -dc '0-9')
+
+log
+log "### Pruning main dockerd ###"
+docker builder prune -f 2>&1 | tee -a "$LOGFILE"
+docker image prune -f 2>&1 | tee -a "$LOGFILE"
+
+log
+log "### Pruning rootless ci dockerd (uid 2000) ###"
+sudo -iu ci docker builder prune -f 2>&1 | tee -a "$LOGFILE"
+sudo -iu ci docker image prune -f 2>&1 | tee -a "$LOGFILE"
+
+log
+log "### disk-report AFTER ###"
+/usr/local/sbin/disk-report | tee -a "$LOGFILE"
+
+# Capture after usage for delta calculation
+AFTER_USE=$(df --output=pcent /srv | tail -1 | tr -dc '0-9')
+
+# Calculate and log delta
+if ! [[ "$BEFORE_USE" =~ ^[0-9]+$ ]] || ! [[ "$AFTER_USE" =~ ^[0-9]+$ ]]; then
+    log "WARNING: could not read /srv usage (before='${BEFORE_USE}', after='${AFTER_USE}')"
+else
+    DELTA=$((BEFORE_USE - AFTER_USE))
+    log
+    log "### Summary ###"
+    log "/srv before: ${BEFORE_USE}%, after: ${AFTER_USE}%, freed: ${DELTA}%"
+fi
 
 # Guard: surface a still-full disk instead of letting the prune quietly fall
 # behind until we're back at 100%. df --output=pcent is GNU coreutils (Ubuntu).
 USE=$(df --output=pcent /srv | tail -1 | tr -dc '0-9')
 if ! [[ "$USE" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: could not read /srv usage after prune (df gave: '${USE}')" >&2
+    log "ERROR: could not read /srv usage after prune (df gave: '${USE}')" >&2
     exit 1
 fi
-echo
+log
 if [ "$USE" -gt "$THRESHOLD" ]; then
-    echo "WARNING: /srv still at ${USE}% (> ${THRESHOLD}%) after prune (may be non-docker growth; run: sudo disk-report)" >&2
+    log "WARNING: /srv still at ${USE}% (> ${THRESHOLD}%) after prune (may be non-docker growth; run: sudo disk-report)" >&2
     exit 1
 fi
-echo "/srv at ${USE}% after prune: healthy"
+log "/srv at ${USE}% after prune: healthy"
+log "=== Docker prune completed ==="
