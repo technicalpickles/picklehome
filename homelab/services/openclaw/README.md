@@ -164,6 +164,85 @@ Tool profile is `coding`, full local tool surface, no `deny` list (browser/canva
 
 **Exec policy matches pickleclaw's local permission model** (changed 2026-07-02, Josh's explicit call): `exec: { security: "full", ask: "off" }` — exec runs immediately, no live Telegram approval prompt. This reverses the original day-one/second-day plan (`minimal` profile + `alsoAllow` + `ask: "always"`, every exec call gated on a live approval), which was deliberately more conservative than pickleclaw's own defaults. That `ask: "always"` flow caused a real, confusing failure mode in practice: an expired/denied approval for a given command silently auto-denied a later identical request with no new prompt shown (collateral denial, not a real user rejection) — see the 2026-07-02 weather/tides testing session. Given picklelab is a single-trusted-operator bot (Telegram DM allowlist, `commands.ownerAllowFrom` both set to `OPENCLAW_ALLOWED_CHAT_IDS`), Josh chose to match pickleclaw's local testing behavior (`security=full`, `ask=off`) rather than keep fighting the approval-flow edge cases. Web search still reuses pickleclaw's proven Gemini wiring (`tools.web.search.provider: "gemini"`, `GEMINI_API_KEY` env var, no plugin install needed — it's a stock extension), now granted natively by the `coding` profile rather than via `alsoAllow`.
 
+## Drift watchdog
+
+A systemd oneshot + timer (`watchdog/`) that hashes both containers'
+`exec-approvals.json` every 5 minutes and alerts on any change, plus a
+standing every-run check for a wildcard (`*`) allowlist pattern (full exec in
+disguise). It watches for drift under **any** exec-policy mode — it doesn't
+assume allowlist mode is active. Currently picklelab runs `security: "full",
+ask: "off"` (see Security above), so the file mostly just holds the exec
+socket's own bookkeeping; the watchdog still matters because that's exactly
+the state where an unnoticed rewrite (e.g. someone/something flipping a
+container to `allowlist` with a `*` entry, or an agent silently rewriting its
+own node's approvals — see `pickleclaw`'s `docs/setup-notes.md` Gotcha 9)
+would otherwise go undetected. Journal is the record of truth regardless of
+whether Telegram delivery succeeds; Telegram delivery resolves its target
+from the gateway's own `commands.ownerAllowFrom` config at alert time — no
+chat id is hardcoded anywhere in the script.
+
+### Install
+
+```bash
+scp homelab/services/openclaw/watchdog/exec-approvals-watch.sh \
+    homelab/services/openclaw/watchdog/openclaw-approvals-watch.service \
+    homelab/services/openclaw/watchdog/openclaw-approvals-watch.timer \
+    picklelab:/tmp/
+
+ssh picklelab '
+  sudo install -m 755 /tmp/exec-approvals-watch.sh /usr/local/bin/exec-approvals-watch.sh &&
+  sudo install -m 644 /tmp/openclaw-approvals-watch.service /etc/systemd/system/ &&
+  sudo install -m 644 /tmp/openclaw-approvals-watch.timer /etc/systemd/system/ &&
+  rm -f /tmp/exec-approvals-watch.sh /tmp/openclaw-approvals-watch.service /tmp/openclaw-approvals-watch.timer
+'
+```
+
+### Enable
+
+```bash
+ssh picklelab '
+  sudo systemctl daemon-reload &&
+  sudo systemctl enable --now openclaw-approvals-watch.timer &&
+  systemctl list-timers openclaw-approvals-watch.timer
+'
+```
+
+Expected: the timer listed with a next-run time. The first run establishes a
+baseline hash per container — no alert on that run even though it has
+nothing to compare against yet.
+
+### Test with a manufactured drift
+
+```bash
+ssh picklelab '
+  docker exec openclaw-openclaw-1 openclaw approvals allowlist add --agent main "/usr/bin/false" --json &&
+  sudo systemctl start openclaw-approvals-watch.service &&
+  journalctl -u openclaw-approvals-watch.service --since "2 min ago" | tail -10
+'
+```
+
+Expected: `ALERT: gateway: exec-approvals.json changed (was ... now ...)` in
+the journal, and the configured Telegram owner gets the
+`🚨 approvals-watch: ...` message. Clean up the dummy entry afterward
+(`openclaw approvals set --stdin` filtering it back out, or however the
+allowlist edit tooling in this repo currently does removal) and run the
+service once more — that run's baseline was already updated by the drift
+run above, so a clean second run should be silent. If removing the dummy
+entry itself alerts once (because it's *also* a hash change from the dirty
+state), that's correct behavior, not a bug.
+
+### Remove
+
+```bash
+ssh picklelab '
+  sudo systemctl disable --now openclaw-approvals-watch.timer &&
+  sudo rm -f /etc/systemd/system/openclaw-approvals-watch.{service,timer} \
+             /usr/local/bin/exec-approvals-watch.sh &&
+  sudo rm -rf /var/lib/openclaw-approvals-watch &&
+  sudo systemctl daemon-reload
+'
+```
+
 ## Logs
 
 ```bash
