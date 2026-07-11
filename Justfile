@@ -620,3 +620,12 @@ openclaw-logs host="picklelab" lines="50":
 # Follow OpenClaw container logs live from picklelab
 openclaw-logs-follow host="picklelab":
     ssh -t {{host}} "sudo journalctl -u openclaw.service -f"
+
+# Disk monitor: manual check (dry-run, outputs to stdout)
+disk-monitor-check:
+    python3 homelab/services/disk_monitor/disk_monitor.py
+
+# Disk monitor: show recent history and current trend
+disk-monitor-status:
+    @echo "=== Recent disk usage history ==="
+    @tail -20 ~/.local/state/picklehome/disk-monitor.csv 2>/dev/null || echo "No history yet"

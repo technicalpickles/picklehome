@@ -90,6 +90,17 @@ A single Intel NUC running the stuff that needs to stay up: a self-hosted task m
 
 **Prerequisites:** [uv](https://github.com/astral-sh/uv), [just](https://github.com/casey/just), and [mise](https://mise.jdx.dev) (pins the Python/uv/go versions via `.mise.toml`; run `mise trust` after cloning)
 
+**Quick install** (if you don't have them yet):
+```bash
+# Install mise (version manager), then just + uv
+curl --proto '=https' --tlsv1.2 -sSf https://mise.run | sh
+mise trust  # trust this repo's .mise.toml
+mise install
+
+# Or install just standalone (if you don't use mise):
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
+```
+
 ```bash
 just install   # install Python deps
 just dotenv    # pull secrets from 1Password into .env
