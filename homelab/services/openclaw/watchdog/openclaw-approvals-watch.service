@@ -3,6 +3,7 @@ Description=OpenClaw exec-approvals drift watchdog
 After=docker.service
 Requires=docker.service
 
+# Runs as root (no User=): needs docker exec access and /var/lib/openclaw-approvals-watch.
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/exec-approvals-watch.sh

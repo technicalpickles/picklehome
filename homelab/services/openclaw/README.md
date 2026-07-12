@@ -183,6 +183,8 @@ chat id is hardcoded anywhere in the script.
 
 ### Install
 
+The watchdog service runs as root because it requires access to the Docker socket for `docker exec` and maintains state under `/var/lib/openclaw-approvals-watch`.
+
 ```bash
 scp homelab/services/openclaw/watchdog/exec-approvals-watch.sh \
     homelab/services/openclaw/watchdog/openclaw-approvals-watch.service \
