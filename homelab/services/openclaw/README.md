@@ -225,13 +225,23 @@ ssh picklelab '
 
 Expected: `ALERT: gateway: exec-approvals.json changed (was ... now ...)` in
 the journal, and the configured Telegram owner gets the
-`🚨 approvals-watch: ...` message. Clean up the dummy entry afterward
-(`openclaw approvals set --stdin` filtering it back out, or however the
-allowlist edit tooling in this repo currently does removal) and run the
-service once more — that run's baseline was already updated by the drift
-run above, so a clean second run should be silent. If removing the dummy
-entry itself alerts once (because it's *also* a hash change from the dirty
-state), that's correct behavior, not a bug.
+`🚨 approvals-watch: ...` message. Clean up the dummy entry afterward with
+the exact command used in the verified 2026-07-12 test run:
+
+```bash
+ssh picklelab '
+  docker exec openclaw-openclaw-1 sh -c "openclaw approvals get --json" \
+    | jq ".file // ." \
+    | jq ".agents.main.allowlist |= map(select(.pattern != \"/usr/bin/false\"))" > /tmp/cleaned.json &&
+  docker exec -i openclaw-openclaw-1 openclaw approvals set --stdin < /tmp/cleaned.json &&
+  rm /tmp/cleaned.json &&
+  docker exec openclaw-openclaw-1 openclaw approvals get --json | jq ".file.agents.main.allowlist"
+'
+```
+
+The removal itself alerts once on the next timer tick (it is *also* a hash
+change from the dirty state) — that's correct behavior, not a bug. The tick
+after that should be silent.
 
 ### Remove
 
