@@ -221,6 +221,21 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # gate -- this is a separate, independent enable flag that gates it regardless.
 # Discovered live on the first goplaces-node deploy (2026-07-09/10) -- see
 # docs/setup-notes.md's "goplaces node" section in the pickleclaw repo.
+#
+# agents.defaults.imageModel.primary: the whole chat chain (glm-5.2, glm-4.7,
+# gpt-oss:20b) is text-only -- `openclaw models list --provider ollama-cloud`
+# prints an input column, and among our configured models only kimi-k2.7-code
+# takes text+image. imageModel is what a text-only primary delegates image input
+# to, and pdfModel defaults to it, so this one line is what lets the image and
+# pdf tools actually run. Without it the pdf tool still registers (that's
+# alsoAllow's job -- see openclaw.tools.json5) and then errors at call time with
+# "No PDF model configured". kimi-k2.7-code is already in the models map below,
+# so this dodges the model-registration trap (an unregistered model here would
+# silently misfire -- see CLAUDE.md in the pickleclaw repo).
+# Verified end-to-end on the dev VM 2026-07-14 (2026.6.11) against both a text
+# PDF over https and an image-only PDF with no text layer. Prompted by the
+# 2026-07-14 session where the bot couldn't read a Canva-exported menu PDF and
+# answered from a different location's menu instead.
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
@@ -235,6 +250,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
     {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
     {"path":"agents.defaults.heartbeat.lightContext","value":true},
+    {"path":"agents.defaults.imageModel.primary","value":"ollama-cloud/kimi-k2.7-code"},
     {"path":"agents.defaults.models","value":{
         "ollama-cloud/glm-5.2":{},
         "ollama-cloud/glm-4.7":{},
