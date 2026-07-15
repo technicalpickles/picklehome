@@ -144,7 +144,17 @@ esac
 ASKPASS
     chmod +x "$DATA_DIR/bin/workspace-git-askpass.sh"
     git -C "$DATA_DIR/workspace" config core.askPass "/opt/tools/workspace-git-askpass.sh"
-    echo "    Wrote workspace-git-askpass.sh and set core.askPass"
+    # Commit identity, repo-local. Without it `git commit` dies with "Author identity
+    # unknown" (exit 128) -- the container has no global git config and can't
+    # auto-detect one ("got 'node@<container-id>.(none)'"), so the sync cron could
+    # commit exactly nothing. This sat hidden behind the askpass bug above: the fetch
+    # failed first, so the commit step was never reached. Both had to be fixed to get
+    # a single successful sync. Mirrors the dev VM's convention (pickleclaw agent
+    # <pickleclaw@localhost>), with the host name swapped so the two writers are
+    # distinguishable in the log. Found 2026-07-15.
+    git -C "$DATA_DIR/workspace" config user.name "picklelab agent"
+    git -C "$DATA_DIR/workspace" config user.email "picklelab@localhost"
+    echo "    Wrote workspace-git-askpass.sh, set core.askPass + commit identity"
 elif [ -d "$DATA_DIR/workspace/.git" ]; then
     echo "    WARNING: OPENCLAW_WORKSPACE_GITHUB_TOKEN not in $ENV_FILE."
     echo "    Skipping git auth wiring -- the workspace-git-sync cron job would fail to"
