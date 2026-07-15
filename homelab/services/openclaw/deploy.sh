@@ -58,6 +58,24 @@ echo "==> Installing the workspace-repo deploy key (if provided)"
 # brineworks-agent's WORKSPACE_DEPLOY_KEY_B64, different var name (each service's
 # deploy key is scoped to a different repo, so they can't share one .env key name).
 ENV_FILE="$SERVICE_DIR/.env"
+
+# Load .env HERE, not further down. docker compose auto-loads it for interpolation
+# inside compose files, but this script's own shell logic needs it exported too --
+# and some of that logic runs well before the "Pulling image" step. This used to be
+# sourced at the compose step, ~37 lines *after* the workspace-git-auth block below
+# tests `-n "${OPENCLAW_WORKSPACE_GITHUB_TOKEN:-}"`. That test therefore read an
+# unset var on every single deploy, silently skipped writing the askpass helper and
+# setting core.askPass, and printed "token not in .env" while the token sat right
+# there in the file. Net effect: the in-container workspace-git-sync cron could not
+# authenticate to GitHub ("could not read Username for 'https://github.com'"), so it
+# failed 99 runs straight and the agent's memory went ~13 days with no backup, with
+# nothing surfacing it. Found 2026-07-14. Keep this above the first consumer.
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
 KEY_B64=""
 if [ -f "$ENV_FILE" ]; then
@@ -138,11 +156,8 @@ fi
 
 cd "$SERVICE_DIR"
 
-# docker compose auto-loads .env for interpolation inside compose files, but this
-# script's own shell logic below (OPENCLAW_ALLOWED_CHAT_IDS) needs it exported too.
-set -a
-source "$SERVICE_DIR/.env"
-set +a
+# .env is already sourced (exported) up near ENV_FILE -- see the note there for why it
+# has to happen before the workspace-git-auth block, not here.
 
 echo "==> Pulling image"
 $COMPOSE pull
