@@ -483,6 +483,19 @@ wheels = [
 ]
 
 [[package]]
+name = "connectlife"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/11/6a1b12a905dae2c67eab74936c78c51f05a1bc5cef3b5f94dc9ff25de24d/connectlife-0.10.0.tar.gz", hash = "sha256:e728f50a02ef59128c7fd99f05fd68523b7604f97c134b23b806ac58949d999e", size = 159367, upload-time = "2026-06-21T16:41:23.462Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/7f/f96bb6c25042338d35222c0e0b5d3098e8ffe3ab9546ce75fe2eccbd77d9/connectlife-0.10.0-py3-none-any.whl", hash = "sha256:1475d87e5c1c6bcb3f4a76799ebf675a7a547dfd699141ae459641c2f31438a9", size = 49215, upload-time = "2026-06-21T16:41:22.39Z" },
+]
+
+[[package]]
 name = "cryptography"
 version = "46.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1013,6 +1026,7 @@ dependencies = [
     { name = "aiohttp" },
     { name = "aiohue" },
     { name = "blueair-api" },
+    { name = "connectlife" },
     { name = "dnspython" },
     { name = "mac-vendor-lookup" },
     { name = "paramiko" },
@@ -1037,6 +1051,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.9" },
     { name = "aiohue", specifier = ">=4.7" },
     { name = "blueair-api", specifier = ">=1.48" },
+    { name = "connectlife", specifier = ">=0.10.0" },
     { name = "dnspython", specifier = ">=2.6" },
     { name = "mac-vendor-lookup", specifier = ">=0.1.12" },
     { name = "paramiko", specifier = ">=3.0" },

@@ -97,6 +97,7 @@ All integrations use the same general pattern: credentials in 1Password, injecte
 | OAuth token (refreshable) | Ecobee | `~/.local/state/picklehome/ecobee-tokens.json` | PIN flow, auto-refresh on use |
 | OAuth token (refreshable) | Nest | `~/.local/state/picklehome/nest-tokens.json` | Loopback browser flow via Device Access "partner connections"; auto-refresh on use |
 | Username/password to session token | Yale, Aladdin, BlueAir | `~/.local/state/picklehome/<service>-tokens.json` | Token cached, re-auth on expiry |
+| Username/password (no persistence) | Hisense/ConnectLife | none (in-memory only) | Library re-auths per session; no token file |
 | TLS client cert | Lutron Caseta | `lighting/.certs/` (key, cert, CA) | One-time pairing, certs don't expire |
 
 **Token storage convention:** `~/.local/state/picklehome/<service>-tokens.json` with 0600 permissions.
@@ -139,6 +140,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `climate/`: HVAC/climate automation; see `climate/README.md`
   - `climate/ecobee/`: Ecobee thermostat API (auth, schedule, comforts, status)
   - `climate/blueair/`: BlueAir air purifier API; see `climate/blueair/README.md`
+  - `climate/hisense/`: Hisense ductless HVAC via ConnectLife (beach house); see `climate/hisense/README.md`
   - `climate/ambient/`: Ambient Weather outdoor temp
   - `climate/outdoor_air/`: Google Air Quality + Pollen APIs (AQI, pollutants, pollen UPI)
   - `climate/config/`: YAML config (thermostats, schedule, comforts, weather, purifiers)
@@ -168,6 +170,7 @@ Quick reference for all smart home and network integrations.
 | Ecobee | `climate/ecobee/` | Thermostats + room sensors | Cloud API (OAuth) | `just climate-*` |
 | Ambient Weather | `climate/ambient/` | Outdoor weather station | Cloud API (API key) | `just climate-weather` |
 | BlueAir | `climate/blueair/` | Air purifiers | Cloud API (user/pass) | `just blueair *` |
+| Hisense (ConnectLife) | `climate/hisense/` | Ductless mini-split HVAC (beach house) | Cloud API (user/pass) | `just hisense *` |
 | Google Air Quality | `climate/outdoor_air/` | N/A (API-only) | REST API (API key) | `just climate-air-quality` |
 | Lutron Caseta | `lighting/` | Dimmers, switches, fans | Local TLS (certs) | `just lutron *` |
 | Philips Hue | `lighting/` | Lights, motion sensors, buttons | Local API V2 (app key) | `just hue *` |

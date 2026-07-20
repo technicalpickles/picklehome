@@ -41,6 +41,12 @@ Coords and MACs are geolocatable, so they live only in the generated `.env`, nev
 
 See [blueair/README.md](blueair/README.md).
 
+### Hisense ductless HVAC (beach house)
+
+See [hisense/README.md](hisense/README.md). Four ConnectLife mini-split heads at
+the beach house; credentials in the `ConnectLife` 1Password item, injected via
+`just dotenv`. Read live, no device registry.
+
 ### Outdoor air quality
 
 Uses the Google Air Quality and Pollen APIs.
@@ -86,6 +92,13 @@ just blueair set <property> <value>      # control all managed purifiers
 just blueair-set "Name" <prop> <val>     # control one purifier
 just blueair discover                    # find devices, create purifiers.yaml
 just blueair auth                        # credential setup guidance
+```
+
+### Hisense (beach house ductless)
+
+```
+just hisense status [name] [--json]      # all heads (optional name/room filter)
+just hisense set <name> [--power on/off] [--mode M] [--temp F] [--fan S]  # control head(s)
 ```
 
 ## Configuration files
@@ -151,6 +164,7 @@ The goal is always ~70°F in any actively occupied space. Comfort Heat and Comfo
 climate/
   sync.py                  # Ecobee CLI (run as `python -m climate.sync`, argparse)
   blueair_cli.py           # BlueAir CLI entry point (argparse)
+  hisense_cli.py           # Hisense ductless HVAC CLI entry point (argparse)
   runlog.py                # Append-only JSONL run logging (used by auto-switch)
   ecobee/
     auth.py                # File-based OAuth (PIN flow, token refresh)
@@ -166,6 +180,10 @@ climate/
     client.py              # Async API wrapper, device control
     devices.py             # Purifier registry loader
     status.py              # Purifier status formatting
+  hisense/
+    auth.py                # Env var credentials + sandbox-safe ConnectLife client
+    client.py              # Async ConnectLife wrapper, unit decode + control
+    status.py              # Unit status formatting
   outdoor_air/
     client.py              # Google Air Quality API (AQI, pollutants, health rec)
     pollen.py              # Google Pollen API (UPI forecast by type)
