@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml>=6",
     "aioambient==2024.08.0",
     "blueair-api>=1.48",
+    "connectlife>=0.10.0",
     # network
     "requests>=2.32",
     "python-dotenv>=1.0",

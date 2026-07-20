@@ -78,6 +78,10 @@ blueair *ARGS:
 blueair-set DEVICE PROPERTY VALUE:
     uv run python climate/blueair_cli.py set {{PROPERTY}} {{VALUE}} --device "{{DEVICE}}"
 
+# Hisense ductless HVAC (ConnectLife): just hisense status [name] [--json] | set <name> [--power/--mode/--temp/--fan]
+hisense *ARGS:
+    uv run python climate/hisense_cli.py {{ARGS}}
+
 # ISP and CDN status: Cloudflare + Radar BGP/traffic + RIPE BGP state + AT&T outage by ZIP
 network-status zip="":
     uv run network/isp_status.py {{ if zip != "" { "--zip " + zip } else { "" } }}

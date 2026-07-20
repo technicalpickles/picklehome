@@ -111,7 +111,7 @@ Telegram allows only **one** active long-poller per bot token — running `pickl
      docker compose -f compose.yaml -f compose.picklelab.yaml run --rm --no-deps --entrypoint node openclaw \
        dist/index.js config set --batch-json '[{\"path\":\"channels.telegram.enabled\",\"value\":true}]'"
    ```
-3. Confirm: `ssh picklelab "docker exec openclaw openclaw channels status"` shows `running, connected, mode:polling`. Hot-reload is confirmed for `agents.defaults.*`, not independently confirmed for channel enablement — if it doesn't take effect live, `docker compose restart openclaw`.
+3. Confirm: `ssh picklelab "docker exec openclaw-openclaw-1 openclaw channels status"` shows `running, connected, mode:polling`. Hot-reload is confirmed for `agents.defaults.model.*`/`heartbeat.*` (not for every key under `agents.defaults.*` — e.g. `thinkingDefault` needs a restart, see `pickleclaw`'s `CLAUDE.md`), and not independently confirmed for channel enablement — if it doesn't take effect live, `docker compose restart openclaw`.
 4. Message the bot from the allowlisted chat; confirm it responds. Confirm a non-allowlisted account is silently rejected (no trace on either side — expected, not a bug).
 
 Only after this is confirmed working should `pickleclaw` be decommissioned (design doc "Decommissioning pickleclaw" — give it a day or two of stable real traffic first).
