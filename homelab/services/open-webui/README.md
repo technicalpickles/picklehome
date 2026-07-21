@@ -22,10 +22,12 @@ deploy script prints the exact steps if the tailnet health check fails.
 
 Env vars marked as ConfigVars (the Ollama connection, signup toggle, etc.) seed
 Open WebUI's database on FIRST BOOT ONLY. After that the admin UI owns them and
-the env value is ignored. To rotate the Ollama Cloud key or change connections:
-Admin Settings -> Connections in the UI. `WEBUI_SECRET_KEY`,
-`WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` are read from env at startup (the
-admin pair only acts on a fresh, user-less database).
+the env value is ignored. This is Open WebUI's default `ENABLE_PERSISTENT_CONFIG=true`
+behavior; set it `false` in compose if env values should always win over the UI
+(not done here -- see plan's Global Constraints for why). To rotate the Ollama
+Cloud key or change connections: Admin Settings -> Connections in the UI.
+`WEBUI_SECRET_KEY`, `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` are read from env
+at startup (the admin pair only acts on a fresh, user-less database).
 
 ## Upgrades
 
