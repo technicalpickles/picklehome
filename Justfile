@@ -625,6 +625,60 @@ openclaw-logs host="picklelab" lines="50":
 openclaw-logs-follow host="picklelab":
     ssh -t {{host}} "sudo journalctl -u openclaw.service -f"
 
+# Deploy Open WebUI to picklelab (idempotent: first setup or update)
+deploy-open-webui host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Pulling on {{host}}"
+    ssh {{host}} "cd /opt/homelab && git pull"
+    echo "==> Copying .env to {{host}}"
+    mkdir -p tmp
+    scripts/service-env homelab/services/open-webui/.env.vars > tmp/open-webui.env
+    scp tmp/open-webui.env {{host}}:/opt/homelab/homelab/services/open-webui/.env
+    rm tmp/open-webui.env
+    ssh {{host}} "cd /opt/homelab && homelab/services/open-webui/deploy.sh"
+
+# Status check for Open WebUI (systemd + loopback HTTP + tailscale routing)
+open-webui-status host="picklelab":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "==> systemd unit on {{host}}"
+    ssh {{host}} "sudo systemctl status open-webui.service --no-pager" || true
+    echo ""
+    echo "==> loopback HTTP on {{host}}"
+    ssh {{host}} "curl -fsS http://127.0.0.1:8090/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "loopback FAILED"
+    echo ""
+    echo "==> tailscale routing (from this machine)"
+    if [ -z "${OPEN_WEBUI_HOST:-}" ]; then
+        echo "OPEN_WEBUI_HOST not set (run 'just dotenv' first)"
+    else
+        curl -fsS "https://$OPEN_WEBUI_HOST/health" -w "\nHTTP %{http_code}  %{time_total}s\n" || echo "tailscale routing FAILED"
+    fi
+
+# Tail Open WebUI container logs
+open-webui-logs host="picklelab" lines="50":
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+
+# Follow Open WebUI container logs
+open-webui-logs-follow host="picklelab":
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+
 # Disk monitor: manual check (dry-run, outputs to stdout)
 disk-monitor-check:
     python3 homelab/services/disk_monitor/disk_monitor.py
