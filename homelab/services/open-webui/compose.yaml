@@ -1,0 +1,38 @@
+services:
+  open-webui:
+    image: open-webui:local
+    restart: unless-stopped
+    # Run as 1000 per the container user model (homelab/services/README.md).
+    # The stock image ships root and is only tested that way -- Dockerfile
+    # (this dir) wraps it with a build-time chown so non-root works cleanly.
+    # See Global Constraints for why a bare `user:` override on the stock
+    # image was rejected (upstream open-webui/open-webui#26662).
+    user: "1000:1000"
+    environment:
+      # --- Ollama Cloud, the only model provider ---
+      ENABLE_OLLAMA_API: "true"
+      OLLAMA_BASE_URLS: "https://ollama.com"
+      # Per-connection config keyed by index in OLLAMA_BASE_URLS; "key" is sent
+      # as Authorization: Bearer. ConfigVar: seeds the DB on first boot only.
+      OLLAMA_API_CONFIGS: '{"0": {"key": "${OLLAMA_API_KEY:?required}"}}'
+      ENABLE_OPENAI_API: "false"
+      # --- Auth: single admin, no signup ---
+      WEBUI_ADMIN_EMAIL: ${OPEN_WEBUI_ADMIN_EMAIL:?required}
+      WEBUI_ADMIN_PASSWORD: ${OPEN_WEBUI_ADMIN_PASSWORD:?required}
+      ENABLE_SIGNUP: "false"
+      # Pinned so JWT sessions survive container recreation; also avoids the
+      # image's fallback write to root-owned /app/backend/.webui_secret_key.
+      WEBUI_SECRET_KEY: ${OPEN_WEBUI_SECRET_KEY:?required}
+      WEBUI_URL: "https://${OPEN_WEBUI_HOST:?required}"
+      # --- Non-root housekeeping ---
+      HOME: /app/backend/data
+      # --- Telemetry off ---
+      DO_NOT_TRACK: "true"
+      SCARF_NO_ANALYTICS: "true"
+      ANONYMIZED_TELEMETRY: "false"
+    ports:
+      - "127.0.0.1:8090:8080"
+    volumes:
+      - data:/app/backend/data
+volumes:
+  data:
