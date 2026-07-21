@@ -42,6 +42,20 @@ tailscale serve status --json | jq '.Services'
 
 **Prerequisite gotcha:** `tailscale serve --service=svc:X ...` does **not** create the Service. A Service must already be defined in the tailnet admin console (Services page, name + port) before the CLI has anything to attach a pending-host-approval to. Running the serve command against an undefined Service reports success ("Serve started and running in the background") but nothing ever shows up as pending, and the hostname never resolves to anything real. Define the Service first, then run `serve --service=`.
 
+## Setting up a brand-new Service (the reliable order)
+
+This exact sequence has had to be rediscovered on every single new Service stood up on picklelab so far (`taskchampion-sync`, `openclaw`, `brineworks`, `open-webui`) — getting the order wrong is the single most common source of "why won't this approve" on a first deploy. Follow it in this order, not the order a deploy script's automated steps happen to run in:
+
+1. **Define the Service in the admin console first**, before running anything else: https://login.tailscale.com/admin/services → "Define Service" → name + port (`443`). A `tailscale serve --service=` call against an undefined Service can report success with nothing to actually show for it.
+2. **Run `tailscale serve --service=svc:X --https=443 <target>`** on the host that will proxy it (this is what a service's `deploy.sh` does automatically).
+3. **Restart `tailscaled` on that host**: `sudo systemctl restart tailscaled` (Linux). Confirmed required, not optional — until the daemon restarts, the pending-proxy registration from step 2 does not get pushed up to Tailscale's Services backend, and nothing shows up as approvable in step 4. Just re-toggling `serve ... off` / `serve ... on` (what deploy scripts currently print as remediation) is **not** a substitute for this restart.
+4. **Approve the pending host** in the admin console (Services page, next to the Service you defined in step 1).
+5. **Validate** from a different node: `curl -fsS https://<name>.<tailnet>.ts.net/<health-path>` (never from the serving host itself — see below).
+
+This restart is a deliberate, expected part of standing up a new Service — it's a different situation from the "don't restart tailscaled reflexively" troubleshooting advice further below, which is about an *already-working* Service whose `serve status` output merely looks wrong.
+
+**Open question, not yet root-caused:** a bare `sudo systemctl restart tailscaled` has intermittently prompted for a password on picklelab even when `sudo -n -l` lists `(ALL) NOPASSWD: /usr/bin/systemctl restart *`. Adding `-n` (`sudo -n systemctl restart tailscaled`) succeeded where the bare form didn't in at least one observed case. Worth a follow-up if it recurs — don't assume the sudoers rule is broken from a single instance.
+
 ## `tailscale ping` doesn't work on Service virtual IPs
 
 `tailscale ping <service-hostname-or-vip>` returns `no matching peer` even when the Service is healthy — a Service's virtual IP isn't a real WireGuard peer, so ping has nothing to reach. This is expected, not a failure signal. To test a Service, `curl` the HTTPS hostname instead:
@@ -63,7 +77,7 @@ Curling a Service's own hostname *from the same host that's proxying it* can tim
 5. Are you testing from the same host that's serving the proxy? Test from a different node.
 6. Only after 1-5 are ruled out: check `tailscaled` itself (`systemctl status tailscaled`, `tailscale status`, node's `BackendState`).
 
-**Restarting `tailscaled` on a shared host is a real action, not a diagnostic one** — it affects connectivity for every service that host proxies. Don't do it reflexively while chasing a status-display confusion; confirm with whoever owns the host first, and reach for it only after ruling out the display gotchas above.
+**Restarting `tailscaled` on a shared host is a real action, not a diagnostic one** — it affects connectivity for every service that host proxies. Don't do it reflexively while chasing a status-display confusion on an *already-working* Service; confirm with whoever owns the host first, and reach for it only after ruling out the display gotchas above. (This is different from standing up a brand-new Service, where the restart is an expected, required step — see "Setting up a brand-new Service" above.)
 
 ## Useful commands
 
