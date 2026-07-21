@@ -61,6 +61,7 @@ Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root 
 | climate-auto-switch | root | No volume sharing; no write-access risk |
 | backup | `backup` system user | Systemd service user; uses `setfacl` for read access to other services' files |
 | openclaw | 1000:1000 | Image default (node); `compose.yaml` `user: "1000:1000"` |
+| open-webui | 1000:1000 | `compose.yaml` `user: "1000:1000"` + custom `Dockerfile` chowning `/app/backend/open_webui/static` at build time (stock image untested non-root, see service README "Non-root fix") |
 
 **Cross-service volume sharing** requires uid alignment at both ends:
 - **Producer** (the writer): set `user: "uid:gid"` in compose
@@ -341,6 +342,26 @@ Off-box inference only (Ollama Cloud, no local model — not viable on the J3455
 Commands: `just deploy-openclaw`, `just openclaw-status`, `just openclaw-logs`, `just openclaw-logs-follow`
 
 See [openclaw/README.md](openclaw/README.md) for full setup and the Telegram bot cutover procedure; [docs/plans/2026-06-30-openclaw-deploy.md](../../docs/plans/2026-06-30-openclaw-deploy.md) for design rationale.
+
+---
+
+### open-webui
+
+Open WebUI chat interface backed by Ollama Cloud. No local models; picklelab only hosts the UI and its database, inference happens at ollama.com.
+
+| | |
+|---|---|
+| **Purpose** | Web chat UI over Ollama Cloud models, single admin login |
+| **Compose** | `/opt/homelab/homelab/services/open-webui/` |
+| **Data** | `/srv/data/open-webui/` (SQLite `webui.db`, uploads, embedding cache) |
+| **Access** | `https://openwebui.<tailnet>.ts.net` (Tailscale Services `svc:openwebui`, port 8090 internally) |
+| **Env vars** | `OPEN_WEBUI_HOST`, `OPEN_WEBUI_ADMIN_EMAIL`, `OPEN_WEBUI_ADMIN_PASSWORD`, `OPEN_WEBUI_SECRET_KEY`, `OLLAMA_API_KEY` |
+| **Backup** | Yes, nightly (SQLite picked up by `/srv/data` restic job) |
+| **Restart** | `restart: unless-stopped` |
+
+Commands: `just deploy-open-webui`, `just open-webui-status`, `just open-webui-logs`, `just open-webui-logs-follow`
+
+See [open-webui/README.md](open-webui/README.md) for config-management gotchas (ConfigVar seeding) and upgrade steps.
 
 ---
 
