@@ -599,4 +599,11 @@ setfacl -R -m u:backup:rX /srv/data/open-webui
 - [ ] **Step 3: Confirm the next nightly run** (or trigger one)
 
 Run: `just backup-now && just backup-status`
-Expected: snapshot completes without exit-code-3 warnings mentioning `open-webui` paths.
+Expected: the snapshot for `/srv/data` completes and includes `open-webui`'s data. **Do not
+expect the overall run to exit clean** -- as of 2026-07-21, `backup.service` already exits
+non-zero every night from unrelated, pre-existing unreadable files in `openclaw`,
+`second-brain-agent`, `taskchampion-sync`, and `woodpecker` (tracked: taskwarrior task
+a949871a, `picklehome.homelab.backup`). Check `journalctl -u backup.service` for `permission
+denied` lines specifically mentioning `open-webui` paths -- there should be none. If there
+are, that's a real new gap (unlike the tracked pre-existing one) and needs a `setfacl` grant
+per Step 2.
