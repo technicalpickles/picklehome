@@ -86,6 +86,16 @@ sudo -u backup -E restic snapshots             # list available snapshots
 sudo -u backup -E restic restore latest --target /srv/data
 ```
 
+These work as-is at an interactive terminal (a plain `sudo -u backup ...` isn't covered
+by the `NOPASSWD: /usr/bin/sudo -u backup *` sudoers rule verbatim, so sudo falls back
+to prompting for your own password, which you can type). **Scripted or non-interactive
+use (e.g. `ssh host "sudo -u backup ..."`, or an agent checking backup-readability for
+another service) has no TTY to prompt into and fails with "a password is required."**
+The rule only matches when `sudo` itself is the command being run -- double it:
+`sudo sudo -u backup <cmd>` (or `sudo -n sudo -u backup <cmd>` to fail fast instead of
+hanging if something's still wrong). Confirmed while checking `open-webui`'s backup
+readability, 2026-07-21.
+
 Database dumps inside the restored tree can be replayed into a fresh Postgres with:
 
 ```bash

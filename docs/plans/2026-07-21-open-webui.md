@@ -580,8 +580,12 @@ The nightly restic job backs up all of `/srv/data`, but runs as the `backup` use
 - [ ] **Step 1: After some use (admin login + one chat), check readability** (sandbox disabled)
 
 ```bash
-ssh picklelab "sudo -u backup test -r /srv/data/open-webui/webui.db && echo 'webui.db readable' || echo 'NOT readable'"
-ssh picklelab "sudo -u backup find /srv/data/open-webui -not -readable 2>/dev/null | head"
+# Note: `sudo -u backup ...` alone hits "a password is required" -- the
+# NOPASSWD sudoers rule on picklelab is `(ALL) NOPASSWD: /usr/bin/sudo -u
+# backup *`, which only matches when sudo itself is the command being run
+# (i.e. double sudo), not a single `sudo -u backup`. Confirmed 2026-07-21.
+ssh picklelab "cd / && sudo -n sudo -u backup test -r /srv/data/open-webui/webui.db && echo 'webui.db readable' || echo 'NOT readable'"
+ssh picklelab "cd / && sudo -n sudo -u backup find /srv/data/open-webui -not -readable 2>&1"
 ```
 
 Expected: `webui.db readable` and no unreadable paths.
