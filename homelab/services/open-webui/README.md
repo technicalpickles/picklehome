@@ -66,6 +66,26 @@ it's an Open WebUI config problem — a Brave API 422 with
 wrong Brave product, which is entirely on Brave's side to fix (regenerate
 or re-paste the key from the [Brave Search API dashboard](https://api.search.brave.com/)).
 
+## Suggested Prompts & Follow-Up Generation
+
+Both are on by default and both are admin-UI-only changes (same
+ConfigVar/already-seeded-database caveat as everything else in this
+section -- `ENABLE_FOLLOW_UP_GENERATION=false` in `.env` does nothing here).
+
+- **In-chat follow-up suggestions** (the clickable follow-up questions
+  Open WebUI generates after an assistant response): Admin Panel ->
+  Settings -> Interface -> **Follow Up Generation** toggle, under Tasks
+  (grouped with Title/Tags/Autocomplete Generation). Backed by
+  `task.follow_up.enable` in the config table.
+- **New-chat suggested prompts** (the "Suggested" list shown on an empty
+  chat): not on the Interface page despite living right next to Follow Up
+  Generation conceptually -- it's under Admin Panel -> **Models** -> the
+  **Settings** button (top-right of the model list, same modal the Web
+  Search capability checkboxes above live in) -> **Defaults** tab ->
+  **Prompt Suggestions**. There's no on/off switch, only a list (backed by
+  `ui.prompt_suggestions`); delete all entries and Save to make new chats
+  show none.
+
 ### Inspecting config without re-deriving all this
 
 `just open-webui-inspect-config [prefix]` dumps the `web.search.*`/
