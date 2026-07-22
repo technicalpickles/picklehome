@@ -1,0 +1,9 @@
+[Unit]
+Description=Run seapickle connectivity probe every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

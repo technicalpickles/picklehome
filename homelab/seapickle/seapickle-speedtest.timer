@@ -1,0 +1,10 @@
+[Unit]
+Description=Run seapickle speedtest daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
