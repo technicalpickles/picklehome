@@ -38,8 +38,12 @@ chat AI a sandboxed shell/file/package environment it drives via tool calls
 reachable from `open-webui` at `http://open-terminal:8000` (no host port, no
 Tailscale Service — nothing outside this Compose project needs to reach it).
 
-The connection is pre-seeded via `TERMINAL_SERVER_CONNECTIONS` (a
-`ConfigVar` — same first-boot-only caveat as the Ollama connection above).
+`TERMINAL_SERVER_CONNECTIONS` sets this connection as a `ConfigVar`, but that
+only seeds a brand-new, user-less database — this instance's database already
+existed when the env var was introduced, so it was silently ignored on deploy;
+the connection was added by hand via Admin Settings → Integrations → Open
+Terminal instead (same fields the env var would have set). See
+`docs/plans/2026-07-21-open-terminal-design.md` (Decision 6) for the full story.
 To use it in a chat: click the terminal button (cloud icon) in the input
 area and select "Open Terminal" under System.
 
