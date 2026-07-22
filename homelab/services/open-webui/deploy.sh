@@ -7,6 +7,7 @@ set -euo pipefail
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/open-webui"
 DATA_DIR=/srv/data/open-webui
+OPEN_TERMINAL_DATA_DIR=/srv/data/open-terminal
 # Loopback port tailscaled proxies to; the container listens on 8080 internally.
 PORT=8090
 # See homelab/services/README.md "Container user model".
@@ -19,6 +20,16 @@ echo "==> Deploying commit $(git rev-parse --short HEAD)"
 echo "==> Creating data directory"
 sudo mkdir -p "$DATA_DIR"
 sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
+
+echo "==> Creating Open Terminal data directory"
+sudo mkdir -p "$OPEN_TERMINAL_DATA_DIR"
+# The image's `user` account is uid 1000 (Debian `useradd -m` default, no
+# explicit --uid; same expectation already confirmed for woodpecker-server's
+# equivalent image on this host -- no userns-remap, 1:1 uid mapping). Verify
+# with `docker top open-webui-open-terminal-1 -o uid` after first deploy; if
+# it's ever different on a future image bump, update CONTAINER_UID here and
+# re-chown (see homelab/services/CLAUDE.md "When changing a service's uid").
+sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$OPEN_TERMINAL_DATA_DIR"
 
 echo "==> Configuring Tailscale serve for openwebui"
 sudo tailscale serve --service=svc:openwebui --https=443 "http://127.0.0.1:$PORT"
@@ -53,6 +64,23 @@ for i in $(seq 1 20); do
         exit 1
     fi
     echo "    Waiting for Open WebUI to start (attempt $i/20)..."
+    sleep 5
+done
+
+echo ""
+echo "==> Checking Open Terminal health"
+COMPOSE="docker compose -f $SERVICE_DIR/compose.yaml -f $SERVICE_DIR/compose.picklelab.yaml"
+for i in $(seq 1 12); do
+    if $COMPOSE exec -T open-terminal curl -fsS http://localhost:8000/health -o /dev/null 2>&1; then
+        echo "    Open Terminal health check passed"
+        break
+    fi
+    if [ "$i" -eq 12 ]; then
+        echo "    WARNING: Open Terminal health check failed after 12 attempts"
+        echo "    Logs: $COMPOSE logs open-terminal"
+        exit 1
+    fi
+    echo "    Waiting for Open Terminal to start (attempt $i/12)..."
     sleep 5
 done
 

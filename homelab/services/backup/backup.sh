@@ -59,9 +59,15 @@ DUMP_FAILURES=0
 #
 # Exclude /srv/data/dev-home: that's the dev container's home directory,
 # unrelated to homelab services. Has its own backup concerns.
+#
+# Exclude /srv/data/open-terminal: Open Terminal's scratch home directory for
+# the chat AI's sandboxed shell sessions. Disposable AI-experiment data, not
+# source of truth -- anything worth keeping gets moved to a real vault/repo/
+# service during the session. See docs/plans/2026-07-21-open-terminal-design.md.
 echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
-    --exclude "$DATA_DIR/dev-home"
+    --exclude "$DATA_DIR/dev-home" \
+    --exclude "$DATA_DIR/open-terminal"
 RESTIC_EXIT=$?
 
 # Restic exit codes: 0 = success, 3 = partial (some files unreadable but snapshot saved).
