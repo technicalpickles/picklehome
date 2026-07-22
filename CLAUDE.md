@@ -23,6 +23,7 @@ Note: the browser profiler and `just bgw *` use a headless browser that can't la
 - **Service hostnames:** `<service-name>.tail2023b7.ts.net`, fronted by Tailscale Services on picklelab. TLS terminated by `tailscaled`, proxied to a `127.0.0.1:<port>` container binding. No public DNS, no Caddy.
 - **Per-service hostname** is stored as `<SERVICE>_HOST` in 1Password (e.g. `op://picklehome/TaskChampion Sync/host`) and surfaced via `.env`.
 - **Debugging `tailscale`/`serve`/Services** (status looks wrong, `ping` fails, sudo prompts hang): use the `tailscale-cli` skill before re-deriving these from scratch.
+- **Beach house node:** `seapickle` (Raspberry Pi 3B+) is the Tailscale node and subnet router at the beach house; see `homelab/seapickle/README.md`.
 
 ## Python Tooling
 
@@ -155,6 +156,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `picklehome/`: Shared cross-module code. `locations.py` is the canonical location registry (main house, beachhouse, ...) consumed by climate and locks; see `climate/README.md` and `locks/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
+  - `homelab/seapickle/`: beach house Raspberry Pi 3B+ (Tailscale jump box, subnet router, connectivity probes); see `homelab/seapickle/README.md`
   - Key services: `obsidian-sync` (vaults: `rpg`, `pickled-knowledge`), `brineworks-server`, `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `climate-auto-switch`, `backup`, `github-actions-runner`, `woodpecker`, `openclaw` (full list in the Homelab Services table below)
   - **Obsidian vaults on host:** `/srv/data/obsidian-sync/vaults/<vault>/` — `pickled-knowledge` is the personal knowledge base (second brain); `rpg` is campaign notes
   - `second-brain-agent` mounts `pickled-knowledge` read-write at `/vault`, reachable at `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net`

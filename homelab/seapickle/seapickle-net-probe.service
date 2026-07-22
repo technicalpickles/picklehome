@@ -1,0 +1,8 @@
+[Unit]
+Description=seapickle connectivity probe (gateway, WAN, DNS, device clouds)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/seapickle/net-probe.sh

@@ -1,0 +1,8 @@
+[Unit]
+Description=seapickle daily speedtest
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/seapickle/speedtest-probe.sh
