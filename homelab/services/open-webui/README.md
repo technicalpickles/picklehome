@@ -29,6 +29,30 @@ Cloud key or change connections: Admin Settings -> Connections in the UI.
 `WEBUI_SECRET_KEY`, `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` are read from env
 at startup (the admin pair only acts on a fresh, user-less database).
 
+## Open Terminal
+
+[Open Terminal](https://docs.openwebui.com/features/open-terminal/) gives the
+chat AI a sandboxed shell/file/package environment it drives via tool calls
+— a second container (`open-terminal`, pinned
+`ghcr.io/open-webui/open-terminal:v0.11.34`) in this same Compose project,
+reachable from `open-webui` at `http://open-terminal:8000` (no host port, no
+Tailscale Service — nothing outside this Compose project needs to reach it).
+
+The connection is pre-seeded via `TERMINAL_SERVER_CONNECTIONS` (a
+`ConfigVar` — same first-boot-only caveat as the Ollama connection above).
+To use it in a chat: click the terminal button (cloud icon) in the input
+area and select "Open Terminal" under System.
+
+Its data lives in `/srv/data/open-terminal` (the container's `/home/user`)
+and is deliberately **excluded from the nightly restic backup** — it's
+disposable AI scratch space, not source-of-truth data. The image's `user`
+account has passwordless sudo *inside its own container* (that's how it
+installs packages on demand); the isolation boundary is the container, not
+that account — no Docker socket is mounted, so it cannot reach picklelab's
+host Docker daemon.
+
+Full rationale: `docs/plans/2026-07-21-open-terminal-design.md`.
+
 ## Upgrades
 
 Bump the pinned tag in the `FROM` line of `Dockerfile` (not `compose.yaml` --

@@ -62,6 +62,7 @@ Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root 
 | backup | `backup` system user | Systemd service user; uses `setfacl` for read access to other services' files |
 | openclaw | 1000:1000 | Image default (node); `compose.yaml` `user: "1000:1000"` |
 | open-webui | 1000:1000 | `compose.yaml` `user: "1000:1000"` + custom `Dockerfile` chowning `/app/backend/open_webui/static` at build time (stock image untested non-root, see service README "Non-root fix") |
+| open-terminal | 1000:1000 | Image default (`useradd -m` on Debian base, no explicit uid); confirmed via `docker top` at first deploy, see `homelab/services/open-webui/deploy.sh` |
 
 **Cross-service volume sharing** requires uid alignment at both ends:
 - **Producer** (the writer): set `user: "uid:gid"` in compose
@@ -347,17 +348,17 @@ See [openclaw/README.md](openclaw/README.md) for full setup and the Telegram bot
 
 ### open-webui
 
-Open WebUI chat interface backed by Ollama Cloud. No local models; picklelab only hosts the UI and its database, inference happens at ollama.com.
+Open WebUI chat interface backed by Ollama Cloud, plus [Open Terminal](https://docs.openwebui.com/features/open-terminal/) for sandboxed AI shell access. No local models; picklelab only hosts the UI/terminal containers and the UI's database, inference happens at ollama.com.
 
 | | |
 |---|---|
-| **Purpose** | Web chat UI over Ollama Cloud models, single admin login |
+| **Purpose** | Web chat UI over Ollama Cloud models, single admin login, plus a sandboxed terminal the AI can drive |
 | **Compose** | `/opt/homelab/homelab/services/open-webui/` |
-| **Data** | `/srv/data/open-webui/` (SQLite `webui.db`, uploads, embedding cache) |
-| **Access** | `https://openwebui.<tailnet>.ts.net` (Tailscale Services `svc:openwebui`, port 8090 internally) |
-| **Env vars** | `OPEN_WEBUI_HOST`, `OPEN_WEBUI_ADMIN_EMAIL`, `OPEN_WEBUI_ADMIN_PASSWORD`, `OPEN_WEBUI_SECRET_KEY`, `OLLAMA_API_KEY` |
-| **Backup** | Yes, nightly (SQLite picked up by `/srv/data` restic job) |
-| **Restart** | `restart: unless-stopped` |
+| **Data** | `/srv/data/open-webui/` (SQLite `webui.db`, uploads, embedding cache); `/srv/data/open-terminal/` (Open Terminal's scratch home dir, **excluded from backup**) |
+| **Access** | `https://openwebui.<tailnet>.ts.net` (Tailscale Services `svc:openwebui`, port 8090 internally); Open Terminal is internal-only (`http://open-terminal:8000` inside the Compose network, no host port) |
+| **Env vars** | `OPEN_WEBUI_HOST`, `OPEN_WEBUI_ADMIN_EMAIL`, `OPEN_WEBUI_ADMIN_PASSWORD`, `OPEN_WEBUI_SECRET_KEY`, `OLLAMA_API_KEY`, `OPEN_TERMINAL_API_KEY` |
+| **Backup** | Yes for `open-webui` (SQLite picked up by `/srv/data` restic job); no for `open-terminal` (excluded, disposable scratch space) |
+| **Restart** | `restart: unless-stopped` (both containers) |
 
 Commands: `just deploy-open-webui`, `just open-webui-status`, `just open-webui-logs`, `just open-webui-logs-follow`
 
