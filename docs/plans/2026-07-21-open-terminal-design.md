@@ -29,7 +29,12 @@ that shaped this design (confirmed by reading the upstream `Dockerfile` and
 - It optionally mounts `/var/run/docker.sock` for docker-in-docker workflows
   (the entrypoint adds `user` to the socket's group if present). We are **not**
   mounting it — that would hand the AI a straightforward escape to picklelab's
-  host Docker daemon, which owns every other service's containers.
+  host Docker daemon, which owns every other service's containers. If
+  docker-in-docker ever becomes a real need, `woodpecker`'s Option D (a
+  second, rootless `dockerd` owned by a dedicated non-privileged user, see
+  `docs/plans/2026-06-18-woodpecker-ci-design.md` Section 4) is the template
+  to reach for — not a plain bind of the host root socket. Not needed for
+  this round.
 - It has a built-in egress firewall (`OPEN_TERMINAL_ALLOWED_DOMAINS`): a DNS
   whitelist enforced via a local `dnsmasq` + `iptables`, after which
   `CAP_NET_ADMIN` is permanently dropped. Available if we ever want it; not
@@ -87,6 +92,20 @@ directly.
    installs, cloning arbitrary repos, hitting arbitrary APIs) need open
    egress anyway. Revisit later if it feels too loose in practice — the
    upstream firewall is a config change away, not a rebuild.
+
+   What "full internet access" actually reaches, concretely (neither a pro
+   nor a con here, just what's true): the container is not a Tailscale node
+   and has no sidecar (unlike `woodpecker`/`brineworks-agent`), so it does
+   not inherit tailnet reachability — it cannot resolve `*.ts.net` MagicDNS
+   names or reach other tailnet devices/services just by existing on
+   picklelab. Outbound traffic NATs through the Docker bridge and picklelab's
+   normal default route (USG → AT&T BGW → internet, per the project
+   `CLAUDE.md` network topology), same as any container on this host.
+   Within the Compose network it can reach the `open-webui` container by
+   service name (the point of this integration); it cannot reach other
+   services' containers (each lives in its own Compose project's isolated
+   default network) unless those services expose ports on an interface
+   broader than loopback, which none currently do.
 5. **Package pre-seeding**: none. `OPEN_TERMINAL_PACKAGES` /
    `_PIP_PACKAGES` / `_NPM_PACKAGES` left unset; the AI installs what it
    needs per-session via its own sudo.
