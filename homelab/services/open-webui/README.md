@@ -34,7 +34,7 @@ at startup (the admin pair only acts on a fresh, user-less database).
 [Open Terminal](https://docs.openwebui.com/features/open-terminal/) gives the
 chat AI a sandboxed shell/file/package environment it drives via tool calls
 — a second container (`open-terminal`, pinned
-`ghcr.io/open-webui/open-terminal:v0.11.34`) in this same Compose project,
+`ghcr.io/open-webui/open-terminal:0.11.34`) in this same Compose project,
 reachable from `open-webui` at `http://open-terminal:8000` (no host port, no
 Tailscale Service — nothing outside this Compose project needs to reach it).
 
