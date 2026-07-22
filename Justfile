@@ -682,6 +682,14 @@ open-webui-logs host="picklelab" lines="50":
 open-webui-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
+# Inspect Open WebUI's persistent config (web search, RAG, etc.) and per-model
+# capability overrides. No sqlite3 CLI in the image, so this pipes the local
+# inspect_config.py script over SSH into the running container via stdin --
+# works even if the host checkout hasn't been git-pulled yet. Optional prefix
+# arg filters config keys (default: web.search./web.loader./models.default_metadata).
+open-webui-inspect-config host="picklelab" prefix="":
+    ssh {{host}} "docker exec -i open-webui-open-webui-1 python3 - {{prefix}}" < homelab/services/open-webui/inspect_config.py
+
 # Disk monitor: manual check (dry-run, outputs to stdout)
 disk-monitor-check:
     python3 homelab/services/disk_monitor/disk_monitor.py
