@@ -113,6 +113,22 @@ directly.
    the `open-webui` container (a `ConfigVar`, so it only seeds on first
    boot — matches the existing `OLLAMA_API_CONFIGS` pattern and caveat).
    Avoids a manual Admin UI step on every fresh deploy/rebuild.
+
+   **Confirmed gap in this reasoning, hit on first deploy (2026-07-22):**
+   "first boot" means the database's first boot, not the container's. Open
+   WebUI's database here was already initialized weeks before this env var
+   existed (the original deploy), so adding a *new* `ConfigVar` to an
+   *already-running* instance does not seed it — `ConfigVar` env seeding
+   only ever applies to a brand-new, user-less database, never
+   retroactively to one that already exists. `GET
+   /api/v1/configs/terminal_servers` came back empty after this deploy,
+   confirming the env var was silently ignored. The connection had to be
+   added by hand via Admin Settings → Integrations → Open Terminal (same
+   fields the env var would have set: URL, API key, Bearer auth) — verified
+   via the server log showing `POST /api/v1/configs/terminal_servers 200`.
+   **Takeaway for any future `ConfigVar` added to this service:** it only
+   auto-applies on a fresh install; adding one to an existing instance
+   always needs a manual one-time Admin UI step, no exceptions.
 7. **Ownership**: no `user:` override in Compose for `open-terminal` — let
    the image's baked-in `USER user` stand, since forcing a uid that doesn't
    match its `/etc/passwd` entry could break `sudo`/`$HOME` resolution
