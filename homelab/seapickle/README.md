@@ -41,9 +41,36 @@ In Raspberry Pi Imager, choose **Raspberry Pi OS Lite (64-bit)** and use the
 OS customisation settings:
 
 - Hostname: `seapickle`
-- Enable SSH, **public-key auth only** (paste your key)
+- Enable SSH, **public-key auth only** (paste your key — the public key of
+  the machine you'll SSH *from*, e.g. `~/.ssh/id_ed25519.pub` on the Mac)
 - Username: `pickles` (or whatever — nothing here assumes a name)
 - Skip wifi config if the Pi will be on ethernet
+
+#### Flashing from a Steam Deck (Desktop Mode)
+
+No computer with an SD slot handy? The Deck works: SteamOS runs entirely off
+internal storage, so its microSD slot is free to use for flashing.
+
+1. Switch to Desktop Mode. Install Raspberry Pi Imager from Discover, or:
+
+   ```bash
+   flatpak install flathub org.raspberrypi.rpi-imager
+   ```
+
+   Flatpaks install to the home partition, so no `steamos-readonly` fiddling.
+   Note this is a community-maintained Flathub package (Raspberry Pi only
+   officially ships a .deb); its "Use custom image" option is broken, but the
+   normal choose-OS-from-the-list flow used here works fine.
+2. Close any running games, eject the games microSD via the Disks & Devices
+   tray applet, and swap in the Pi's card. **Label the cards** — Imager
+   erases whatever card is inserted. Ignore/dismiss any KDE mount prompts;
+   Imager writes to the raw device.
+3. Run Imager with the OS choice + customisation settings above. If the
+   flatpak can't see the internal card reader, use a USB card reader via a
+   dock instead (or fall back to `dd` from Konsole).
+4. Eject the flashed card, put the games card back, and only **then** return
+   to Game Mode — Game Mode offers to format unrecognised cards, which would
+   wipe the freshly flashed Pi card.
 
 ### 2. First boot + bootstrap
 
