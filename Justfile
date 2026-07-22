@@ -670,6 +670,9 @@ open-webui-status host="picklelab":
     else
         curl -fsS "https://$OPEN_WEBUI_HOST/health" -w "\nHTTP %{http_code}  %{time_total}s\n" || echo "tailscale routing FAILED"
     fi
+    echo ""
+    echo "==> Open Terminal (internal container, no host port)"
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml exec -T open-terminal curl -fsS http://localhost:8000/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "Open Terminal health check FAILED"
 
 # Tail Open WebUI container logs
 open-webui-logs host="picklelab" lines="50":
