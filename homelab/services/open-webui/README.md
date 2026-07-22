@@ -29,6 +29,55 @@ Cloud key or change connections: Admin Settings -> Connections in the UI.
 `WEBUI_SECRET_KEY`, `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` are read from env
 at startup (the admin pair only acts on a fresh, user-less database).
 
+## Web Search
+
+Enabled, using Brave as the search engine. The Brave API key is entered
+directly in Admin Settings → Web Search → Brave Search API Key, not via
+`.env`/1Password — it isn't one of the ConfigVars this service seeds from
+env (see `.env.vars`), so it only exists in the database.
+
+**Enabling web search for chat is two separate settings, and both have to
+be saved explicitly:**
+
+1. Admin Settings → Web Search: turns the feature on globally and sets the
+   engine/key. This is the one that's easy to find and easy to assume is
+   enough.
+2. Admin Panel → Models → **Settings** (the button next to Import/Export/
+   Manage on the Models list, not a sidebar item) → **Defaults** tab →
+   **Model Capabilities** accordion: a `Web Search` checkbox under
+   "Capabilities" (can the model use it at all) and another under "Default
+   Features" (is it on automatically for new chats, vs. requiring a
+   per-chat toggle click).
+
+The Capabilities/Default Features checkboxes render pre-checked by
+default in the UI even when nothing has ever been saved — the form shows
+sensible-looking defaults, not the actual persisted state. If nobody has
+clicked Save on that modal, `models.default_metadata` in the database is
+still `{}` and no model gets the capability, so the web search toggle
+never shows up in chat even though global settings look fully configured.
+This was the actual root cause the one time this bit us: everything in
+Admin Settings → Web Search was correct, but that Models settings modal
+had never been saved.
+
+If web search is enabled and showing up in chat but errors when used,
+check the actual HTTP response from the search engine before assuming
+it's an Open WebUI config problem — a Brave API 422 with
+`SUBSCRIPTION_TOKEN_INVALID` means the stored key is wrong/expired/for the
+wrong Brave product, which is entirely on Brave's side to fix (regenerate
+or re-paste the key from the [Brave Search API dashboard](https://api.search.brave.com/)).
+
+### Inspecting config without re-deriving all this
+
+`just open-webui-inspect-config [prefix]` dumps the `web.search.*`/
+`web.loader.*`/`models.default_metadata` config keys plus any per-model
+capability overrides, straight from the container's SQLite DB (secrets are
+masked as set/unset). Useful background: the image has no `sqlite3` CLI,
+so this pipes `inspect_config.py` over SSH into the container via
+`docker exec -i ... python3 -`. Also useful background: as of v0.10.2, the
+`config` table is `(key, value, updated_at)` per-row, not the single JSON
+blob older Open WebUI versions used (there's a leftover `config_old` table
+from that migration).
+
 ## Open Terminal
 
 [Open Terminal](https://docs.openwebui.com/features/open-terminal/) gives the
