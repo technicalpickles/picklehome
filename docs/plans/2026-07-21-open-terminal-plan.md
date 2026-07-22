@@ -6,13 +6,13 @@
 
 **Architecture:** Bundle `open-terminal` as a second container inside `homelab/services/open-webui/` (same multi-container-per-service-dir shape as `woodpecker`), sharing the default Compose network with `open-webui` — no host port, no Tailscale Service. `open-webui` gets `TERMINAL_SERVER_CONNECTIONS` (a `ConfigVar`, first-boot-only, same caveat as the existing `OLLAMA_API_CONFIGS`) pointing at it.
 
-**Tech Stack:** Docker Compose, systemd (existing `open-webui.service`, unchanged), 1Password CLI, `ghcr.io/open-webui/open-terminal:v0.11.34` (pinned).
+**Tech Stack:** Docker Compose, systemd (existing `open-webui.service`, unchanged), 1Password CLI, `ghcr.io/open-webui/open-terminal:0.11.34` (pinned).
 
 See `docs/plans/2026-07-21-open-terminal-design.md` for the full design rationale (why bundled, why no docker socket, why no egress restriction, why excluded from backup).
 
 ## Global Constraints
 
-- Image pinned to `ghcr.io/open-webui/open-terminal:v0.11.34` (latest release as of 2026-07-21). Bump deliberately, not via `:latest`.
+- Image pinned to `ghcr.io/open-webui/open-terminal:0.11.34` (latest release as of 2026-07-21). Bump deliberately, not via `:latest`.
 - **No Docker socket mount.** The upstream image supports mounting `/var/run/docker.sock` for docker-in-docker workflows; we deliberately do not, since that would be a straightforward escape to picklelab's host Docker daemon. If docker-in-docker is ever needed, follow `woodpecker`'s Option D (rootless `dockerd` as a dedicated non-privileged user, `docs/plans/2026-06-18-woodpecker-ci-design.md` Section 4) — not a plain host-socket bind.
 - **No egress restriction.** `OPEN_TERMINAL_ALLOWED_DOMAINS` stays unset. Full internet access via the Docker bridge + picklelab's normal default route; the container is not a Tailscale node and has no sidecar, so it cannot reach the tailnet or other services' containers regardless.
 - **No package pre-seeding.** `OPEN_TERMINAL_PACKAGES`/`_PIP_PACKAGES`/`_NPM_PACKAGES` stay unset.
@@ -90,7 +90,7 @@ git commit -m "feat(open-webui): add 1Password-backed env var for Open Terminal"
 
 **Interfaces:**
 - Consumes: `OPEN_TERMINAL_API_KEY` from `onepassword-item`.
-- Produces: `open-terminal` Compose service (image `ghcr.io/open-webui/open-terminal:v0.11.34`, internal port 8000, volume `/home/user`), `open-webui`'s new `TERMINAL_SERVER_CONNECTIONS` env var. Consumed by `deploy-script-and-backup`, `justfile-status-update`, `first-deploy`.
+- Produces: `open-terminal` Compose service (image `ghcr.io/open-webui/open-terminal:0.11.34`, internal port 8000, volume `/home/user`), `open-webui`'s new `TERMINAL_SERVER_CONNECTIONS` env var. Consumed by `deploy-script-and-backup`, `justfile-status-update`, `first-deploy`.
 
 - [ ] **Step 1: Modify `compose.yaml`** — add `depends_on` + `TERMINAL_SERVER_CONNECTIONS` to `open-webui`, and the new `open-terminal` service
 
@@ -141,7 +141,7 @@ services:
 
   open-terminal:
     # Pinned like open-webui's own image; bump deliberately (see Global Constraints).
-    image: ghcr.io/open-webui/open-terminal:v0.11.34
+    image: ghcr.io/open-webui/open-terminal:0.11.34
     restart: unless-stopped
     environment:
       OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?required}
@@ -201,7 +201,7 @@ docker compose -f compose.yaml -f compose.picklelab.yaml config
 cd -
 ```
 
-Expected: rendered config showing both services; `open-webui.depends_on: {open-terminal: {condition: service_started, ...}}`; `TERMINAL_SERVER_CONNECTIONS` rendered as a JSON string with `"key": "x"`; `open-terminal.image: ghcr.io/open-webui/open-terminal:v0.11.34`; `open-terminal.volumes` bind-mounting `/srv/data/open-terminal`; no `docker.sock` anywhere; no warnings about unset vars.
+Expected: rendered config showing both services; `open-webui.depends_on: {open-terminal: {condition: service_started, ...}}`; `TERMINAL_SERVER_CONNECTIONS` rendered as a JSON string with `"key": "x"`; `open-terminal.image: ghcr.io/open-webui/open-terminal:0.11.34`; `open-terminal.volumes` bind-mounting `/srv/data/open-terminal`; no `docker.sock` anywhere; no warnings about unset vars.
 
 - [ ] **Step 5: Commit**
 
@@ -395,7 +395,7 @@ task add project:picklehome.homelab.open-webui "<followup>"
 [Open Terminal](https://docs.openwebui.com/features/open-terminal/) gives the
 chat AI a sandboxed shell/file/package environment it drives via tool calls
 — a second container (`open-terminal`, pinned
-`ghcr.io/open-webui/open-terminal:v0.11.34`) in this same Compose project,
+`ghcr.io/open-webui/open-terminal:0.11.34`) in this same Compose project,
 reachable from `open-webui` at `http://open-terminal:8000` (no host port, no
 Tailscale Service — nothing outside this Compose project needs to reach it).
 

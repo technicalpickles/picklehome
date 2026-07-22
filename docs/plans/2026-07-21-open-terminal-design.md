@@ -82,7 +82,7 @@ directly.
 1. **Placement**: bundled into `homelab/services/open-webui/`, not a
    standalone service directory. Simplest option given it only serves
    Open WebUI; matches the `woodpecker` multi-container precedent.
-2. **Image**: `ghcr.io/open-webui/open-terminal:v0.11.34` (latest release as
+2. **Image**: `ghcr.io/open-webui/open-terminal:0.11.34` (latest release as
    of 2026-07-21), pinned like `open-webui`'s own image. Bump deliberately.
 3. **Docker socket**: not mounted. Closes the container-escape path the
    upstream image otherwise supports for docker-in-docker workflows.

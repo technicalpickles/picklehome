@@ -44,7 +44,11 @@ services:
 
   open-terminal:
     # Pinned like open-webui's own image; bump deliberately (see Global Constraints).
-    image: ghcr.io/open-webui/open-terminal:v0.11.34
+    # Note: the published image tag drops the git tag's "v" prefix (it's taken
+    # from pyproject.toml's version field via docker/metadata-action, not the
+    # git tag name) -- ghcr.io/open-webui/open-terminal:v0.11.34 doesn't exist,
+    # only :0.11.34 does. Verify with `docker manifest inspect` before bumping.
+    image: ghcr.io/open-webui/open-terminal:0.11.34
     restart: unless-stopped
     environment:
       OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?required}
