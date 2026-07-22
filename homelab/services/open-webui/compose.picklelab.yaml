@@ -8,6 +8,13 @@ services:
       dockerfile: homelab/services/open-webui/Dockerfile
     volumes:
       - /srv/data/open-webui:/app/backend/data
+
+  open-terminal:
+    volumes:
+      - /srv/data/open-terminal:/home/user
+
 volumes:
   data:
     name: open-webui_data_unused
+  open-terminal-data:
+    name: open-terminal_data_unused

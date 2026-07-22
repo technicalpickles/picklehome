@@ -8,6 +8,8 @@ services:
     # See Global Constraints for why a bare `user:` override on the stock
     # image was rejected (upstream open-webui/open-webui#26662).
     user: "1000:1000"
+    depends_on:
+      - open-terminal
     environment:
       # --- Ollama Cloud, the only model provider ---
       ENABLE_OLLAMA_API: "true"
@@ -24,6 +26,11 @@ services:
       # image's fallback write to root-owned /app/backend/.webui_secret_key.
       WEBUI_SECRET_KEY: ${OPEN_WEBUI_SECRET_KEY:?required}
       WEBUI_URL: "https://${OPEN_WEBUI_HOST:?required}"
+      # --- Open Terminal: sandboxed compute the chat AI drives via tool calls ---
+      # ConfigVar: seeds the DB on first boot only, same caveat as OLLAMA_API_CONFIGS
+      # above. URL is the Compose service name -- both containers share this
+      # project's default network. See docs/plans/2026-07-21-open-terminal-design.md.
+      TERMINAL_SERVER_CONNECTIONS: '[{"id": "open-terminal", "url": "http://open-terminal:8000", "key": "${OPEN_TERMINAL_API_KEY:?required}", "name": "Open Terminal", "auth_type": "bearer", "config": {"access_grants": []}}]'
       # --- Non-root housekeeping ---
       HOME: /app/backend/data
       # --- Telemetry off ---
@@ -34,5 +41,18 @@ services:
       - "127.0.0.1:8090:8080"
     volumes:
       - data:/app/backend/data
+
+  open-terminal:
+    # Pinned like open-webui's own image; bump deliberately (see Global Constraints).
+    image: ghcr.io/open-webui/open-terminal:v0.11.34
+    restart: unless-stopped
+    environment:
+      OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?required}
+    # No `ports:` -- nothing outside this Compose project needs to reach it.
+    # No docker.sock mount -- see Global Constraints.
+    volumes:
+      - open-terminal-data:/home/user
+
 volumes:
   data:
+  open-terminal-data:
