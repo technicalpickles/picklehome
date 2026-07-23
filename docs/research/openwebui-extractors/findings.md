@@ -67,18 +67,20 @@ service to point at "index my whole vault" without expecting it to take a while.
 
 | Service | Price | Free tier |
 |---------|-------|-----------|
-| Datalab Marker API | $0.30 per 1,000 pages | $5 free credit on signup |
-| Unstructured serverless API | ~$1 per 1,000 pages (pay-as-you-go listed as $0.03/page in one source — treat as approximate, pricing pages disagree) | 15,000 pages free |
-| Mistral OCR 3 | $2/1,000 pages standard, $1/1,000 batch | — |
-| Mistral OCR 4 (current) | $4/1,000 pages standard, $2/1,000 batch | — |
-| Azure Document Intelligence — Read (OCR only) | $1.50/1,000 pages | 500 pages/month free |
-| Azure Document Intelligence — Prebuilt models | $10/1,000 pages | 500 pages/month free |
-| Azure Document Intelligence — Custom extraction | $30/1,000 pages | 500 pages/month free |
+| Datalab Marker API | $0.30 per 1,000 pages | $5 **one-time** signup credit (~16,700 pages), not recurring — balance hits $0 and requests 403 until you're on a paid plan |
+| Unstructured serverless API | ~$1 per 1,000 pages (pay-as-you-go listed as $0.03/page in one source — treat as approximate, pricing pages disagree) | **15,000 pages/month, recurring**, resets monthly, no credit card required |
+| Mistral OCR 3 | $2/1,000 pages standard, $1/1,000 batch | None — the free "Experiment" tier (~1B tokens/month) covers chat/text models only; the OCR endpoint bills per-page from page one |
+| Mistral OCR 4 (current) | $4/1,000 pages standard, $2/1,000 batch | Same as above — no free allowance |
+| Azure Document Intelligence — Read (OCR only) | $1.50/1,000 pages | 500 pages/month, recurring, but the free **F0 tier only processes the first 2 pages of any document** and silently drops the rest — not usable for real multi-page PDFs without upgrading to S0 |
+| Azure Document Intelligence — Prebuilt models | $10/1,000 pages | Same F0 tier + 2-page-per-doc cap |
+| Azure Document Intelligence — Custom extraction | $30/1,000 pages | Same F0 tier + 2-page-per-doc cap |
 
-At homelab scale (dozens to low hundreds of pages/month, not thousands), every one of
-these cloud options costs cents to low dollars/month — cost is not the deciding factor
-here, it's whether sending document content to a third party is acceptable for what gets
-uploaded.
+At homelab scale (dozens to low hundreds of pages/month, not thousands), Unstructured's
+recurring 15,000-pages/month free tier likely covers this use case indefinitely at zero
+cost. Everything else is either a one-time trial credit (Datalab) or has no free
+allowance at all (Mistral OCR), and Azure's free tier is effectively unusable beyond
+2-page test documents. Outside of Unstructured, cost is still trivial at this volume —
+it's just not actually "free" the way the headline numbers imply.
 
 ## Comparisons found online
 
@@ -115,10 +117,13 @@ For `open-webui` on picklelab, in order of effort vs. payoff:
    PDFs) start showing up — cheapest self-hosted option in RAM/CPU terms, straightforward
    sidecar (`http://tika:9998`), same Compose-sidecar pattern already used for
    `open-terminal`.
-3. **Consider a cloud OCR API (Mistral OCR or Azure Document Intelligence)** instead of
-   Docling if document quality matters more than self-hosting purity — cost at this volume
-   is trivial, and it avoids adding a multi-GB container + CPU load to a low-power NUC that
-   also runs everything else in `homelab/services/`.
+3. **Consider a cloud OCR API instead of Docling** if document quality matters more than
+   self-hosting purity — it avoids adding a multi-GB container + CPU load to a low-power
+   NUC that also runs everything else in `homelab/services/`. **Unstructured** is the
+   strongest pick here: its 15,000-pages/month free tier recurs monthly and likely covers
+   this use case at zero ongoing cost. Mistral OCR and Azure Document Intelligence have no
+   comparable free allowance (Azure's F0 tier is capped at 2 pages/document, effectively
+   unusable) but are still cents/month at this volume.
 4. **Docling self-hosted** is the right call only if OCR/table quality needs to be good
    *and* documents must never leave the box — expect it to be the heaviest and slowest of
    these options on this hardware.
@@ -143,5 +148,8 @@ For `open-webui` on picklelab, in order of effort vs. payoff:
 - [Azure Document Intelligence pricing](https://azure.microsoft.com/en-us/pricing/details/document-intelligence/)
 - [Datalab Marker conversion API overview](https://documentation.datalab.to/docs/recipes/marker/conversion-api-overview)
 - [Unstructured pricing](https://unstructured.io/pricing)
+- [Unstructured: 15,000 free pages announcement](https://x.com/UnstructuredIO/status/1990817148759847260)
+- [Azure Document Intelligence service quotas and limits (F0 tier, 2-page cap)](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/service-limits?view=doc-intel-4.0.0)
+- [Datalab billing docs (credit expiry behavior)](https://documentation.datalab.to/platform/billing)
 - [Apache Tika Docker images](https://github.com/apache/tika-docker)
 - [Apache Tika memory issue discussion (Alfresco)](https://github.com/Alfresco/alfresco-docker-installer/issues/87)
