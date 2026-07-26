@@ -3,6 +3,7 @@ from climate.ecobee.status import (
     get_equipment_description,
     get_active_hold,
     extract_thermostat_status,
+    format_status,
 )
 
 
@@ -107,3 +108,53 @@ def test_extract_thermostat_status():
     assert status["aq_score"] == 51
     assert status["voc"] == 520
     assert status["co2"] == 508
+
+
+def test_format_status_shows_climate_setpoints_when_no_hold():
+    statuses = [
+        {
+            "name": "Downstairs",
+            "temp": 71.8,
+            "humidity": 68,
+            "equipment": "idle",
+            "hvac_mode": "auto",
+            "climate_ref": "smart1",
+            "cool_setpoint": 72.0,
+            "heat_setpoint": 65.0,
+            "hold": None,
+            "aq_score": None,
+            "voc": None,
+            "co2": None,
+            "weather": None,
+        }
+    ]
+    line = format_status(statuses)
+    assert "65/72°F" in line
+
+
+def test_format_status_shows_hold_setpoints_not_climate_setpoints():
+    statuses = [
+        {
+            "name": "Downstairs",
+            "temp": 71.8,
+            "humidity": 68,
+            "equipment": "compCool1,fan",
+            "hvac_mode": "auto",
+            "climate_ref": "smart1",
+            "cool_setpoint": 72.0,
+            "heat_setpoint": 65.0,
+            "hold": {
+                "end": "2026-07-27 00:00:00",
+                "cool_temp": 70.0,
+                "heat_temp": 64.0,
+            },
+            "aq_score": None,
+            "voc": None,
+            "co2": None,
+            "weather": None,
+        }
+    ]
+    line = format_status(statuses)
+    assert "64/70°F" in line
+    assert "65/72°F" not in line
+    assert "hold until 2026-07-27 00:00:00" in line

@@ -91,8 +91,12 @@ def format_status(statuses: list[dict]) -> str:
             hold_str = f"  hold until {end}"
 
         climate = s["climate_ref"] or ""
-        cool_sp = s.get("cool_setpoint")
-        heat_sp = s.get("heat_setpoint")
+        if s["hold"]:
+            cool_sp = s["hold"]["cool_temp"]
+            heat_sp = s["hold"]["heat_temp"]
+        else:
+            cool_sp = s.get("cool_setpoint")
+            heat_sp = s.get("heat_setpoint")
         if cool_sp is not None and heat_sp is not None:
             climate = f"{climate} {heat_sp:.0f}/{cool_sp:.0f}°F"
         line = f"{s['name']:<14} {temp:<8} {humidity:<5} {equipment:<10} {climate:<20} {hvac}{hold_str}"
