@@ -132,6 +132,17 @@ The subnet is passed as an argument (and remembered on the Pi) so it never
 lives in git — beach house network details are sensitive per
 `docs/CONVENTIONS.md`. Record it in agent memory / 1Password instead.
 
+`bootstrap.sh` needs `sudo` for everything it does, which means a password
+prompt every run unless you set that up once first:
+
+```bash
+cd seapickle
+./setup-sudo.sh   # prompts for your password once; installs /etc/sudoers.d/seapickle
+```
+
+That installs a NOPASSWD rule scoped to running `bootstrap.sh` itself (not a
+blanket sudo grant) — see `sudoers-seapickle` for the exact rule.
+
 The script is idempotent — re-run it after changing probe scripts or to
 converge a drifted setup. It:
 

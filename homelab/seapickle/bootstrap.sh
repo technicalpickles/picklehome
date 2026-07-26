@@ -38,7 +38,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get -y install \
     mtr-tiny iperf3 tcpdump nmap arp-scan dnsutils jq curl \
-    zram-tools unattended-upgrades logrotate
+    unattended-upgrades logrotate
 
 # Ookla speedtest CLI: official packagecloud repo, ships arm64/armhf debs.
 if ! command -v speedtest >/dev/null 2>&1; then
@@ -60,8 +60,19 @@ if ! grep -q '^gpu_mem=' "$BOOT_CONFIG"; then
     echo "note: gpu_mem=16 added to $BOOT_CONFIG (takes effect after reboot)"
 fi
 
-# Compressed-RAM swap instead of SD-card swap (zram-tools defaults are fine).
-systemctl enable --now zramswap.service
+# Compressed-RAM swap instead of SD-card swap. Current Raspberry Pi OS
+# (Debian 13+) ships systemd-zram-generator, which claims /dev/zram0 as swap
+# before this script even runs. Installing zram-tools on top collides over
+# the same device (mkswap refuses because it's already mounted). Only manage
+# zram ourselves on older images that lack the generator; otherwise leave
+# the OS default alone.
+if systemctl is-active --quiet systemd-zram-setup@zram0.service 2>/dev/null; then
+    echo "note: zram swap already managed by systemd-zram-generator, skipping zram-tools"
+    systemctl disable --now zramswap.service >/dev/null 2>&1 || true
+else
+    apt-get -y install zram-tools
+    systemctl enable --now zramswap.service
+fi
 
 # Cap journald so logs can't eat the SD card.
 mkdir -p /etc/systemd/journald.conf.d
