@@ -11,13 +11,14 @@ question is always "was the internet down?" — and until now there was nothing
 on-site to answer it. seapickle is:
 
 1. **A jump box:** SSH over Tailscale (`ssh seapickle.<tailnet>.ts.net`),
-   no public exposure, no password auth.
-2. **A subnet router:** advertises the beach house LAN over Tailscale so
-   local device UIs (router admin page, anything with a local interface)
-   are reachable from anywhere.
-3. **A debug toolkit:** `mtr`, `iperf3`, `tcpdump`, `nmap`, `arp-scan`,
+   no public exposure, no password auth. Deliberately a jump host only — it
+   does not advertise a Tailscale subnet route. That would make every device
+   on the beach house LAN directly reachable from anything else on the
+   tailnet (and vice versa), which is more exposure than this needs; SSH in
+   and run diagnostics from the Pi's own shell instead.
+2. **A debug toolkit:** `mtr`, `iperf3`, `tcpdump`, `nmap`, `arp-scan`,
    `dig`, Ookla `speedtest` — ready to run interactively over SSH.
-4. **A connectivity recorder:** a 5-minute probe of the gateway, DNS, and
+3. **A connectivity recorder:** a 5-minute probe of the gateway, DNS, and
    the cloud endpoints the smart devices depend on, plus a daily speedtest,
    logged locally. When a device was unreachable at 3am Tuesday, the log
    says whether the internet was up.
@@ -125,12 +126,8 @@ the router's client list), and copy this directory over:
 ```bash
 scp -r homelab/seapickle/ pickles@seapickle.local:
 ssh pickles@seapickle.local
-sudo ./seapickle/bootstrap.sh 192.168.x.0/24   # the beach house subnet
+sudo ./seapickle/bootstrap.sh
 ```
-
-The subnet is passed as an argument (and remembered on the Pi) so it never
-lives in git — beach house network details are sensitive per
-`docs/CONVENTIONS.md`. Record it in agent memory / 1Password instead.
 
 `bootstrap.sh` needs `sudo` for everything it does, which means a password
 prompt every run unless you set that up once first:
@@ -148,7 +145,6 @@ converge a drifted setup. It:
 
 - installs the debug toolkit, Ookla speedtest, and Tailscale
 - applies low-RAM / SD-wear tuning (`gpu_mem=16`, zram swap, capped journald)
-- enables IP forwarding for subnet routing
 - installs the probe scripts + systemd timers and starts them
 
 ### 3. Bring up Tailscale
@@ -156,13 +152,13 @@ converge a drifted setup. It:
 The script prints the exact command; it looks like:
 
 ```bash
-sudo tailscale up --ssh --advertise-routes=192.168.x.0/24 --hostname=seapickle
+sudo tailscale up --ssh --hostname=seapickle
 ```
 
-Then in the [Tailscale admin console](https://login.tailscale.com/admin/machines):
+No `--advertise-routes` — seapickle is a jump host only (see above). Then in
+the [Tailscale admin console](https://login.tailscale.com/admin/machines):
 
 - approve the machine (if device approval is on)
-- **approve the advertised subnet route** (Machines → seapickle → Edit route settings)
 - disable key expiry for this node (it's a headless appliance)
 
 ### 4. Verify from the laptop
@@ -171,7 +167,6 @@ Then in the [Tailscale admin console](https://login.tailscale.com/admin/machines
 ssh seapickle.tail2023b7.ts.net          # Tailscale SSH
 systemctl list-timers 'seapickle-*'      # both timers scheduled
 tail /var/log/seapickle/net-probe.jsonl  # entries appearing every 5 min
-ping 192.168.x.1                         # beach house router via subnet route
 ```
 
 ## What the probes record
@@ -232,8 +227,7 @@ visit, record (in agent memory / 1Password — **not** in git):
 
 Unlike `homelab/services/*`, there is no `deploy.sh`/compose here: the Pi is
 not on the picklelab deploy path. To update after changing scripts, copy the
-directory over again and re-run `bootstrap.sh` (no argument needed — the
-subnet is remembered in `/etc/seapickle/subnet`).
+directory over again and re-run `bootstrap.sh`.
 
 ## Maybe later (deliberately not in v1)
 

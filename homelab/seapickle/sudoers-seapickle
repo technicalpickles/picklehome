@@ -1,4 +1,4 @@
-# Passwordless sudo for running bootstrap.sh on seapickle.
+# Passwordless sudo for running bootstrap.sh and managing tailscale on seapickle.
 # Installed to /etc/sudoers.d/seapickle by setup-sudo.sh
 #
 # bootstrap.sh runs entirely as root (invoked via `sudo ./bootstrap.sh`), so
@@ -6,3 +6,9 @@
 # from this one elevation, no per-command sudo calls inside it to allowlist.
 
 technicalpickles ALL=(ALL) NOPASSWD: /home/technicalpickles/seapickle/bootstrap.sh *
+
+# tailscale up/set need root to reconfigure the daemon (e.g. re-running
+# `tailscale up` when this Pi moves to the beach house, or clearing an
+# advertised route). This is a single-user appliance, not shared infra.
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/tailscale up *
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/tailscale set *
