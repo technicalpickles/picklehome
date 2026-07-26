@@ -72,6 +72,51 @@ internal storage, so its microSD slot is free to use for flashing.
    to Game Mode — Game Mode offers to format unrecognised cards, which would
    wipe the freshly flashed Pi card.
 
+### Troubleshooting: Imager customisation silently not applied
+
+Symptom set, all at once: pingable and fully network-reachable (responds to
+ICMP, TCP RST on every port) but **nothing listening on port 22**; HDMI
+shows nothing even with a monitor attached *before* power-on (rules out the
+usual hotplug-detection gotcha); eventually a blue interactive "create a
+user" screen appears on HDMI. That screen is Raspberry Pi OS's first-run
+setup, which only appears when the Imager's OS customisation (hostname,
+user, SSH key, wifi country, keyboard layout) never actually got written to
+the card — a known flaky step in Imager, especially so via the Steam Deck
+flatpak flow above. Also watch for: `wlan0` missing entirely from `ip a`
+(wifi country never got set, so the radio stays disabled), and a console
+keyboard layout mismatch (e.g. `Shift+'` producing `@` instead of `"` — the
+system's console keymap doesn't match the physical keyboard).
+
+Recovery without re-flashing, all done at the console once you're at the
+blue setup screen:
+
+```bash
+# complete the interactive prompt with your username/password, log in, then:
+sudo raspi-config nonint do_wifi_country US     # unblocks wlan0 if missing
+sudo reboot
+# after reboot, connect wifi if not using ethernet:
+nmcli device wifi list
+sudo nmcli device wifi connect 'SSID' password 'PASSWORD'
+sudo systemctl enable --now ssh
+sudo hostnamectl set-hostname seapickle
+sudo sed -i 's/raspberrypi/seapickle/' /etc/hosts
+```
+
+If double quotes on the physical keyboard produce the wrong character,
+that's the console keymap, not the keyboard — use single quotes to sidestep
+it in the moment (`nmcli ... 'SSID' password 'PASSWORD'`), or fix it with
+`sudo loadkeys us` (immediate) / `sudo setupcon --force` (reapplies
+`/etc/default/keyboard`, persists across reboots). Don't write directly to
+`/etc/vconsole.conf` — on this OS it's a symlink to `/etc/default/keyboard`,
+which uses the `XKBLAYOUT=...` format, not `KEYMAP=...`; overwriting it
+with the wrong format clobbers the existing (possibly already-correct)
+config.
+
+Once SSH is confirmed working, get a real pubkey-only setup in place (the
+whole point of the Imager step that didn't take): `ssh-copy-id` your key
+over while password auth still works, confirm key-based login, then set
+`PasswordAuthentication no` in `/etc/ssh/sshd_config` and restart `sshd`.
+
 ### 2. First boot + bootstrap
 
 Boot the Pi on the beach house LAN, find it (`ping seapickle.local` or check
