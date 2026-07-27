@@ -338,7 +338,7 @@ Self-hosted OpenClaw gateway (chat -> agent that can act), reached via Telegram 
 | **Backup** | Yes, nightly (`/srv/data/openclaw` picked up by restic) |
 | **Restart** | `restart: unless-stopped` |
 
-Off-box inference only (Ollama Cloud, no local model — not viable on the J3455). Tool policy starts `minimal` (no `docker.sock`, browser/canvas/automation denied); widened deliberately as trust grows. Two config sections (`openclaw.tools.json5`, `openclaw.mcp.json5`) live in the private `pickleclaw` repo and are symlinked in, not committed here — the MCP one would leak real server names into a public repo.
+Off-box inference only (Ollama Cloud, no local model — not viable on the J3455). Tool policy is `coding` with full exec (`security: "full"`, `ask: "off"`) and no deny list, widened from the original `minimal` on 2026-07-02 to match `pickleclaw`'s local model 1:1. No `docker.sock` grant. Session visibility is `agent` (2026-07-26), so the chat-ID allowlist is the only thing isolating sessions from each other. Both settings rest on this being a single-operator bot; see the [openclaw README](openclaw/README.md#security). Two config sections (`openclaw.tools.json5`, `openclaw.mcp.json5`) live in the private `pickleclaw` repo and are symlinked in, not committed here — the MCP one would leak real server names into a public repo.
 
 Commands: `just deploy-openclaw`, `just openclaw-status`, `just openclaw-logs`, `just openclaw-logs-follow`
 
