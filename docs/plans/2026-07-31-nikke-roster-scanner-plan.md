@@ -736,28 +736,52 @@ ls -la /tmp/nikke-migrate
 
 Expected: `roster.db` around 13MB, the session JSON around 25KB.
 
-- [ ] **Step 4: Stop serve so nothing is writing during the swap**
+- [ ] **Step 4: Stop serve AND the sync timer so nothing is writing during the swap**
+
+Stopping only `nikke.service` is not enough: `nikke-sync.service` declares
+`After=nikke.service`, not `Requires=`, so it fires independently on its own
+6-hour schedule and isn't held back by serve being down. If `nikke-sync.timer`
+stays armed and fires between this step and Step 6, `docker compose run --rm
+sync` opens `/srv/data/nikke/roster.db` while Step 5's `sudo install`
+truncates and rewrites that same inode out from under it, landing sync's
+buffered writes at stale offsets inside the freshly-restored 13MB database.
+Stop the timer too, and don't "simplify" this back down to just the service.
 
 ```bash
-ssh picklelab "sudo systemctl stop nikke.service"
+ssh picklelab "sudo systemctl stop nikke-sync.timer nikke.service"
 ```
 
 - [ ] **Step 5: Upload both files with correct ownership**
 
+`scp -p` preserves the source file's mode instead of landing at the remote
+umask (typically 0644, world-readable) on this rootless-docker `ci` host. The
+`install` calls are chained with `&&` because the second `install` (session
+file, mode 600) must not run against a half-copied database, but `rm` is
+split onto its own `;` so the temp copies in `/tmp` are cleaned up even if an
+`install` fails partway through -- leaving live auth material sitting
+world-readable in `/tmp` is worse than a confusing leftover file.
+
 ```bash
-scp /tmp/nikke-migrate/roster.db picklelab:/tmp/roster-migrate.db
-scp /tmp/nikke-migrate/.blablalink-session.json picklelab:/tmp/.blablalink-session.json
+scp -p /tmp/nikke-migrate/roster.db picklelab:/tmp/roster-migrate.db
+scp -p /tmp/nikke-migrate/.blablalink-session.json picklelab:/tmp/.blablalink-session.json
 ssh picklelab "sudo install -o 1000 -g 1000 -m 644 /tmp/roster-migrate.db /srv/data/nikke/roster.db && \
-  sudo install -o 1000 -g 1000 -m 600 /tmp/.blablalink-session.json /srv/data/nikke/.blablalink-session.json && \
-  rm -f /tmp/roster-migrate.db /tmp/.blablalink-session.json && ls -lan /srv/data/nikke"
+  sudo install -o 1000 -g 1000 -m 600 /tmp/.blablalink-session.json /srv/data/nikke/.blablalink-session.json; \
+  rm -f /tmp/roster-migrate.db /tmp/.blablalink-session.json; \
+  ls -lan /srv/data/nikke"
 ```
 
-- [ ] **Step 6: Start serve and verify the count survived**
+- [ ] **Step 6: Start serve and the sync timer, then verify the count survived**
+
+Start `nikke.service` before `nikke-sync.timer` so serve is never briefly up
+without the safety of a re-armed sync guard racing it -- and so a sync firing
+immediately on re-arm reads the already-restored database, not a half-started
+serve's.
 
 ```bash
 ssh picklelab "sudo systemctl start nikke.service"
 sleep 10
 ssh picklelab "sudo sqlite3 /srv/data/nikke/roster.db 'select count(*) from characters;'"
+ssh picklelab "sudo systemctl start nikke-sync.timer"
 ```
 
 Expected: the same number recorded in Step 1. If it differs, stop and investigate before touching the VM copy.

@@ -45,13 +45,17 @@ shape for scheduled sync.
 | `deploy.sh` | pull app source, write `.env.build`, prep data dir, register the Tailscale Service, link and restart units, health check |
 | `nikke.service` | long-lived serve unit |
 | `nikke-sync.service` + `nikke-sync.timer` | 6-hourly sync |
-| `.env.vars` | comment-only, see below |
 | `README.md` | per-service reference |
 
 nikke has no secrets. The blablalink session is a file on the data volume, not
-an environment variable, and there's no database password or API key. So
-`.env.vars` exists for consistency with every other service (and because
-`just deploy-nikke` feeds it to `scripts/service-env`) but lists nothing.
+an environment variable, and there's no database password or API key. So,
+unlike every other service, nikke ships **no** `.env.vars`: an empty-but-present
+`.env.vars` was the original design, but `scripts/service-env` builds its key
+list with a `grep -v '^#'` pipeline, and a comment-only file makes that grep
+match nothing, so the command substitution exits 1 and takes the
+`set -euo pipefail` `deploy-nikke` recipe down with it. `just deploy-nikke`
+skips the filtered-env/scp step entirely as a result. Add `.env.vars` and the
+scp block back together if nikke ever gains a secret.
 `NIKKE_PORT` is not a secret either, so it comes from `deploy.sh` writing
 `.env.build`, the same way `brineworks-server` handles `BRINEWORKS_SERVER_PORT`.
 
@@ -292,8 +296,12 @@ already there. Recorded so the next person doesn't spend an evening on it.
 
 - **Playwright in the image is untested here.** The nikke coi profile solved
   chromium dependencies for arm64 Ubuntu; the Dockerfile re-solves them for
-  amd64. Use the official Playwright base image rather than hand-installing
-  system libraries.
+  amd64. Shipped as `python:3.13-slim` plus
+  `playwright install --with-deps chromium` rather than the official
+  Playwright base image: it does the same apt work, but keeps the chromium
+  version tied to the `playwright` pin in `uv.lock` instead of a
+  separately-versioned base image tag -- same outcome, one fewer version to
+  keep in sync.
 - **Sync duration versus timer interval.** Sync took about 16 seconds against a
   warm coi container. A cold `docker compose run --rm` adds container start
   time but not much. Not expected to approach the 6-hour window, so no

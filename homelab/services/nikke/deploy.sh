@@ -77,7 +77,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     if [ "$i" -eq 10 ]; then
         echo "    WARNING: local check failed after 10 attempts"
         echo "    Check container logs:"
-        echo "      cd $SERVICE_DIR && docker compose -f compose.yaml -f compose.picklelab.yaml logs"
+        echo "      cd $SERVICE_DIR && docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs"
         exit 1
     fi
     echo "    Waiting for serve to start (attempt $i/10)..."
@@ -99,6 +99,6 @@ else
     echo "    3. Re-advertise (tailscaled doesn't auto-detect approval):"
     echo "       sudo tailscale serve --service=svc:nikke --https=443 off"
     echo "       sleep 2"
-    echo "       sudo tailscale serve --service=svc:nikke --https=443 http://127.0.0.1:\$NIKKE_PORT"
+    echo "       sudo tailscale serve --service=svc:nikke --https=443 http://127.0.0.1:$NIKKE_PORT"
     echo "    4. Verify: curl ${NIKKE_URL}/"
 fi
