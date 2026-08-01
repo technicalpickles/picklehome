@@ -26,7 +26,12 @@ else
     echo "    Cloning nikke-roster-scanner to $NIKKE_REPO"
     sudo mkdir -p "$NIKKE_REPO"
     sudo chown "$(id -u):$(id -g)" "$NIKKE_REPO"
-    git clone git@github.com:technicalpickles/nikke-roster-scanner.git "$NIKKE_REPO"
+    # github-nikke, not github.com: nikke-roster-scanner is private, and
+    # picklelab's default ~/.ssh/id_ed25519 is a deploy key scoped to the
+    # picklehome repo alone, so a plain github.com URL gets "Repository not
+    # found". The github-nikke alias in ~/.ssh/config points at a dedicated
+    # read-only deploy key (~/.ssh/id_nikke), same pattern as github-brineworks.
+    git clone git@github-nikke:technicalpickles/nikke-roster-scanner.git "$NIKKE_REPO"
 fi
 NIKKE_SHA=$(git -C "$NIKKE_REPO" rev-parse --short HEAD)
 echo "    nikke-roster-scanner at $NIKKE_SHA"
