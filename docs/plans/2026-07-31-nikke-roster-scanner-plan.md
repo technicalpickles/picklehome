@@ -751,6 +751,24 @@ Stop the timer too, and don't "simplify" this back down to just the service.
 ssh picklelab "sudo systemctl stop nikke-sync.timer nikke.service"
 ```
 
+Stopping the timer prevents a *new* sync from starting, but does not kill one
+already running: the sync container comes from `docker compose run --rm sync`,
+which `nikke.service`'s scoped `ExecStop=... down serve` deliberately leaves
+alone. An in-flight sync at this moment has `roster.db` open and lands you in
+exactly the corruption case above. So confirm nothing is running before
+uploading, and wait it out if something is:
+
+```bash
+ssh picklelab "systemctl is-active nikke-sync.service; \
+  cd /opt/homelab/homelab/services/nikke && \
+  docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml ps sync"
+```
+
+Expected: `inactive`, and no running `sync` container. A warm sync took ~16s
+historically, so if one is mid-run, wait for `systemctl is-active` to report
+`inactive` rather than killing it — a clean finish leaves the database
+consistent, a `docker kill` mid-transaction is the thing you're avoiding.
+
 - [ ] **Step 5: Upload both files with correct ownership**
 
 `scp -p` preserves the source file's mode instead of landing at the remote
