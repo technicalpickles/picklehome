@@ -1,0 +1,19 @@
+[Unit]
+Description=Nikke roster dashboard (FastAPI + SQLite)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/homelab/homelab/services/nikke
+# .env.build is written by deploy.sh and carries NIKKE_GIT_SHA and NIKKE_PORT
+# into the docker compose process env, so compose's strict ${NIKKE_PORT:?...}
+# interpolation succeeds when systemd starts this with an empty user env.
+EnvironmentFile=-/opt/homelab/homelab/services/nikke/.env.build
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build serve
+ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+
+[Install]
+WantedBy=multi-user.target

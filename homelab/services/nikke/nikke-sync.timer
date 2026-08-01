@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the nikke blablalink sync every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 00/6:00:00
+# picklelab reboots; without this a missed window is silently skipped.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
