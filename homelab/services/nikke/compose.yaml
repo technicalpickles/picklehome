@@ -1,0 +1,31 @@
+services:
+  serve:
+    image: nikke:local
+    restart: unless-stopped
+    # uid must match /srv/data/nikke ownership; deploy.sh chowns to 1000:1000.
+    # See homelab/services/README.md "Container user model".
+    user: "1000:1000"
+    environment:
+      # The CLI's --session-path defaults to $NIKKE_SESSION_PATH.
+      NIKKE_SESSION_PATH: /data/.blablalink-session.json
+    # --db has no env-var equivalent and defaults to a cwd-relative roster.db,
+    # so it must be passed explicitly or writes land in the container and vanish.
+    command: >
+      nikke-scan serve
+      --host 0.0.0.0
+      --port ${NIKKE_PORT:?set by deploy.sh}
+      --db /data/roster.db
+
+  sync:
+    image: nikke:local
+    user: "1000:1000"
+    # Only `serve` carries a build stanza. Without this, `compose run sync` on a
+    # host that has never built the image tries to pull nikke:local from a
+    # registry that doesn't exist.
+    pull_policy: never
+    environment:
+      NIKKE_SESSION_PATH: /data/.blablalink-session.json
+    command: >
+      nikke-scan blablalink sync
+      --headless
+      --db /data/roster.db
