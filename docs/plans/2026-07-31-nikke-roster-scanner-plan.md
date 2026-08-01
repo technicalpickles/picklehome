@@ -63,20 +63,34 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.26 /uv /uvx /bin/
 WORKDIR /app
 
 # Dependency layer first so source edits don't invalidate the (slow) chromium install.
-COPY pyproject.toml uv.lock ./
-COPY src/ ./src/
-RUN uv sync --locked --no-dev
+# README.md is required too: pyproject.toml's readme = "README.md" makes uv's
+# build backend read it during `uv sync`. --no-install-project defers installing
+# nikke-scanner itself (which needs src/) so this layer only changes when
+# pyproject.toml/uv.lock/README.md change, not on every source edit.
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --locked --no-dev --no-install-project
 
 # Chromium plus its system libraries. PLAYWRIGHT_BROWSERS_PATH keeps the download
 # out of root's home so uid 1000 can actually read it at runtime; a+rx makes that
-# explicit rather than relying on umask.
+# explicit rather than relying on umask. This sits before src/ is copied so
+# source edits don't invalidate the (slow) chromium download. --no-sync: src/
+# isn't present yet, and `uv run` re-syncing would try (and fail) to install
+# the project itself; the deps-only venv from the previous layer already has
+# the playwright package needed to run this CLI.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN uv run playwright install --with-deps chromium \
+RUN uv run --no-sync playwright install --with-deps chromium \
     && chmod -R a+rX /ms-playwright
 
 # Tracked runtime data: the asset manifest, dex overrides, and the dex cache.
+# Only data/dex/ is tracked (see .gitignore); data/ also holds several GB of
+# untracked local screen recordings that must never land in the image, so we
+# copy the dex subdirectory explicitly rather than the whole data/ tree.
+COPY src/ ./src/
 COPY config/ ./config/
-COPY data/ ./data/
+COPY data/dex/ ./data/dex/
+
+# Now install the project itself; deps are already synced above, so this is fast.
+RUN uv sync --locked --no-dev
 
 RUN useradd -m -u 1000 -s /bin/bash nikke && chown -R 1000:1000 /app
 USER 1000:1000
