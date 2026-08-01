@@ -21,7 +21,7 @@ See `docs/plans/2026-07-31-nikke-roster-scanner-design.md` for the design ration
 - **`config/blablalink_character_assets.json`, `config/dex_overrides.yaml`, and `data/dex/characters.json` are all tracked in git** (verified with `git ls-files --error-unmatch`), so they ship inside the image. Only `roster.db` and `.blablalink-session.json` need the volume.
 - **Playwright browsers install to `/ms-playwright`**, not the build user's home, via `PLAYWRIGHT_BROWSERS_PATH`. Installing as root into a root-owned home would leave them unreadable to uid 1000 at runtime.
 - **picklelab is amd64.** The VM this is moving off was arm64. Nothing in the plan pins an architecture, but don't copy arm64 wheels or base-image tags from the old coi profile.
-- **No secrets.** nikke has no API keys or passwords; the blablalink session is a file on the volume, not an environment variable. `.env.vars` exists for convention and lists nothing.
+- **No secrets, and therefore no `.env.vars`.** nikke has no API keys or passwords; the blablalink session is a file on the volume, not an environment variable. An empty-but-present `.env.vars` was the original design, and it does not work: `scripts/service-env` builds its key list with `wanted=$(grep -v '^#' "$VARS_FILE" | ...)`, and a comment-only file makes both greps match nothing, so the command substitution exits 1 and takes the `set -euo pipefail` recipe down with it. Verified on 2026-08-01: comment-only input exits 1 with no output, a real `.env.vars` exits 0. So `deploy-nikke` skips the filtered-env step entirely. When nikke first needs a secret, add `.env.vars` **and** the scp block back together.
 - **Sandbox:** anything that SSHes to picklelab, runs `op`, or runs `just dotenv` must run with the Claude Code sandbox disabled. `ssh picklelab` was unreachable from the Mac during planning on 2026-07-31 (exit 124, timeout); confirm connectivity before starting `first-deploy`.
 - **Never commit secrets.** `.env` files stay gitignored; only `.env.template` references land in git.
 
@@ -157,7 +157,8 @@ Repo: **picklehome**
 **Files:**
 - Create: `homelab/services/nikke/compose.yaml`
 - Create: `homelab/services/nikke/compose.picklelab.yaml`
-- Create: `homelab/services/nikke/.env.vars`
+
+Deliberately **no** `.env.vars` — see Global Constraints for why an empty one breaks `deploy-nikke`.
 
 **Interfaces:**
 - Consumes: the `nikke:local` image from `dockerfile`.
@@ -227,20 +228,7 @@ services:
       - /srv/data/nikke:/data
 ```
 
-- [ ] **Step 3: Write `.env.vars`**
-
-```
-# Vars required by the nikke service.
-# Used by scripts/service-env to extract a minimal .env for deployment.
-#
-# nikke has no secrets: the blablalink session is a file on the data volume,
-# not an env var, and there is no API key or database password. NIKKE_PORT is
-# not a secret either -- deploy.sh writes it to .env.build. This file exists so
-# `just deploy-nikke` matches every other service and so a future secret has an
-# obvious home.
-```
-
-- [ ] **Step 4: Verify the compose files parse**
+- [ ] **Step 3: Verify the compose files parse**
 
 `NIKKE_PORT` is normally supplied by `.env.build`, which doesn't exist yet, so provide it inline:
 
@@ -251,11 +239,11 @@ NIKKE_PORT=8770 docker compose -f compose.yaml config >/dev/null && echo "base O
 
 Expected: `base OK`. Do not run `config` against `compose.picklelab.yaml` locally; its build context `/opt/nikke-roster-scanner` only exists on picklelab.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 cd ~/github.com/technicalpickles/picklehome
-git add homelab/services/nikke/compose.yaml homelab/services/nikke/compose.picklelab.yaml homelab/services/nikke/.env.vars
+git add homelab/services/nikke/compose.yaml homelab/services/nikke/compose.picklelab.yaml
 git commit -m "feat(nikke): compose scaffold for the roster dashboard"
 ```
 
@@ -516,7 +504,7 @@ Repo: **picklehome**
 - Modify: `Justfile` (append after the existing `deploy-open-webui` block)
 
 **Interfaces:**
-- Consumes: `deploy.sh` from `deploy-script`, `.env.vars` from `compose-scaffold`.
+- Consumes: `deploy.sh` from `deploy-script`, the Compose service names from `compose-scaffold`.
 - Produces: `just deploy-nikke`, `just nikke-logs`, `just nikke-logs-follow`, `just nikke-sync-now`, `just nikke-login`. Consumed by `first-deploy`, `data-migration`, `sync-verification`.
 
 - [ ] **Step 1: Add the deploy and log recipes**
@@ -546,11 +534,10 @@ deploy-nikke host="picklelab":
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     echo "==> Pulling on {{host}}"
     ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/nikke/.env.vars > tmp/nikke.env
-    scp tmp/nikke.env {{host}}:/opt/homelab/homelab/services/nikke/.env
-    rm tmp/nikke.env
+    # No .env scp: nikke has no secrets, so there is no .env.vars to filter.
+    # scripts/service-env exits 1 on an empty/comment-only vars file, which
+    # would kill this recipe. See the plan's Global Constraints. Add the
+    # service-env + scp block back if nikke ever gains a secret.
     ssh {{host}} "cd /opt/homelab && homelab/services/nikke/deploy.sh"
 
 # Tail nikke container logs from picklelab
