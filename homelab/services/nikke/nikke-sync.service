@@ -1,0 +1,14 @@
+[Unit]
+Description=Nikke blablalink roster sync
+After=network-online.target docker.service nikke.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# A warm sync took ~16s on the old setup; 15 minutes is slack for a cold
+# container start plus a slow blablalink, not an expected duration.
+TimeoutStartSec=900
+WorkingDirectory=/opt/homelab/homelab/services/nikke
+EnvironmentFile=-/opt/homelab/homelab/services/nikke/.env.build
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml run --rm sync

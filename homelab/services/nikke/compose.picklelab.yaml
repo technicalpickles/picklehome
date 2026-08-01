@@ -1,0 +1,21 @@
+services:
+  serve:
+    build:
+      # deploy.sh clones/fast-forwards this checkout before the build runs.
+      context: /opt/nikke-roster-scanner
+      dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${NIKKE_GIT_SHA:-unknown}
+    env_file:
+      - .env.build
+    ports:
+      # Loopback only. tailscale serve proxies from nikke.<tailnet>.ts.net.
+      - "127.0.0.1:${NIKKE_PORT:?set by deploy.sh}:${NIKKE_PORT:?set by deploy.sh}"
+    volumes:
+      - /srv/data/nikke:/data
+
+  sync:
+    env_file:
+      - .env.build
+    volumes:
+      - /srv/data/nikke:/data

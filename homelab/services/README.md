@@ -63,6 +63,7 @@ Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root 
 | openclaw | 1000:1000 | Image default (node); `compose.yaml` `user: "1000:1000"` |
 | open-webui | 1000:1000 | `compose.yaml` `user: "1000:1000"` + custom `Dockerfile` chowning `/app/backend/open_webui/static` at build time (stock image untested non-root, see service README "Non-root fix") |
 | open-terminal | 1000:1000 | Image default (`useradd -m` on Debian base, no explicit uid); confirmed via `docker top` at first deploy, see `homelab/services/open-webui/deploy.sh` |
+| nikke | 1000:1000 | `compose.yaml` `user: "1000:1000"`; Dockerfile `useradd -u 1000`; `deploy.sh` chowns `/srv/data/nikke` |
 
 **Cross-service volume sharing** requires uid alignment at both ends:
 - **Producer** (the writer): set `user: "uid:gid"` in compose
@@ -363,6 +364,27 @@ Open WebUI chat interface backed by Ollama Cloud, plus [Open Terminal](https://d
 Commands: `just deploy-open-webui`, `just open-webui-status`, `just open-webui-logs`, `just open-webui-logs-follow`
 
 See [open-webui/README.md](open-webui/README.md) for config-management gotchas (ConfigVar seeding) and upgrade steps.
+
+---
+
+### nikke
+
+Roster dashboard for NIKKE, backed by a SQLite store synced from blablalink.com every 6 hours.
+
+| | |
+|---|---|
+| **Purpose** | Browse and track a synced NIKKE character roster |
+| **Compose** | `/opt/homelab/homelab/services/nikke/` |
+| **Data** | `/srv/data/nikke/` (`roster.db`, `.blablalink-session.json`) |
+| **Access** | `https://nikke.<tailnet>.ts.net` (Tailscale Services, port 8770 internally) |
+| **Env vars** | None (`.env.vars` doesn't exist; `deploy-nikke` skips the `.env` scp) |
+| **Backup** | Yes, nightly (`/srv/data/nikke` picked up by the `/srv/data` restic job, no per-service registration) |
+| **Restart** | `serve`: `restart: unless-stopped`; `sync`: `run --rm` from `nikke-sync.timer` (every 6h) |
+| **Source** | `technicalpickles/nikke-roster-scanner` (private repo), cloned to `/opt/nikke-roster-scanner` on host |
+
+Commands: `just deploy-nikke`, `just nikke-logs`, `just nikke-logs-follow`, `just nikke-sync-now`, `just nikke-login`
+
+See [nikke/README.md](nikke/README.md) for full setup.
 
 ---
 
