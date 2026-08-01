@@ -690,6 +690,71 @@ open-webui-logs-follow host="picklelab":
 open-webui-inspect-config host="picklelab" prefix="":
     ssh {{host}} "docker exec -i open-webui-open-webui-1 python3 - {{prefix}}" < homelab/services/open-webui/inspect_config.py
 
+# Deploy the nikke roster dashboard to picklelab (idempotent: first setup or update)
+deploy-nikke host="picklelab":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "ERROR: uncommitted changes. Commit or stash first."
+        exit 1
+    fi
+    BRANCH=$(git branch --show-current)
+    if [ "$BRANCH" != "main" ]; then
+        echo "ERROR: not on main (on $BRANCH). Switch to main first."
+        exit 1
+    fi
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "Pushing to origin/main..."
+        git push
+    fi
+    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
+    echo "==> Pulling on {{host}}"
+    ssh {{host}} "cd /opt/homelab && git pull"
+    # No .env scp: nikke has no secrets, so there is no .env.vars to filter.
+    # scripts/service-env exits 1 on an empty/comment-only vars file, which
+    # would kill this recipe. See the plan's Global Constraints. Add the
+    # service-env + scp block back if nikke ever gains a secret.
+    ssh {{host}} "cd /opt/homelab && homelab/services/nikke/deploy.sh"
+
+# Tail nikke container logs from picklelab
+nikke-logs host="picklelab" lines="50":
+    ssh {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+
+# Follow nikke container logs live from picklelab
+nikke-logs-follow host="picklelab":
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+
+# Run a blablalink sync right now instead of waiting for the timer
+nikke-sync-now host="picklelab":
+    ssh -t {{host}} "sudo systemctl start nikke-sync.service && journalctl -u nikke-sync.service -n 40 --no-pager"
+
+# Refresh the blablalink session on the Mac (needs a browser) and upload it to picklelab.
+# Run this when the dashboard's staleness banner reports auth_expired.
+nikke-login host="picklelab" repo="~/github.com/technicalpickles/nikke-roster-scanner":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO=$(eval echo {{repo}})
+    SESSION="$REPO/.blablalink-session.json"
+    echo "==> Opening a browser to log in to blablalink"
+    echo "    Log in when the window appears; the session is cached on success."
+    cd "$REPO"
+    uv run nikke-scan blablalink sync \
+        --no-headless \
+        --session-path "$SESSION" \
+        --db /tmp/nikke-login-throwaway.db
+    rm -f /tmp/nikke-login-throwaway.db
+    if [ ! -f "$SESSION" ]; then
+        echo "ERROR: no session file at $SESSION -- login did not complete."
+        exit 1
+    fi
+    echo "==> Uploading the session to {{host}}"
+    scp "$SESSION" {{host}}:/tmp/.blablalink-session.json
+    ssh {{host}} "sudo install -o 1000 -g 1000 -m 600 /tmp/.blablalink-session.json /srv/data/nikke/.blablalink-session.json && rm -f /tmp/.blablalink-session.json"
+    echo "==> Verifying with a real sync"
+    just nikke-sync-now {{host}}
+
 # Disk monitor: manual check (dry-run, outputs to stdout)
 disk-monitor-check:
     python3 homelab/services/disk_monitor/disk_monitor.py
