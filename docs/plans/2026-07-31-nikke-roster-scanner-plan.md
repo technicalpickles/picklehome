@@ -581,12 +581,17 @@ nikke-login host="picklelab" repo="~/github.com/technicalpickles/nikke-roster-sc
     SESSION="$REPO/.blablalink-session.json"
     echo "==> Opening a browser to log in to blablalink"
     echo "    Log in when the window appears; the session is cached on success."
-    cd "$REPO"
-    uv run nikke-scan blablalink sync \
+    # The cd MUST stay scoped to this subshell. `just nikke-sync-now` at the end
+    # of this recipe resolves its Justfile from cwd, and there is no Justfile in
+    # the nikke checkout -- `just` isn't even on PATH there, since mise
+    # provisions it per-project in picklehome. A bare `cd "$REPO"` makes this
+    # recipe fail its own final verification step on every run.
+    # trap, not a plain rm: set -e would otherwise skip cleanup on a failed login.
+    trap 'rm -f /tmp/nikke-login-throwaway.db' EXIT
+    ( cd "$REPO" && uv run nikke-scan blablalink sync \
         --no-headless \
         --session-path "$SESSION" \
-        --db /tmp/nikke-login-throwaway.db
-    rm -f /tmp/nikke-login-throwaway.db
+        --db /tmp/nikke-login-throwaway.db )
     if [ ! -f "$SESSION" ]; then
         echo "ERROR: no session file at $SESSION -- login did not complete."
         exit 1
