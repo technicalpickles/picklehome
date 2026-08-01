@@ -739,12 +739,11 @@ nikke-login host="picklelab" repo="~/github.com/technicalpickles/nikke-roster-sc
     SESSION="$REPO/.blablalink-session.json"
     echo "==> Opening a browser to log in to blablalink"
     echo "    Log in when the window appears; the session is cached on success."
-    cd "$REPO"
-    uv run nikke-scan blablalink sync \
+    trap 'rm -f /tmp/nikke-login-throwaway.db' EXIT
+    ( cd "$REPO" && uv run nikke-scan blablalink sync \
         --no-headless \
         --session-path "$SESSION" \
-        --db /tmp/nikke-login-throwaway.db
-    rm -f /tmp/nikke-login-throwaway.db
+        --db /tmp/nikke-login-throwaway.db )
     if [ ! -f "$SESSION" ]; then
         echo "ERROR: no session file at $SESSION -- login did not complete."
         exit 1
