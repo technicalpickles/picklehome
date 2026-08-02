@@ -70,8 +70,8 @@ Scripts run inside the Claude Code sandbox. Design code to work within it rather
 The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTTPS_PROXY` env vars, not OS firewall rules. Tools that respect proxy env vars (`curl`, `requests`) work automatically. Tools that don't get `Operation not permitted` on `connect()` even if the domain is in `allowedDomains`.
 
 - **Python `aiohttp`**: defaults to `trust_env=False`, so you must pass `trust_env=True` when creating a `ClientSession`, or pass a pre-configured session to libraries that create their own
-- **New API integrations**: add the domain to `sandbox.network.allowedDomains` in `.claude/settings.local.json`, and verify the HTTP client respects the proxy
-- **`allowedDomains` applies next session**: a domain just added to `.claude/settings.local.json` isn't active in the current session, so run same-session live API tests with the sandbox disabled until the next start
+- **New API integrations**: add the domain to `sandbox.network.allowedDomains` in `.claude/settings.json` (tracked, shared across checkouts), and verify the HTTP client respects the proxy. `.claude/settings.local.json` is gitignored and is for per-machine overrides only, so a domain added there is invisible to everyone else
+- **`allowedDomains` applies next session**: a domain just added isn't active in the current session, so run same-session live API tests with the sandbox disabled until the next start
 - **1Password (`op`) / `just dotenv`**: the `op` CLI reaches the desktop app over a socket the sandbox blocks (fails with `couldn't connect to the 1Password desktop app` or `account is not signed in`). Run anything backed by `op` (`op read`/`inject`/`item`, `just dotenv`) with the sandbox disabled
 - **Keychain access**: requires `~/Library/Keychains/` in `sandbox.filesystem.allowWrite`
 - **Headless browser (Playwright/Chromium)**: can't launch in the sandbox (fails with `bootstrap_check_in ... Permission denied`). Scripts that use it (`network/profile.py` / `just network-profile`, `network/bgw.py` / `just bgw *`) must run with the sandbox disabled.

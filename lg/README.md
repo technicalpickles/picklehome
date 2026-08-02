@@ -77,7 +77,7 @@ secret.
 `lg/thinq/auth.py` builds the session itself (`trust_env=True`) and passes it into `ThinQApi`, the
 same fix used by `birdfeeder/vicohome` and `climate/hisense`.
 
-`api-aic.lgthinq.com` is in `sandbox.network.allowedDomains` in `.claude/settings.local.json`.
+`api-aic.lgthinq.com` is in `sandbox.network.allowedDomains` in `.claude/settings.json` (tracked).
 Domain allowlist changes take effect on the *next* session, not the current one -- first live runs
 against real credentials should go with the sandbox disabled.
 
