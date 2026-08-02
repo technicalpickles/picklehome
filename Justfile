@@ -429,7 +429,7 @@ nest *ARGS:
 sonos *ARGS:
     uv run python sonos/sonos_cli.py {{ARGS}}
 
-# VicoHome bird feeder/camera: just birdfeeder status | events [--days N]
+# VicoHome bird feeder/camera: just birdfeeder status | events [--days N] [--species TEXT] | species [--days N]
 birdfeeder *ARGS:
     uv run python birdfeeder/birdfeeder_cli.py {{ARGS}}
 

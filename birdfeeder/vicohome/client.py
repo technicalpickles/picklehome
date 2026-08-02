@@ -41,6 +41,15 @@ class BirdEvent:
     video_url: str
 
 
+@dataclass
+class SpeciesSummary:
+    species_name: str
+    species_latin: str | None
+    count: int
+    first_seen: datetime
+    last_seen: datetime
+
+
 async def connect(email: str, password: str, region: str) -> aiohttp.ClientSession:
     """Create an authenticated session for the VicoHome API.
 
@@ -125,3 +134,33 @@ async def get_events(
     if data.get("result") != 0:
         raise RuntimeError(f"VicoHome events fetch failed: {data.get('msg', 'unknown error')}")
     return [_parse_event(e) for e in data.get("data", {}).get("list", [])]
+
+
+def filter_events_by_species(events: list[BirdEvent], species_query: str) -> list[BirdEvent]:
+    """Case-insensitive substring match against species_name. Unidentified events never match."""
+    query = species_query.lower()
+    return [e for e in events if e.species_name and query in e.species_name.lower()]
+
+
+def summarize_species(events: list[BirdEvent]) -> list[SpeciesSummary]:
+    """Aggregate identified events by species: count and first/last seen, sorted by count descending.
+
+    Unidentified events (species_name is None) are excluded.
+    """
+    by_species: dict[str, list[BirdEvent]] = {}
+    for event in events:
+        if not event.species_name:
+            continue
+        by_species.setdefault(event.species_name, []).append(event)
+
+    summaries = [
+        SpeciesSummary(
+            species_name=species_name,
+            species_latin=species_events[0].species_latin,
+            count=len(species_events),
+            first_seen=min(e.timestamp for e in species_events),
+            last_seen=max(e.timestamp for e in species_events),
+        )
+        for species_name, species_events in by_species.items()
+    ]
+    return sorted(summaries, key=lambda s: s.count, reverse=True)

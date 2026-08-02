@@ -7,8 +7,11 @@ import pytest
 from birdfeeder.vicohome.client import (
     Device,
     BirdEvent,
+    SpeciesSummary,
     get_devices,
     get_events,
+    filter_events_by_species,
+    summarize_species,
 )
 
 
@@ -208,3 +211,71 @@ def test_get_events_raises_on_failure():
             )
 
     asyncio.run(_run())
+
+
+def _event(species_name, timestamp, trace_id="t"):
+    return BirdEvent(
+        trace_id=trace_id,
+        timestamp=timestamp,
+        duration_seconds=10.0,
+        device_name="Fence Birdfeeder",
+        serial_number="serial123",
+        species_name=species_name,
+        species_latin="Latin name" if species_name else None,
+        confidence=90 if species_name else None,
+        image_url="https://example.com/i.jpg",
+        video_url="https://example.com/v.m3u8",
+    )
+
+
+def test_filter_events_by_species_matches_case_insensitive_substring():
+    events = [
+        _event("Northern Cardinal", datetime(2026, 8, 1, tzinfo=timezone.utc)),
+        _event("Blue Jay", datetime(2026, 8, 1, tzinfo=timezone.utc)),
+        _event(None, datetime(2026, 8, 1, tzinfo=timezone.utc)),
+    ]
+
+    matches = filter_events_by_species(events, "cardinal")
+
+    assert len(matches) == 1
+    assert matches[0].species_name == "Northern Cardinal"
+
+
+def test_filter_events_by_species_excludes_unidentified():
+    events = [_event(None, datetime(2026, 8, 1, tzinfo=timezone.utc))]
+
+    assert filter_events_by_species(events, "") == []
+
+
+def test_summarize_species_aggregates_counts_and_time_range():
+    events = [
+        _event("Northern Cardinal", datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc)),
+        _event("Northern Cardinal", datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)),
+        _event("Blue Jay", datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)),
+        _event(None, datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)),
+    ]
+
+    summaries = summarize_species(events)
+
+    assert summaries == [
+        SpeciesSummary(
+            species_name="Northern Cardinal",
+            species_latin="Latin name",
+            count=2,
+            first_seen=datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc),
+            last_seen=datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc),
+        ),
+        SpeciesSummary(
+            species_name="Blue Jay",
+            species_latin="Latin name",
+            count=1,
+            first_seen=datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc),
+            last_seen=datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+def test_summarize_species_empty_when_no_identified_events():
+    events = [_event(None, datetime(2026, 8, 1, tzinfo=timezone.utc))]
+
+    assert summarize_species(events) == []

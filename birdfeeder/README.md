@@ -21,11 +21,20 @@ smart bird feeder and other rebranded VicoHome/Vico Nature hardware).
 ## Commands
 
 ```
-just birdfeeder status                              # device state: battery, WiFi signal, online, firmware
-just birdfeeder events [--days N]                    # bird detection log, default last 1 day
-just birdfeeder events [--days N] --urls             # also print image/video URLs (see note below)
-just birdfeeder events [--days N] --json             # structured output, always includes URLs
+just birdfeeder status                                    # device state: battery, WiFi signal, online, firmware
+just birdfeeder events [--days N]                          # bird detection log, default last 1 day
+just birdfeeder events [--days N] --species TEXT            # filter to one species (case-insensitive substring)
+just birdfeeder events [--days N] --urls                    # also print image/video URLs (see note below)
+just birdfeeder events [--days N] --json                    # structured output, always includes URLs
+just birdfeeder species [--days N]                          # species seen, with counts + a tip to filter events
+just birdfeeder species [--days N] --json                    # structured output
 ```
+
+`species` aggregates identified events (unidentified events are excluded) and defaults to a
+7-day window rather than `events`'s 1-day default, since species diversity accumulates slower
+than raw detections. Each entry prints a ready-to-paste `events --species "..."` command using
+the same `--days` value, so going from "what showed up" to "show me every visit from that one"
+is a copy-paste away.
 
 Image/video URLs are omitted from the default `events` output because they're long and noisy.
 They're also **not access-controlled beyond the URL itself**: pre-signed cloud storage links
