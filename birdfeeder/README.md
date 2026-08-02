@@ -62,18 +62,16 @@ account.
   stored that particular clip) that expire after ~48 hours. Don't persist them long-term; refetch
   via `events` if needed later.
 
-### Which device actually shows up
+### Which device this actually is
 
-The one device on this account is reported by the API as a general `"Smart Camera"`
-(model `CG625-BD2-ST1BQJ`) with `aiBirdDevice.isAiBirdDevice: false` — i.e. not marketed as a
-dedicated bird-feeder SKU — yet 100% of its events are bird detections. It's unclear whether this
-*is* the Harymor feeder under a generic model label, or a separate VicoHome camera on the same
-account that happens to be pointed at bird activity. The Vico Nature app (package
-`com.smartaddx.vicohome.nature`) is a distinct Android app from the general VicoHome app
-(`com.smartaddx.vicohome`); whether they share this same backend/account scope for feeder-specific
-hardware, or Nature-registered devices live on a separate API surface entirely, is unresolved.
-This module works against whatever `/device/listuserdevices` returns for the account, whatever
-that turns out to be.
+Confirmed: the device is the Harymor feeder. The generic `"Smart Camera"` name and
+`aiBirdDevice.isAiBirdDevice: false` flag from `/device/listuserdevices` are just an artifact of
+the account's own naming, not a signal about hardware type — the device has since been renamed in
+the app (now "Fence Birdfeeder"). Whether the Vico Nature app
+(`com.smartaddx.vicohome.nature`) shares this same API surface with the general VicoHome app
+(`com.smartaddx.vicohome`), or feeder-specific hardware registered there could live on a separate
+backend, remains unconfirmed — moot in practice since this module already gets real device state
+and bird events through `api-{region}.vicohome.io`.
 
 ## Module structure
 
