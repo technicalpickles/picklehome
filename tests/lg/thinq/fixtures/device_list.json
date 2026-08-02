@@ -1,0 +1,32 @@
+[
+  {
+    "deviceId": "washer-0000-0000-0000-000000000001",
+    "deviceInfo": {
+      "alias": "Top Load Washer",
+      "connected": null,
+      "deviceType": "DEVICE_WASHER",
+      "modelName": "T1789EFH_F",
+      "reportable": true
+    }
+  },
+  {
+    "deviceId": "dryer-0000-0000-0000-000000000002",
+    "deviceInfo": {
+      "alias": "Dryer",
+      "connected": null,
+      "deviceType": "DEVICE_DRYER",
+      "modelName": "RV13U6AM8W_D_US_WIFI",
+      "reportable": true
+    }
+  },
+  {
+    "deviceId": "fridge-0000-0000-0000-00000000003",
+    "deviceInfo": {
+      "alias": "Refrigerator",
+      "connected": null,
+      "deviceType": "DEVICE_REFRIGERATOR",
+      "modelName": "2REF11EIDG__4",
+      "reportable": true
+    }
+  }
+]

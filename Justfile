@@ -436,6 +436,13 @@ birdfeeder *ARGS:
     set -euo pipefail
     uv run python birdfeeder/birdfeeder_cli.py "$@"
 
+# LG appliances: just lg status | laundry | fridge | devices [--raw]
+# Shebang + "$@" (not {{ARGS}}) preserves quoting for multi-word args
+lg *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run python lg/lg_cli.py "$@"
+
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
     #!/usr/bin/env bash

@@ -1,0 +1,90 @@
+{
+  "error": [
+    "POWER_CODE_CONNECTION_ERROR",
+    "HIGH_POWER_SUPPLY_ERROR",
+    "TEMPERATURE_SENSOR_ERROR"
+  ],
+  "notification": {
+    "push": [
+      "DRYING_FAILED",
+      "DRYING_IS_COMPLETE"
+    ]
+  },
+  "property": {
+    "operation": {
+      "dryerOperationMode": {
+        "mode": [
+          "w"
+        ],
+        "type": "enum",
+        "value": {
+          "w": [
+            "START",
+            "STOP",
+            "POWER_OFF"
+          ]
+        }
+      }
+    },
+    "remoteControlEnable": {
+      "remoteControlEnabled": {
+        "mode": [
+          "r"
+        ],
+        "type": "boolean",
+        "value": {
+          "r": [
+            false,
+            true
+          ]
+        }
+      }
+    },
+    "runState": {
+      "currentState": {
+        "mode": [
+          "r"
+        ],
+        "type": "enum",
+        "value": {
+          "r": [
+            "RUNNING",
+            "INITIAL",
+            "PAUSE",
+            "POWER_OFF",
+            "END",
+            "ERROR",
+            "WRINKLE_CARE",
+            "COOLING"
+          ]
+        }
+      }
+    },
+    "timer": {
+      "remainHour": {
+        "mode": [
+          "r"
+        ],
+        "type": "number"
+      },
+      "remainMinute": {
+        "mode": [
+          "r"
+        ],
+        "type": "number"
+      },
+      "totalHour": {
+        "mode": [
+          "r"
+        ],
+        "type": "number"
+      },
+      "totalMinute": {
+        "mode": [
+          "r"
+        ],
+        "type": "number"
+      }
+    }
+  }
+}

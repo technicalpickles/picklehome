@@ -96,7 +96,7 @@ All integrations use the same general pattern: credentials in 1Password, injecte
 
 | Style | Used by | Token storage | Notes |
 |-------|---------|---------------|-------|
-| API key (static) | UniFi, Cloudflare Radar, Google APIs | `.env` only | No refresh needed |
+| API key (static) | UniFi, Cloudflare Radar, Google APIs, LG ThinQ | `.env` only | No refresh needed |
 | OAuth token (refreshable) | Ecobee | `~/.local/state/picklehome/ecobee-tokens.json` | PIN flow, auto-refresh on use |
 | OAuth token (refreshable) | Nest | `~/.local/state/picklehome/nest-tokens.json` | Loopback browser flow via Device Access "partner connections"; auto-refresh on use |
 | Username/password to session token | Yale, Aladdin, BlueAir | `~/.local/state/picklehome/<service>-tokens.json` | Token cached, re-auth on expiry |
@@ -155,6 +155,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `nest/`: Nest thermostats + cameras via Google SDM; see `nest/README.md`
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `birdfeeder/`: VicoHome (Harymor) bird feeder/camera state + bird detection log; see `birdfeeder/README.md`
+- `lg/`: LG ThinQ appliances (washer, dryer, refrigerator), read-only; see `lg/README.md`
 - `picklehome/`: Shared cross-module code. `locations.py` is the canonical location registry (main house, beachhouse, ...) consumed by climate and locks; see `climate/README.md` and `locks/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
   - `homelab/seapickle/`: beach house Raspberry Pi 3B+ (Tailscale jump box, subnet router, connectivity probes); see `homelab/seapickle/README.md`
@@ -186,6 +187,7 @@ Quick reference for all smart home and network integrations.
 | Nest | `nest/` | Thermostats + cameras (SDM) | Cloud API (OAuth) | `just nest *` |
 | Sonos | `sonos/` | Speakers | Local UPnP (no auth) | `just sonos *` |
 | VicoHome (Harymor) | `birdfeeder/` | Bird feeder/camera | Cloud API (user/pass, unofficial) | `just birdfeeder *` |
+| LG ThinQ | `lg/` | Washer, dryer, refrigerator | Cloud API (static PAT), read-only | `just lg *` |
 
 ## Homelab Services
 

@@ -1,0 +1,14 @@
+{
+  "remoteControlEnable": {
+    "remoteControlEnabled": true
+  },
+  "runState": {
+    "currentState": "COOLING"
+  },
+  "timer": {
+    "remainHour": 0,
+    "remainMinute": 5,
+    "totalHour": 0,
+    "totalMinute": 30
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "doorStatus": [
+    {
+      "doorState": "CLOSE",
+      "locationName": "MAIN"
+    }
+  ],
+  "powerSave": {
+    "powerSaveEnabled": true
+  },
+  "refrigeration": {
+    "expressMode": false,
+    "expressModeName": "FREEZER",
+    "freshAirFilterRemainPercent": 0
+  },
+  "sabbath": {
+    "sabbathMode": false
+  },
+  "temperature": [
+    {
+      "locationName": "FRIDGE",
+      "targetTemperature": 37,
+      "unit": "F"
+    },
+    {
+      "locationName": "FREEZER",
+      "targetTemperature": 0,
+      "unit": "F"
+    }
+  ],
+  "temperatureInUnits": [
+    {
+      "locationName": "FRIDGE",
+      "targetTemperatureC": 3,
+      "targetTemperatureF": 37,
+      "unit": "F"
+    },
+    {
+      "locationName": "FREEZER",
+      "targetTemperatureF": 0,
+      "unit": "F"
+    }
+  ],
+  "waterFilterInfo": {
+    "waterFilter1RemainPercent": 0
+  }
+}

@@ -1,0 +1,24 @@
+[
+  {
+    "cycle": {
+      "cycleCount": 48
+    },
+    "location": {
+      "locationName": "MAIN"
+    },
+    "remoteControlEnable": {
+      "remoteControlEnabled": false
+    },
+    "runState": {
+      "currentState": "SPINNING"
+    },
+    "timer": {
+      "relativeHourToStart": 0,
+      "relativeMinuteToStart": 0,
+      "remainHour": 0,
+      "remainMinute": 9,
+      "totalHour": 0,
+      "totalMinute": 35
+    }
+  }
+]

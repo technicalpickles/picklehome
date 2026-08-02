@@ -1,0 +1,259 @@
+{
+  "notification": {
+    "push": [
+      "DOOR_IS_OPEN",
+      "FROZEN_IS_COMPLETE",
+      "TIME_TO_CHANGE_WATER_FILTER",
+      "TIME_TO_CHANGE_FILTER",
+      "FILTER_RESET_COMPLETE",
+      "WATER_FILTER_RESET_COMPLETE"
+    ]
+  },
+  "property": {
+    "doorStatus": [
+      {
+        "doorState": {
+          "mode": [
+            "r"
+          ],
+          "type": "enum",
+          "value": {
+            "r": [
+              "OPEN",
+              "CLOSE"
+            ]
+          }
+        },
+        "locationName": "MAIN"
+      }
+    ],
+    "powerSave": {
+      "powerSaveEnabled": {
+        "mode": [
+          "r"
+        ],
+        "type": "enum",
+        "value": {
+          "r": [
+            false,
+            true
+          ]
+        }
+      }
+    },
+    "refrigeration": {
+      "expressMode": {
+        "mode": [
+          "r",
+          "w"
+        ],
+        "type": "boolean",
+        "value": {
+          "r": [
+            true,
+            false
+          ],
+          "w": [
+            true,
+            false
+          ]
+        }
+      },
+      "expressModeName": {
+        "mode": [
+          "r"
+        ],
+        "type": "enum",
+        "value": {
+          "r": [
+            "FREEZER"
+          ]
+        }
+      },
+      "freshAirFilterRemainPercent": {
+        "mode": [
+          "r"
+        ],
+        "type": "number"
+      }
+    },
+    "sabbath": {
+      "sabbathMode": {
+        "mode": [
+          "r"
+        ],
+        "type": "boolean",
+        "value": {
+          "r": [
+            false,
+            true
+          ]
+        }
+      }
+    },
+    "temperature": [
+      {
+        "locationName": "FRIDGE",
+        "targetTemperature": {
+          "mode": [
+            "r",
+            "w"
+          ],
+          "type": "range",
+          "value": {
+            "r": {
+              "max": 7,
+              "min": 1,
+              "step": 1
+            },
+            "w": {
+              "max": 7,
+              "min": 1,
+              "step": 1
+            }
+          }
+        },
+        "unit": "C"
+      },
+      {
+        "locationName": "FREEZER",
+        "targetTemperature": {
+          "mode": [
+            "r",
+            "w"
+          ],
+          "type": "range",
+          "value": {
+            "r": {
+              "max": -15,
+              "min": -23,
+              "step": 1
+            },
+            "w": {
+              "max": -15,
+              "min": -23,
+              "step": 1
+            }
+          }
+        },
+        "unit": "C"
+      }
+    ],
+    "temperatureInUnits": [
+      {
+        "locationName": "FRIDGE",
+        "targetTemperatureC": {
+          "mode": [
+            "r",
+            "w"
+          ],
+          "type": "range",
+          "value": {
+            "r": {
+              "max": 7,
+              "min": 1,
+              "step": 1
+            },
+            "w": {
+              "max": 7,
+              "min": 1,
+              "step": 1
+            }
+          }
+        },
+        "targetTemperatureF": {
+          "mode": [
+            "r",
+            "w"
+          ],
+          "type": "range",
+          "value": {
+            "r": {
+              "max": 43,
+              "min": 33,
+              "step": 1
+            },
+            "w": {
+              "max": 43,
+              "min": 33,
+              "step": 1
+            }
+          }
+        },
+        "unit": {
+          "mode": [
+            "r"
+          ],
+          "type": "enum",
+          "value": {
+            "r": [
+              "C",
+              "F"
+            ]
+          }
+        }
+      },
+      {
+        "locationName": "FREEZER",
+        "targetTemperatureC": {
+          "mode": [
+            "r",
+            "w"
+          ],
+          "type": "range",
+          "value": {
+            "r": {
+              "max": -15,
+              "min": -23,
+              "step": 1
+            },
+            "w": {
+              "max": -15,
+              "min": -23,
+              "step": 1
+            }
+          }
+        },
+        "targetTemperatureF": {
+          "mode": [
+            "r",
+            "w"
+          ],
+          "type": "range",
+          "value": {
+            "r": {
+              "max": 5,
+              "min": -7,
+              "step": 1
+            },
+            "w": {
+              "max": 5,
+              "min": -7,
+              "step": 1
+            }
+          }
+        },
+        "unit": {
+          "mode": [
+            "r"
+          ],
+          "type": "enum",
+          "value": {
+            "r": [
+              "C",
+              "F"
+            ]
+          }
+        }
+      }
+    ],
+    "waterFilterInfo": {
+      "waterFilter1RemainPercent": {
+        "mode": [
+          "r"
+        ],
+        "type": "number"
+      }
+    }
+  }
+}

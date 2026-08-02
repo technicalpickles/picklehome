@@ -91,17 +91,24 @@ the active-to-`POWER_OFF` transition catchable.
 This is a deliberate scope cut against the original mockup, which showed
 `Last cycle: finished 2h 14m ago` under the dryer. That line does not ship in v1.
 
-This has to degrade honestly. For the washer, where `cycleCount` makes completion provable:
+This has to degrade honestly. For the washer, where `cycleCount` makes completion provable, the
+estimate is reported as two explicit bounds -- `earliest_ago` (time since the counter was first
+observed at its new value) and `latest_ago` (time since it was last observed below that value) --
+rather than a single number whose meaning depends on context:
 
 | Log state | Output |
 |-----------|--------|
-| Counter incremented between two close observations | `finished 2h 14m ago` |
-| Counter incremented, but the surrounding gap is wide | `finished sometime in the last 6h` |
+| Counter incremented, first seen on this very invocation | `finished within the last 6h` |
+| Counter incremented between two close observations | `finished about 2h 14m ago` |
+| Counter incremented, but the surrounding gap is wide | `finished between 7d and 8d ago` |
 | No log, or counter unchanged since the last entry | Line omitted entirely |
 
 Never invent precision the log cannot support. `cycleCount` proves *that* a cycle finished; only the
 spacing of surrounding observations bounds *when*. Those are different claims and the output has to
-reflect which one it can make.
+reflect which one it can make. (An earlier implementation collapsed both bounds into one `span`
+field whose meaning flipped on a `precise` flag -- that overloading is what let the imprecise branch
+render the width of the *detection window* as if it were time-since-completion, understating a
+week-old finish as "in the last 24h". Two named fields make that particular bug unrepresentable.)
 
 The same file is what a future watcher writes, just at higher resolution. When the service exists it
 backfills the same log and the CLI reading code is unchanged. JSONL run logging already has
