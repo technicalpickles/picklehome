@@ -21,9 +21,16 @@ smart bird feeder and other rebranded VicoHome/Vico Nature hardware).
 ## Commands
 
 ```
-just birdfeeder status              # device state: battery, WiFi signal, online, firmware
-just birdfeeder events [--days N]   # bird detection log, default last 1 day
+just birdfeeder status                              # device state: battery, WiFi signal, online, firmware
+just birdfeeder events [--days N]                    # bird detection log, default last 1 day
+just birdfeeder events [--days N] --urls             # also print image/video URLs (see note below)
+just birdfeeder events [--days N] --json             # structured output, always includes URLs
 ```
+
+Image/video URLs are omitted from the default `events` output because they're long and noisy.
+They're also **not access-controlled beyond the URL itself**: pre-signed cloud storage links
+(image) or a JWT embedded in the query string (video), both good for ~48 hours to anyone who has
+the link, no VicoHome login required. Use `--urls` or `--json` when you actually need them.
 
 ## Architecture
 
