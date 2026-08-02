@@ -93,14 +93,34 @@ Three values in `.env` from 1Password. Static token, no refresh, no token file. 
 (static)" row of the auth table alongside UniFi and Cloudflare Radar.
 
 ```
-LG_THINQ_PAT={{ op://picklehome/LG ThinQ/pat }}
+LG_THINQ_PAT={{ op://picklehome/LG ThinQ/credential }}
 LG_THINQ_CLIENT_ID={{ op://picklehome/LG ThinQ/client_id }}
 LG_THINQ_COUNTRY={{ op://picklehome/LG ThinQ/country }}
 ```
 
-**The client id is a UUID4 generated once and stored**, not regenerated per run. LG ties MQTT
-subscription registration to it, so a fresh UUID each invocation would churn registrations for no
-benefit.
+The PAT lives in the `credential` field because that is the default field name for 1Password's
+API Credential item type. Not worth fighting.
+
+### The client id is self-assigned
+
+**LG does not issue the client id.** It is not shown anywhere in the PAT creation flow, and nothing
+on LG's end validates it. The caller invents it. The SDK asks only that each client device use a
+unique value and suggests a UUID4.
+
+Confirmed by reading the SDK, where it is used in exactly two places:
+
+- `thinq_api.py` sets it as the `x-client-id` header on every HTTP request
+- `mqtt_client.py` passes it as the MQTT client id when connecting to AWS IoT
+
+**It must stay fixed once chosen.** AWS IoT allows one live connection per client id and drops the
+existing connection when a second one claims the same id. A value regenerated per invocation would
+be harmless for the read-only HTTP path in v1 and actively broken once the watcher exists, which is
+the worst kind of bug: invisible until the day it matters.
+
+Storing it in 1Password next to the PAT is a deliberate choice for keeping the credential material
+in one place, even though the client id is not itself a secret. The tradeoff is an empty-field
+failure mode, so `auth.py` validates that the client id is present and non-empty at load time and
+raises with a pointer to the 1Password item rather than letting an empty header reach LG.
 
 ## Sandbox
 
@@ -109,8 +129,14 @@ Two known traps from the root CLAUDE.md apply directly:
 - **`thinqconnect` creates its own `aiohttp.ClientSession`**, which defaults to `trust_env=False`
   and ignores the sandbox proxy. `auth.py` constructs the session with `trust_env=True` and passes
   it in.
-- **LG's API host goes in `sandbox.network.allowedDomains`** in `.claude/settings.local.json`, and
-  does not take effect until the next session. First live runs go with the sandbox disabled.
+- **`api-aic.lgthinq.com` goes in `sandbox.network.allowedDomains`** in `.claude/settings.local.json`,
+  and does not take effect until the next session. First live runs go with the sandbox disabled.
+
+The host is region-derived, not fixed: `thinq_api.py` builds
+`https://api-{region}.lgthinq.com/`, where the region comes from mapping the country code through
+`DomainPrefix`. There are three regions (`kic` Asia-Pacific, `aic` Americas, `eic` Europe/Africa).
+`US` maps to `aic`. `US` is present in the SDK's supported-country list, so the "Aborted: The country
+is not supported" error that affects several European countries does not apply here.
 
 ## CLI surface
 
@@ -211,15 +237,21 @@ of the repo.
 
 ## Open questions
 
-Both are blockers on the build, both are quick, and both are already filed in taskwarrior under
-`project:picklehome.lg`:
+**Resolved: a PAT can be minted.** Token created 2026-08-02 with all scopes, stored in 1Password
+alongside a generated client id and the `US` country code. The country-support concern does not
+apply to the US. Whether the token carries an expiry is still unconfirmed; if it does, that needs a
+renewal task.
 
-1. **Can a PAT be minted at all?** Everything depends on this. There is community chatter about
-   people hitting trouble, and the HA docs reference an "Aborted: The country is not supported"
-   error without publishing a supported-country list.
-2. **Are these specific models covered?** ThinQ Connect roughly covers 2019 and newer with no clean
-   published cutoff. The discovery dump answers this and the fridge-temperature question in the same
-   run.
+Remaining, and still a blocker on writing `client.py`:
+
+**Are these specific appliances covered, and what do they actually report?** ThinQ Connect roughly
+covers 2019 and newer with no clean published cutoff. The discovery dump answers three things at
+once: whether the appliances appear at all, whether the WashTower reports as one device or two (the
+SDK defines `WASHTOWER`, `WASHTOWER_WASHER`, `WASHTOWER_DRYER`, `WASHCOMBO_MAIN`, and
+`WASHCOMBO_MINI` as distinct types, so both shapes exist in practice), and whether the refrigerator
+exposes only `targetTemperature` or something closer to a real measurement.
+
+Filed as `a1cb401b-48d9-46de-9186-4e485bd45766`.
 
 ## Future: the watcher
 
