@@ -100,7 +100,7 @@ All integrations use the same general pattern: credentials in 1Password, injecte
 | OAuth token (refreshable) | Ecobee | `~/.local/state/picklehome/ecobee-tokens.json` | PIN flow, auto-refresh on use |
 | OAuth token (refreshable) | Nest | `~/.local/state/picklehome/nest-tokens.json` | Loopback browser flow via Device Access "partner connections"; auto-refresh on use |
 | Username/password to session token | Yale, Aladdin, BlueAir | `~/.local/state/picklehome/<service>-tokens.json` | Token cached, re-auth on expiry |
-| Username/password (no persistence) | Hisense/ConnectLife | none (in-memory only) | Library re-auths per session; no token file |
+| Username/password (no persistence) | Hisense/ConnectLife, VicoHome | none (in-memory only) | Re-auths per session; no token file |
 | TLS client cert | Lutron Caseta | `lighting/.certs/` (key, cert, CA) | One-time pairing, certs don't expire |
 
 **Token storage convention:** `~/.local/state/picklehome/<service>-tokens.json` with 0600 permissions.
@@ -154,6 +154,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `locks/`: Yale Access smart locks; see `locks/README.md`
 - `nest/`: Nest thermostats + cameras via Google SDM; see `nest/README.md`
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
+- `birdfeeder/`: VicoHome (Harymor) bird feeder/camera state + bird detection log; see `birdfeeder/README.md`
 - `picklehome/`: Shared cross-module code. `locations.py` is the canonical location registry (main house, beachhouse, ...) consumed by climate and locks; see `climate/README.md` and `locks/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
   - `homelab/seapickle/`: beach house Raspberry Pi 3B+ (Tailscale jump box, subnet router, connectivity probes); see `homelab/seapickle/README.md`
@@ -184,6 +185,7 @@ Quick reference for all smart home and network integrations.
 | Yale Access | `locks/` | Smart locks + bridges | Cloud API (user/pass) | `just locks *` |
 | Nest | `nest/` | Thermostats + cameras (SDM) | Cloud API (OAuth) | `just nest *` |
 | Sonos | `sonos/` | Speakers | Local UPnP (no auth) | `just sonos *` |
+| VicoHome (Harymor) | `birdfeeder/` | Bird feeder/camera | Cloud API (user/pass, unofficial) | `just birdfeeder *` |
 
 ## Homelab Services
 
