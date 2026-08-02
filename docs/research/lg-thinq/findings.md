@@ -210,11 +210,27 @@ Observed while both machines were `POWER_OFF`, the timer retained non-zero lefto
 cycle (dryer read `remain 0h01m / total 0h01m`). **Timer values are not meaningful unless the run
 state says they are.**
 
-### Filter percentages read zero
+### Filter percentages are unpopulated, not measurements
 
 Both `refrigeration.freshAirFilterRemainPercent` and `waterFilterInfo.waterFilter1RemainPercent`
-returned `0`. Unresolved whether the filters are genuinely expired or the fields are unpopulated on
-this model. Verify against the appliance before rendering a filter percentage to a human.
+return `0`. **These are not real readings. Do not render them.**
+
+The reasoning, since `0` is superficially plausible as "filter expired":
+
+- The refrigerator is relatively new and **neither filter has ever been replaced**. Genuinely
+  tracked filters would therefore read near 100%, not 0. Fresh filters cannot be at zero.
+- **LG's own ThinQ app does not display filter status for this model anywhere.** Their UI declines
+  to render the field, which is a strong signal there is nothing behind it.
+- Both fields declare as bare `{"mode": ["r"], "type": "number"}` with no `min`/`max`/`step`, unlike
+  `targetTemperature`, which declares a full range. Consistent with a field that is present in the
+  schema but not wired to hardware.
+- Both reading exactly `0` simultaneously fits "default value for an unset number" better than two
+  independent counters coincidentally bottoming out together.
+
+Note this is despite the device declaring `TIME_TO_CHANGE_WATER_FILTER`, `TIME_TO_CHANGE_FILTER`,
+`FILTER_RESET_COMPLETE`, and `WATER_FILTER_RESET_COMPLETE` in its push notification list. **A
+declared notification type is not evidence that the corresponding status field carries data.** That
+inference was made during this investigation and was wrong.
 
 ## TV: separate stack entirely
 

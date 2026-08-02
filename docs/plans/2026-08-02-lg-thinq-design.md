@@ -330,14 +330,19 @@ See the Confirmed device model section above. Closes
 neither. `cycleCount` verified incrementing 48 to 49 on the washer. The washer gets a "finished N
 ago" line, the dryer does not. See the completion detection section above.
 
-Remaining:
+**Resolved: the filter percentages carry no data.** Both read `0` on a relatively new refrigerator
+whose filters have never been replaced, where real counters would read near 100%. LG's own app does
+not display filter status for this model. The fields are unpopulated placeholders. **No filter
+information ships**, and `client.py` should not expose the fields at all rather than passing through
+a zero that downstream code might render.
 
-1. **Do the filter percentages mean anything?** Both `freshAirFilterRemainPercent` and
-   `waterFilter1RemainPercent` read `0`. Needs an eyeball at the actual appliance to distinguish
-   "genuinely expired" from "field not populated on this model". Do not render a filter percentage
-   until this is settled.
-2. **Does the PAT expire?** Unconfirmed. If it does, that needs a renewal task before the token
-   silently dies.
+No open questions remain. The design is ready to implement.
+**Resolved, with a caveat: the PAT shows no expiration date.** The creation flow did not display
+one. That is not the same as a documented guarantee that it never expires, so the code should not
+assume permanence. `auth.py` distinguishes an authentication rejection (401/403) from other failures
+and raises a message naming the likely cause ("LG rejected the token; it may have expired or been
+revoked") with a pointer to the 1Password item. Cheaper than rediscovering it later from a generic
+error.
 
 ## Future: the watcher
 
