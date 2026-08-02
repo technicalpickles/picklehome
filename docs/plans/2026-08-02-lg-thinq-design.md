@@ -31,18 +31,77 @@ lives for under a second cannot know that a cycle ended two hours ago.
 
 **Every CLI invocation appends what it observed to a JSONL log** at
 `~/.local/state/picklehome/lg-observations.jsonl`. One record per device per run: timestamp, device
-id, run state, remaining time. "Finished 2h 14m ago" is derived by scanning back for the most recent
-running-to-finished transition.
+id, run state, remaining time, and cycle count where available. "Finished 2h 14m ago" is derived by
+scanning back for the most recent completion.
 
-This has to degrade honestly:
+### Completion detection, and why the dryer does not get it in v1
+
+**`END` is not usable on either appliance. Confirmed empirically, not assumed.** Full cycles on both
+machines were polled at 60 second intervals on 2026-08-02:
+
+```
+dryer:   POWER_OFF -> RUNNING -> COOLING  -> POWER_OFF
+washer:  POWER_OFF -> DETECTING -> RUNNING -> RINSING -> SPINNING -> POWER_OFF
+```
+
+`END` never appeared in a single sample on either machine. It is in both profiles' run-state enums
+and fires on neither. **Any completion logic built on `END` would silently never trigger**, which is
+the failure mode that looks like working code.
+
+The active-state sets still matter, and still differ per appliance:
+
+| | Active states declared | Actually observed |
+|---|---|---|
+| Washer | `INITIAL` `DETECTING` `RUNNING` `SOAKING` `RINSING` `SPINNING` | all but `INITIAL`, `SOAKING` |
+| Dryer | `INITIAL` `RUNNING` `COOLING` `WRINKLE_CARE` | `RUNNING`, `COOLING` |
+
+Declared states that never appear are the norm here, not the exception. Treat the enum as the set of
+values that *may* arrive, never as a sequence that *will*.
+
+`PAUSE` is neither active nor complete. `ERROR`, `RESERVED`, and `FIRMWARE` are their own thing.
+`INITIAL` was never observed either, so it must not be treated as a reliable cycle-start marker.
+These sets are per-device-type constants in `client.py`, not a shared list.
+
+That leaves two usable signals, with different reach:
+
+*The active-to-`POWER_OFF` transition.* This is what completion actually looks like on the dryer. It
+is a real, detectable event, but only for an observer that is sampling continuously. A CLI that runs
+when you happen to type a command will nearly always see `POWER_OFF` with no idea when it arrived.
+
+*The washer's `cycle.cycleCount`.* A monotonic counter. A value higher than the last observation
+proves a cycle completed regardless of sampling gaps, which is exactly the weakness the transition
+signal has. **The dryer profile has no equivalent property.**
+
+**Verified working.** The counter incremented 48 to 49 in the same sample the washer dropped to
+`POWER_OFF`:
+
+```
+19:08:40  SPINNING   remain=0h01m  cycleCount=48
+19:09:41  POWER_OFF  remain=0h00m  cycleCount=49
+```
+
+This is the one completion signal in the whole integration that survives sparse sampling, and it is
+the only reason the washer keeps a "finished N ago" line while the dryer does not.
+
+**Consequence for v1: the dryer gets no "finished N ago" line.** The CLI cannot honestly produce it,
+and an approximation would be worse than silence for something you actively rely on. The washer
+gets it via `cycleCount`. The dryer gets it when the watcher exists, since continuous sampling makes
+the active-to-`POWER_OFF` transition catchable.
+
+This is a deliberate scope cut against the original mockup, which showed
+`Last cycle: finished 2h 14m ago` under the dryer. That line does not ship in v1.
+
+This has to degrade honestly. For the washer, where `cycleCount` makes completion provable:
 
 | Log state | Output |
 |-----------|--------|
-| Transition captured | `finished 2h 14m ago` |
-| Newest entry older than the transition | `finished sometime in the last 6h` |
-| No log, or no transition found | Line omitted entirely |
+| Counter incremented between two close observations | `finished 2h 14m ago` |
+| Counter incremented, but the surrounding gap is wide | `finished sometime in the last 6h` |
+| No log, or counter unchanged since the last entry | Line omitted entirely |
 
-Never invent precision the log cannot support.
+Never invent precision the log cannot support. `cycleCount` proves *that* a cycle finished; only the
+spacing of surrounding observations bounds *when*. Those are different claims and the output has to
+reflect which one it can make.
 
 The same file is what a future watcher writes, just at higher resolution. When the service exists it
 backfills the same log and the CLI reading code is unchanged. JSONL run logging already has
@@ -68,24 +127,45 @@ Boundaries:
 
 - **`client.py`** is the only place that imports `thinqconnect`. It returns dataclasses (`Laundry`,
   `Refrigerator`) consumed by both the CLI and, later, the watcher. Swapping the SDK means touching
-  one file.
+  one file. It also absorbs the payload-shape inconsistencies described below, so nothing downstream
+  ever sees a raw LG response.
 - **`observations.py`** knows nothing about LG. Append a record, query when a field last changed.
   Pure logic over a file, trivially testable.
 - **`lg_cli.py`** formats. No API calls, no business logic.
 
-### Build sequencing
+### Confirmed device model
 
-Do not write `client.py` first. The dataclasses are guesswork until we see what these specific
-appliances report.
+The discovery dump ran against the real account on 2026-08-02. Full schema detail is in
+`docs/research/lg-thinq/findings.md`; what the module has to handle:
 
-1. Mint the PAT, confirm it works at all (this is the project's single blocker)
-2. Dump raw `async_get_device_list()` plus per-device status against the real account
-3. Read the JSON together, confirm the fridge setpoint-only finding first-hand, and see whether the
-   WashTower reports as one device or two
-4. Then write `client.py` against real payloads, keeping them as test fixtures
+| Device | Type | Model |
+|--------|------|-------|
+| Top Load Washer | `DEVICE_WASHER` | `T1789EFH_F` |
+| Dryer | `DEVICE_DRYER` | `RV13U6AM8W_D_US_WIFI` |
+| Refrigerator | `DEVICE_REFRIGERATOR` | `2REF11EIDG__4` |
 
-This mirrors the approach the hisense integration used (`python -m connectlife.dump` before any
-module code), which caught a property that every device claimed to support and none actually did.
+**Three separate appliances, no WashTower.** The `WASHTOWER*` and `WASHCOMBO*` device types are not
+relevant here and should not be handled speculatively.
+
+`client.py` normalizes three inconsistencies at the boundary:
+
+1. **Washer status and profile are JSON lists; dryer and refrigerator are dicts.** The washer is
+   location-scoped, carrying `location.locationName: "MAIN"` in its single entry.
+2. **Profiles are wrapped** in `error` / `notification` / `property`. The schema is under `property`.
+3. **Refrigerator units disagree between layers.** The profile declares setpoint ranges in Celsius
+   (1 to 7 fridge, -23 to -15 freezer) while status reports Fahrenheit.
+
+Two things not to trust:
+
+- **`deviceInfo.connected` is `null`** on all three devices. It is not an availability signal and
+  must not be rendered as online/offline. (`reportable` was `true` for all three.)
+- **Timer values persist after a cycle ends.** Both machines read `POWER_OFF` with non-zero leftover
+  timer values from a prior cycle. Remaining time is only meaningful when the run state says the
+  appliance is active.
+
+Sequencing note, kept because it paid off: dumping before writing the client is what surfaced the
+list-vs-dict split and killed the WashTower branch before it was written. Same approach the hisense
+integration used, same kind of result.
 
 ## Configuration
 
@@ -145,28 +225,27 @@ is not supported" error that affects several European countries does not apply h
 
 ```
 $ just lg status
-Washer        running    42m left
-Dryer         idle
-Refrigerator  ok         door closed
+Top Load Washer  rinsing    22m left
+Dryer            off
+Refrigerator     ok         door closed
 
 $ just lg laundry
-Washer (LG WashTower)
-  State:      running, Rinse
-  Remaining:  42m  (of 1h 58m)
+Top Load Washer (T1789EFH_F)
+  State:      rinsing
+  Remaining:  22m  (of 35m)
   Ends:       ~3:47 PM
-  Remote:     enabled
+  Remote:     available now
+  Cycles:     48
 
-Dryer (LG WashTower)
-  State:      idle
-  Last cycle: finished 2h 14m ago
+Dryer (RV13U6AM8W_D_US_WIFI)
+  State:      off
 
 $ just lg fridge
-Refrigerator (LG InstaView)
+Refrigerator (2REF11EIDG__4)
   Fridge:   37 F  (setpoint)
   Freezer:   0 F  (setpoint)
   Door:     closed
-  Modes:    eco on, express freeze off
-  Filter:   water 62% remaining
+  Modes:    power save on, express freeze off
 ```
 
 `just lg devices --raw` prints unmassaged API JSON. This is the discovery dump from the build
@@ -242,16 +321,23 @@ alongside a generated client id and the `US` country code. The country-support c
 apply to the US. Whether the token carries an expiry is still unconfirmed; if it does, that needs a
 renewal task.
 
-Remaining, and still a blocker on writing `client.py`:
+**Resolved: the appliances are covered and their schema is known.** Discovery dump ran 2026-08-02.
+Three separate devices, no WashTower, refrigerator confirmed setpoint-only from the profile itself.
+See the Confirmed device model section above. Closes
+`a1cb401b-48d9-46de-9186-4e485bd45766`.
 
-**Are these specific appliances covered, and what do they actually report?** ThinQ Connect roughly
-covers 2019 and newer with no clean published cutoff. The discovery dump answers three things at
-once: whether the appliances appear at all, whether the WashTower reports as one device or two (the
-SDK defines `WASHTOWER`, `WASHTOWER_WASHER`, `WASHTOWER_DRYER`, `WASHCOMBO_MAIN`, and
-`WASHCOMBO_MINI` as distinct types, so both shapes exist in practice), and whether the refrigerator
-exposes only `targetTemperature` or something closer to a real measurement.
+**Resolved: completion detection.** Full cycles measured on both machines 2026-08-02. `END` fires on
+neither. `cycleCount` verified incrementing 48 to 49 on the washer. The washer gets a "finished N
+ago" line, the dryer does not. See the completion detection section above.
 
-Filed as `a1cb401b-48d9-46de-9186-4e485bd45766`.
+Remaining:
+
+1. **Do the filter percentages mean anything?** Both `freshAirFilterRemainPercent` and
+   `waterFilter1RemainPercent` read `0`. Needs an eyeball at the actual appliance to distinguish
+   "genuinely expired" from "field not populated on this model". Do not render a filter percentage
+   until this is settled.
+2. **Does the PAT expire?** Unconfirmed. If it does, that needs a renewal task before the token
+   silently dies.
 
 ## Future: the watcher
 
