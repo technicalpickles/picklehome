@@ -430,8 +430,11 @@ sonos *ARGS:
     uv run python sonos/sonos_cli.py {{ARGS}}
 
 # VicoHome bird feeder/camera: just birdfeeder status | events [--days N] [--species TEXT] | species [--days N]
+# Shebang + "$@" (not {{ARGS}}) preserves quoting for multi-word args like --species "Northern Cardinal"
 birdfeeder *ARGS:
-    uv run python birdfeeder/birdfeeder_cli.py {{ARGS}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run python birdfeeder/birdfeeder_cli.py "$@"
 
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
