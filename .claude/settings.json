@@ -1,0 +1,15 @@
+
+{
+  "sandbox": {
+    "network": {
+      "allowedDomains": [
+        "accounts.eu1.gigya.com",
+        "api-aic.lgthinq.com",
+        "api-eu.vicohome.io",
+        "api-us.vicohome.io",
+        "clife-eu-gateway.hijuconn.com",
+        "oauth.hijuconn.com"
+      ]
+    }
+  }
+}
