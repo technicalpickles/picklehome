@@ -152,6 +152,23 @@ Note: `is_stale` keys only off bridge connectivity, so a lock on an online
 bridge with a stale `status_datetime` still renders its battery cell as live.
 The percentage shown there is the last read, not necessarily current.
 
+### A misaligned back plate can block the bridge connection, not just the battery
+
+Observed on the Marann Front Door, after a routine AA battery swap: a screw
+poking out from the door's back plate kept the plate from seating flush on
+reassembly, which broke the lock's connection to the bridge. Symptoms looked
+identical to a dead-battery/wedged-lock case -- `lock unreachable`, stuck low
+battery reading, bridge online but `Last online` frozen from before the
+swap -- and did not clear on its own after the battery swap, a bridge
+power-cycle, or waiting for BLE re-bond.
+
+If a battery swap does not clear an "unreachable" reading and the bridge
+shows online, physically re-check that the back plate seated flush (no
+screws or debris propping it off the door) before assuming a firmware or
+pairing problem. Clearing the obstruction and reseating the plate fixed it
+immediately: battery jumped to 100% and `Last online` updated within a
+minute.
+
 ### WiFi RSSI and SSID are not populated by the API
 
 The `wifiData` field on the raw lock detail payload is `null` on every lock
