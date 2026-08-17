@@ -12,7 +12,27 @@ services:
     env_file:
       - /opt/homelab/.env
       - .env.build
+    # Phase 2 of the identity-auth rollout: uncomment these two, commit, redeploy.
+    # Deliberately staged separately from the code deploy so that phase 1 ships the new
+    # server with header trust OFF (prod behaves exactly as before), and enabling it is a
+    # change you can revert by re-commenting these lines -- no code rollback.
+    # Neither value is a secret, which is why they sit here rather than in 1Password.
+    # Verify after enabling: `just brineworks-server-logs` should show
+    # identity_kind=user for browser traffic and identity_kind=key for brineworks-agent.
+    # environment:
+    #   BRINEWORKS_TRUST_TAILSCALE_HEADERS: "true"
+    #   BRINEWORKS_ALLOWED_LOGINS: joshua.nichols@gmail.com
     ports:
       # Bound to loopback only -- tailscale serve proxies from brineworks.<tailnet>.ts.net.
       # BRINEWORKS_SERVER_PORT is set by deploy.sh (which defaults it to 8765).
+      #
+      # THE 127.0.0.1 PREFIX IS LOAD-BEARING FOR AUTHENTICATION, not just network hygiene.
+      # The server trusts Tailscale Serve's identity headers (Tailscale-User-Login) as an
+      # auth path. Serve overwrites those headers on traffic it proxies, so they cannot be
+      # spoofed through it -- but anything that can reach this port WITHOUT going through
+      # Serve can set them itself and authenticate as anyone. Verified 2026-08-16: the
+      # header sent straight to the loopback port arrives verbatim. Publishing this on
+      # 0.0.0.0, or adding a second ingress, turns identity auth into an impersonation
+      # hole. See brineworks docs/decisions/0007-tailscale-identity-auth.md (spike finding
+      # #3) and the BRINEWORKS_TRUST_TAILSCALE_HEADERS note in this service's README.
       - "127.0.0.1:${BRINEWORKS_SERVER_PORT:?set by deploy.sh}:${BRINEWORKS_SERVER_PORT:?set by deploy.sh}"

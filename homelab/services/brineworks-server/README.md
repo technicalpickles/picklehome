@@ -82,6 +82,25 @@ Injected from the root `.env` via `compose.picklelab.yaml`:
 
 The database URL is derived in `compose.yaml`: `postgresql+asyncpg://brineworks:<password>@db:5432/brineworks`.
 
+### Tailscale identity auth
+
+Set directly in `compose.picklelab.yaml` (neither is a secret, so neither goes through 1Password):
+
+| Variable | Description |
+|----------|-------------|
+| `BRINEWORKS_TRUST_TAILSCALE_HEADERS` | Trust Serve's `Tailscale-User-Login` header as an auth path. Defaults to **false**. |
+| `BRINEWORKS_ALLOWED_LOGINS` | Comma-separated tailnet logins allowed to authenticate that way (a JSON list also works). |
+
+These live in the picklelab overlay rather than the portable `compose.yaml` on purpose: they are only safe alongside the loopback-only port binding, which is defined there too. The base compose should not assert a Tailscale topology it cannot guarantee. **Read the port-binding comment in `compose.picklelab.yaml` before changing how this service is published** -- the loopback binding is what makes header trust safe.
+
+**Turning the flag on with an empty `BRINEWORKS_ALLOWED_LOGINS` makes the server refuse to start**, deliberately. A config that reads as "identity auth enabled" but authenticates nobody is worse than a loud failure at boot (ops principle #1). Because the container CMD is `alembic upgrade head && uvicorn`, the migration step is what dies first.
+
+The API key stays required regardless. Tagged devices never receive identity headers, so `brineworks-agent` authenticates by key permanently, not transitionally.
+
+Verify a rollout by watching `brineworks.auth` lines in the container log (`just brineworks-server-logs`): browser traffic shows `identity_kind=user`, the agent shows `identity_kind=key`.
+
+Full design: brineworks `docs/decisions/0007-tailscale-identity-auth.md`.
+
 ## API
 
 - `GET /health`: returns `{"status": "ok"}` if DB is reachable, 503 otherwise
