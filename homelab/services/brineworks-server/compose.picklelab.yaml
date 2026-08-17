@@ -12,16 +12,14 @@ services:
     env_file:
       - /opt/homelab/.env
       - .env.build
-    # Phase 2 of the identity-auth rollout: uncomment these two, commit, redeploy.
-    # Deliberately staged separately from the code deploy so that phase 1 ships the new
-    # server with header trust OFF (prod behaves exactly as before), and enabling it is a
-    # change you can revert by re-commenting these lines -- no code rollback.
+    # Identity auth, enabled 2026-08-17 after phase 1 (sha 95244bf) verified healthy.
     # Neither value is a secret, which is why they sit here rather than in 1Password.
-    # Verify after enabling: `just brineworks-server-logs` should show
-    # identity_kind=user for browser traffic and identity_kind=key for brineworks-agent.
-    # environment:
-    #   BRINEWORKS_TRUST_TAILSCALE_HEADERS: "true"
-    #   BRINEWORKS_ALLOWED_LOGINS: joshua.nichols@gmail.com
+    # To back this out: re-comment both lines and redeploy. No code rollback needed.
+    # Setting the trust flag while ALLOWED_LOGINS is empty makes the server refuse to
+    # start, on purpose -- see this service's README.
+    environment:
+      BRINEWORKS_TRUST_TAILSCALE_HEADERS: "true"
+      BRINEWORKS_ALLOWED_LOGINS: joshua.nichols@gmail.com
     ports:
       # Bound to loopback only -- tailscale serve proxies from brineworks.<tailnet>.ts.net.
       # BRINEWORKS_SERVER_PORT is set by deploy.sh (which defaults it to 8765).
