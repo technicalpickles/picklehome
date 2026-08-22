@@ -29,7 +29,9 @@ Separately, picklehome is a public repo. `docs/CONVENTIONS.md` already has a rul
 
 ### 1. Compose/app-repo ownership
 
-For services with a split app repo (brineworks-server, brineworks-agent, nikke), the app repo becomes the single source of truth for its *production* compose definition, not just a dev one. picklehome's `homelab/services/<name>/` shrinks to: systemd unit, `deploy.sh` (clone/pull the app repo, `docker compose -f <path-in-app-repo>` up), `.env.vars` filter list, and a README pointing at the app repo's own docs. No more parallel `compose.yaml` re-deriving the same service definition that has to be hand-synced.
+For services with a split app repo (brineworks-server, brineworks-agent, nikke), the app repo becomes the single source of truth for its *portable* production compose definition (`compose.yaml`), not just a dev one. picklehome's `homelab/services/<name>/` shrinks to: systemd unit, `deploy.sh` (clone/pull the app repo, `docker compose -f <path-in-app-repo>` up), `.env.vars` filter list, and a README pointing at the app repo's own docs. No more parallel `compose.yaml` re-deriving the same service definition that has to be hand-synced.
+
+**Exception: picklelab-specific overlays stay in picklehome.** `compose.picklelab.yaml` for brineworks-server encodes a security invariant tied to *this deploy environment*, not to the app: the loopback-only port binding is load-bearing for Tailscale Serve identity auth (anything reaching the port without going through Serve can spoof the identity header), confirmed live 2026-08-16 and documented in commits 6c4c952/ccc5203. That's picklelab topology knowledge the portable `compose.yaml` can't assert, so the overlay file (and its env-var/port bindings) stays in picklehome rather than moving to the app repo. The values in it (`BRINEWORKS_TRUST_TAILSCALE_HEADERS`, `BRINEWORKS_ALLOWED_LOGINS`) are plain config, not secrets, so this doesn't touch section 3.
 
 **New extractions**, following the same pattern, for services confirmed to have no code coupling to picklehome:
 
@@ -46,10 +48,11 @@ For services with a split app repo (brineworks-server, brineworks-agent, nikke),
 
 Replace "Mac materializes `.env`, scp's it to host" with 1Password injecting secrets on the host, scoped to the single deploy invocation:
 
-- One-time setup: mint a 1Password **Service Account** token scoped read-only to the `picklehome` vault, store it on picklelab as a single narrow credential (e.g. `/etc/opt/homelab/op-token`, 0600) — one small long-lived secret instead of the full integration credential set.
-- `deploy.sh` runs `op run --env-file=.env.template -- docker compose ... up -d`, so secrets exist only in that process's environment for the duration of the compose invocation — no standalone `.env` persists on the host.
+- **Two service account tokens, one per vault**, not one shared token. `.env.template` draws from two vaults that homelab deploys actually touch: `picklehome` (everything except openclaw/open-webui) and `Brent Pickleclaw` (`OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY` — needed by openclaw and open-webui). 1Password service account vault access and permissions are immutable after creation (confirmed via 1Password docs, 2026-08-22), so splitting by vault now avoids ever needing to touch the picklehome-scoped token when the pickleclaw side changes, or vice versa. Each token is read-only, scoped to exactly one vault.
+- One-time setup: mint both service account tokens, store them on picklelab as narrow credentials (e.g. `/etc/opt/homelab/op-token-picklehome`, `/etc/opt/homelab/op-token-pickleclaw`, 0600 each) — small long-lived secrets instead of the full integration credential set.
+- `deploy.sh` runs `op run --env-file=.env.template -- docker compose ... up -d`, selecting whichever token(s) the service's `.env.vars` filter list requires, so secrets exist only in that process's environment for the duration of the compose invocation — no standalone `.env` persists on the host.
 - `.env.template` (already checked in, already the source of truth for which secrets exist) becomes the file actually passed to `op run`.
-- The Mac-local `.env`/`just dotenv` workflow stays available for local dev/testing, but deploy no longer depends on it.
+- The Mac-local `.env`/`just dotenv` workflow stays available for local dev/testing, but deploy no longer depends on it. Note: `.env.template` also has a `Personal`-vault reference (`VICOHOME_*`), but no homelab service's `.env.vars` list draws from it — local-dev-only, out of scope for the service account tokens.
 
 ### 4. Sensitive-data hygiene in docs
 
@@ -59,6 +62,7 @@ Replace "Mac materializes `.env`, scp's it to host" with 1Password injecting sec
 
 ## Open questions for implementation planning
 
-- Exact repo name/visibility settings for `second-brain-agent` and the dev container (private confirmed; specific GitHub repo names not yet chosen).
-- Whether `homelab/dev/` shares a repo with `second-brain-agent` or gets its own.
-- Mechanics of the 1Password Service Account setup on picklelab (token provisioning, rotation policy, exact file location/permissions).
+- ~~Exact repo name/visibility settings for `second-brain-agent` and the dev container~~ **Resolved:** `technicalpickles/second-brain-agent` and `technicalpickles/homelab-dev`, both private, each its own repo.
+- ~~Whether `homelab/dev/` shares a repo with `second-brain-agent` or gets its own~~ **Resolved:** separate repos, no code or lifecycle coupling between them beyond superficial shape similarity.
+- ~~Whether one Service Account can span multiple vaults~~ **Resolved:** yes, but vault access/permissions are immutable after creation, which is why the design uses two single-vault tokens rather than one multi-vault token — see section 3.
+- Remaining mechanics of the 1Password Service Account setup on picklelab: exact token provisioning steps, rotation policy (service account tokens don't auto-expire; default to no scheduled rotation, document revoke/reissue steps inline at the point of use), and how `deploy.sh` picks the right token per service — still open, resolve during plan-writing.
