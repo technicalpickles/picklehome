@@ -5,6 +5,10 @@ Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect c
 
 ## Follow-up
 
+- [ ] **Upstairs AC HD 5GHz tx power leveling verification**: `just unifi wifi roaming iPhone
+  --sessions 3` after a day or two of normal use. 2026-08-20 change was verified with 5 min
+  of live polling only (see entry below) — no bounce to Upstairs AC HD in that window, but
+  confirm it holds over longer/more typical usage (multiple rooms, different times of day).
 - [ ] **2.4 GHz power reduction verification**: `just unifi-wifi checkup` after 24h. Compare
   retry rates to pre-change baseline (Living Room was 25-33%, Upstairs was 33%). Also verify
   no IoT devices dropped off (check 2.4 GHz client counts on both APs).
@@ -30,6 +34,33 @@ Most recent first. Use `just unifi-wifi config` and `just bgw wifi` to inspect c
   No trace of SSID or BSSID in RF scan.
 - [x] ~~**5GHz TX power reduction verification**~~: 2026-03-20: all radios confirmed mode=medium.
 - [x] ~~**Ch 48 clean after BGW disable**~~: 2026-03-20: zero neighbors on ch 48 in RF scan.
+
+---
+
+## 2026-08-20
+
+### Upstairs AC HD 5GHz: mode=medium (16 dBm) → custom (13 dBm)
+
+**What:** `just unifi wifi set-power "Upstairs" 5 custom --dbm 13 --yes`
+
+**Why:** Live-diagnosed a real-time complaint (weak WiFi in the TV room, between Living
+Room AC LR and Josh Office AC Pro). Polling the client every 10-20s showed the iPhone
+actively roaming Living Room AC LR ↔ Josh Office AC Pro ↔ Upstairs AC HD every 1-3 min
+without moving, including one bounce onto Upstairs AC HD at -83 dBm (down from -67 dBm
+on Living Room). Upstairs AC HD had only 2 5GHz clients (vs. 6 on both other APs) and was
+transmitting at the highest power of the three (16 dBm vs. 13-14 dBm) — a combination that
+plausibly makes it look preferable to load-aware BSS Transition (802.11v) steering even
+though the client's actual received signal there is much worse. Full research with
+citations: `docs/research/bss-transition-management/findings-with-citations.md`. Research
+recommended tx power leveling as the primary fix, ahead of disabling BSS Transition or
+tuning Min RSSI.
+
+**Verify:**
+- [x] `just unifi wifi aps`: Upstairs AC HD 5GHz confirmed at 13 dBm (2026-08-20, after
+  ~30s stats lag)
+- [x] 5 min of live polling (`just unifi client "Josh iPhone"` every 10s) post-change:
+  zero AP-hops, stayed on Living Room AC LR throughout signal variance -60 to -75 dBm
+- [ ] Longer-term recheck (see Follow-up above)
 
 ---
 

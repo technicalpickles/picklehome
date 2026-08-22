@@ -83,6 +83,91 @@ Five UniFi APs, all wired via ethernet (no wireless uplink/mesh). All PoE from t
 > Run `just unifi devices` for all adopted devices with firmware versions.
 > Use `just unifi topology --format mermaid` to generate a diagram for docs.
 
+### Room Registry
+
+Stable room IDs, so docs/investigations/floorplan annotations can reference an exact
+room instead of an ambiguous name (e.g. "TV room" wasn't documented anywhere before the
+2026-08-20 investigation, and turned out to be a distinct room between Living Room and
+Josh Office, not a synonym for either). Format: `<floor>-<kebab-case-slug>`. IDs are
+assigned once and never renumbered or reused, same rule as taskwarrior UUIDs and plan
+step slugs — if a room needs splitting later (e.g. "upstairs" turns out to be three
+rooms), give the new rooms new IDs rather than repurposing the old one.
+
+Floors: `1` = ground floor (same level as the garage/entry), `2` = upper floor.
+
+| Room ID | Common name | Floor | Notes | Status |
+|---|---|---|---|---|
+| `1-living-room` | Living Room | 1 | Has Living Room AC LR; L-shaped, runs from TV Room past the stairwell nook to Kitchen/Dining/Entry | confirmed |
+| `1-josh-office` | Josh's Office | 1 | Has Josh Office AC Pro + offline Porch AC LR (co-located) | confirmed |
+| `1-tracy-office` | Tracy's Office | 1 | Converted carport; brick wall between it and main house | confirmed |
+| `1-tv-room` | TV Room | 1 | Between Living Room and Josh's Office; single doorway to Living Room; site of the 2026-08-20 roaming investigation | confirmed |
+| `1-porch` | Porch / backyard | 1 (exterior) | Porch AC LR's original/intended mount location, facing backyard; currently offline, relocation pending | confirmed |
+| `1-gym-bathroom` | Gym Bathroom | 1 | Spans the front of the house above/beside Josh's Office; largest 1st-floor room (214.69 sqft) | confirmed |
+| `1-kitchen` | Kitchen | 1 | Open to Living Room, no dividing wall | confirmed |
+| `1-dining-room` | Dining Room | 1 | Open to Kitchen/Living Room | confirmed |
+| `1-entry` | Entry | 1 | Front door, off the angled bay window nook east of Living Room | confirmed |
+| `2-hallway` | Upstairs Hallway | 2 | Central 2nd-floor room (211.66 sqft); has Upstairs AC HD, ceiling-mounted. Its NW corner (just below `2-bathroom`) lines up with the upper part of `1-living-room` (open concept), which contains the stairwell landing. Resolves former `2-upstairs-tbd` placeholder | confirmed (user-verified corner alignment) |
+| `2-bathroom` | Bathroom above Josh's Office | 2 | Footprint sits above `1-gym-bathroom` + `1-josh-office`; referenced in `CHANGELOG.md` (2026-03-20 Tracy Office channel note) as a spot with 3 distinct 5GHz APs in range. Resolves former `2-bathroom-above-office` placeholder | confirmed (floorplan-estimated alignment, see Room Layout below) |
+| `2-bedroom` | Primary Bedroom | 2 | Above `1-tv-room`'s footprint; NE corner matches `1-tv-room`'s NE corner (same orientation, user-verified); largest 2nd-floor room (237.98 sqft) | confirmed (user-verified corner alignment) |
+| `2-alex-bedroom` | Alex's Bedroom | 2 | Off `2-hallway` | confirmed |
+| `2-playroom` | Playroom | 2 | Off `2-hallway` | confirmed |
+| `2-laundry` | Laundry | 2 | Off `2-hallway`, near `2-bathroom` | confirmed |
+| `2-storage` | Storage | 2 | Off `2-bedroom` | confirmed |
+
+**Alignment caveat:** initially resolved from the MagicPlan "Sketch Files" PNG/SVG
+exports (2026-08-22, stored in Dropbox — see Room Layout below) by matching room
+footprints and printed dimensions between the two independently-scanned floor images —
+a visual estimate, not the precision overlay `docs/floorplan-markup-legend.md` calls
+for. Two corners were then user-verified in person against the actual house (not just
+the floorplan image): `1-tv-room`'s NE corner = `2-bedroom`'s NE corner (confirms same
+orientation), and `2-hallway`'s NW corner (just below `2-bathroom`) lines up with the
+upper part of open-concept `1-living-room`. `2-bathroom`'s alignment over
+`1-gym-bathroom`/`1-josh-office` is still the unverified visual estimate.
+
+### Room Layout
+
+From the MagicPlan "Sketch Files" export (both floors, dimensioned; captured 2026-08-22,
+stored in `~/Dropbox/2108 Marann Dr Floor Plans/` rather than the vault — see Storage
+note in `docs/floorplan-markup-legend.md`). No wall-material or floor-penetration
+markup pass has been done yet (per `docs/floorplan-capture-checklist.md`); this is
+adjacency + rough distance only.
+
+**1st floor:** `1-gym-bathroom` spans the front of the house. Below/beside it,
+`1-josh-office` (+ a small bathroom/shower) sits on the west side and `1-tv-room` on
+the east side, connected to `1-living-room` by a single doorway (no other wall between
+them). `1-living-room` is L-shaped, running from `1-tv-room` past a central stairwell
+nook down to `1-kitchen`/`1-dining-room`/`1-entry`. `1-tracy-office` is a separate wing
+(converted carport) off the south end, with the already-documented brick dividing wall.
+
+**2nd floor:** footprint sits only over the `1-gym-bathroom` / `1-josh-office` /
+`1-tv-room` block, not over the kitchen/dining/entry/Tracy-office wing (those read as
+single-story from the floorplan extents). `2-bathroom` (top-left) lines up over
+`1-gym-bathroom` + `1-josh-office` (visual estimate, unverified). `2-bedroom` (top-right)
+lines up over `1-tv-room` — user-verified: their NE corners are the same corner, same
+orientation. `2-hallway`'s NW corner (just below `2-bathroom`) lines up with the upper
+part of `1-living-room` — also user-verified. `1-living-room` is open concept, so this
+is the same stairwell-landing/Upstairs-AC-HD area the AP table's "open stairwell
+connects Living Room and Upstairs" note and `docs/24ghz-power-tuning.md` already
+describe, now with a confirmed corner instead of a guess.
+
+**TV Room finding (reopens the 2026-08-20 open question):** `1-tv-room` is a short
+hop from Living Room AC LR, roughly 10-15 ft through a single doorway, both rooms part
+of the same open ground-floor pod — not a long-range or heavy-material path. That means
+the observed -64 to -75 dBm in `1-tv-room` is **not** well explained by simple
+distance/wall-material path loss. The more likely explanation: Living Room AC LR is
+floor-mounted facing up with a high-gain *focused* beam, tuned (per
+`docs/24ghz-power-tuning.md`) for vertical throw up through the open stairwell to reach
+`2-hallway` — that vertical focus plausibly trades off horizontal spread through
+`1-tv-room`'s doorway, producing a real coverage gap despite the short physical
+distance, not measurement noise.
+
+This reframes the two still-open threads from the 2026-08-20 investigation as separate
+problems: leveling Josh Office AC Pro's tx power (task 385's follow-up) addresses
+*roaming* onto a weaker AP, not `1-tv-room`'s baseline weak signal from Living Room AC
+LR — that's an antenna-pattern/coverage problem, closer to task 386 (an AP better
+angled to cover `1-tv-room`, e.g. redeploying Porch AC LR to an interior wall aimed
+into `1-tv-room`/`1-living-room` instead of outdoors) than a tx-power tweak.
+
 ### AP Model Characteristics
 
 | Model | 2.4 GHz Max | 5 GHz Max | Design Intent |

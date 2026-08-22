@@ -24,6 +24,10 @@ sonos/config/speakers.yaml
 network/diag-results/
 network-diag-results/
 
+# Floorplan exports/annotations reveal home layout (physical security concern);
+# symlinked to the pickled-knowledge Obsidian vault instead of committed
+network/floorplan
+
 # Claude Code local state: personal memory and machine-specific settings
 .claude/projects/
 .claude/settings.local.json

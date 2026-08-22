@@ -222,3 +222,5 @@ Read these when working on a specific tool; do not load by default.
 | `docs/wifi-survey-tools.md` | WiFi survey and floor plan tools: WiFiMan (free, LiDAR heatmap), NetSpot (paid, multi-metric), Design Center (free, simulated), InnerSpace (live coverage); recommended workflow and comparison |
 | `docs/24ghz-power-tuning.md` | 2.4 GHz TX power research: near-far problem, AP model antenna characteristics, why medium beats max in multi-floor homes, before/after data |
 | `docs/cloud-gateway-upgrade-research.md` | Replacing CloudKey Gen2 + USG with a Cloud Gateway: model comparison (UDM Pro/SE/Pro Max), migration process, features unlocked, WiFi 7 AP lineup |
+| `docs/floorplan-capture-checklist.md` | Annotating the MagicPlan floorplan with network-relevant info: what to capture (AP positions, room adjacency, wall/floor materials, measured distances) so RF reasoning stops relying on assumptions about range |
+| `docs/floorplan-markup-legend.md` | How to mark up the exported floorplan: symbols/colors for AP position, wall material, floor penetrations, room IDs, and the floor-alignment method. Room IDs themselves are canonical in `TOPOLOGY.md`'s Room Registry |
