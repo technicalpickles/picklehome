@@ -20,6 +20,9 @@ technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable *
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart *
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl start *
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl reset-failed *
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/systemctl status *
+technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/journalctl *
 
 # Ownership changes (brineworks, backup)
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/chown *
