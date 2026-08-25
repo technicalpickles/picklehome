@@ -13,6 +13,8 @@
 # Drop this file and switch compose.yaml back to pulling
 # ghcr.io/open-webui/open-webui directly once the upstream fix ships and the
 # pin is bumped past it.
+# USE_SLIM=true drops embedding/whisper models (~3-4GB savings)
+ARG USE_SLIM=true
 FROM ghcr.io/open-webui/open-webui:v0.10.2
 USER root
 RUN chown -R 1000:1000 /app/backend/open_webui/static
