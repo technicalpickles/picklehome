@@ -15,6 +15,7 @@ services:
       --host 0.0.0.0
       --port ${NIKKE_PORT:?set by deploy.sh}
       --db /data/roster.db
+      --export-dir /data/exports/latest
 
   sync:
     image: nikke:local
@@ -25,7 +26,12 @@ services:
     pull_policy: never
     environment:
       NIKKE_SESSION_PATH: /data/.blablalink-session.json
+    # --export-dir must land on the shared /data volume too: this container
+    # runs via `compose run --rm`, so its default cwd-relative exports/latest
+    # is deleted the instant sync exits, and even without --rm it's a
+    # separate container from `serve` with no other shared filesystem.
     command: >
       nikke-scan blablalink sync
       --headless
       --db /data/roster.db
+      --export-dir /data/exports/latest
