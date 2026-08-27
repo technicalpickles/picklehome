@@ -65,8 +65,21 @@ services:
     volumes:
       - goplaces_node_state:/root/.openclaw
 
+  gog-mcp:
+    build:
+      context: /opt/pickleclaw/nodes/gog-mcp
+    restart: unless-stopped
+    depends_on:
+      - openclaw
+    environment:
+      GOG_MCP_TOKEN: ${GOG_MCP_TOKEN:?required}
+      GOG_KEYRING_PASSWORD: ${GOG_KEYRING_PASSWORD:?required}
+    volumes:
+      - gog_mcp_keyring:/root/.local/share/gogcli
+
 volumes:
   config:
   workspace:
   auth:
   goplaces_node_state:
+  gog_mcp_keyring:
