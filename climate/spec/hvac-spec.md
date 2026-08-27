@@ -92,7 +92,7 @@ Temperatures in °F. Minimum 5°F spread required between heat and cool.
 
 | Comfort      | Cool | Heat | Notes                                  |
 |--------------|------|------|----------------------------------------|
-| Comfort Cool | 70   | 65   | Primary occupied mode: outdoor temp > 65°F. Matches the ~70°F target directly. The former +1°F ceiling (72) meant to offset Tracy's office was dropped 2026-08-09 without waiting on her room-level fixes (fan/screen/deflector, still pending): it was already flagged counterproductive for her actual overheating problem, and the rest of downstairs (e.g. the home office) was running hot during the day as a result (see Tracy's office) |
+| Comfort Cool | 71   | 65   | Primary occupied mode: outdoor temp > 65°F. Interim compromise (2026-08-26): the 72 ceiling (set for Tracy) made Josh's office run hot, so it was dropped to 70 on 2026-08-09; that overshot the other way and both offices are now running noticeably cold despite hot outdoor temps (confirmed against `runtimeReport` outdoor history, not a weather/seasonal effect). Splitting the difference at 71 while room-level fixes for Tracy's office (fan/screen/deflector, still pending) remain the real fix. Check back in on both offices later this week (task `4acc8608`) before adjusting further. |
 | Comfort Heat | 73   | 72   | Primary occupied mode: outdoor temp < 60°F; set higher than upstairs to compensate for Ecobee running cooler than Nest and remote offices (Josh's office, Tracy's office) feeling cold in winter (radiant loss, see Tracy's office) |
 | Eco          | 71   | 68   | Moderate setback: allow drift without full Away range |
 | Sleep        | 72   | 65   | Nighttime energy saving: wide enough to save, narrow enough for quick recovery |
