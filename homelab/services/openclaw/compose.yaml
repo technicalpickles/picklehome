@@ -14,6 +14,9 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required}
       GEMINI_API_KEY: ${GEMINI_API_KEY:?required}          # web_search (gemini provider) — see openclaw.tools.json5
       OPENCLAW_ALLOWED_CHAT_IDS: ${OPENCLAW_ALLOWED_CHAT_IDS:?required}
+      # Resolved by the gateway's config loader into mcp.json5's Authorization
+      # header for the gog MCP server -- see openclaw-config/mcp.json5 in pickleclaw.
+      GOG_MCP_TOKEN: ${GOG_MCP_TOKEN:?required}
       # Optional (not :?required): the workspace-git-sync cron job's GIT_ASKPASS
       # helper reads this to auth git-over-HTTPS in-container (no ssh client in
       # this image). Empty until provisioned -- deploy.sh degrades to no-sync-wiring
@@ -64,6 +67,23 @@ services:
       OPENCLAW_NODE_HOST: openclaw.local
     volumes:
       - goplaces_node_state:/root/.openclaw
+
+  gog-mcp:
+    build:
+      context: /opt/pickleclaw/nodes/gog-mcp
+    restart: unless-stopped
+    # No depends_on: unlike goplaces-node (which dials the gateway), the gateway
+    # dials *into* gog-mcp's MCP endpoint -- there's no real start-order dependency
+    # the other way.
+    environment:
+      GOG_MCP_TOKEN: ${GOG_MCP_TOKEN:?required}
+      GOG_KEYRING_PASSWORD: ${GOG_KEYRING_PASSWORD:?required}
+    volumes:
+      # Bind mount, not a named volume: this holds Gmail/Calendar OAuth refresh
+      # tokens that take a human browser consent flow to recreate, so it needs to
+      # live under /srv/data (covered by backup.sh's restic job) rather than
+      # /var/lib/docker/volumes (which the backup script doesn't touch).
+      - /srv/data/openclaw/gog-keyring:/root/.local/share/gogcli
 
 volumes:
   config:

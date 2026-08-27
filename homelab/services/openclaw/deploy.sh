@@ -19,12 +19,14 @@ cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Creating data directories on the volume"
-# config:    writable root config (openclaw.json), created by `onboard`, plus memory/sessions/credentials
-# workspace: agent's identity/memory repo (openclaw-workspace), cloned below
-# auth:      OpenClaw's own auth-profile store
-# bin:       drop-in CLIs, bind-mounted read-only to /opt/tools in-container
-# ssh:       the workspace deploy key, written below
-sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh"
+# config:      writable root config (openclaw.json), created by `onboard`, plus memory/sessions/credentials
+# workspace:   agent's identity/memory repo (openclaw-workspace), cloned below
+# auth:        OpenClaw's own auth-profile store
+# bin:         drop-in CLIs, bind-mounted read-only to /opt/tools in-container
+# ssh:         the workspace + pickleclaw deploy keys, written below
+# gog-keyring: gog-mcp's OAuth token file keyring, bind-mounted into that service --
+#              under $DATA_DIR (not a named volume) so it's covered by backup.sh
+sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh" "$DATA_DIR/gog-keyring"
 
 echo "==> Fixing data directory ownership"
 # Do this now, right after mkdir, not at the end: it makes $DATA_DIR owned by uid
@@ -105,6 +107,52 @@ else
     echo "    Skipping clone (no deploy key)"
 fi
 
+echo "==> Installing the pickleclaw deploy key (if provided)"
+# Read-only SSH deploy key for github.com/technicalpickles/pickleclaw -- used only to
+# clone/pull gog-mcp's source (nodes/gog-mcp/), which lives in that private repo, not
+# this one (unlike goplaces-node, which is open source and checked in here directly).
+# See docs/superpowers/specs/2026-08-26-gog-mcp-picklelab-rollout-design.md in the
+# pickleclaw repo.
+PICKLECLAW_DEPLOY_KEY_FILE="$DATA_DIR/ssh/pickleclaw_deploy_key"
+PICKLECLAW_KEY_B64=""
+if [ -f "$ENV_FILE" ]; then
+    PICKLECLAW_KEY_B64=$(grep -m1 '^OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
+fi
+if [ -n "$PICKLECLAW_KEY_B64" ]; then
+    ( umask 077; echo "$PICKLECLAW_KEY_B64" | base64 -d > "$PICKLECLAW_DEPLOY_KEY_FILE" )
+    echo "    Wrote $PICKLECLAW_DEPLOY_KEY_FILE (0600)"
+else
+    echo "    WARNING: OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 not in $ENV_FILE."
+    echo "    Can't clone/update pickleclaw, so gog-mcp won't build. Add the var to"
+    echo "    .env.vars + .env.template (see README), re-run 'just dotenv', redeploy."
+fi
+
+echo "==> Cloning/updating pickleclaw (gog-mcp's build context)"
+# Tracks main HEAD, not pinned to a commit -- every deploy rebuilds gog-mcp from
+# whatever's on pickleclaw@main at deploy time, same as the workspace repo's ongoing
+# sync above. See the design doc's "Deploy mechanics" section for why (no separate
+# picklelab-specific pin/bump step to maintain).
+PICKLECLAW_DIR=/opt/pickleclaw
+if [ -f "$PICKLECLAW_DEPLOY_KEY_FILE" ]; then
+    PICKLECLAW_GIT_SSH="ssh -i $PICKLECLAW_DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+    if [ ! -d "$PICKLECLAW_DIR/.git" ]; then
+        sudo mkdir -p "$PICKLECLAW_DIR"
+        sudo chown "$(id -u):$(id -g)" "$PICKLECLAW_DIR"
+        GIT_SSH_COMMAND="$PICKLECLAW_GIT_SSH" \
+            git clone git@github.com:technicalpickles/pickleclaw.git "$PICKLECLAW_DIR"
+        echo "    Cloned pickleclaw to $PICKLECLAW_DIR"
+    else
+        if GIT_SSH_COMMAND="$PICKLECLAW_GIT_SSH" git -C "$PICKLECLAW_DIR" pull --ff-only; then
+            echo "    Updated pickleclaw at $PICKLECLAW_DIR to $(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD)"
+        else
+            echo "    WARNING: pickleclaw pull failed (non-fast-forward, network issue, or dirty tree)."
+            echo "    Continuing with the existing checkout at $(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD) -- gog-mcp's build context may be stale."
+        fi
+    fi
+else
+    echo "    Skipping (no deploy key)"
+fi
+
 echo "==> Shipping workspace-git-sync.sh (idempotent)"
 # Lands in the same $DATA_DIR/bin dir the goplaces stub uses above -- already
 # bind-mounted read-only to /opt/tools in-container, no new mount needed.
@@ -178,6 +226,13 @@ $COMPOSE pull
 # explicit rebuild step to pick up Dockerfile/entrypoint edits.
 echo "==> Building goplaces-node"
 $COMPOSE build goplaces-node
+
+if [ -d "$PICKLECLAW_DIR/nodes/gog-mcp" ]; then
+    echo "==> Building gog-mcp"
+    $COMPOSE build gog-mcp
+else
+    echo "==> Skipping gog-mcp build (no $PICKLECLAW_DIR/nodes/gog-mcp)"
+fi
 
 echo "==> Onboarding (first deploy only)"
 # OPENCLAW_SKIP_ONBOARDING does NOT mean "boot from a mounted file instead" — even with
