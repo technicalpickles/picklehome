@@ -6,6 +6,8 @@ services:
       # runs. Same layering as second-brain-agent/brineworks-agent.
       context: /opt/homelab
       dockerfile: homelab/services/open-webui/Dockerfile
+      args:
+        USE_SLIM: "true"
     volumes:
       - /srv/data/open-webui:/app/backend/data
 

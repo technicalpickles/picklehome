@@ -43,12 +43,9 @@ services:
       - data:/app/backend/data
 
   open-terminal:
-    # Pinned like open-webui's own image; bump deliberately (see Global Constraints).
-    # Note: the published image tag drops the git tag's "v" prefix (it's taken
-    # from pyproject.toml's version field via docker/metadata-action, not the
-    # git tag name) -- ghcr.io/open-webui/open-terminal:v0.11.34 doesn't exist,
-    # only :0.11.34 does. Verify with `docker manifest inspect` before bumping.
-    image: ghcr.io/open-webui/open-terminal:0.11.34
+    # Use slim image (~430MB vs 5.15GB full) -- same features, smaller footprint.
+    # See https://github.com/open-webui/open-terminal#readme for tag options.
+    image: ghcr.io/open-webui/open-terminal:slim
     restart: unless-stopped
     environment:
       OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?required}
