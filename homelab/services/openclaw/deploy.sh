@@ -140,8 +140,12 @@ if [ -f "$PICKLECLAW_DEPLOY_KEY_FILE" ]; then
             git clone git@github.com:technicalpickles/pickleclaw.git "$PICKLECLAW_DIR"
         echo "    Cloned pickleclaw to $PICKLECLAW_DIR"
     else
-        GIT_SSH_COMMAND="$PICKLECLAW_GIT_SSH" git -C "$PICKLECLAW_DIR" pull --ff-only
-        echo "    Updated pickleclaw at $PICKLECLAW_DIR to $(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD)"
+        if GIT_SSH_COMMAND="$PICKLECLAW_GIT_SSH" git -C "$PICKLECLAW_DIR" pull --ff-only; then
+            echo "    Updated pickleclaw at $PICKLECLAW_DIR to $(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD)"
+        else
+            echo "    WARNING: pickleclaw pull failed (non-fast-forward, network issue, or dirty tree)."
+            echo "    Continuing with the existing checkout at $(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD) -- gog-mcp's build context may be stale."
+        fi
     fi
 else
     echo "    Skipping (no deploy key)"
