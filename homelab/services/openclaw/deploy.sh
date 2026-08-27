@@ -19,12 +19,14 @@ cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Creating data directories on the volume"
-# config:    writable root config (openclaw.json), created by `onboard`, plus memory/sessions/credentials
-# workspace: agent's identity/memory repo (openclaw-workspace), cloned below
-# auth:      OpenClaw's own auth-profile store
-# bin:       drop-in CLIs, bind-mounted read-only to /opt/tools in-container
-# ssh:       the workspace deploy key, written below
-sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh"
+# config:      writable root config (openclaw.json), created by `onboard`, plus memory/sessions/credentials
+# workspace:   agent's identity/memory repo (openclaw-workspace), cloned below
+# auth:        OpenClaw's own auth-profile store
+# bin:         drop-in CLIs, bind-mounted read-only to /opt/tools in-container
+# ssh:         the workspace + pickleclaw deploy keys, written below
+# gog-keyring: gog-mcp's OAuth token file keyring, bind-mounted into that service --
+#              under $DATA_DIR (not a named volume) so it's covered by backup.sh
+sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh" "$DATA_DIR/gog-keyring"
 
 echo "==> Fixing data directory ownership"
 # Do this now, right after mkdir, not at the end: it makes $DATA_DIR owned by uid
@@ -225,8 +227,12 @@ $COMPOSE pull
 echo "==> Building goplaces-node"
 $COMPOSE build goplaces-node
 
-echo "==> Building gog-mcp"
-$COMPOSE build gog-mcp
+if [ -d "$PICKLECLAW_DIR/nodes/gog-mcp" ]; then
+    echo "==> Building gog-mcp"
+    $COMPOSE build gog-mcp
+else
+    echo "==> Skipping gog-mcp build (no $PICKLECLAW_DIR/nodes/gog-mcp)"
+fi
 
 echo "==> Onboarding (first deploy only)"
 # OPENCLAW_SKIP_ONBOARDING does NOT mean "boot from a mounted file instead" — even with

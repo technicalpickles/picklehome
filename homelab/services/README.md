@@ -335,7 +335,7 @@ Self-hosted OpenClaw gateway (chat -> agent that can act), reached via Telegram 
 | **Compose** | `/opt/homelab/homelab/services/openclaw/` |
 | **Data** | `/srv/data/openclaw/` (config, workspace/memory repo, auth-profile store, drop-in CLI dir) |
 | **Access** | `https://openclaw.<tailnet>.ts.net` (Tailscale Services, port 18789 internally) + gateway token; Telegram bot gated by a chat-ID allowlist |
-| **Env vars** | `OPENCLAW_HOST`, `OPENCLAW_GATEWAY_TOKEN`, `OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, `TELEGRAM_BOT_TOKEN`, `OPENCLAW_ALLOWED_CHAT_IDS`, `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64`, `OPENCLAW_IMAGE` |
+| **Env vars** | `OPENCLAW_HOST`, `OPENCLAW_GATEWAY_TOKEN`, `OLLAMA_API_KEY`, `OPENROUTER_API_KEY`, `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `OPENCLAW_ALLOWED_CHAT_IDS`, `GOOGLE_PLACES_API_KEY`, `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64`, `OPENCLAW_WORKSPACE_GITHUB_TOKEN`, `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64`, `GOG_MCP_TOKEN`, `GOG_KEYRING_PASSWORD`, `OPENCLAW_IMAGE` |
 | **Backup** | Yes, nightly (`/srv/data/openclaw` picked up by restic) |
 | **Restart** | `restart: unless-stopped` |
 

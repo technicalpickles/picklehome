@@ -59,6 +59,22 @@ The workspace (`github.com/technicalpickles/openclaw-workspace` — `AGENTS.md`,
    ```
    Until the ref exists it's skipped silently and `deploy.sh` degrades to an empty workspace with a warning. Delete the local keypair once it's in 1Password and on GitHub.
 
+### Pickleclaw deploy key (one-time)
+
+`gog-mcp`'s source (`nodes/gog-mcp/` in the private `pickleclaw` repo) isn't open source like `goplaces-node`, so it can't be baked into this public repo's Dockerfile — instead `deploy.sh` clones/pulls `pickleclaw@main` directly on picklelab, host-side, using a scoped **read-only** deploy key.
+
+1. Generate an ed25519 keypair (no passphrase):
+   ```bash
+   ssh-keygen -t ed25519 -f openclaw-pickleclaw-deploy -C "openclaw picklelab pickleclaw deploy key" -N ""
+   ```
+2. Add the **public** key to `technicalpickles/pickleclaw` -> Settings -> Deploy keys, **with "Allow write access" unchecked** — this key only needs to read.
+3. Store the private key in the `picklehome` 1Password vault as an SSH-key item titled `OpenClaw Pickleclaw Deploy Key`, with a custom text field `deploy_key_b64` holding the **single-line base64** of the private key (same convention as the workspace deploy key above — see step 3 there for the `op item get`/"add more" nesting caveat and the `base64 | tr -d '\n'` command).
+4. Add to `.env.template`:
+   ```
+   OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64={{ op://picklehome/OpenClaw Pickleclaw Deploy Key/deploy_key_b64 }}
+   ```
+   Until the ref exists it's skipped silently and `deploy.sh` degrades to no-clone with a warning, and the guarded `gog-mcp` build step in `deploy.sh` skips the build rather than failing the deploy. Delete the local keypair once it's in 1Password and on GitHub.
+
 ### Google Places API key (one-time, for the goplaces second node)
 
 Powers the `goplaces-node` compose service — an isolated container that holds
@@ -88,6 +104,8 @@ ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/mcp.json5 \
 ```
 
 `deploy.sh` runs from the Mac, where `pickleclaw` is already cloned with your own GitHub access — `git pull` it before deploying, same as any other dependency.
+
+**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5` from whatever local checkout you have here (no branch/cleanliness guard), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
 
 ## First-time Setup
 
@@ -140,6 +158,9 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `OPENCLAW_ALLOWED_CHAT_IDS` | `.env` (1Password) | Comma-separated chat-ID allowlist — the front door |
 | `GOOGLE_PLACES_API_KEY` | `.env` (1Password) | Real key for the isolated `goplaces-node` service only — the `openclaw` service itself gets a hardcoded placeholder, never this value |
 | `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the one-time workspace clone |
+| `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 read-only deploy key; `deploy.sh` decodes it to `ssh/pickleclaw_deploy_key` to clone/pull `pickleclaw@main` (gog-mcp's build context) |
+| `GOG_MCP_TOKEN` | `.env` (1Password) | Bearer token gog-mcp's HTTP endpoint requires; set on both the `openclaw` service (interpolated into `mcp.json5`'s Authorization header) and the `gog-mcp` service (to check incoming requests) |
+| `GOG_KEYRING_PASSWORD` | `.env` (1Password) | Decryption password for gog-mcp's file keyring (OAuth refresh tokens); set only on the `gog-mcp` service |
 | `OPENCLAW_IMAGE` | `.env` | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.6.11` |
 
 **Why `OPENCLAW_HOST` also has to be pushed into `gateway.controlUi.allowedOrigins` (`deploy.sh`'s `config set --batch-json` step):** OpenClaw doesn't auto-discover its own Tailscale hostname for browser-Origin validation on a non-loopback bind (`lan`/`tailnet`/`auto`) — it only auto-seeds `http://localhost:<port>`/`http://127.0.0.1:<port>` (`gateway-control-ui-origins.ts` in the vendored source). Without an explicit entry, the Control UI would still often work anyway: `origin-check.ts` has a same-origin fallback that trusts any `*.ts.net` hostname when the `Origin` and `Host` headers match — but that's an implicit fallback, not a guarantee (e.g. it breaks if something ever proxies with a different `Host`), so keep setting `allowedOrigins` explicitly rather than relying on it.
@@ -147,14 +168,21 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 ## Data Locations (on picklelab)
 
 ```
-/srv/data/openclaw/config/openclaw.json    # writable root config (created by onboard)
-/srv/data/openclaw/workspace/              # openclaw-workspace checkout (identity/memory)
-/srv/data/openclaw/auth/                   # OpenClaw's own auth-profile store
-/srv/data/openclaw/bin/                    # drop-in CLIs, mounted read-only to /opt/tools
-/srv/data/openclaw/ssh/workspace_deploy_key # scoped openclaw-workspace deploy key (0600)
+/srv/data/openclaw/config/openclaw.json      # writable root config (created by onboard)
+/srv/data/openclaw/workspace/                # openclaw-workspace checkout (identity/memory)
+/srv/data/openclaw/auth/                     # OpenClaw's own auth-profile store
+/srv/data/openclaw/bin/                      # drop-in CLIs, mounted read-only to /opt/tools
+/srv/data/openclaw/ssh/workspace_deploy_key  # scoped openclaw-workspace deploy key (0600)
+/srv/data/openclaw/ssh/pickleclaw_deploy_key # scoped read-only pickleclaw deploy key (0600)
+/srv/data/openclaw/gog-keyring/              # gog-mcp's OAuth token file keyring, bind-mounted
+                                              # into the gog-mcp container (moved off a named
+                                              # Docker volume so it's covered by backup below)
+/opt/pickleclaw/                             # pickleclaw@main checkout, gog-mcp's build context
+                                              # (host-side, NOT under /srv/data -- not backed up,
+                                              # reproducible by re-cloning)
 ```
 
-All of `/srv/data/openclaw` is picked up by the nightly restic job. `bin/` is reproducible from a future committed manifest, so it's covered but not load-bearing.
+All of `/srv/data/openclaw` is picked up by the nightly restic job. `bin/` is reproducible from a future committed manifest, so it's covered but not load-bearing. `/opt/pickleclaw` is deliberately outside `/srv/data`: it's a disposable source checkout, not state — see `deploy.sh`'s clone/pull step.
 
 **Ongoing workspace sync** is automated via an in-container `openclaw cron` job (`workspace-git-sync`, hourly): commits local changes, `git pull --rebase`, pushes; a real rebase conflict escalates to an `openclaw agent` call for judgment rather than guessing. Registered idempotently by `deploy.sh`. Git auth is HTTPS + a fine-grained PAT (`OPENCLAW_WORKSPACE_GITHUB_TOKEN`) via a `GIT_ASKPASS` helper, not the SSH deploy key above — the container image has no ssh client. See `docs/plans/2026-07-04-workspace-git-sync-picklelab-rollout.md` and `pickleclaw`'s `scripts/workspace-git-sync.sh` / `docs/setup-notes.md` "Workspace git backup".
 
