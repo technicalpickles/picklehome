@@ -275,13 +275,19 @@ else
     echo "    Root config already exists, skipping onboard"
 fi
 
-# memorySearch: without this, it defaults to provider "openai", which has no key
+# memory.search: without this, it defaults to provider "openai", which has no key
 # in this deploy (only OLLAMA_API_KEY/OPENROUTER_API_KEY are wired) -- vector recall
 # stays paused forever ("Provider: openai (requested: openai)" in `memory status`,
 # 0/N files indexed). Same OpenRouter embedding model pickleclaw validated
 # (docs/setup-notes.md in that repo), but apiKey reads OPENROUTER_API_KEY directly
 # since it's already a plain env var here, not the exec-secretref trick pickleclaw
 # needed to dedupe against its own auth store.
+# Path is top-level memory.search, not agents.defaults.memorySearch -- the latter
+# was removed from the OpenClaw config schema by 2026.8.1 (confirmed via `openclaw
+# config set --dry-run` against the dev VM's 2026.8.1 container 2026-09-01, which
+# fails closed with "Unrecognized key: memorySearch" under agents.defaults). Since
+# this whole batch runs under `set -euo pipefail`, that one bad key would abort
+# every deploy on an image that new.
 echo "==> Applying declarative config (model chain, channel policy, hardening)"
 # Re-run on every deploy so config drift self-heals from these plain scalar/array
 # values. Excludes channels.telegram.enabled and the tools/mcp $include pointers
@@ -337,7 +343,7 @@ $RUN_CLI config set --batch-json '[
         "ollama-cloud/gpt-oss:20b":{},
         "ollama-cloud/kimi-k2.7-code":{}
     }},
-    {"path":"agents.defaults.memorySearch","value":{
+    {"path":"memory.search","value":{
         "provider":"openai-compatible",
         "model":"qwen/qwen3-embedding-8b",
         "remote":{
