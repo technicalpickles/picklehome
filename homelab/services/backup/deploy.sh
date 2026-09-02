@@ -44,7 +44,6 @@ sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR"
 #   done
 
 echo "==> Granting backup user read ACLs on service data"
-sudo chmod +x "$SERVICE_DIR/reapply-acls.sh"
 sudo "$SERVICE_DIR/reapply-acls.sh"
 
 echo "==> Initializing restic repo (if needed)"

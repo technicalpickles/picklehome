@@ -33,6 +33,10 @@ technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/tailscale serve *
 # ACLs for backup cross-user reads
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/setfacl *
 
+# Backup ACL re-apply script (deploy.sh runs it directly as root; the setfacl
+# rule above doesn't match because sudo sees the script path, not `setfacl`)
+technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/backup/reapply-acls.sh
+
 # Backup user management (backup deploy)
 technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/useradd *
 technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/usermod *
