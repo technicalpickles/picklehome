@@ -78,6 +78,21 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
+# OPENCLAW_IMAGE (pinned image tag, not a secret) lives in the private pickleclaw
+# repo (openclaw-config/openclaw.env), scp'd here by `just deploy-openclaw` the same
+# way openclaw.tools.json5/openclaw.mcp.json5 are -- single source of truth shared
+# with the dev VM, instead of an independently-set-by-hand picklelab-only pin.
+IMAGE_ENV_FILE="$SERVICE_DIR/openclaw.image.env"
+if [ -f "$IMAGE_ENV_FILE" ]; then
+    set -a
+    source "$IMAGE_ENV_FILE"
+    set +a
+else
+    echo "ERROR: $IMAGE_ENV_FILE missing. Symlink it from the private pickleclaw repo"
+    echo "       first -- see homelab/services/openclaw/README.md."
+    exit 1
+fi
+
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
 KEY_B64=""
 if [ -f "$ENV_FILE" ]; then
