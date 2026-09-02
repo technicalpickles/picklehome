@@ -296,6 +296,18 @@ if [ ! -f "$DATA_DIR/config/openclaw.json" ]; then
     ]'
 else
     echo "    Root config already exists, skipping onboard"
+    # An image bump can retire/rename config keys (e.g. 2026.8.1 dropped
+    # agents.defaults.memorySearch and gateway.tailscale.resetOnExit). The config
+    # on disk was written by the *previous* image's schema, so any config
+    # set/patch call below -- which validates against the *new* binary's schema --
+    # fails closed on those stale keys before it ever gets a chance to run. Doctor
+    # itself understands both the old keys and how to migrate them, so it has to
+    # run first, against an existing config, every deploy (cheap no-op when there's
+    # nothing to migrate). Hit this for real on the 2026.6.11 -> 2026.8.1 bump,
+    # 2026-09-02: "Unrecognized key" on memorySearch/resetOnExit/lastTouchedAt
+    # aborted the tools.json5 patch step below under set -euo pipefail.
+    echo "==> Doctor --fix (migrate config-schema changes from the previous image)"
+    $RUN_CLI doctor --fix
 fi
 
 # tools.json5's shared fields (profile/alsoAllow/sessions/web), applied via `config
