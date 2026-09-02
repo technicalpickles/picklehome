@@ -225,17 +225,26 @@ needs its own re-examination; it was resting on the now-corrected "floor-mounted
 facing up" premise.
 
 This reframes the two still-open threads from the 2026-08-20 investigation as separate
-problems: leveling Josh Office AC Pro's tx power (taskwarrior `267b6114`) addresses
-*roaming* onto a weaker AP, not `1-tv-room`'s baseline weak signal from Living Room AC
-LR — that's an antenna-pattern/coverage problem, closer to relocating Porch AC LR to
-an interior wall aimed into `1-tv-room`/`1-living-room` instead of outdoors
-(taskwarrior `0bc49afc`) than a tx-power tweak.
+problems: leveling Josh Office AC Pro's tx power would address *roaming* onto a weaker
+AP, not `1-tv-room`'s baseline weak signal from Living Room AC LR — that's an
+antenna-pattern/coverage problem, closer to relocating Porch AC LR to an interior wall
+aimed into `1-tv-room`/`1-living-room` instead of outdoors (taskwarrior `0bc49afc`)
+than a tx-power tweak.
 
 (This paragraph previously cited "task 385"/"task 386" — taskwarrior's integer IDs get
 reused once a task completes, and by 2026-09-02 those numbers pointed at unrelated
 chirpfinder tasks. Re-pointed to stable UUIDs per the "cite UUIDs, not integer IDs, in
-durable docs" convention; `267b6114` is a new task created during this correction,
-since no existing task matched "level Josh Office AC Pro's tx power".)
+durable docs" convention.)
+
+**2026-09-02 update — roaming thread closed, not fixed:** before making the Josh
+Office tx-power change, a live review (`267b6114`, closed) found no active roaming
+problem — recent Josh iPhone roaming history held satisfaction 99-100 through every
+segment, with no bad landings like the 2026-08-20 -83dBm Upstairs bounce. The 1dB gap
+between Josh Office (14dBm/medium) and Living Room/Upstairs (13dBm/custom) is much
+smaller than the 16-vs-13 asymmetry that caused that original bounce, so the tx-power
+change was skipped. The live hotspot right now is Living Room AC LR 5GHz itself (88%
+utilization, 34.2% retries) — tracked as a capacity/load question, not a roaming one,
+in taskwarrior `515`.
 
 **Markup pass (2026-09-02):** wall material, AP positions, and RF-hostile objects were
 hand-placed against the DXF floor plan via the floorplan-playground editor and are now
