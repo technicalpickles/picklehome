@@ -78,6 +78,21 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
+# OPENCLAW_IMAGE (pinned image tag, not a secret) lives in the private pickleclaw
+# repo (openclaw-config/openclaw.env), scp'd here by `just deploy-openclaw` the same
+# way openclaw.tools.json5/openclaw.mcp.json5 are -- single source of truth shared
+# with the dev VM, instead of an independently-set-by-hand picklelab-only pin.
+IMAGE_ENV_FILE="$SERVICE_DIR/openclaw.image.env"
+if [ -f "$IMAGE_ENV_FILE" ]; then
+    set -a
+    source "$IMAGE_ENV_FILE"
+    set +a
+else
+    echo "ERROR: $IMAGE_ENV_FILE missing. Symlink it from the private pickleclaw repo"
+    echo "       first -- see homelab/services/openclaw/README.md."
+    exit 1
+fi
+
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
 KEY_B64=""
 if [ -f "$ENV_FILE" ]; then
@@ -258,30 +273,55 @@ if [ ! -f "$DATA_DIR/config/openclaw.json" ]; then
     # - channels.telegram.enabled: once the Telegram bot cutover (README) flips this
     #   to true, a redeploy re-running this key would silently take the live bot
     #   back offline.
-    # - tools/mcp $include pointers: setting an object value at a path that's
-    #   ALREADY $include-owned errors with "Config write would flatten $include-owned
-    #   config" (confirmed live on the second real deploy) -- the design doc's known
-    #   gotcha ("$include is now exercised hands-on" section) bites the moment you
-    #   retrofit an $include onto an already-configured section, which is exactly
-    #   what re-running this every deploy would do after the first one sets it. The
+    # - mcp $include pointer: setting an object value at a path that's ALREADY
+    #   $include-owned errors with "Config write would flatten $include-owned config"
+    #   (confirmed live on the second real deploy) -- the design doc's known gotcha
+    #   ("$include is now exercised hands-on" section) bites the moment you retrofit
+    #   an $include onto an already-configured section, which is exactly what
+    #   re-running this every deploy would do after the first one sets it. The
     #   pointer only needs setting once; content changes flow through the include
     #   file itself (redeployed via scp), not through re-running config set.
+    #
+    #   tools does NOT get the same $include treatment -- tried, hit a harder wall:
+    #   once a path is $include-owned, ANY later write under it (even a different
+    #   literal at tools.exec, which is meant to deliberately diverge from the dev
+    #   VM's value) tries to rewrite the include file and fails hard, EBUSY, against
+    #   a real read-only bind mount (confirmed live 2026-09-01, pickleclaw repo's
+    #   docs/setup-notes.md "Dev VM wired to consume the real tools.json5/mcp.json5").
+    #   tools.json5's shared fields are applied via `config patch` below instead --
+    #   see that step's comment.
     $RUN_CLI config set --batch-json '[
         {"path":"channels.telegram.enabled","value":false},
-        {"path":"tools","value":{"$include":"./includes/tools.json5"}},
         {"path":"mcp","value":{"$include":"./includes/mcp.json5"}}
     ]'
 else
     echo "    Root config already exists, skipping onboard"
 fi
 
-# memorySearch: without this, it defaults to provider "openai", which has no key
+# tools.json5's shared fields (profile/alsoAllow/sessions/web), applied via `config
+# patch` rather than `$include` -- see the onboarding step's comment above for why.
+# Re-run every deploy (unlike the onboard-only mcp $include, this has no live link to
+# the file, so it needs to be re-applied whenever includes/tools.json5 changes -- a
+# redeploy already scps a fresh copy of it, so this is that same self-healing
+# guarantee, just via patch instead of $include). `config patch --stdin` merges
+# recursively and parses JSON5 (comments and all) natively, so this reads the real
+# file directly rather than hand-copying its fields into a batch-json array.
+echo "==> Syncing tools.json5's shared fields (profile/alsoAllow/sessions/web)"
+{ printf '{\n  tools: '; cat openclaw.tools.json5; printf '\n}\n'; } | $RUN_CLI config patch --stdin
+
+# memory.search: without this, it defaults to provider "openai", which has no key
 # in this deploy (only OLLAMA_API_KEY/OPENROUTER_API_KEY are wired) -- vector recall
 # stays paused forever ("Provider: openai (requested: openai)" in `memory status`,
 # 0/N files indexed). Same OpenRouter embedding model pickleclaw validated
 # (docs/setup-notes.md in that repo), but apiKey reads OPENROUTER_API_KEY directly
 # since it's already a plain env var here, not the exec-secretref trick pickleclaw
 # needed to dedupe against its own auth store.
+# Path is top-level memory.search, not agents.defaults.memorySearch -- the latter
+# was removed from the OpenClaw config schema by 2026.8.1 (confirmed via `openclaw
+# config set --dry-run` against the dev VM's 2026.8.1 container 2026-09-01, which
+# fails closed with "Unrecognized key: memorySearch" under agents.defaults). Since
+# this whole batch runs under `set -euo pipefail`, that one bad key would abort
+# every deploy on an image that new.
 echo "==> Applying declarative config (model chain, channel policy, hardening)"
 # Re-run on every deploy so config drift self-heals from these plain scalar/array
 # values. Excludes channels.telegram.enabled and the tools/mcp $include pointers
@@ -294,6 +334,24 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # back to trusting the Host header), and auth needs a rate limit (else brute-force
 # attempts on the gateway token aren't mitigated). Found live via the first real
 # `just openclaw-status` run, not anticipated in the original design doc.
+#
+# tools.exec stays full/off here (picklelab) on purpose, 2026-07-12 -- lives here
+# as a plain value rather than inside openclaw.tools.json5's $include, because a
+# single $include can't do a partial override (OpenClaw errors "would flatten
+# $include-owned config" the moment you try to set a subpath under one), and
+# picklelab's exec policy is meant to deliberately diverge from the dev VM's
+# rather than track it. Plan: the dev VM soaks security="allowlist", ask="on-miss"
+# first (curated seed file openclaw-config/exec-allowlist-seed.json, seeding
+# script scripts/seed-exec-allowlist.sh, and the argPattern-guarded openclaw CLI
+# entry are all proven there), then picklelab flips to match -- but that's
+# deliberately deferred pending https://github.com/openclaw/openclaw/issues/104798
+# (node-routed exec precheck resolves bare command names against an empty PATH,
+# so a node's own allowlist can never satisfy it under gateway allowlist mode --
+# would make every goplaces search prompt for approval). Flip tracked by
+# taskwarrior 189ae39b. Design: docs/superpowers/specs/2026-07-11-exec-allowlist-
+# hardening-design.md (pickleclaw repo). Do not flip this line until #104798 is
+# fixed and re-verified on the dev VM -- and check the dev VM's own tools.exec
+# value is actually on allowlist/on-miss before assuming a soak is underway.
 #
 # skills.entries.goplaces.enabled: most bundled skills ship disabled by default
 # (this onboard's own baseline leaves ~40 of them off). The goplaces-node stub
@@ -320,6 +378,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
+    {"path":"tools.exec","value":{"security":"full","ask":"off"}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"channels.telegram.execApprovals.enabled","value":true},
@@ -337,7 +396,7 @@ $RUN_CLI config set --batch-json '[
         "ollama-cloud/gpt-oss:20b":{},
         "ollama-cloud/kimi-k2.7-code":{}
     }},
-    {"path":"agents.defaults.memorySearch","value":{
+    {"path":"memory.search","value":{
         "provider":"openai-compatible",
         "model":"qwen/qwen3-embedding-8b",
         "remote":{

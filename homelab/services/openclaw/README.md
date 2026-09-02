@@ -37,7 +37,7 @@ OPENROUTER_API_KEY={{ op://<pickleclaw's existing OpenRouter item path> }}
 TELEGRAM_BOT_TOKEN={{ op://<pickleclaw's existing Telegram bot item path> }}
 ```
 
-`OPENCLAW_IMAGE` isn't a secret — set it directly in `.env` (or `.env.template` as a plain default), e.g. `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.6.11`.
+`OPENCLAW_IMAGE` isn't a secret and isn't set here at all — it lives in `pickleclaw`'s `openclaw-config/openclaw.env`, symlinked in as `openclaw.image.env` (see "Include-file setup" below) and sourced directly by `deploy.sh`, same as the dev VM. Single source of truth shared between environments.
 
 ### Workspace deploy key (one-time)
 
@@ -94,18 +94,20 @@ keys, Telegram token). Full design/verification history:
 
 ### Include-file setup (one-time, per dev machine)
 
-`openclaw.tools.json5` (tool policy) and `openclaw.mcp.json5` (MCP server config) aren't committed to this **public** repo — the MCP file would leak real server names/commands. Both live in the private `pickleclaw` repo instead, symlinked in:
+`openclaw.tools.json5` (tool policy) and `openclaw.mcp.json5` (MCP server config) aren't committed to this **public** repo — the MCP file would leak real server names/commands. `openclaw.image.env` (pinned image version) isn't secret, but is colocated with the rest of pickleclaw's openclaw config rather than split across two repos — see "Deploying Updates" below. All three live in the private `pickleclaw` repo instead, symlinked in:
 
 ```bash
 ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/tools.json5 \
   homelab/services/openclaw/openclaw.tools.json5
 ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/mcp.json5 \
   homelab/services/openclaw/openclaw.mcp.json5
+ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/openclaw.env \
+  homelab/services/openclaw/openclaw.image.env
 ```
 
 `deploy.sh` runs from the Mac, where `pickleclaw` is already cloned with your own GitHub access — `git pull` it before deploying, same as any other dependency.
 
-**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5` from whatever local checkout you have here (no branch/cleanliness guard), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
+**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5`/`openclaw.env` from whatever local checkout you have here (no branch/cleanliness guard), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
 
 ## First-time Setup
 
@@ -140,7 +142,7 @@ Only after this is confirmed working should `pickleclaw` be decommissioned (desi
 just deploy-openclaw
 ```
 
-Bumps run through the pinned `OPENCLAW_IMAGE` var: change it in `.env`, redeploy. `deploy.sh` runs `docker compose pull` then `up -d` (no `build:` key, so `pull` is unambiguous), and a `doctor` pass catches config-schema migrations.
+Bumps run through the pinned `OPENCLAW_IMAGE` var: change it in `pickleclaw`'s `openclaw-config/openclaw.env` (single source of truth, shared with the dev VM — not this repo's `.env`), redeploy. `deploy.sh` runs `docker compose pull` then `up -d` (no `build:` key, so `pull` is unambiguous), and a `doctor` pass catches config-schema migrations.
 
 ## Environment Variables
 
@@ -161,7 +163,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 read-only deploy key; `deploy.sh` decodes it to `ssh/pickleclaw_deploy_key` to clone/pull `pickleclaw@main` (gog-mcp's build context) |
 | `GOG_MCP_TOKEN` | `.env` (1Password) | Bearer token gog-mcp's HTTP endpoint requires; set on both the `openclaw` service (interpolated into `mcp.json5`'s Authorization header) and the `gog-mcp` service (to check incoming requests) |
 | `GOG_KEYRING_PASSWORD` | `.env` (1Password) | Decryption password for gog-mcp's file keyring (OAuth refresh tokens); set only on the `gog-mcp` service |
-| `OPENCLAW_IMAGE` | `.env` | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.6.11` |
+| `OPENCLAW_IMAGE` | `openclaw.image.env` (pickleclaw, symlinked) | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.8.1` -- shared source of truth with the dev VM, not this repo's `.env` |
 
 **Why `OPENCLAW_HOST` also has to be pushed into `gateway.controlUi.allowedOrigins` (`deploy.sh`'s `config set --batch-json` step):** OpenClaw doesn't auto-discover its own Tailscale hostname for browser-Origin validation on a non-loopback bind (`lan`/`tailnet`/`auto`) — it only auto-seeds `http://localhost:<port>`/`http://127.0.0.1:<port>` (`gateway-control-ui-origins.ts` in the vendored source). Without an explicit entry, the Control UI would still often work anyway: `origin-check.ts` has a same-origin fallback that trusts any `*.ts.net` hostname when the `Origin` and `Host` headers match — but that's an implicit fallback, not a guarantee (e.g. it breaks if something ever proxies with a different `Host`), so keep setting `allowedOrigins` explicitly rather than relying on it.
 

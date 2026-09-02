@@ -13,6 +13,10 @@ lighting/.certs/
 # private pickleclaw repo instead, symlinked in here for compose to find at deploy time
 homelab/services/openclaw/openclaw.tools.json5
 homelab/services/openclaw/openclaw.mcp.json5
+# Same pattern: pinned image version colocated with the rest of pickleclaw's openclaw
+# config (not secret, just kept in one place instead of split across two repos),
+# symlinked in here for deploy.sh to source.
+homelab/services/openclaw/openclaw.image.env
 # Same pattern: kept in the private pickleclaw repo, symlinked in here so
 # `just deploy-openclaw` can scp it to picklelab.
 homelab/services/openclaw/workspace-git-sync.sh

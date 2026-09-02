@@ -5,5 +5,9 @@ services:
       - /srv/data/openclaw/workspace:/home/node/.openclaw/workspace
       - /srv/data/openclaw/auth:/home/node/.config/openclaw
       - /srv/data/openclaw/bin:/opt/tools:ro
-      - ./openclaw.tools.json5:/home/node/.openclaw/includes/tools.json5:ro
+      # openclaw.tools.json5 is NOT bind-mounted here -- unlike mcp, it's applied via
+      # `openclaw config patch` (deploy.sh, "Syncing tools.json5's shared fields"),
+      # not $include, so the container never reads it directly. See deploy.sh's
+      # comment on the onboarding step for why (tools.exec is meant to deliberately
+      # diverge from the dev VM's value, and $include can't do a partial override).
       - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro

@@ -581,9 +581,10 @@ deploy-openclaw host="picklelab":
         echo "Pushing to origin/main..."
         git push
     fi
-    if [ ! -e homelab/services/openclaw/openclaw.tools.json5 ] || [ ! -e homelab/services/openclaw/openclaw.mcp.json5 ]; then
-        echo "ERROR: openclaw.tools.json5 / openclaw.mcp.json5 missing. Symlink them from the"
-        echo "       private pickleclaw repo first -- see homelab/services/openclaw/README.md."
+    if [ ! -e homelab/services/openclaw/openclaw.tools.json5 ] || [ ! -e homelab/services/openclaw/openclaw.mcp.json5 ] || [ ! -e homelab/services/openclaw/openclaw.image.env ]; then
+        echo "ERROR: openclaw.tools.json5 / openclaw.mcp.json5 / openclaw.image.env missing."
+        echo "       Symlink them from the private pickleclaw repo first -- see"
+        echo "       homelab/services/openclaw/README.md."
         exit 1
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
@@ -597,10 +598,12 @@ deploy-openclaw host="picklelab":
     echo "==> Copying include files (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/openclaw.tools.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.tools.json5
     scp homelab/services/openclaw/openclaw.mcp.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.mcp.json5
+    scp homelab/services/openclaw/openclaw.image.env {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.image.env
     # scp lands these world-readable (644); they can contain tokens (mcp.json5 esp.),
     # and `openclaw security audit` flags exactly this -- tighten before deploy.sh
     # bind-mounts them into the container (bind mounts carry host perms through).
-    ssh {{host}} "chmod 600 /opt/homelab/homelab/services/openclaw/openclaw.tools.json5 /opt/homelab/homelab/services/openclaw/openclaw.mcp.json5"
+    # openclaw.image.env isn't a secret but gets the same treatment for consistency.
+    ssh {{host}} "chmod 600 /opt/homelab/homelab/services/openclaw/openclaw.tools.json5 /opt/homelab/homelab/services/openclaw/openclaw.mcp.json5 /opt/homelab/homelab/services/openclaw/openclaw.image.env"
     echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
     ssh {{host}} "cd /opt/homelab && homelab/services/openclaw/deploy.sh"
