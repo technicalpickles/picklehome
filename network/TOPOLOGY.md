@@ -107,7 +107,7 @@ Floors: `1` = ground floor (same level as the garage/entry), `2` = upper floor.
 | `1-dining-room` | Dining Room | 1 | Open to Kitchen/Living Room | confirmed |
 | `1-entry` | Entry | 1 | Front door, off the angled bay window nook east of Living Room; `2-storage` sits directly above it | confirmed (user-verified cross-floor stacking) |
 | `2-hallway` | Upstairs Hallway | 2 | Central 2nd-floor room (211.66 sqft); has Upstairs AC HD, ceiling-mounted. Its NW corner (just below `2-bathroom`) lines up with the upper part of `1-living-room` (open concept), which contains the stairwell landing. Resolves former `2-upstairs-tbd` placeholder | confirmed (user-verified corner alignment) |
-| `2-bathroom` | Bathroom above Josh's Office | 2 | Footprint sits above `1-josh-office` (not `1-gym-bathroom` as previously estimated — see Alignment caveat below); referenced in `CHANGELOG.md` (2026-03-20 Tracy Office channel note) as a spot with 3 distinct 5GHz APs in range. Resolves former `2-bathroom-above-office` placeholder | confirmed (corrected via floor-registration offset, still not directly in-person verified — taskwarrior `71701d18`) |
+| `2-bathroom` | Bathroom above Josh's Office | 2 | Footprint sits above `1-josh-office` (not `1-gym-bathroom` as previously estimated — see Alignment caveat below); tile floor; referenced in `CHANGELOG.md` (2026-03-20 Tracy Office channel note) as a spot with 3 distinct 5GHz APs in range. Resolves former `2-bathroom-above-office` placeholder | confirmed (user-verified in person, 2026-09-02) |
 | `2-bedroom` | Primary Bedroom | 2 | Above `1-tv-room`'s footprint; NE corner matches `1-tv-room`'s NE corner (same orientation, user-verified); largest 2nd-floor room (237.98 sqft) | confirmed (user-verified corner alignment) |
 | `2-alex-bedroom` | Alex's Bedroom | 2 | Off `2-hallway` | confirmed |
 | `2-playroom` | Playroom | 2 | Off `2-hallway` | confirmed |
@@ -145,8 +145,8 @@ lands it on top of `1-josh-office`, not `1-gym-bathroom` as the Room Registry
 previously stated — that prior claim (`2-bathroom`'s raw x-coordinate landing within
 0.4ft of `1-gym-bathroom`'s) compared un-registered coordinates from two different
 origins and the match was coincidental. `2-bathroom` is now recorded as above
-`1-josh-office` alone. This is still a computed correction, not the in-person check
-taskwarrior `71701d18` calls for — that task remains open to confirm it by eye.
+`1-josh-office` alone, user-confirmed in person 2026-09-02 (taskwarrior `71701d18`,
+closed).
 
 **New rooms below** (`1-shower` through `2-nook-c`) were surfaced by the
 `floorplan_dxf_to_geojson.py` pipeline (see `docs/floorplan-geojson-schema.md`):
@@ -180,13 +180,26 @@ nook down to `1-kitchen`/`1-dining-room`/`1-entry`. `1-tracy-office` is a separa
 **2nd floor:** footprint sits only over the `1-gym-bathroom` / `1-josh-office` /
 `1-tv-room` block, not over the kitchen/dining/entry/Tracy-office wing (those read as
 single-story from the floorplan extents). `2-bathroom` (top-left) lines up over
-`1-gym-bathroom` + `1-josh-office` (visual estimate, unverified). `2-bedroom` (top-right)
+`1-josh-office` alone, user-confirmed in person (corrected 2026-09-02 — see the
+Alignment caveat above; previously thought to also span `1-gym-bathroom`). `2-bedroom` (top-right)
 lines up over `1-tv-room` — user-verified: their NE corners are the same corner, same
 orientation. `2-hallway`'s NW corner (just below `2-bathroom`) lines up with the upper
 part of `1-living-room` — also user-verified. `1-living-room` is open concept, so this
 is the same stairwell-landing/Upstairs-AC-HD area the AP table's "open stairwell
 connects Living Room and Upstairs" note and `docs/24ghz-power-tuning.md` already
 describe, now with a confirmed corner instead of a guess.
+
+**Floor construction/materials (user-confirmed 2026-09-02):** the house is largely
+hardwood floor over standard wood-joist framing. Exceptions: the upstairs bathrooms
+(`2-bathroom`, `2-bathroom-east`) are tile; `1-tracy-office` and `1-tracy-annex`
+(Pantry) sit on a concrete slab (that wing was originally a carport); `1-entry` is
+also slab. Since `1-living-room`, `1-josh-office`, and the 2nd floor above them are
+hardwood (not slab), the floor/ceiling assembly between those two levels is standard
+wood-joist construction, not concrete — this resolves the wood-joist-vs-slab half of
+the `docs/floorplan-capture-checklist.md` "floor/ceiling construction between levels"
+item (taskwarrior `d04eb7cc`). Still unconfirmed: whether metal ductwork or HVAC
+returns run through that same joist bay near Upstairs AC HD, Living Room AC LR, or
+Josh Office AC Pro — that part of `d04eb7cc` remains open.
 
 **TV Room finding (reopens the 2026-08-20 open question):** `1-tv-room` is a short
 hop from Living Room AC LR, roughly 10-15 ft through a single doorway, both rooms part
