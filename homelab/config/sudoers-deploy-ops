@@ -45,5 +45,7 @@ technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/usermod *
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/apt-get update
 technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/apt-get install *
 
-# Run restic as backup user (backup deploy init/check)
-technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/sudo -u backup *
+# Run restic as backup user (backup deploy init/check). Runas is scoped to
+# `backup` specifically, not ALL -- sudoers matches the resolved command
+# (restic), not the `sudo -u backup` invocation syntax deploy.sh uses.
+technicalpickles ALL=(backup) NOPASSWD: /usr/bin/restic *
