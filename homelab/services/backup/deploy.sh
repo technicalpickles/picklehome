@@ -44,8 +44,8 @@ sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR"
 #   done
 
 echo "==> Granting backup user read ACLs on service data"
-# Ecobee tokens are seeded by the human user with mode 600
-sudo setfacl -m u:"$BACKUP_USER":r /srv/data/climate-auto-switch/ecobee-tokens.json
+sudo chmod +x "$SERVICE_DIR/reapply-acls.sh"
+sudo "$SERVICE_DIR/reapply-acls.sh"
 
 echo "==> Initializing restic repo (if needed)"
 # Source the env file for RESTIC_REPOSITORY and RESTIC_PASSWORD.

@@ -12,4 +12,8 @@ Group=backup
 # without needing a writable home directory.
 Environment=RESTIC_CACHE_DIR=/srv/backups/restic-cache
 EnvironmentFile=/opt/homelab/homelab/services/backup/.env
+# The '+' runs this one line as root regardless of the unit's own User=/Group=,
+# so it can re-apply ACLs that other services' chmod() calls may have wiped
+# since the last run. See reapply-acls.sh for why this has to be unconditional.
+ExecStartPre=+/opt/homelab/homelab/services/backup/reapply-acls.sh
 ExecStart=/opt/homelab/homelab/services/backup/backup.sh

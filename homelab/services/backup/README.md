@@ -117,3 +117,20 @@ cat /srv/data/<service>/dumps/pg_dumpall.sql | docker exec -i <service>-db-1 psq
 - `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` injected via systemd `EnvironmentFile` from `.env`
 - ACLs grant read-only access to service data without changing file ownership
 - Restic encrypts all snapshots at rest, so it's safe to ship the repo offsite
+
+### Why ACLs get re-applied every run
+
+A one-shot `setfacl` doesn't stay granted. Any `chmod()` on a file or directory
+-- even one unrelated to backups, like a service locking a freshly-written
+token down to `600` -- recalculates the POSIX ACL mask and silently collapses
+the `backup` grant back to nothing. This isn't hypothetical: it's hit both a
+regenerated file (`climate-auto-switch/ecobee-tokens.json`, rewritten on every
+OAuth refresh) and a directory an app re-locks on its own lifecycle
+(`openclaw/config/state`).
+
+`reapply-acls.sh` re-grants the full list unconditionally. `backup.service`
+runs it via `ExecStartPre=+...` (the `+` runs that one line as root even
+though the unit itself runs as `backup`) before every nightly backup, and
+`deploy.sh` runs it too so a fresh deploy doesn't have to wait for the first
+scheduled run. Add a new consumer's data path to the `TREES` or `PATHS` array
+in that script, not a one-off `setfacl` in `deploy.sh`.
