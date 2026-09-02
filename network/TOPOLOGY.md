@@ -195,11 +195,13 @@ hardwood floor over standard wood-joist framing. Exceptions: the upstairs bathro
 (Pantry) sit on a concrete slab (that wing was originally a carport); `1-entry` is
 also slab. Since `1-living-room`, `1-josh-office`, and the 2nd floor above them are
 hardwood (not slab), the floor/ceiling assembly between those two levels is standard
-wood-joist construction, not concrete — this resolves the wood-joist-vs-slab half of
-the `docs/floorplan-capture-checklist.md` "floor/ceiling construction between levels"
-item (taskwarrior `d04eb7cc`). Still unconfirmed: whether metal ductwork or HVAC
-returns run through that same joist bay near Upstairs AC HD, Living Room AC LR, or
-Josh Office AC Pro — that part of `d04eb7cc` remains open.
+wood-joist construction, not concrete. User also confirmed there's no ductwork or HVAC
+returns running through that joist bay — all ductwork lives in the attic above the 2nd
+floor or the basement below the 1st floor, not between the levels themselves. Together
+this fully resolves the `docs/floorplan-capture-checklist.md` "floor/ceiling
+construction between levels" item (taskwarrior `d04eb7cc`, closed): the path between
+Upstairs AC HD, Living Room AC LR, and Josh Office AC Pro is plain wood-joist/hardwood,
+no metal in the way.
 
 **TV Room finding (reopens the 2026-08-20 open question):** `1-tv-room` is a short
 hop from Living Room AC LR, roughly 10-15 ft through a single doorway, both rooms part
