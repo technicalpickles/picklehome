@@ -105,14 +105,14 @@ Floors: `1` = ground floor (same level as the garage/entry), `2` = upper floor.
 | `1-gym-bathroom` | Gym Bathroom | 1 | Spans the front of the house above/beside Josh's Office; largest 1st-floor room (214.69 sqft) | confirmed |
 | `1-kitchen` | Kitchen | 1 | Open to Living Room, no dividing wall | confirmed |
 | `1-dining-room` | Dining Room | 1 | Open to Kitchen/Living Room | confirmed |
-| `1-entry` | Entry | 1 | Front door, off the angled bay window nook east of Living Room | confirmed |
+| `1-entry` | Entry | 1 | Front door, off the angled bay window nook east of Living Room; `2-storage` sits directly above it | confirmed (user-verified cross-floor stacking) |
 | `2-hallway` | Upstairs Hallway | 2 | Central 2nd-floor room (211.66 sqft); has Upstairs AC HD, ceiling-mounted. Its NW corner (just below `2-bathroom`) lines up with the upper part of `1-living-room` (open concept), which contains the stairwell landing. Resolves former `2-upstairs-tbd` placeholder | confirmed (user-verified corner alignment) |
-| `2-bathroom` | Bathroom above Josh's Office | 2 | Footprint sits above `1-gym-bathroom` + `1-josh-office`; referenced in `CHANGELOG.md` (2026-03-20 Tracy Office channel note) as a spot with 3 distinct 5GHz APs in range. Resolves former `2-bathroom-above-office` placeholder | confirmed (floorplan-estimated alignment, see Room Layout below) |
+| `2-bathroom` | Bathroom above Josh's Office | 2 | Footprint sits above `1-josh-office` (not `1-gym-bathroom` as previously estimated — see Alignment caveat below); referenced in `CHANGELOG.md` (2026-03-20 Tracy Office channel note) as a spot with 3 distinct 5GHz APs in range. Resolves former `2-bathroom-above-office` placeholder | confirmed (corrected via floor-registration offset, still not directly in-person verified — taskwarrior `71701d18`) |
 | `2-bedroom` | Primary Bedroom | 2 | Above `1-tv-room`'s footprint; NE corner matches `1-tv-room`'s NE corner (same orientation, user-verified); largest 2nd-floor room (237.98 sqft) | confirmed (user-verified corner alignment) |
 | `2-alex-bedroom` | Alex's Bedroom | 2 | Off `2-hallway` | confirmed |
 | `2-playroom` | Playroom | 2 | Off `2-hallway` | confirmed |
 | `2-laundry` | Laundry | 2 | Off `2-hallway`, near `2-bathroom` | confirmed |
-| `2-storage` | Storage | 2 | Off `2-bedroom` | confirmed |
+| `2-storage` | Storage | 2 | Off `2-bedroom`; directly above `1-entry` | confirmed (user-verified cross-floor stacking) |
 | `1-shower` | Shower (Josh's Office wing) | 1 | 40.77 sqft; sits ~10ft east of `1-gym-bathroom` at similar y, north of `1-josh-office` | confirmed (DXF position) |
 | `1-powder-room` | Powder room off the stairwell | 1 | 47.27 sqft; toilet + sink, small closet/stair icon on its MagicPlan floor plan, between `1-living-room`'s stairwell nook and `1-dining-room` | confirmed (DXF position + PDF thumbnail) |
 | `1-office-bathroom` | Small bathroom by Josh's Office | 1 | 25.99 sqft; toilet-only per its MagicPlan floor plan; closest of the two ambiguous "Bathroom" rooms to `1-josh-office` | confirmed (DXF position + PDF thumbnail) |
@@ -129,15 +129,24 @@ Floors: `1` = ground floor (same level as the garage/entry), `2` = upper floor.
 exports (2026-08-22, stored in Dropbox — see Room Layout below) by matching room
 footprints and printed dimensions between the two independently-scanned floor images —
 a visual estimate, not the precision overlay `docs/floorplan-markup-legend.md` calls
-for. Two corners were then user-verified in person against the actual house (not just
+for. Three pairs are now user-verified in person against the actual house (not just
 the floorplan image): `1-tv-room`'s NE corner = `2-bedroom`'s NE corner (confirms same
-orientation), and `2-hallway`'s NW corner (just below `2-bathroom`) lines up with the
-upper part of open-concept `1-living-room`. `2-bathroom`'s alignment over
-`1-gym-bathroom`/`1-josh-office` is still the unverified visual estimate, though the
-DXF-precision label positions in `network/floorplan/floor-{1,2}.geojson` now show
-`2-bathroom`'s x-coordinate (-27.48) landing within 0.4ft of `1-gym-bathroom`'s
-(-27.11) — corroborating evidence, not the in-person verification task 475 still
-calls for.
+orientation), `2-hallway`'s NW corner (just below `2-bathroom`) lines up with the
+upper part of open-concept `1-living-room`, and `1-entry` sits directly below
+`2-storage`.
+
+That third pair (`1-entry`/`2-storage`) matters beyond confirming those two rooms: it
+gives a real registration offset between floor 1's and floor 2's independent DXF
+coordinate systems (`network/floorplan/floor-{1,2}.geojson` — each floor keeps its own
+origin, see `docs/floorplan-geojson-schema.md`). `2-storage`'s raw coordinates minus
+`1-entry`'s raw coordinates work out to roughly (-12, +17); the `1-tv-room`/`2-bedroom`
+pair gives a consistent (-13, +18). Applying that offset to `2-bathroom`'s coordinates
+lands it on top of `1-josh-office`, not `1-gym-bathroom` as the Room Registry
+previously stated — that prior claim (`2-bathroom`'s raw x-coordinate landing within
+0.4ft of `1-gym-bathroom`'s) compared un-registered coordinates from two different
+origins and the match was coincidental. `2-bathroom` is now recorded as above
+`1-josh-office` alone. This is still a computed correction, not the in-person check
+taskwarrior `71701d18` calls for — that task remains open to confirm it by eye.
 
 **New rooms below** (`1-shower` through `2-nook-c`) were surfaced by the
 `floorplan_dxf_to_geojson.py` pipeline (see `docs/floorplan-geojson-schema.md`):
