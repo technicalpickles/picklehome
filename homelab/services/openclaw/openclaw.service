@@ -8,6 +8,13 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/openclaw
+# OPENCLAW_IMAGE lives in openclaw.image.env (colocated with pickleclaw's config,
+# see deploy.sh), not .env -- docker compose auto-loads only a literally-named
+# .env from the working directory, so without this the unit's own `up -d` (on
+# boot, or any restart deploy.sh didn't already source it for) fails closed with
+# "required variable OPENCLAW_IMAGE is missing a value". Hit live 2026-09-02
+# during the 2026.8.1 upgrade deploy -- see docs/setup-notes.md in pickleclaw.
+EnvironmentFile=/opt/homelab/homelab/services/openclaw/openclaw.image.env
 ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d
 ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 
