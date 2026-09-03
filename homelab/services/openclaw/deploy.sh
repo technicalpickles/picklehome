@@ -386,11 +386,17 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # PDF over https and an image-only PDF with no text layer. Prompted by the
 # 2026-07-14 session where the bot couldn't read a Canva-exported menu PDF and
 # answered from a different location's menu instead.
+# tools.exec uses "mode" (not "security"/"ask") as of the 2026.8.1 upgrade
+# (2026-09-02) -- the old shape triggers "tools.exec.mode cannot be combined
+# with tools.exec.security or tools.exec.ask" once doctor has migrated the
+# persisted config to the new field. mode="full" is the doctor-verified
+# equivalent of security="full"/ask="off". See docs/setup-notes.md in
+# pickleclaw for the full upgrade writeup.
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
-    {"path":"tools.exec","value":{"security":"full","ask":"off"}},
+    {"path":"tools.exec","value":{"mode":"full"}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"channels.telegram.execApprovals.enabled","value":true},
