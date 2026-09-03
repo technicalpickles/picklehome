@@ -392,10 +392,28 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # persisted config to the new field. mode="full" is the doctor-verified
 # equivalent of security="full"/ask="off". See docs/setup-notes.md in
 # pickleclaw for the full upgrade writeup.
+#
+# gateway.trustedProxies: new in 2026.8.1 -- the gateway now fails closed
+# ("proxy_attribution_required") on any request carrying forwarded/Tailscale
+# headers unless the proxy's source IP is explicitly trusted. `tailscale serve`
+# above runs on the HOST and proxies https://openclaw.tail2023b7.ts.net into
+# this container's published 127.0.0.1:18789 -- that's an "ordinary" (non
+# openclaw-managed) transport from the gateway's point of view, so it needs
+# trustedProxies set or every Tailscale-fronted request gets rejected. Because
+# the port is bound to 127.0.0.1 (not 0.0.0.0), Docker can't NAT the
+# loopback-sourced packet across interfaces and instead proxies it as a new
+# connection from the bridge gateway -- so the source IP the container sees is
+# this compose project's docker0 gateway address (172.21.0.1, confirmed live
+# 2026-09-03 from the "observed unattributable proxy-shaped traffic from
+# 172.21.0.1" warning in `docker logs openclaw-openclaw-1`), not 127.0.0.1.
+# This address is assigned by Docker's IPAM at network-creation time and is
+# stable across restarts/redeploys, but would need re-verifying (same log
+# grep) if the compose project's network is ever removed and recreated.
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
+    {"path":"gateway.trustedProxies","value":["172.21.0.1"]},
     {"path":"tools.exec","value":{"mode":"full"}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
