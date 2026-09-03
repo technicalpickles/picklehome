@@ -372,7 +372,16 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # Discovered live on the first goplaces-node deploy (2026-07-09/10) -- see
 # docs/setup-notes.md's "goplaces node" section in the pickleclaw repo.
 #
-# agents.defaults.imageModel.primary: the whole chat chain (glm-5.2, glm-4.7,
+# agents.defaults.model.fallbacks: glm-4.7 was retired from Ollama Cloud's
+# catalog sometime before 2026-09-03 (`openclaw models list --provider
+# ollama-cloud` shows it "missing": true) -- same class of drift as
+# kimi-k2.5:cloud -> kimi-k2.6 elsewhere in this file. Replaced with glm-5.1,
+# matching glm-4.7's original role as a lighter/cheaper tier below the
+# glm-5.2 primary (202k context vs glm-5.2's 1M). Flagged by taskwarrior 518
+# (openclaw doctor, 2026-09-02 upgrade run); see docs/setup-notes.md's
+# "openclaw doctor review" section in pickleclaw.
+#
+# agents.defaults.imageModel.primary: the whole chat chain (glm-5.2, glm-5.1,
 # gpt-oss:20b) is text-only -- `openclaw models list --provider ollama-cloud`
 # prints an input column, and among our configured models only kimi-k2.7-code
 # takes text+image. imageModel is what a text-only primary delegates image input
@@ -443,7 +452,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"skills.entries.goplaces.enabled","value":true},
     {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
-    {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-4.7"]},
+    {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-5.1"]},
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
     {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
     {"path":"agents.defaults.heartbeat.lightContext","value":true},
@@ -451,7 +460,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.bootstrapMaxChars","value":28000},
     {"path":"agents.defaults.models","value":{
         "ollama-cloud/glm-5.2":{},
-        "ollama-cloud/glm-4.7":{},
+        "ollama-cloud/glm-5.1":{},
         "ollama-cloud/gpt-oss:20b":{},
         "ollama-cloud/kimi-k2.7-code":{}
     }},
