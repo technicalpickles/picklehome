@@ -376,16 +376,38 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # gpt-oss:20b) is text-only -- `openclaw models list --provider ollama-cloud`
 # prints an input column, and among our configured models only kimi-k2.7-code
 # takes text+image. imageModel is what a text-only primary delegates image input
-# to, and pdfModel defaults to it, so this one line is what lets the image and
-# pdf tools actually run. Without it the pdf tool still registers (that's
-# alsoAllow's job -- see openclaw.tools.json5) and then errors at call time with
-# "No PDF model configured". kimi-k2.7-code is already in the models map below,
-# so this dodges the model-registration trap (an unregistered model here would
-# silently misfire -- see CLAUDE.md in the pickleclaw repo).
-# Verified end-to-end on the dev VM 2026-07-14 (2026.6.11) against both a text
-# PDF over https and an image-only PDF with no text layer. Prompted by the
-# 2026-07-14 session where the bot couldn't read a Canva-exported menu PDF and
-# answered from a different location's menu instead.
+# to, and pdfModel defaults to it -- when "pdf" is in tools.json5's alsoAllow,
+# this one line is what lets the image and pdf tools actually run. Without it
+# the pdf tool still registers (that's alsoAllow's job) and then errors at
+# call time with "No PDF model configured". kimi-k2.7-code is already in the
+# models map below, so this dodges the model-registration trap (an
+# unregistered model here would silently misfire -- see CLAUDE.md in the
+# pickleclaw repo).
+# "pdf" was pulled from tools.json5's alsoAllow 2026-09-03 (only ever verified
+# end-to-end on the dev VM, 2026-07-14, 2026.6.11 -- never confirmed working on
+# picklelab itself or since the 2026.8.1 upgrade; see taskwarrior 522 and
+# docs/setup-notes.md's "openclaw doctor review" section in pickleclaw). This
+# imageModel line stays regardless -- still needed for image_generate, and for
+# pdf once 522 confirms it and it's added back.
+#
+# agents.defaults.bootstrapMaxChars: raised from the unset 20_000-char runtime
+# default (src/agents/embedded-agent-helpers/bootstrap.ts in vendor/openclaw)
+# to 28_000. `openclaw doctor` flagged AGENTS.md as truncated on the 2026.8.1
+# upgrade deploy (2026-09-02, taskwarrior 517) -- not because we added content,
+# but because upstream commit 669db2968fc ("retire TOOLS.md into an AGENTS.md
+# section with a doctor migration", openclaw/openclaw#113966, first shipped
+# v2026.7.2-beta.5, not present in picklelab's prior v2026.7.1) folded
+# TOOLS.md's ~165 lines and HEARTBEAT.md's few lines into AGENTS.md via a
+# doctor migration during this same upgrade -- nearly doubling it (confirmed
+# via openclaw-workspace repo history: 9,793 -> 19,836 chars in one commit
+# when the dev VM got the same migration 2026-08-20). Real, wanted content
+# just moved into the one file with a per-file cap; nothing to prune. 28_000
+# leaves headroom for both AGENTS.md and MEMORY.md (each ~20k as of
+# 2026-09-03) well under the unchanged 60_000
+# agents.defaults.bootstrapTotalMaxChars default (28_000 x 2 = 56_000 <
+# 60_000) -- raise bootstrapTotalMaxChars too if a third bootstrap file is
+# ever added or these two keep growing. See docs/setup-notes.md's "openclaw
+# doctor review, picklelab, 2026.8.1" section in the pickleclaw repo.
 # tools.exec uses "mode" (not "security"/"ask") as of the 2026.8.1 upgrade
 # (2026-09-02) -- the old shape triggers "tools.exec.mode cannot be combined
 # with tools.exec.security or tools.exec.ask" once doctor has migrated the
@@ -426,6 +448,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
     {"path":"agents.defaults.heartbeat.lightContext","value":true},
     {"path":"agents.defaults.imageModel.primary","value":"ollama-cloud/kimi-k2.7-code"},
+    {"path":"agents.defaults.bootstrapMaxChars","value":28000},
     {"path":"agents.defaults.models","value":{
         "ollama-cloud/glm-5.2":{},
         "ollama-cloud/glm-4.7":{},
