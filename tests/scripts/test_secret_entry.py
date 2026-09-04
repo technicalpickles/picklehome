@@ -1,4 +1,5 @@
 import pytest
+from dotenv import dotenv_values
 
 from scripts.secret_entry import upsert_env_vars
 
@@ -59,3 +60,59 @@ def test_sets_owner_only_permissions(tmp_path):
 def test_rejects_invalid_key_name(tmp_path):
     with pytest.raises(ValueError, match="not a valid env var name"):
         upsert_env_vars(tmp_path / ".env", {"bad key": "1"})
+
+
+def test_rejects_values_with_dollar_brace_interpolation(tmp_path):
+    """python-dotenv interpolates ${{...}} regardless of quoting."""
+    with pytest.raises(ValueError, match="contains '\\$\\{...\\}' which python-dotenv interpolates"):
+        upsert_env_vars(tmp_path / ".env", {"TOKEN": "tok${HOME}en"})
+    # Verify file was not written
+    assert not (tmp_path / ".env").exists()
+
+
+def test_replaces_all_occurrences_of_duplicate_key(tmp_path):
+    """python-dotenv uses the last occurrence; we must replace all."""
+    env = tmp_path / ".env"
+    env.write_text('FLO_USERNAME="first"\nA="1"\nFLO_USERNAME="second"\n')
+    upsert_env_vars(env, {"FLO_USERNAME": "new"})
+    # Both lines should be replaced, preventing the stale one from being used
+    assert env.read_text() == 'FLO_USERNAME="new"\nA="1"\nFLO_USERNAME="new"\n'
+    # Verify round-trip: only the last occurrence matters to dotenv
+    assert dotenv_values(env)["FLO_USERNAME"] == "new"
+
+
+def test_preserves_export_prefix(tmp_path):
+    """Handle lines like `export KEY=value`."""
+    env = tmp_path / ".env"
+    env.write_text('export FLO_USERNAME="old"\n')
+    upsert_env_vars(env, {"FLO_USERNAME": "new"})
+    assert env.read_text() == 'export FLO_USERNAME="new"\n'
+
+
+def test_rejects_values_with_literal_newline(tmp_path):
+    """Newlines corrupt file structure on the next write."""
+    with pytest.raises(ValueError, match="contains a literal newline"):
+        upsert_env_vars(tmp_path / ".env", {"A": "line1\nline2"})
+    # Verify file was not written
+    assert not (tmp_path / ".env").exists()
+
+
+def test_new_file_created_with_0600_permissions(tmp_path):
+    """File should not have a window where it's readable by others."""
+    env = tmp_path / ".env"
+    upsert_env_vars(env, {"A": "secret"})
+    # Use stat to verify permissions were set correctly
+    mode = env.stat().st_mode & 0o777
+    assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
+
+
+def test_round_trip_through_dotenv_consumer(tmp_path):
+    """Verify written values are readable by python-dotenv without corruption."""
+    env = tmp_path / ".env"
+    # Adversarial but legal password: quote, backslash, hash, space, equals
+    password = 'my"pass\\word#key=value test'
+    upsert_env_vars(env, {"SECRET": password})
+
+    # Read back using dotenv (the real consumer)
+    values = dotenv_values(env)
+    assert values["SECRET"] == password, f"Round-trip failed: {values['SECRET']!r} != {password!r}"
