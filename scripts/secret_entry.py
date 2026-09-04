@@ -252,8 +252,8 @@ def main() -> None:
             check=True,
             stdout=subprocess.DEVNULL,
         )
-        print(f"Open on your phone:\n\n  https://{dns_name}:{SERVE_PORT}/{token}\n")
-        print(f"Waiting up to {args.timeout}s for: {', '.join(args.names)}")
+        print(f"Open on your phone:\n\n  https://{dns_name}:{SERVE_PORT}/{token}\n", flush=True)
+        print(f"Waiting up to {args.timeout}s for: {', '.join(args.names)}", flush=True)
 
         if not done.wait(timeout=args.timeout):
             sys.exit("\nerror: timed out, nothing written")
@@ -269,8 +269,8 @@ def main() -> None:
         )
 
     for name in args.names:
-        print(f"  {name} written")
-    print(f"Wrote {len(args.names)} value(s) to {args.env_file}")
+        print(f"  {name} written", flush=True)
+    print(f"Wrote {len(args.names)} value(s) to {args.env_file}", flush=True)
 
 
 if __name__ == "__main__":
