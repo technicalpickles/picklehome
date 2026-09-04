@@ -203,9 +203,13 @@ vendor error code to classify on. What is honestly available is *position in the
 
 | Condition | Raised | Message content |
 |---|---|---|
-| `FLO_USERNAME`/`FLO_PASSWORD` missing or blank | `FloConfigError` | Points at `just secret-entry` now, the `Moen Flo` 1Password item later |
-| `RequestError` during `async_authenticate()` | `FloAuthError` | Names both likely causes: bad password, or wrong auth flow — try flipping `FLO_USE_SSO` |
-| `RequestError` after authentication | `FloError` | Names which call failed |
+| `FLO_USERNAME`/`FLO_PASSWORD` missing or blank | `MoenFloConfigError` | Points at `just secret-entry` now, the `Moen Flo` 1Password item later |
+| `RequestError` during `async_authenticate()` | `MoenFloAuthError` | Names both likely causes: bad password, or wrong auth flow — try flipping `FLO_USE_SSO` |
+| `RequestError` after authentication | `MoenFloError` | Names which call failed |
+
+**The `MoenFlo` prefix is deliberate, not verbosity.** `aioflo` already exports its own base
+class named `FloError` (`aioflo/errors.py`). Naming ours `FloError` too would shadow it in any
+module that imports both, which reads as a subtle bug rather than a naming choice.
 
 All three are caught at `main()` in `water_cli.py`, printed as a clean message with a nonzero exit
 and no traceback. Nothing returns `None` on failure (see CLAUDE.md, Coding Conventions).
