@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import os
 import re
 import secrets
@@ -20,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -206,12 +208,24 @@ def main() -> None:
             sys.exit(f"error: {name!r} is not a valid env var name")
 
     tailscale = _tailscale_binary()
-    hostname = subprocess.run(
-        [tailscale, "status", "--json"], capture_output=True, text=True, check=True
-    )
-    import json as _json
+    try:
+        hostname = subprocess.run(
+            [tailscale, "status", "--json"], capture_output=True, text=True, check=True
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() if exc.stderr else str(exc)
+        sys.exit(
+            "error: `tailscale status` failed. Is Tailscale running and are you "
+            f"logged in?\n{detail}"
+        )
 
-    dns_name = _json.loads(hostname.stdout)["Self"]["DNSName"].rstrip(".")
+    try:
+        dns_name = json.loads(hostname.stdout)["Self"]["DNSName"].rstrip(".")
+    except (json.JSONDecodeError, KeyError) as exc:
+        sys.exit(
+            "error: could not read this node's tailnet hostname from "
+            f"`tailscale status --json` ({exc}). Is Tailscale set up correctly?"
+        )
 
     token = secrets.token_urlsafe(24)
     done = threading.Event()
@@ -219,20 +233,35 @@ def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     port = server.server_address[1]
 
-    subprocess.run(
-        [tailscale, "serve", "--bg", f"--https={SERVE_PORT}", f"http://127.0.0.1:{port}"],
-        check=True,
-        stdout=subprocess.DEVNULL,
-    )
-    print(f"Open on your phone:\n\n  https://{dns_name}:{SERVE_PORT}/{token}\n")
-    print(f"Waiting up to {args.timeout}s for: {', '.join(args.names)}")
-
+    # Start the accept loop before the try/finally below so that
+    # server.shutdown() in finally is always guaranteed to return: shutdown()
+    # blocks on an internal Event that only gets set once serve_forever() has
+    # run and exited, so if the thread were never started, an early failure
+    # (e.g. the tailscale serve call below raising) would hang the process
+    # forever inside finally instead of tearing down cleanly.
     threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    # The `tailscale serve --bg` call must be the first statement inside this
+    # try block: everything from route creation onward must be guarded by the
+    # matching finally, or an exception (e.g. a BrokenPipeError from print()
+    # if stdout closes) could leave the tailnet route up with nothing behind
+    # it after the process exits.
     try:
+        subprocess.run(
+            [tailscale, "serve", "--bg", f"--https={SERVE_PORT}", f"http://127.0.0.1:{port}"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        print(f"Open on your phone:\n\n  https://{dns_name}:{SERVE_PORT}/{token}\n")
+        print(f"Waiting up to {args.timeout}s for: {', '.join(args.names)}")
+
         if not done.wait(timeout=args.timeout):
             sys.exit("\nerror: timed out, nothing written")
     finally:
         server.shutdown()
+        # Give the "Saved." response time to reach the client before the
+        # proxy route disappears out from under the connection.
+        time.sleep(0.5)
         subprocess.run(
             [tailscale, "serve", f"--https={SERVE_PORT}", "off"],
             check=False,
