@@ -94,11 +94,21 @@ FLO_USERNAME
 This is the desired behavior: a loud reminder to create the vault item, not a silent credential
 loss. No extra code needed.
 
-### Risks to verify before building
+### Risks, and what a live dry run settled
 
-- Whether `tailscale serve --https=8443` works here without `sudo`. The existing `/` route implies
-  operator permissions are set, but that is inference, not evidence.
-- Whether the sandbox permits binding a loopback listener. If not, the server runs sandbox-off, as
+Serving this design doc to a phone via `crit` on 2026-09-04 exercised the exact mechanism Phase 0
+needs, so two of these are now evidence rather than inference:
+
+- **`tailscale serve --https=8443` works without `sudo`.** Confirmed. Operator permissions are set
+  on this node.
+- **8443 coexists cleanly with the existing `/` route on 443.** Confirmed: both appear in
+  `tailscale serve status` and the 443 bridge route was undisturbed.
+- **The tailnet path reaches a loopback listener end-to-end.** Confirmed by `curl` from picklelab
+  (a *different* tailnet node -- self-curl from the serving host can hairpin-hang and gives false
+  negatives): `HTTP 200`.
+- **Still open: whether the sandbox permits binding a loopback listener.** The crit run died before
+  binding, on a *filesystem* denial (`~/.crit/sessions/*.lock: operation not permitted`), so it
+  never tested the network question. Assume `scripts/secret-entry` may need to run sandbox-off, as
   the `tailscale` calls must anyway.
 
 ### Environment gotchas
