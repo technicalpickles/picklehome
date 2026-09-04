@@ -1,12 +1,14 @@
-
 {
   "sandbox": {
     "network": {
       "allowedDomains": [
+        "4j1gkf0vji.execute-api.us-east-2.amazonaws.com",
         "accounts.eu1.gigya.com",
         "api-aic.lgthinq.com",
         "api-eu.vicohome.io",
+        "api-gw.meetflo.com",
         "api-us.vicohome.io",
+        "api.meetflo.com",
         "clife-eu-gateway.hijuconn.com",
         "oauth.hijuconn.com"
       ]
