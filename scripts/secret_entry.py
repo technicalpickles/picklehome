@@ -58,7 +58,7 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
             raise ValueError("Value contains a literal newline, which corrupts the file")
 
     lines = path.read_text().splitlines() if path.exists() else []
-    remaining = set(values.keys())
+    remaining = dict.fromkeys(values)  # Preserves insertion order; acts as ordered set
 
     for i, line in enumerate(lines):
         stripped = line.lstrip()
@@ -75,14 +75,12 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
         key = key_part.split("=", 1)[0].strip()
         if key in values:
             lines[i] = f"{prefix}{key}={_quote(values[key])}"
-            # Don't pop yet; keep key in remaining to catch duplicates below
-            remaining.discard(key)
+            remaining.pop(key, None)  # Mark as seen; will not re-append
 
     for key in remaining:
         lines.append(f"{key}={_quote(values[key])}")
 
     # Create file with 0o600 permissions from the start, then write content
-    os.makedirs(path.parent, exist_ok=True)
     fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write("\n".join(lines) + "\n")

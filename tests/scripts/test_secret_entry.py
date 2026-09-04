@@ -116,3 +116,11 @@ def test_round_trip_through_dotenv_consumer(tmp_path):
     # Read back using dotenv (the real consumer)
     values = dotenv_values(env)
     assert values["SECRET"] == password, f"Round-trip failed: {values['SECRET']!r} != {password!r}"
+
+
+def test_appends_multiple_new_keys_in_order(tmp_path):
+    """Multiple newly-appended keys must preserve insertion order."""
+    env = tmp_path / ".env"
+    # Python 3.7+ dicts preserve insertion order; call with three new keys
+    upsert_env_vars(env, {"FLO_USERNAME": "user1", "FLO_PASSWORD": "pass1", "FLO_TOKEN": "token1"})
+    assert env.read_text() == 'FLO_USERNAME="user1"\nFLO_PASSWORD="pass1"\nFLO_TOKEN="token1"\n'
