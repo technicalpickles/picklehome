@@ -443,6 +443,19 @@ lg *ARGS:
     set -euo pipefail
     uv run python lg/lg_cli.py "$@"
 
+# Moen Flo water shutoff (read-only): just water status, just water device --raw
+water *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run python water/water_cli.py "$@"
+
+# Type secrets into .env from a phone over the tailnet: just secret-entry FLO_USERNAME FLO_PASSWORD
+# Escape hatch for when 1Password/op is unreachable. Tailnet-only, never funnel.
+secret-entry *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run python scripts/secret_entry.py "$@"
+
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
     #!/usr/bin/env bash

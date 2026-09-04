@@ -1,0 +1,343 @@
+{
+  "user": {
+    "id": "REDACTED",
+    "email": "REDACTED",
+    "firstName": "REDACTED",
+    "lastName": "REDACTED",
+    "unitSystem": "imperial_us",
+    "phoneMobile": "REDACTED",
+    "locale": "en-us",
+    "source": "moen",
+    "isActive": true,
+    "locations": [
+      {
+        "id": "REDACTED",
+        "children": [],
+        "devices": [
+          {
+            "id": "REDACTED",
+            "macAddress": "REDACTED"
+          }
+        ],
+        "address": "REDACTED",
+        "city": "REDACTED",
+        "state": "REDACTED",
+        "country": "REDACTED",
+        "postalCode": "REDACTED",
+        "timezone": "REDACTED",
+        "gallonsPerDayGoal": 240,
+        "occupants": 3,
+        "stories": 2,
+        "createdAt": "2026-08-28T13:14:48.917Z",
+        "updatedAt": "2026-08-28T21:36:41.088Z",
+        "hasPastWaterDamage": false,
+        "showerBathCount": 3,
+        "toiletCount": 4,
+        "nickname": "REDACTED",
+        "systemMode": {
+          "target": "sleep"
+        },
+        "locationType": "sfh",
+        "residenceType": "primary",
+        "locationSize": "lte_4000_sq_ft",
+        "waterShutoffKnown": "unsure",
+        "indoorAmenities": [
+          "dishwasher",
+          "bathtub",
+          "icemaker_ref",
+          "clotheswasher"
+        ],
+        "outdoorAmenities": [],
+        "plumbingAppliances": [],
+        "notifications": {
+          "pending": {
+            "infoCount": 0,
+            "warningCount": 0,
+            "criticalCount": 0,
+            "alarmCount": [],
+            "info": {
+              "count": 0,
+              "devices": {
+                "count": 0,
+                "absolute": 0
+              }
+            },
+            "warning": {
+              "count": 0,
+              "devices": {
+                "count": 0,
+                "absolute": 0
+              }
+            },
+            "critical": {
+              "count": 0,
+              "devices": {
+                "count": 0,
+                "absolute": 0
+              }
+            }
+          }
+        },
+        "class": {
+          "key": "unit",
+          "level": 0
+        },
+        "geoLocation": "REDACTED"
+      }
+    ],
+    "alarmSettings": [],
+    "locationRoles": [
+      {
+        "locationId": "REDACTED",
+        "roles": [
+          "owner"
+        ]
+      }
+    ],
+    "accountRole": {
+      "accountId": "REDACTED",
+      "roles": [
+        "owner"
+      ]
+    },
+    "enabledFeatures": []
+  },
+  "locations": [
+    {
+      "id": "REDACTED",
+      "children": [],
+      "devices": [
+        {
+          "isConnected": true,
+          "fwVersion": "8.2.1",
+          "lastHeardFromTime": "2026-09-04T17:17:00Z",
+          "id": "REDACTED",
+          "macAddress": "REDACTED",
+          "nickname": "REDACTED",
+          "isPaired": true,
+          "deviceModel": "flo_device_075_v2",
+          "deviceType": "flo_device_v2",
+          "irrigationType": "no_irrigation",
+          "systemMode": {
+            "isLocked": true,
+            "shouldInherit": true,
+            "lastKnown": "sleep",
+            "target": "sleep"
+          },
+          "valve": {
+            "target": "open",
+            "lastKnown": "open"
+          },
+          "installStatus": {
+            "isInstalled": true,
+            "installDate": "2026-08-28T21:37:53.065Z"
+          },
+          "notifications": {
+            "pending": {
+              "infoCount": 0,
+              "warningCount": 0,
+              "criticalCount": 0,
+              "alarmCount": [],
+              "info": {
+                "count": 0,
+                "devices": {
+                  "count": 0,
+                  "absolute": 0
+                }
+              },
+              "warning": {
+                "count": 0,
+                "devices": {
+                  "count": 0,
+                  "absolute": 0
+                }
+              },
+              "critical": {
+                "count": 0,
+                "devices": {
+                  "count": 0,
+                  "absolute": 0
+                }
+              }
+            }
+          },
+          "serialNumber": "REDACTED",
+          "connectivity": {
+            "rssi": -62,
+            "ssid": "REDACTED"
+          },
+          "telemetry": {
+            "current": {
+              "gpm": 1.1349101066589355,
+              "psi": 40.20000076293945,
+              "tempF": 85,
+              "updated": "2026-09-04T11:57:00Z"
+            }
+          },
+          "healthTest": {
+            "config": {
+              "enabled": true,
+              "timesPerDay": 1,
+              "start": "20:00",
+              "end": "20:00"
+            }
+          },
+          "shutoff": {
+            "scheduledAt": "1970-01-01T00:00:00.000Z"
+          },
+          "location": {
+            "id": "REDACTED"
+          }
+        }
+      ],
+      "address": "REDACTED",
+      "city": "REDACTED",
+      "state": "REDACTED",
+      "country": "REDACTED",
+      "postalCode": "REDACTED",
+      "timezone": "REDACTED",
+      "gallonsPerDayGoal": 240,
+      "occupants": 3,
+      "stories": 2,
+      "createdAt": "2026-08-28T13:14:48.917Z",
+      "updatedAt": "2026-08-28T21:36:41.088Z",
+      "hasPastWaterDamage": false,
+      "showerBathCount": 3,
+      "toiletCount": 4,
+      "nickname": "REDACTED",
+      "systemMode": {
+        "target": "sleep"
+      },
+      "locationType": "sfh",
+      "residenceType": "primary",
+      "locationSize": "lte_4000_sq_ft",
+      "waterShutoffKnown": "unsure",
+      "indoorAmenities": [
+        "dishwasher",
+        "bathtub",
+        "icemaker_ref",
+        "clotheswasher"
+      ],
+      "outdoorAmenities": [],
+      "plumbingAppliances": [],
+      "notifications": {
+        "pending": {
+          "infoCount": 0,
+          "warningCount": 0,
+          "criticalCount": 0,
+          "alarmCount": [],
+          "info": {
+            "count": 0,
+            "devices": {
+              "count": 0,
+              "absolute": 0
+            }
+          },
+          "warning": {
+            "count": 0,
+            "devices": {
+              "count": 0,
+              "absolute": 0
+            }
+          },
+          "critical": {
+            "count": 0,
+            "devices": {
+              "count": 0,
+              "absolute": 0
+            }
+          }
+        }
+      },
+      "class": {
+        "key": "unit",
+        "level": 0
+      },
+      "geoLocation": "REDACTED"
+    }
+  ],
+  "devices": [
+    {
+      "isConnected": true,
+      "fwVersion": "8.2.1",
+      "lastHeardFromTime": "2026-09-04T17:17:00Z",
+      "id": "REDACTED",
+      "macAddress": "REDACTED",
+      "nickname": "Main Shutoff",
+      "isPaired": true,
+      "deviceModel": "flo_device_075_v2",
+      "deviceType": "flo_device_v2",
+      "irrigationType": "no_irrigation",
+      "systemMode": {
+        "isLocked": true,
+        "shouldInherit": true,
+        "lastKnown": "sleep",
+        "target": "sleep"
+      },
+      "valve": {
+        "target": "open",
+        "lastKnown": "open"
+      },
+      "installStatus": {
+        "isInstalled": true,
+        "installDate": "2026-08-28T21:37:53.065Z"
+      },
+      "notifications": {
+        "pending": {
+          "infoCount": 0,
+          "warningCount": 0,
+          "criticalCount": 0,
+          "alarmCount": [],
+          "info": {
+            "count": 0,
+            "devices": {
+              "count": 0,
+              "absolute": 0
+            }
+          },
+          "warning": {
+            "count": 0,
+            "devices": {
+              "count": 0,
+              "absolute": 0
+            }
+          },
+          "critical": {
+            "count": 0,
+            "devices": {
+              "count": 0,
+              "absolute": 0
+            }
+          }
+        }
+      },
+      "serialNumber": "REDACTED",
+      "connectivity": {
+        "rssi": -62,
+        "ssid": "REDACTED"
+      },
+      "telemetry": {
+        "current": {
+          "gpm": 1.1349101066589355,
+          "psi": 40.20000076293945,
+          "tempF": 85,
+          "updated": "2026-09-04T11:57:00Z"
+        }
+      },
+      "healthTest": {
+        "config": {
+          "enabled": true,
+          "timesPerDay": 1,
+          "start": "20:00",
+          "end": "20:00"
+        }
+      },
+      "shutoff": {
+        "scheduledAt": "1970-01-01T00:00:00.000Z"
+      },
+      "location": {
+        "id": "REDACTED"
+      }
+    }
+  ]
+}

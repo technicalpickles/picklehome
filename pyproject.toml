@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["picklehome", "climate", "network", "lighting", "garage", "locks", "nest", "sonos", "homelab", "lg"]
+packages = ["picklehome", "climate", "network", "lighting", "garage", "locks", "nest", "sonos", "homelab", "lg", "water"]
 
 [project]
 name = "picklehome"
@@ -34,6 +34,8 @@ dependencies = [
     "soco>=0.30",
     # lg
     "thinqconnect>=1.0.12",
+    # water
+    "aioflo>=2026.9.3",
 ]
 
 [dependency-groups]

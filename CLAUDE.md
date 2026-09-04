@@ -156,6 +156,7 @@ See @docs/CONVENTIONS.md for where information belongs (code comments vs README 
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
 - `birdfeeder/`: VicoHome (Harymor) bird feeder/camera state + bird detection log; see `birdfeeder/README.md`
 - `lg/`: LG ThinQ appliances (washer, dryer, refrigerator), read-only; see `lg/README.md`
+- `water/`: Moen Flo smart water shutoff (read-only); see `water/README.md`
 - `picklehome/`: Shared cross-module code. `locations.py` is the canonical location registry (main house, beachhouse, ...) consumed by climate and locks; see `climate/README.md` and `locks/README.md`
 - `homelab/`: NUC server services and infrastructure; see `homelab/README.md`
   - `homelab/seapickle/`: beach house Raspberry Pi 3B+ (Tailscale jump box, subnet router, connectivity probes); see `homelab/seapickle/README.md`
@@ -188,6 +189,7 @@ Quick reference for all smart home and network integrations.
 | Sonos | `sonos/` | Speakers | Local UPnP (no auth) | `just sonos *` |
 | VicoHome (Harymor) | `birdfeeder/` | Bird feeder/camera | Cloud API (user/pass, unofficial) | `just birdfeeder *` |
 | LG ThinQ | `lg/` | Washer, dryer, refrigerator | Cloud API (static PAT), read-only | `just lg *` |
+| Moen Flo | `water/` | Smart water shutoff valve | Cloud API (user/pass), read-only | `just water *` |
 
 ## Homelab Services
 
