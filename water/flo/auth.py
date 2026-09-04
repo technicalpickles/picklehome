@@ -67,15 +67,27 @@ def use_sso() -> bool:
 async def connect() -> tuple[API, aiohttp.ClientSession]:
     """Build an authenticated aioflo API client.
 
-    Returns (api, session). The caller owns the session and must close it in a
-    finally block -- aioflo only holds a reference.
+    Returns (api, session). The caller owns the session on success and must
+    close it in a finally block -- aioflo only holds a reference.
 
     The session is built with trust_env=True so it honours HTTP_PROXY/HTTPS_PROXY.
     aioflo's own fallback session does not, which breaks under the Claude Code
     sandbox's proxy-based allowlisting (root CLAUDE.md, Sandbox). Same pattern as
     lg/thinq/auth.py and climate/hisense/auth.py.
+
+    Unlike ThinQApi's constructor (lg/thinq/auth.py), async_get_api is not a
+    plain constructor -- it awaits api.async_authenticate() internally, a real
+    network call that can fail (bad password, wrong auth flow, Moen down). If
+    it raises, this closes the session before re-raising the exception
+    unchanged, so a failed connect() never leaks a session with nobody holding
+    a handle to close it. Without this, the caller's "I own the session" only
+    holds on the success path.
     """
     username, password = get_credentials()
     session = aiohttp.ClientSession(trust_env=True)
-    api = await async_get_api(username, password, session=session, use_sso=use_sso())
+    try:
+        api = await async_get_api(username, password, session=session, use_sso=use_sso())
+    except BaseException:
+        await session.close()
+        raise
     return api, session
