@@ -11,11 +11,38 @@ docs/plans/2026-09-04-moen-flo-design.md, Phase 0.
 
 from __future__ import annotations
 
+import argparse
+import html
 import os
 import re
+import secrets
+import shutil
+import subprocess
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 VALID_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+TAILSCALE_FALLBACK = "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+SERVE_PORT = 8443  # not 443: the node's / route on 443 is already in use
+IDLE_TIMEOUT_SECONDS = 15 * 60
+
+PAGE = """<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>secret entry</title>
+<style>
+ body{{font:16px/1.5 system-ui;margin:0;padding:2rem;max-width:30rem}}
+ label{{display:block;margin:1.25rem 0 .25rem;font-weight:600}}
+ input{{width:100%;padding:.75rem;font-size:1rem;box-sizing:border-box}}
+ button{{margin-top:1.5rem;padding:.85rem 1.5rem;font-size:1rem;width:100%}}
+</style></head>
+<body><form method="post"><h1>Enter secrets</h1>{fields}
+<button type="submit">Save to .env</button></form></body></html>
+"""
 
 
 def _quote(value: str) -> str:
@@ -87,3 +114,135 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
 
     # Ensure permissions even if file existed with looser perms
     path.chmod(0o600)
+
+
+def _tailscale_binary() -> str:
+    """Locate the tailscale CLI, which the macOS GUI app does not put on PATH."""
+    found = shutil.which("tailscale")
+    if found:
+        return found
+    if os.path.exists(TAILSCALE_FALLBACK):
+        return TAILSCALE_FALLBACK
+    raise RuntimeError(
+        f"tailscale not found on PATH or at {TAILSCALE_FALLBACK}. "
+        "Is the Tailscale app installed?"
+    )
+
+
+def _make_handler(token: str, names: list[str], env_path: Path, done: threading.Event):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args) -> None:
+            """Silence the default access log; it would record the URL token."""
+
+        def _authorized(self) -> bool:
+            path = urlparse(self.path).path.strip("/")
+            return secrets.compare_digest(path, token)
+
+        def do_GET(self) -> None:
+            if not self._authorized():
+                self.send_error(404)
+                return
+            fields = "".join(
+                f'<label for="{html.escape(n)}">{html.escape(n)}</label>'
+                f'<input id="{html.escape(n)}" name="{html.escape(n)}" '
+                f'type="password" autocomplete="off" autocapitalize="off" '
+                f'autocorrect="off" spellcheck="false" required>'
+                for n in names
+            )
+            self._respond(200, PAGE.format(fields=fields))
+
+        def do_POST(self) -> None:
+            if not self._authorized():
+                self.send_error(404)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            form = parse_qs(self.rfile.read(length).decode(), keep_blank_values=True)
+            values = {n: form.get(n, [""])[0] for n in names}
+            blank = [n for n, v in values.items() if not v]
+            if blank:
+                self._respond(400, f"<p>Blank: {html.escape(', '.join(blank))}. Go back.</p>")
+                return
+            try:
+                upsert_env_vars(env_path, values)
+            except ValueError as exc:
+                # upsert_env_vars raises on unsafe values (e.g. "${" which
+                # python-dotenv would interpolate, or literal newlines) or an
+                # invalid key. Render the message, but never the submitted
+                # value, so the person on their phone knows what to fix
+                # without a stack trace or their password on screen.
+                self._respond(
+                    400,
+                    f"<h1>Could not save</h1><p>{html.escape(str(exc))}</p>"
+                    f"<p>Go back and try again.</p>",
+                )
+                return
+            self._respond(200, "<h1>Saved.</h1><p>You can close this tab.</p>")
+            done.set()
+
+        def _respond(self, status: int, body: str) -> None:
+            encoded = body.encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+
+    return Handler
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Serve a one-shot form over the tailnet to write secrets into .env"
+    )
+    parser.add_argument("names", nargs="+", metavar="VAR", help="Env var names to prompt for")
+    parser.add_argument("--env-file", default=".env", type=Path, help="Target env file")
+    parser.add_argument(
+        "--timeout", type=int, default=IDLE_TIMEOUT_SECONDS, help="Give up after N seconds"
+    )
+    args = parser.parse_args()
+
+    for name in args.names:
+        if not VALID_KEY.match(name):
+            sys.exit(f"error: {name!r} is not a valid env var name")
+
+    tailscale = _tailscale_binary()
+    hostname = subprocess.run(
+        [tailscale, "status", "--json"], capture_output=True, text=True, check=True
+    )
+    import json as _json
+
+    dns_name = _json.loads(hostname.stdout)["Self"]["DNSName"].rstrip(".")
+
+    token = secrets.token_urlsafe(24)
+    done = threading.Event()
+    handler = _make_handler(token, args.names, args.env_file, done)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    port = server.server_address[1]
+
+    subprocess.run(
+        [tailscale, "serve", "--bg", f"--https={SERVE_PORT}", f"http://127.0.0.1:{port}"],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+    print(f"Open on your phone:\n\n  https://{dns_name}:{SERVE_PORT}/{token}\n")
+    print(f"Waiting up to {args.timeout}s for: {', '.join(args.names)}")
+
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        if not done.wait(timeout=args.timeout):
+            sys.exit("\nerror: timed out, nothing written")
+    finally:
+        server.shutdown()
+        subprocess.run(
+            [tailscale, "serve", f"--https={SERVE_PORT}", "off"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+        )
+
+    for name in args.names:
+        print(f"  {name} written")
+    print(f"Wrote {len(args.names)} value(s) to {args.env_file}")
+
+
+if __name__ == "__main__":
+    main()
