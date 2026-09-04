@@ -443,7 +443,7 @@ lg *ARGS:
     set -euo pipefail
     uv run python lg/lg_cli.py "$@"
 
-# Moen Flo water shutoff (read-only): just water device --raw
+# Moen Flo water shutoff (read-only): just water status, just water device --raw
 water *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail

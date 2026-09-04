@@ -54,13 +54,14 @@ def get_credentials() -> tuple[str, str]:
 def use_sso() -> bool:
     """Whether to authenticate via Moen SSO (Cognito) instead of the legacy flow.
 
-    Defaults to True: SSO is what the current Moen Smartwater app uses, and an
-    account created recently may never have had a legacy Flo login at all. Set
-    FLO_USE_SSO=0 to fall back to aioflo's legacy users/auth flow.
+    Defaults to False. Determined empirically against the live account on
+    2026-09-04: SSO (Cognito) authentication fails, while aioflo's legacy
+    users/auth flow works. Set FLO_USE_SSO=1 to opt back into SSO, in case a
+    different (e.g. newer) account needs it.
     """
     raw = os.environ.get("FLO_USE_SSO")
     if raw is None:
-        return True
+        return False
     return raw.strip().lower() in _TRUTHY
 
 

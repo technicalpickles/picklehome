@@ -14,6 +14,7 @@ anything later is an ordinary request failure.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 from aioflo.api import API
 from aioflo.errors import FloError as AioFloError
@@ -76,3 +77,74 @@ async def fetch_raw(api: API) -> dict:
         raise MoenFloError(f"Flo API request failed: {err}") from err
 
     return {"user": user, "locations": locations, "devices": devices}
+
+
+@dataclass(frozen=True)
+class FloValve:
+    """One Flo shutoff valve, flattened from its device payload.
+
+    Every telemetry field is optional. The Flo reports telemetry only while it
+    has a recent reading; absent is meaningfully different from zero, and 0.0 gpm
+    ("no water moving") must not be confused with "no reading" (see root
+    CLAUDE.md, Coding Conventions).
+
+    Mode comes from the device's own `systemMode.lastKnown`, not the location's
+    `systemMode` -- the location payload carries only a `target`, no observed
+    value, so the device is the only source with an actual last-known mode.
+
+    `telemetry_updated` is the timestamp the *current* telemetry reading was
+    taken, not when this object was built. On this account it has been seen
+    over five hours stale while `gpm`/`psi`/`temp_f` still read out normally --
+    rendering those numbers without this timestamp presents stale data as live.
+    """
+
+    name: str
+    state: str          # "open" | "closed" | "unknown"
+    mode: str | None    # home | away | sleep
+    gpm: float | None
+    psi: float | None
+    temp_f: float | None
+    telemetry_updated: str | None
+    rssi: int | None
+    connected: bool | None
+    pending_alerts: int | None
+
+
+def _dig(node: dict, *keys, default=None):
+    """Walk nested dict keys, returning default the moment one is missing."""
+    for key in keys:
+        if not isinstance(node, dict) or key not in node:
+            return default
+        node = node[key]
+    return node
+
+
+def parse_valve(device: dict) -> FloValve:
+    """Flatten a device payload into a FloValve.
+
+    Takes only the device, not the location: mode comes from the device's own
+    `systemMode.lastKnown`, which the location payload doesn't have (see
+    FloValve's docstring).
+    """
+    pending = _dig(device, "notifications", "pending", default={})
+    alert_count = None
+    if isinstance(pending, dict):
+        # alarmCount is a list on this account, not an int like the other
+        # *Count fields (infoCount, warningCount, criticalCount) -- the
+        # isinstance guard is load-bearing, not defensive boilerplate.
+        alert_count = sum(
+            v for k, v in pending.items() if k.endswith("Count") and isinstance(v, int)
+        )
+
+    return FloValve(
+        name=_dig(device, "nickname", default="Flo"),
+        state=_dig(device, "valve", "lastKnown", default="unknown"),
+        mode=_dig(device, "systemMode", "lastKnown"),
+        gpm=_dig(device, "telemetry", "current", "gpm"),
+        psi=_dig(device, "telemetry", "current", "psi"),
+        temp_f=_dig(device, "telemetry", "current", "tempF"),
+        telemetry_updated=_dig(device, "telemetry", "current", "updated"),
+        rssi=_dig(device, "connectivity", "rssi"),
+        connected=_dig(device, "isConnected"),
+        pending_alerts=alert_count,
+    )

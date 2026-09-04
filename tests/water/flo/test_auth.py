@@ -59,9 +59,9 @@ def test_use_sso_parsing(monkeypatch, raw, expected):
     assert use_sso() is expected
 
 
-def test_use_sso_defaults_to_true_when_unset(monkeypatch):
+def test_use_sso_defaults_to_false_when_unset(monkeypatch):
     monkeypatch.delenv("FLO_USE_SSO", raising=False)
-    assert use_sso() is True
+    assert use_sso() is False
 
 
 def test_connect_builds_session_with_trust_env(monkeypatch):
