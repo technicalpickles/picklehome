@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """scripts/secret_entry.py -- type secrets into .env from a phone, over the tailnet.
 
-A temporary bridge for when `op` cannot reach the 1Password desktop app (a
-phone-driven session, or the sandbox blocking the socket -- see root CLAUDE.md's
-Sandbox section). The alternative is pasting a password into an agent transcript.
+An escape hatch for entering secrets when `op` cannot reach the 1Password desktop
+app (a phone-driven session, or the sandbox blocking the socket -- see root
+CLAUDE.md's Sandbox section). The alternative is pasting a password into an agent
+transcript.
 
 Values are never printed, logged, or echoed. See
 docs/plans/2026-09-04-moen-flo-design.md, Phase 0.
@@ -69,7 +70,8 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
     Raises ValueError on:
     - a key that is not a legal shell/env identifier
     - a value containing ${...} (python-dotenv interpolates this regardless of quoting)
-    - a value containing a literal newline (corrupts file structure on next write)
+    - a value containing a literal newline or carriage return (corrupts file
+      structure on next write)
 
     No file is written if validation fails.
     """
@@ -83,7 +85,10 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
                 f"Value contains '${{...}}' which python-dotenv interpolates "
                 f"regardless of quoting. Put the secret in 1Password instead."
             )
-        if "\n" in value:
+        if "\n" in value or "\r" in value:
+            # path.read_text() below uses universal newlines, so a lone \r
+            # round-trips to \n on the next read and corrupts the file the
+            # same way an unescaped \n would -- reject both here, not just \n.
             raise ValueError("Value contains a literal newline, which corrupts the file")
 
     lines = path.read_text().splitlines() if path.exists() else []
@@ -109,12 +114,29 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
     for key in remaining:
         lines.append(f"{key}={_quote(values[key])}")
 
-    # Create file with 0o600 permissions from the start, then write content
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write("\n".join(lines) + "\n")
+    # Write to a sibling temp file (created 0600 from the start, same as
+    # before) and os.replace() it into place, rather than truncating path
+    # in place. FLO_USERNAME/FLO_PASSWORD have no other copy once written
+    # here (they're deliberately absent from .env.template -- see
+    # water/README.md), and `set dotenv-load` means a malformed .env breaks
+    # every recipe in the repo, not just this one -- an interrupt between
+    # O_TRUNC and the write used to be able to leave a truncated file with
+    # nothing to recover it. os.replace() is atomic on POSIX, so readers
+    # only ever see the old complete file or the new complete file.
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        os.replace(str(tmp_path), str(path))
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
-    # Ensure permissions even if file existed with looser perms
+    # Ensure permissions even if the file previously existed with looser
+    # perms: the temp file is created 0600, and os.replace() carries that
+    # mode into place, but chmod again so this holds regardless of platform
+    # or umask quirks.
     path.chmod(0o600)
 
 
@@ -258,15 +280,26 @@ def main() -> None:
         if not done.wait(timeout=args.timeout):
             sys.exit("\nerror: timed out, nothing written")
     finally:
-        server.shutdown()
-        # Give the "Saved." response time to reach the client before the
-        # proxy route disappears out from under the connection.
-        time.sleep(0.5)
-        subprocess.run(
-            [tailscale, "serve", f"--https={SERVE_PORT}", "off"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-        )
+        # The `serve ... off` call below must run even if shutdown() or the
+        # sleep is interrupted (e.g. a second Ctrl-C) -- otherwise the
+        # tailnet route is left pointing at this process's ephemeral
+        # 127.0.0.1 port. That port returns to the OS pool the moment the
+        # process exits, so whatever unrelated service binds it next
+        # inherits an unauthenticated tailnet-wide proxy to itself, since
+        # the token that gated it died with this process. Nesting the
+        # try/finally guarantees the route teardown runs regardless of what
+        # happens in the drain.
+        try:
+            server.shutdown()
+            # Give the "Saved." response time to reach the client before the
+            # proxy route disappears out from under the connection.
+            time.sleep(0.5)
+        finally:
+            subprocess.run(
+                [tailscale, "serve", f"--https={SERVE_PORT}", "off"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+            )
 
     for name in args.names:
         print(f"  {name} written", flush=True)

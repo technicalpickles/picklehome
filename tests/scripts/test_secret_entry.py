@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from dotenv import dotenv_values
 
@@ -95,6 +97,50 @@ def test_rejects_values_with_literal_newline(tmp_path):
         upsert_env_vars(tmp_path / ".env", {"A": "line1\nline2"})
     # Verify file was not written
     assert not (tmp_path / ".env").exists()
+
+
+def test_rejects_values_with_carriage_return(tmp_path):
+    """Path.read_text() uses universal newlines, so a lone \\r round-trips to
+    \\n on the next read and corrupts the file the same way an unescaped \\n
+    would -- must be rejected too, not just \\n."""
+    with pytest.raises(ValueError, match="contains a literal newline"):
+        upsert_env_vars(tmp_path / ".env", {"A": "line1\rline2"})
+    assert not (tmp_path / ".env").exists()
+
+
+def test_no_leftover_temp_file_after_a_successful_write(tmp_path):
+    """The atomic write goes through a sibling temp file; it must not survive."""
+    env = tmp_path / ".env"
+    upsert_env_vars(env, {"A": "1"})
+    leftovers = [p for p in tmp_path.iterdir() if p != env]
+    assert leftovers == []
+
+
+def test_replace_step_is_atomic_not_truncate_in_place(tmp_path, monkeypatch):
+    """Simulate a crash between opening the temp file and the atomic
+    replace: the original .env must be left completely untouched, not
+    truncated. This is the failure mode the temp-file+os.replace() rewrite
+    exists to prevent (previously O_TRUNC opened the real file in place)."""
+    env = tmp_path / ".env"
+    env.write_text('FLO_USERNAME="old"\n')
+
+    real_replace = os.replace
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated crash before replace")
+
+    monkeypatch.setattr(os, "replace", boom)
+
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        upsert_env_vars(env, {"FLO_USERNAME": "new"})
+
+    monkeypatch.setattr(os, "replace", real_replace)
+
+    # Original file untouched -- not truncated, not partially written.
+    assert env.read_text() == 'FLO_USERNAME="old"\n'
+    # No leftover temp file.
+    leftovers = [p for p in tmp_path.iterdir() if p != env]
+    assert leftovers == []
 
 
 def test_new_file_created_with_0600_permissions(tmp_path):

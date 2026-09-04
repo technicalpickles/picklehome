@@ -76,6 +76,17 @@ async def connect() -> tuple[API, aiohttp.ClientSession]:
     sandbox's proxy-based allowlisting (root CLAUDE.md, Sandbox). Same pattern as
     lg/thinq/auth.py and climate/hisense/auth.py.
 
+    The session also carries an explicit timeout=ClientTimeout(total=10), matching
+    aioflo's own DEFAULT_TIMEOUT (aioflo/api.py). aioflo only applies that timeout
+    to the fallback session it builds itself; passing our own session (required for
+    trust_env above) silently raises the ceiling to aiohttp's 300s default across
+    the three sequential calls in fetch_raw. That matters more than a slow response:
+    a total-timeout expiry raises asyncio.TimeoutError, not aiohttp.ClientError, so
+    aioflo's except ClientError never wraps it in RequestError -- with_api()'s
+    AioFloError handler and fetch_raw()'s AioFloError handler both miss it, and it
+    would reach main() as a raw, unhandled traceback instead of the usual
+    MoenFloError/MoenFloAuthError.
+
     Unlike ThinQApi's constructor (lg/thinq/auth.py), async_get_api is not a
     plain constructor -- it awaits api.async_authenticate() internally, a real
     network call that can fail (bad password, wrong auth flow, Moen down). If
@@ -85,7 +96,7 @@ async def connect() -> tuple[API, aiohttp.ClientSession]:
     holds on the success path.
     """
     username, password = get_credentials()
-    session = aiohttp.ClientSession(trust_env=True)
+    session = aiohttp.ClientSession(trust_env=True, timeout=aiohttp.ClientTimeout(total=10))
     try:
         api = await async_get_api(username, password, session=session, use_sso=use_sso())
     except BaseException:

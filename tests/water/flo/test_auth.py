@@ -82,6 +82,30 @@ def test_connect_builds_session_with_trust_env(monkeypatch):
     asyncio.run(_run())
 
 
+def test_connect_builds_session_with_a_10s_total_timeout(monkeypatch):
+    # aioflo's DEFAULT_TIMEOUT (aioflo/api.py) is 10s, but only applies to the
+    # fallback session aioflo builds itself. Passing our own session for
+    # trust_env (above) means we must set this explicitly, or requests fall
+    # back to aiohttp's 300s default -- see connect()'s docstring for why
+    # that's worse than it sounds (asyncio.TimeoutError isn't caught by
+    # aioflo's RequestError wrapping).
+    _set_credentials(monkeypatch)
+
+    async def fake_async_get_api(username, password, *, session, use_sso):
+        return "fake-api"
+
+    monkeypatch.setattr(auth, "async_get_api", fake_async_get_api)
+
+    async def _run():
+        api, session = await connect()
+        try:
+            assert session.timeout.total == 10
+        finally:
+            await session.close()
+
+    asyncio.run(_run())
+
+
 def test_connect_passes_use_sso_through(monkeypatch):
     _set_credentials(monkeypatch)
     monkeypatch.setenv("FLO_USE_SSO", "0")
