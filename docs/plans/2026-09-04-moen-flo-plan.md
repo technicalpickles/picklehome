@@ -913,25 +913,20 @@ geolocatable and must not land in a public repo.
 mkdir -p tests/fixtures
 uv run python - <<'PY'
 import json, pathlib
+from water.flo.scrub import scrub_payload
 raw = json.loads(pathlib.Path("/tmp/flo-raw.json").read_text())
-REDACT = {"email", "macAddress", "serialNumber", "address", "address2", "city",
-          "state", "postalCode", "country", "lat", "lng", "firstName", "lastName",
-          "phoneMobile", "nickname"}
-def scrub(node):
-    if isinstance(node, dict):
-        return {k: ("REDACTED" if k in REDACT else scrub(v)) for k, v in node.items()}
-    if isinstance(node, list):
-        return [scrub(v) for v in node]
-    return node
 pathlib.Path("tests/fixtures/flo-device.json").write_text(
-    json.dumps(scrub(raw), indent=2) + "\n"
+    json.dumps(scrub_payload(raw), indent=2) + "\n"
 )
 PY
 grep -icE 'meetflo|@|[0-9a-f]{2}:[0-9a-f]{2}' tests/fixtures/flo-device.json
 ```
 
-Read the scrubbed file yourself before committing. The redaction list is a starting point, not a
-guarantee; Flo may nest identifiers under keys not listed here.
+`water/flo/scrub.py` (added in the code-review fix wave, after this task originally shipped) is
+now the single source of truth for what gets redacted -- see its docstring and
+`tests/water/flo/test_scrub.py`. Read the scrubbed file yourself before committing regardless;
+the redaction list is a starting point, not a guarantee, and Flo may nest identifiers under keys
+not listed there.
 
 - [ ] **Step 6: Commit**
 

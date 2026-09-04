@@ -14,15 +14,49 @@ Read-only status for the Moen Flo smart water shutoff valve (`aioflo`). See
    commented out on purpose.
 3. Check status: `just water status`
 
+### `just dotenv` will refuse to run until step 2 is done
+
+Because `FLO_USERNAME`/`FLO_PASSWORD` live in `.env` (via `just secret-entry`) but are
+deliberately absent from `.env.template`, `scripts/dotenv`'s key-snapshot check sees them
+disappear on every regeneration and refuses rather than silently dropping them:
+
+```
+ERROR: these keys were in .env but are missing from the new one:
+FLO_PASSWORD FLO_USERNAME
+Add them to .env.template and re-run.
+```
+
+This is a loud reminder, not a bug -- it's cheaper to hit this once than to silently lose
+credentials `just dotenv` has no way to regenerate. The fix is step 2 above: create the `Moen
+Flo` 1Password item and un-comment the `FLO_*` lines in `.env.template`. Until then, avoid running
+`just dotenv` while Flo credentials are the only copy in `.env`, and re-enter them with
+`just secret-entry` if it happens anyway.
+
 ## Commands
 
 ```
-just water status [--json]   # valve state, flow, pressure, temp, mode, wifi, alerts
-just water device --raw      # unmassaged API JSON (user + locations + devices)
+just water status [--json]              # valve state, flow, pressure, temp, mode, wifi, alerts
+just water device --raw                 # redacted API JSON (user + locations + devices)
+just water device --raw --unredacted    # the same dump, unredacted -- see Redaction below
 ```
 
 `device --raw` is the discovery dump from the initial build, kept permanently. It's the first
 thing to reach for when Moen changes a field or adds a device to the account.
+
+## Redaction
+
+`device --raw`'s output is redacted by default. The unmassaged payload carries the account email,
+the device MAC address and serial number, the street address, city/state/postal code, GPS
+coordinates, the WiFi SSID, and roughly 180 keys of `fwProperties` (including a 32-char
+`memfault_project_key`) -- and `device --raw` is documented above as "the first thing to reach
+for," which also makes it the first thing someone pastes into a GitHub issue, a chat, or an agent
+session. Redacting by default means that paste is safe without anyone having to remember to scrub
+it first.
+
+Pass `--unredacted` to get the real payload (e.g. to check a field Moen just added); it prints a
+warning to stderr first, naming what's in there. The redaction logic lives in
+`water/flo/scrub.py` and is unit-tested in `tests/water/flo/test_scrub.py`, which also asserts it
+reproduces `tests/fixtures/flo-device.json` -- the two are meant to stay in sync.
 
 ## Findings
 
@@ -42,6 +76,14 @@ confirmed on this account: `telemetry.current.updated` read `2026-09-04T11:57:00
 later. The device was connected and checking in; the flow/pressure numbers it was reporting were
 still over five hours old. `just water status` prints this timestamp on the flow line (`as of
 ...`) specifically so stale numbers never look live.
+
+**Caveat: this observation was made in `sleep` mode.** The fixture's `systemMode.lastKnown` is
+`"sleep"` at the time of that five-hour gap (`tests/fixtures/flo-device.json`), and Flo's sleep
+mode is documented to suspend active monitoring for a set duration -- which is a very plausible
+explanation for telemetry going stale while the device stays connected. Whether the same gap
+happens in `home` mode is unverified. Don't read this as "telemetry is always this stale" or trust
+a stale reading in `home` mode without checking; re-verify in `home` mode before relying on this
+either way.
 
 ### Mode lives on the device, not the location
 

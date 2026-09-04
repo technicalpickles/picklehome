@@ -3,7 +3,7 @@
 
 Usage:
     uv run python water/water_cli.py status [--json]
-    uv run python water/water_cli.py device --raw
+    uv run python water/water_cli.py device --raw [--unredacted]
 """
 
 import argparse
@@ -14,6 +14,7 @@ from dataclasses import asdict
 
 from water.flo.auth import MoenFloConfigError
 from water.flo.client import FloValve, MoenFloError, fetch_raw, parse_valve, with_api
+from water.flo.scrub import scrub_payload
 
 
 def _num(value, suffix: str, fmt: str = "{:.0f}") -> str:
@@ -63,12 +64,30 @@ async def cmd_status(json_output: bool) -> None:
         print(json.dumps([asdict(v) for v in valves], indent=2))
         return
 
+    if not valves:
+        print("No Flo devices on this account.")
+        return
+
     print("\n\n".join(format_status(v) for v in valves))
 
 
-async def cmd_device() -> None:
+async def cmd_device(unredacted: bool) -> None:
     async with with_api() as api:
         payload = await fetch_raw(api)
+
+    if unredacted:
+        # Deliberately unredacted: printed to stderr so it can't be missed
+        # even when stdout is redirected to a file, which is the whole point
+        # of --raw in the first place.
+        print(
+            "warning: --unredacted output contains the account email, device "
+            "MAC address, serial number, street address, and GPS coordinates. "
+            "Do not paste this into an issue, chat, or agent session.",
+            file=sys.stderr,
+        )
+    else:
+        payload = scrub_payload(payload)
+
     print(json.dumps(payload, indent=2, default=str))
 
 
@@ -76,7 +95,7 @@ async def run(args: argparse.Namespace) -> None:
     if args.command == "status":
         await cmd_status(args.json)
     elif args.command == "device":
-        await cmd_device()
+        await cmd_device(args.unredacted)
 
 
 def main() -> None:
@@ -87,7 +106,14 @@ def main() -> None:
     status_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     device_parser = sub.add_parser("device", help="Raw API dump")
-    device_parser.add_argument("--raw", action="store_true", help="Print the unmassaged API JSON")
+    device_parser.add_argument(
+        "--raw", action="store_true", help="Print the API JSON (redacted by default)"
+    )
+    device_parser.add_argument(
+        "--unredacted",
+        action="store_true",
+        help="Skip redaction -- includes email, MAC, serial, address, and coordinates",
+    )
 
     args = parser.parse_args()
     if args.command == "device" and not args.raw:
