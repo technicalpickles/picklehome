@@ -1,5 +1,9 @@
 @README.md
 
+## When exposing a new service over Tailscale
+
+Standing up a new `svc:<name>` Service (admin console → `serve --service=` → restart `tailscaled` → approve → validate from a different node) has a specific required order that's easy to get wrong on a first deploy. Use the `tailscale-cli` skill for that sequence and for debugging `serve status`/Services once it's up. Use the `tailscale-serve-patterns` skill when deciding whether to bind loopback + `serve` (the default here, see README.md) vs. binding directly to the tailnet interface, and for identity-header auth (`Tailscale-User-Login`) implications.
+
 ## When adding a new service with bind mounts
 
 Before writing any compose or Dockerfile, answer:

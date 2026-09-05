@@ -24,8 +24,12 @@ Devices can reach each other by Tailscale hostname or `100.x.y.z` IP. See
 just tailscale           # all tailnet devices + status (wraps `tailscale status`)
 ```
 
-To make a local service reachable from other tailnet devices, bind to `0.0.0.0`
-instead of `127.0.0.1`.
+For CLI mechanics (debugging `serve`/Services, `ping`, sudo prompts) use the
+`tailscale-cli` skill. For deciding how to expose a local service — loopback
+bind + `tailscale serve` (the default; see the homelab pattern in
+[homelab/services/README.md](../homelab/services/README.md)) vs. binding
+directly to the tailnet interface, and what each implies for auth — use the
+`tailscale-serve-patterns` skill.
 
 ## Scripts
 

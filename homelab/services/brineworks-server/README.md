@@ -91,7 +91,7 @@ Set directly in `compose.picklelab.yaml` (neither is a secret, so neither goes t
 | `BRINEWORKS_TRUST_TAILSCALE_HEADERS` | Trust Serve's `Tailscale-User-Login` header as an auth path. Defaults to **false**. |
 | `BRINEWORKS_ALLOWED_LOGINS` | Comma-separated tailnet logins allowed to authenticate that way (a JSON list also works). |
 
-These live in the picklelab overlay rather than the portable `compose.yaml` on purpose: they are only safe alongside the loopback-only port binding, which is defined there too. The base compose should not assert a Tailscale topology it cannot guarantee. **Read the port-binding comment in `compose.picklelab.yaml` before changing how this service is published** -- the loopback binding is what makes header trust safe.
+These live in the picklelab overlay rather than the portable `compose.yaml` on purpose: they are only safe alongside the loopback-only port binding, which is defined there too. The base compose should not assert a Tailscale topology it cannot guarantee. **Read the port-binding comment in `compose.picklelab.yaml` before changing how this service is published** -- the loopback binding is what makes header trust safe (see the `tailscale-serve-patterns` skill for the general reasoning and failure modes: Docker port publish, a reverse proxy, or any other path that reaches the port without going through Serve can forge the identity header).
 
 **Turning the flag on with an empty `BRINEWORKS_ALLOWED_LOGINS` makes the server refuse to start**, deliberately. A config that reads as "identity auth enabled" but authenticates nobody is worse than a loud failure at boot (ops principle #1). Because the container CMD is `alembic upgrade head && uvicorn`, the migration step is what dies first.
 
