@@ -59,6 +59,10 @@ Secrets are stored in 1Password and injected into `.env` via `op inject`. Most s
 
 The logic lives in `scripts/dotenv` (supports `--template`, `--output`, `--force`).
 
+**Gotcha:** `op inject` scans the *entire* `.env.template`, comments included. Writing a bare `op:` + `//` secret-reference scheme in explanatory prose makes it parse that prose as a real reference and fail the whole run (`invalid secret reference ... too few '/'`). Describe references in words, never by writing the literal scheme in a comment.
+
+**Gotcha:** add the 1Password item *before* adding its reference to `.env.template`. `op inject` fails hard on a reference to a nonexistent item, and since the template is one shared file, that breaks `just dotenv` for every module, not just the one being added.
+
 **Gotcha:** 1Password field labels feeding `op inject` / `scripts/locations-filter.jq` must have no leading/trailing whitespace. A stray space (e.g. `" yale_houses"`) silently drops the field from the generated `.env` with no error, so a location value just quietly goes missing.
 
 Scripts load `.env` automatically via `python-dotenv` (or `just`'s `set dotenv-load`).
