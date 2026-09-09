@@ -116,15 +116,17 @@ just dotenv              # pull secrets from 1Password
 just deploy-openclaw
 ```
 
-`deploy.sh` creates the `/srv/data/openclaw` directories, clones the workspace repo, runs `onboard` once (idempotent — skipped if the root config already exists), applies the declarative `config set --batch-json` (includes, model chain, channel policy — every deploy, self-healing), and brings the container up with `channels.telegram.enabled: false`.
+`deploy.sh` creates the `/srv/data/openclaw` directories, clones the workspace repo, runs `onboard` once on a first deploy only (idempotent — skipped if the root config already exists, which is the case on every deploy since the initial bring-up), and brings the container up with `channels.telegram.enabled: false` at that first-onboard time only. It stays off from then on unless explicitly flipped — see cutover below.
 
-Verify: `just openclaw-status` — expect healthz/readyz OK and a clean `openclaw security audit`, with the Telegram channel still disabled.
+Verify: `just openclaw-status` — expect healthz/readyz OK and a clean `openclaw security audit`. `deploy.sh`'s final output line reports the live `channels.telegram.enabled` value read from the running container, so trust that over this doc for current state.
 
 ## Telegram bot cutover
 
+**Status: done.** picklelab has owned the live bot for a while now (confirmed working, exact cutover date not recorded here — should have been logged when it happened). `pickleclaw`'s dev-VM gateway keeps its own Telegram channel disabled to avoid the `409 Conflict` below. Steps kept for reference (re-cutover after a rebuild, or restoring `pickleclaw` as primary):
+
 Telegram allows only **one** active long-poller per bot token — running `pickleclaw`'s gateway and picklelab's at once causes `409 Conflict` on both. Do this only after `just openclaw-status` is clean:
 
-1. Stop `pickleclaw`'s gateway: `systemctl --user stop openclaw-gateway` inside the OrbStack VM.
+1. Stop `pickleclaw`'s gateway: `docker compose -f dev-vm/compose.yaml stop openclaw` (the dev VM's gateway is containerized as of 2026-09-01, not a native systemd unit — see `pickleclaw`'s `CLAUDE.md`).
 2. Flip picklelab's channel on:
    ```bash
    ssh picklelab "cd /opt/homelab/homelab/services/openclaw && \
@@ -134,7 +136,7 @@ Telegram allows only **one** active long-poller per bot token — running `pickl
 3. Confirm: `ssh picklelab "docker exec openclaw-openclaw-1 openclaw channels status"` shows `running, connected, mode:polling`. Hot-reload is confirmed for `agents.defaults.model.*`/`heartbeat.*` (not for every key under `agents.defaults.*` — e.g. `thinkingDefault` needs a restart, see `pickleclaw`'s `CLAUDE.md`), and not independently confirmed for channel enablement — if it doesn't take effect live, `docker compose restart openclaw`.
 4. Message the bot from the allowlisted chat; confirm it responds. Confirm a non-allowlisted account is silently rejected (no trace on either side — expected, not a bug).
 
-Only after this is confirmed working should `pickleclaw` be decommissioned (design doc "Decommissioning pickleclaw" — give it a day or two of stable real traffic first).
+**`pickleclaw` is not being decommissioned.** The original migration plan doc ("Decommissioning pickleclaw") floated retiring the dev VM once picklelab's cutover proved stable; Josh has since decided against that (2026-09-09) — `pickleclaw` continues as the dedicated local dev/test rig for trying config and permission changes before they reach picklelab, per its own `CLAUDE.md`. Treat the plan doc's decommission language as superseded, not as a live TODO.
 
 ## Deploying Updates
 

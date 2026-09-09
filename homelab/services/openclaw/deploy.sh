@@ -561,5 +561,10 @@ else
     echo "    4. Find 'openclaw' at https://login.tailscale.com/admin/services and approve the pending host"
     echo "    5. Verify: curl ${OPENCLAW_URL}/healthz"
 fi
-echo "Telegram channel is disabled until the cutover — see README 'Telegram bot cutover'."
+TELEGRAM_ENABLED=$(docker exec openclaw-openclaw-1 openclaw config get channels.telegram.enabled 2>/dev/null || echo "unknown")
+if [ "$TELEGRAM_ENABLED" = "true" ]; then
+    echo "Telegram channel is enabled (cutover complete) — see README 'Telegram bot cutover'."
+else
+    echo "Telegram channel is disabled — see README 'Telegram bot cutover' to enable it."
+fi
 echo "Run 'just openclaw-status' for the full self-test (systemd + tailscale + security audit)."
