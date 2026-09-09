@@ -31,7 +31,7 @@ On picklelab, services land at:
 - **Persistent data:** `/srv/data/<service>/`
 - **Env file:** `/opt/homelab/homelab/services/<service>/.env`, scp'd by `just deploy-<service>` from a filtered subset of the master `.env` (via `scripts/service-env`), landing alongside that service's compose files.
 
-TLS and external access use **Tailscale Services**: `tailscaled` on the host terminates HTTPS and proxies to the local container port. No reverse proxy container needed. Container ports bind to `127.0.0.1:<port>` only.
+TLS and external access use **Tailscale Services**: `tailscaled` on the host terminates HTTPS and proxies to the local container port. No reverse proxy container needed. Container ports bind to `127.0.0.1:<port>` only — this loopback-only bind is what makes it safe for a service to trust Tailscale's identity headers; see the `tailscale-serve-patterns` skill for why, and before deviating from this default.
 
 Per-service hostname is stored in 1Password as `<SERVICE>_HOST` and pulled into `.env`. The tailnet suffix is documented in the project [CLAUDE.md](../../CLAUDE.md).
 
