@@ -544,15 +544,43 @@ def cmd_comfort_switch(args) -> None:
     decision_info = None
     data_dir = runlog.get_data_dir()
 
+    def _log_pre_decision_failure(reason: str) -> None:
+        """Append a run-log entry before a sys.exit() that happens before
+        thermostat status is ever fetched.
+
+        Every one of these exits used to write nothing, so the run log --
+        now the unattended timer's only memory (see hvac-spec.md / the
+        2026-09-10 design) -- had no trace of *why* a 15-minute run did
+        nothing. A cold front arriving during an outage like this previously
+        left the house frozen on a stale mode with no operator-visible
+        signal beyond a red `systemctl status`. --dry-run still means zero
+        persistent writes, full stop.
+        """
+        if args.dry_run:
+            print(f"[dry run] Would record failure ({reason}). No run-log written.")
+            return
+        runlog.append_run_log(data_dir, {
+            "timestamp": runlog.now_iso(),
+            "outdoor_temp_f": outdoor_temp,
+            "decision": None,
+            "reason": reason,
+            "switched": False,
+            "holds_cleared": False,
+            "skipped": True,
+            "thermostats": [],
+        })
+
     if mode == "auto":
         config = load_weather_config(args.weather)
         macs = get_configured_macs(config)
         if not macs:
             print("No stations configured. Run 'just climate-weather-discover', then set AMBIENT_STATION_MACS in .env.")
+            _log_pre_decision_failure("no_stations_configured")
             sys.exit(1)
         result = get_outdoor_temp_from_stations(macs)
         if result is None:
             print("Could not read outdoor temp from any configured station.")
+            _log_pre_decision_failure("outdoor_temp_unavailable")
             sys.exit(1)
         mac, outdoor_temp, age_minutes = result
         # The instantaneous reading is still fetched and logged: it is no longer
@@ -571,9 +599,13 @@ def cmd_comfort_switch(args) -> None:
             print(f"24h mean {decision_info['mean']}°F "
                   f"({decision_info['samples']} samples) → {mode}")
 
-    # Check last-state for no-op
+    # Check last-state for no-op. .get(), not a bare subscript: a corrupt
+    # last-state.json now degrades to None (see runlog.read_last_state)
+    # rather than raising, and a run where nothing was ever actually pushed
+    # (see the "mode" field note near write_last_state below) omits "mode"
+    # from a well-formed file too.
     last_state = runlog.read_last_state(data_dir)
-    previous_mode = last_state["mode"] if last_state else None
+    previous_mode = last_state.get("mode") if last_state else None
 
     # Always fetch thermostat status for logging
     ecobee = auth.make_ecobee()
@@ -588,9 +620,11 @@ def cmd_comfort_switch(args) -> None:
         success = ecobee.get_thermostats()
     except InvalidTokenError:
         print("Tokens invalid. Re-run 'just climate-auth'.")
+        _log_pre_decision_failure("invalid_token")
         sys.exit(1)
     if not success or not ecobee.thermostats:
         print("Failed to fetch thermostat data from Ecobee.")
+        _log_pre_decision_failure("thermostat_fetch_failed")
         sys.exit(1)
 
     thermostat_statuses = [
@@ -598,6 +632,21 @@ def cmd_comfort_switch(args) -> None:
         for t in ecobee.thermostats
         if t["identifier"] in managed_ids
     ]
+
+    # Surfaced, never corrected: a person choosing Off or heat-only outranks
+    # the automation (hvac-spec.md, "HVAC mode"). Previously this warning
+    # only reached a human running `climate-status` interactively -- the
+    # unattended timer computed nothing and the run log carried no signal,
+    # so a thermostat set to Off in October could go unnoticed indefinitely
+    # (the timer keeps finding the schedule "already correct" and printing
+    # exactly that).
+    hvac_warnings = [
+        warning
+        for s in thermostat_statuses
+        if (warning := status.hvac_mode_warning(s)) is not None
+    ]
+    for w in hvac_warnings:
+        print(f"WARNING: {w}")
 
     # Hysteresis: log and exit without changing anything
     if hysteresis:
@@ -620,6 +669,7 @@ def cmd_comfort_switch(args) -> None:
             "holds_cleared": False,
             "skipped": True,
             "thermostats": thermostat_statuses,
+            "warnings": hvac_warnings,
         }
         runlog.append_run_log(data_dir, log_entry)
 
@@ -689,9 +739,20 @@ def cmd_comfort_switch(args) -> None:
             any_error = True
             continue
 
-        desired = resolve_schedule_array(
-            schedule.build_schedule_array(schedule_dict), mode
-        )
+        # Mirrors cmd_sync:59-63's handling of this same call. This used to
+        # be unguarded here: a bad schedule.yaml would raise ValueError
+        # straight out of the function, past the try/except's sibling calls,
+        # aborting the whole run before the run-log write at the bottom --
+        # and before any other, valid thermostat entry got a chance to
+        # converge.
+        try:
+            schedule_array = schedule.build_schedule_array(schedule_dict)
+        except ValueError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        desired = resolve_schedule_array(schedule_array, mode)
         diffs = schedule.diff_schedules(desired, program["schedule"], program)
         if not diffs:
             print(f"  [{name}] Already correct, nothing to push.")
@@ -791,15 +852,25 @@ def cmd_comfort_switch(args) -> None:
             "holds_cleared": holds_cleared,
             "skipped": skipped,
             "thermostats": thermostat_statuses,
+            "warnings": hvac_warnings,
         }
         runlog.append_run_log(data_dir, log_entry)
 
         state = {
             "timestamp": runlog.now_iso(),
-            "mode": mode,
             "outdoor_temp_f": outdoor_temp,
             "thermostats": thermostat_statuses,
         }
+        # Only claim "mode" when it is actually confirmed: either something
+        # was pushed this run (switched), or nothing needed pushing anywhere
+        # and no errors occurred (every entry's live schedule already
+        # matched the decision). If a push was attempted and failed
+        # (any_error, switched still False because `pushed` only accumulates
+        # confirmed successes), the decided mode is not what the thermostats
+        # are actually running -- writing it here previously made
+        # `just climate-check` report a mode that isn't real.
+        if switched or not any_error:
+            state["mode"] = mode
         runlog.write_last_state(data_dir, state)
 
     if any_error:

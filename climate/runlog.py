@@ -19,8 +19,18 @@ def read_last_state(data_dir: Path) -> dict | None:
     path = data_dir / LAST_STATE_FILE
     if not path.exists():
         return None
-    with open(path) as f:
-        return json.load(f)
+    # A power loss between open(path, "w") and the completed json.dump in
+    # write_last_state leaves a torn/partial file. This value is purely
+    # informational (previous_mode gates no behavior, it only appears in log
+    # entries), so a corrupt file must degrade to "unknown" rather than
+    # raising -- an unguarded JSONDecodeError here would crash before any
+    # write happens, permanently bricking the unattended timer since the
+    # file is never repaired and nothing alerts on it.
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def write_last_state(data_dir: Path, state: dict) -> None:

@@ -166,6 +166,13 @@ def test_warns_when_heat_only_during_comfort_cool():
     assert w is not None and "cannot cool" in w
 
 
+def test_warns_when_aux_heat_only_during_comfort_cool():
+    # auxHeatOnly is argparse-accepted by 'climate-hvac-mode' alongside heat,
+    # and is just as unable to cool as plain heat-only.
+    w = hvac_mode_warning({"hvac_mode": "auxHeatOnly", "climate_ref": "smart1"})
+    assert w is not None and "cannot cool" in w
+
+
 def test_warns_when_cool_only_during_comfort_heat():
     w = hvac_mode_warning({"hvac_mode": "cool", "climate_ref": "smart2"})
     assert w is not None and "cannot heat" in w

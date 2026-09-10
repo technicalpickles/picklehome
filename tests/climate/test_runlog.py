@@ -34,6 +34,15 @@ def test_read_last_state_exists(tmp_path):
     assert read_last_state(tmp_path) == state
 
 
+def test_read_last_state_torn_file_returns_none(tmp_path):
+    # Simulates a power loss between open(path, "w") and the completed
+    # json.dump: the file exists but is truncated mid-write. Must not raise
+    # JSONDecodeError -- an unattended timer that crashes here every 15
+    # minutes never gets a chance to write a fresh file and repair itself.
+    (tmp_path / "last-state.json").write_text('{"timestamp": "2026-03-27T06:00:00Z", "mode": "coo')
+    assert read_last_state(tmp_path) is None
+
+
 def test_write_last_state(tmp_path):
     state = {"timestamp": "2026-03-27T06:00:00Z", "mode": "cool", "outdoor_temp_f": 66.6, "thermostats": []}
     write_last_state(tmp_path, state)

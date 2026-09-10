@@ -86,8 +86,11 @@ def hvac_mode_warning(status: dict) -> str | None:
     ref = status.get("climate_ref")
     if mode == "off":
         return "HVAC mode is off; neither heating nor cooling will run. Use 'just climate-hvac-mode auto' to restore."
-    if mode == "heat" and ref == "smart1":
-        return "HVAC mode is heat-only but Comfort Cool is scheduled; it cannot cool. Use 'just climate-hvac-mode auto' to restore."
+    # auxHeatOnly (argparse-accepted alongside heat/cool/off/auto for
+    # 'climate-hvac-mode') is just as heat-only as `heat` -- it likewise
+    # cannot deliver Comfort Cool.
+    if mode in ("heat", "auxHeatOnly") and ref == "smart1":
+        return f"HVAC mode is {mode} (heat-only) but Comfort Cool is scheduled; it cannot cool. Use 'just climate-hvac-mode auto' to restore."
     if mode == "cool" and ref == "smart2":
         return "HVAC mode is cool-only but Comfort Heat is scheduled; it cannot heat. Use 'just climate-hvac-mode auto' to restore."
     return None

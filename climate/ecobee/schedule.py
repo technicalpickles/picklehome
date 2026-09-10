@@ -22,6 +22,23 @@ def get_current_program(ecobee, thermostat_id: str) -> dict:
     program = thermostat.get("program")
     if program is None:
         raise RuntimeError(f"Thermostat {thermostat_id} returned no program data.")
+    # diff_schedules is the only thing gating the push (see hvac-spec.md /
+    # the 2026-09-10 design), so a degenerate remote schedule (missing,
+    # empty, or wrong-shaped) must not be allowed to zip-compare as "equal"
+    # to the desired 7x48 array -- Python's zip() silently truncates to the
+    # shorter iterable, so a 0-length or ragged remote schedule would yield
+    # zero diffs and the caller would conclude "already correct" forever,
+    # with nothing to self-correct it.
+    remote_schedule = program.get("schedule")
+    if (
+        not isinstance(remote_schedule, list)
+        or len(remote_schedule) != 7
+        or any(not isinstance(day, list) or len(day) != 48 for day in remote_schedule)
+    ):
+        raise RuntimeError(
+            f"Thermostat {thermostat_id} returned a malformed schedule "
+            "(expected 7 days of 48 slots each). Refusing to diff against it."
+        )
     return program
 
 

@@ -73,15 +73,17 @@ def _write_comfort_switch_fixtures(tmp_path):
 
 def _run_comfort_switch(
     monkeypatch, tmp_path, *, live_ref, hold, mode="heat", dry_run=False,
-    status_name="Downstairs",
+    status_name="Downstairs", recent_temps=None, station_temp=68.0,
 ):
     """Drive the real cmd_comfort_switch, mocking only the Ecobee network
-    boundary (auth.make_ecobee, push_schedule, resume_program) and status
-    extraction. Everything else -- load_thermostats, schedule.load_schedule,
+    boundary (auth.make_ecobee, push_schedule, resume_program), the Ambient
+    Weather boundary (for mode="auto"), and status extraction. Everything
+    else -- load_thermostats, schedule.load_schedule,
     iter_thermostat_entries, build_schedule_array, validate_climate_refs,
-    resolve_schedule_array, diff_schedules, get_current_program -- runs for
-    real against the fixture files, so a regression to the unconditional-push
-    defect this task exists to fix would actually be caught here.
+    resolve_schedule_array, diff_schedules, get_current_program,
+    decide_mode -- runs for real against the fixture files, so a regression
+    to the unconditional-push defect this task exists to fix would actually
+    be caught here.
 
     `live_ref` is the climateRef the live program reports in every slot
     (controls whether the diff is empty or not); `hold` is what the mocked
@@ -90,10 +92,17 @@ def _run_comfort_switch(
     "downstairs" (case-insensitively); pass a different value to simulate a
     lookup miss (e.g. a thermostat renamed in the Ecobee app).
 
+    For mode="auto": `recent_temps` is the 24h window handed to decide_mode
+    (via a mocked read_recent_outdoor_temps) and `station_temp` is the
+    instantaneous reading handed to get_outdoor_temp_from_stations (the
+    value that gets logged, per hvac-spec.md, regardless of what the window
+    decides). Thresholds are fixed at heat_below=60, cool_above=65.
+
     Returns (push_mock, resume_mock, append_run_log_mock, write_last_state_mock).
     """
     import climate.sync as sync_mod
     from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
 
     schedule_file, thermostats_file = _write_comfort_switch_fixtures(tmp_path)
 
@@ -116,12 +125,30 @@ def _run_comfort_switch(
     monkeypatch.setattr(sync_mod.schedule, "resume_program", resume)
     monkeypatch.setattr(
         sync_mod.status, "extract_thermostat_status",
-        lambda t: {"name": status_name, "hold": hold},
+        lambda t: {"name": status_name, "hold": hold, "hvac_mode": "auto", "climate_ref": None},
     )
     monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
     monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
     monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
     monkeypatch.setattr(runlog_mod, "write_last_state", write_last_state)
+
+    if mode == "auto":
+        # These are imported with `from climate.ambient.client import ...`
+        # *inside* cmd_comfort_switch, so patching the names on the real
+        # module (not on sync_mod) is what that local import picks up.
+        monkeypatch.setattr(
+            ambient_mod, "load_weather_config",
+            lambda path: {"thresholds": {"heat_below": 60, "cool_above": 65}},
+        )
+        monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: ["AA:BB:CC"])
+        monkeypatch.setattr(
+            ambient_mod, "get_outdoor_temp_from_stations",
+            lambda macs: ("AA:BB:CC", station_temp, 5.0),
+        )
+        monkeypatch.setattr(
+            runlog_mod, "read_recent_outdoor_temps",
+            lambda data_dir: recent_temps if recent_temps is not None else [],
+        )
 
     args = argparse.Namespace(
         mode=mode,
@@ -344,24 +371,30 @@ def test_raises_rather_than_defaulting_when_undeterminable(monkeypatch):
 # dumped into the journal for someone to find later.
 
 
-def test_invalid_token_during_get_thermostats_exits_cleanly(monkeypatch, capsys):
+def test_invalid_token_during_get_thermostats_exits_cleanly(monkeypatch, capsys, tmp_path):
     """The real-world failure mode: tokens expire before the *first* network
     call in the function (ecobee.get_thermostats()), not mid-loop. pyecobee
     propagates InvalidTokenError from that call directly rather than
     returning False, so it must be guarded there specifically -- a guard
     later in the function (e.g. around get_current_program) never gets a
-    chance to run."""
+    chance to run.
+
+    Also covers finding 4: this exit now writes a run-log entry before
+    sys.exit(1) rather than leaving the run invisible."""
     import climate.sync as sync_mod
     from climate import runlog as runlog_mod
 
     mock_ecobee = MagicMock()
     mock_ecobee.get_thermostats.side_effect = InvalidTokenError("expired")
 
+    append_run_log = MagicMock()
+
     monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
     monkeypatch.setattr(sync_mod, "load_thermostats", lambda path: {})
     monkeypatch.setattr(sync_mod, "get_managed_thermostats", lambda registry: [])
     monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
-    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: Path("/tmp/test"))
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
     # If the code under test reached this far, the guard failed -- the
     # exception should stop the function before any schedule I/O happens.
     monkeypatch.setattr(
@@ -383,6 +416,11 @@ def test_invalid_token_during_get_thermostats_exits_cleanly(monkeypatch, capsys)
 
     assert exc_info.value.code == 1
     assert "Tokens invalid. Re-run 'just climate-auth'." in capsys.readouterr().out
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "invalid_token"
+    assert entry["skipped"] is True
+    assert entry["switched"] is False
 
 
 def test_invalid_token_during_push_prints_message_and_exits_nonzero(monkeypatch, capsys):
@@ -436,3 +474,230 @@ def test_invalid_token_during_push_prints_message_and_exits_nonzero(monkeypatch,
 
     assert exc_info.value.code == 1
     assert "Tokens invalid. Re-run 'just climate-auth'." in capsys.readouterr().out
+
+
+# --- cmd_comfort_switch: pre-decision exits now write a run-log entry ---
+#
+# Every one of these used to sys.exit(1) before the run-log write at the
+# bottom of the function ever ran. On the auto-mode timer that means a
+# weather-station outage or a config error produced zero trace in
+# run-log.jsonl -- the run log is now the system's only memory, so a silent
+# gap here is a cold house with no signal beyond a red `systemctl status`.
+
+
+def test_no_stations_configured_logs_reason_before_exit(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(ambient_mod, "load_weather_config", lambda path: {})
+    monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: [])
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+
+    args = argparse.Namespace(
+        mode="auto",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=False,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_mod.cmd_comfort_switch(args)
+
+    assert exc_info.value.code == 1
+    assert "No stations configured" in capsys.readouterr().out
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "no_stations_configured"
+    assert entry["outdoor_temp_f"] is None
+    assert entry["switched"] is False
+    assert entry["skipped"] is True
+
+
+def test_no_stations_configured_dry_run_writes_nothing(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(ambient_mod, "load_weather_config", lambda path: {})
+    monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: [])
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+
+    args = argparse.Namespace(
+        mode="auto",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=True,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit):
+        sync_mod.cmd_comfort_switch(args)
+
+    append_run_log.assert_not_called()
+
+
+def test_outdoor_temp_unavailable_logs_reason_before_exit(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(ambient_mod, "load_weather_config", lambda path: {})
+    monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: ["AA:BB:CC"])
+    monkeypatch.setattr(ambient_mod, "get_outdoor_temp_from_stations", lambda macs: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+
+    args = argparse.Namespace(
+        mode="auto",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=False,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_mod.cmd_comfort_switch(args)
+
+    assert exc_info.value.code == 1
+    assert "Could not read outdoor temp" in capsys.readouterr().out
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "outdoor_temp_unavailable"
+    assert entry["outdoor_temp_f"] is None
+
+
+# --- cmd_comfort_switch: hvac_mode_warning is surfaced on the unattended path ---
+#
+# hvac_mode_warning previously had exactly one caller (format_status, only
+# reached interactively via `climate-status`). The unattended timer never
+# called it, so a thermostat set to Off in October -- correct, the
+# automation must not revert it -- produced no signal anywhere the timer
+# writes: it just kept finding the schedule "already correct".
+
+
+def test_hvac_mode_warning_surfaced_in_run_log_and_stdout(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+
+    schedule_file, thermostats_file = _write_comfort_switch_fixtures(tmp_path)
+    live_program = {
+        "schedule": [["smart2"] * 48 for _ in range(7)],  # matches mode="heat" -> nothing to push
+        "climates": [{"climateRef": r, "name": r} for r in
+                     ("smart1", "smart2", "sleep", "away", "home")],
+    }
+    mock_ecobee = MagicMock()
+    mock_ecobee.get_thermostats.return_value = True
+    mock_ecobee.thermostats = [{"identifier": "111", "program": live_program}]
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
+    monkeypatch.setattr(sync_mod.schedule, "push_schedule", MagicMock())
+    monkeypatch.setattr(sync_mod.schedule, "resume_program", MagicMock())
+    monkeypatch.setattr(
+        sync_mod.status, "extract_thermostat_status",
+        lambda t: {"name": "Downstairs", "hold": None, "hvac_mode": "off", "climate_ref": "smart2"},
+    )
+    monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+    monkeypatch.setattr(runlog_mod, "write_last_state", MagicMock())
+
+    args = argparse.Namespace(
+        mode="heat",
+        schedule=schedule_file,
+        thermostats=thermostats_file,
+        weather=tmp_path / "unused-weather.yaml",
+        dry_run=False,
+        clear_holds=False,
+    )
+    sync_mod.cmd_comfort_switch(args)
+
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert "off" in out.lower()
+
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["warnings"]
+    assert "off" in entry["warnings"][0].lower()
+
+
+def test_no_warning_when_hvac_mode_matches_season(monkeypatch, tmp_path, capsys):
+    """The common case: no warning text, and an empty (not missing) warnings
+    list in the run log."""
+    push, resume, append_run_log, _ = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart2", hold=None, mode="heat",
+    )
+    assert "WARNING" not in capsys.readouterr().out
+    entry = append_run_log.call_args.args[1]
+    assert entry["warnings"] == []
+
+
+# --- cmd_comfort_switch: mode="auto" is an integration-tested path ---
+#
+# Every prior _run_comfort_switch call passed an explicit mode -- nothing
+# exercised the weather fetch, read_recent_outdoor_temps -> decide_mode
+# wiring, hysteresis, or the dry-run guard on the auto path as production
+# actually runs it. A regression that swapped `temps` for `outdoor_temp` in
+# the decide_mode call, or dropped the hysteresis early return, would have
+# shipped green.
+
+
+def test_auto_mode_mean_inside_band_appends_run_log_without_pushing(monkeypatch, tmp_path):
+    # 62F is inside the (60, 65) band -- decide_mode returns None -> hysteresis.
+    push, resume, append_run_log, write_last_state = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart2", hold=None, mode="auto",
+        recent_temps=[62.0] * 60, station_temp=45.0,
+    )
+    push.assert_not_called()
+    resume.assert_not_called()
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "hysteresis"
+    assert entry["decision"] == "no_change"
+    assert entry["outdoor_temp_f"] == 45.0
+    write_last_state.assert_called_once()
+
+
+def test_auto_mode_dry_run_inside_band_appends_nothing(monkeypatch, tmp_path):
+    push, resume, append_run_log, write_last_state = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart2", hold=None, mode="auto",
+        recent_temps=[62.0] * 60, station_temp=45.0, dry_run=True,
+    )
+    push.assert_not_called()
+    resume.assert_not_called()
+    append_run_log.assert_not_called()
+    write_last_state.assert_not_called()
+
+
+def test_auto_mode_mean_below_band_decides_heat_and_pushes_when_live_differs(monkeypatch, tmp_path):
+    # 50F is below heat_below=60 -> decide_mode returns "heat". Live program
+    # is smart1 (cool) everywhere, so the resolved "heat" schedule differs
+    # and must be pushed.
+    push, resume, append_run_log, write_last_state = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart1", hold=None, mode="auto",
+        recent_temps=[50.0] * 60, station_temp=63.0,
+    )
+    assert push.call_count == 1
+    resume.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["decision"] == "heat"
+    assert entry["switched"] is True
+    assert entry["outdoor_temp_f"] == 63.0
+    write_last_state.assert_called_once()
+    state = write_last_state.call_args.args[1]
+    assert state["mode"] == "heat"
