@@ -29,7 +29,7 @@ def read_last_state(data_dir: Path) -> dict | None:
     try:
         with open(path) as f:
             return json.load(f)
-    except (json.JSONDecodeError, OSError):
+    except (ValueError, OSError):
         return None
 
 

@@ -156,3 +156,15 @@ def test_offset_naive_timestamp_is_skipped(tmp_path):
         f.write(json.dumps(_entry(now, 68.0)) + "\n")
     # Naive timestamp should be skipped, not crash
     assert read_recent_outdoor_temps(tmp_path, hours=24, now=now) == [68.0]
+
+
+def test_read_last_state_returns_none_on_binary_corruption(tmp_path):
+    # A power cut can leave last-state.json corrupt in shapes other than
+    # truncated JSON. Non-UTF-8 bytes raise UnicodeDecodeError, not
+    # JSONDecodeError -- both are ValueError subclasses. This must return None
+    # rather than raise, because the caller reads it before writing anything,
+    # so an exception here would brick the unattended timer permanently.
+    from climate.runlog import read_last_state
+
+    (tmp_path / "last-state.json").write_bytes(b'{"mode": "cool", \xff\xfe')
+    assert read_last_state(tmp_path) is None
