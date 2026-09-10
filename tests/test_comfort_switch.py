@@ -1,6 +1,9 @@
+import argparse
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pyecobee.errors import InvalidTokenError
 
 from climate.ecobee.comfort_mode import COMFORT_REF, resolve_schedule_array
 
@@ -126,3 +129,60 @@ def test_raises_rather_than_defaulting_when_undeterminable(monkeypatch):
     program = _live_program()  # live is None, and the window is empty too
     with pytest.raises(RuntimeError, match="Cannot determine the comfort mode"):
         _resolve_mode_for_push(program, None, {}, MagicMock())
+
+
+# --- cmd_comfort_switch: unattended-run error handling ---
+#
+# This runs unattended every 15 minutes on a home server. An expired token
+# must produce the actionable message and a non-zero exit, not a traceback
+# dumped into the journal for someone to find later.
+
+
+def test_invalid_token_during_push_prints_message_and_exits_nonzero(monkeypatch, capsys):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+
+    mock_ecobee = MagicMock()
+    mock_ecobee.get_thermostats.return_value = True
+    mock_ecobee.thermostats = [MagicMock()]  # non-empty so the "failed to fetch" guard passes
+
+    # No managed thermostats needed for the status-logging side of the
+    # function; only `iter_thermostat_entries` needs to yield the one entry
+    # that drives the push loop where get_current_program is exercised.
+    # `runlog` is imported locally inside cmd_comfort_switch (`from climate
+    # import runlog`), so patching the actual `climate.runlog` module -- not
+    # an attribute of `climate.sync` -- is what that local import picks up.
+    monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
+    monkeypatch.setattr(sync_mod, "load_thermostats", lambda path: {})
+    monkeypatch.setattr(sync_mod, "get_managed_thermostats", lambda registry: [])
+    monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: Path("/tmp/test"))
+    monkeypatch.setattr(runlog_mod, "append_run_log", lambda *a, **kw: None)
+    monkeypatch.setattr(runlog_mod, "write_last_state", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        sync_mod.schedule, "load_schedule",
+        lambda path: {"thermostats": {"downstairs": {"schedule": {}}}},
+    )
+    monkeypatch.setattr(
+        sync_mod.schedule, "iter_thermostat_entries",
+        lambda data, registry, name_filter: iter([("downstairs", "123", {})]),
+    )
+    monkeypatch.setattr(
+        sync_mod.schedule, "get_current_program",
+        MagicMock(side_effect=InvalidTokenError("expired")),
+    )
+
+    args = argparse.Namespace(
+        mode="heat",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=False,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_mod.cmd_comfort_switch(args)
+
+    assert exc_info.value.code == 1
+    assert "Tokens invalid. Re-run 'just climate-auth'." in capsys.readouterr().out

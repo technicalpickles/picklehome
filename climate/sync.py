@@ -631,8 +631,27 @@ def cmd_comfort_switch(args) -> None:
         sys.exit(1)
 
     pushed = []
+    any_error = False
     for name, thermostat_id, schedule_dict in entries:
-        program = schedule.get_current_program(ecobee, thermostat_id)
+        # Mirrors cmd_sync's handling of this same call: InvalidTokenError is
+        # global (the credentials are dead for every thermostat, so stop now
+        # rather than repeating the same failure per thermostat), while
+        # LookupError/RuntimeError are per-thermostat -- one zone being
+        # unreachable or missing from the account should not stop the other
+        # zone from being corrected.
+        try:
+            program = schedule.get_current_program(ecobee, thermostat_id)
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except LookupError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+        except RuntimeError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
         schedule.validate_climate_refs(schedule_dict, program)
         desired = resolve_schedule_array(
             schedule.build_schedule_array(schedule_dict), mode
@@ -694,6 +713,9 @@ def cmd_comfort_switch(args) -> None:
         "thermostats": thermostat_statuses,
     }
     runlog.write_last_state(data_dir, state)
+
+    if any_error:
+        sys.exit(1)
 
 
 def cmd_air_quality(args) -> None:
