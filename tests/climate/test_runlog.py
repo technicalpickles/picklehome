@@ -126,3 +126,24 @@ def test_partial_first_line_from_tail_read_is_dropped(tmp_path):
     assert len(temps) > 0
     assert all(t == 70.0 for t in temps)
     assert len(temps) < 200
+
+
+def test_non_numeric_temp_is_skipped(tmp_path):
+    now = datetime(2026, 9, 10, 12, 0, tzinfo=LOCAL_TZ)
+    path = tmp_path / "run-log.jsonl"
+    with open(path, "w") as f:
+        f.write(json.dumps({"timestamp": now.isoformat(), "outdoor_temp_f": "not-a-number", "decision": "cool"}) + "\n")
+        f.write(json.dumps(_entry(now, 68.0)) + "\n")
+    # Non-numeric temp should be skipped, not crash
+    assert read_recent_outdoor_temps(tmp_path, hours=24, now=now) == [68.0]
+
+
+def test_offset_naive_timestamp_is_skipped(tmp_path):
+    now = datetime(2026, 9, 10, 12, 0, tzinfo=LOCAL_TZ)
+    path = tmp_path / "run-log.jsonl"
+    with open(path, "w") as f:
+        # Naive timestamp (no timezone offset)
+        f.write(json.dumps({"timestamp": "2026-09-10T12:00:00", "outdoor_temp_f": 65.0, "decision": "cool"}) + "\n")
+        f.write(json.dumps(_entry(now, 68.0)) + "\n")
+    # Naive timestamp should be skipped, not crash
+    assert read_recent_outdoor_temps(tmp_path, hours=24, now=now) == [68.0]

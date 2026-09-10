@@ -87,10 +87,16 @@ def read_recent_outdoor_temps(
             entry = json.loads(line)
             ts = datetime.fromisoformat(entry["timestamp"])
             temp = entry["outdoor_temp_f"]
+            if temp is None:
+                continue
+            # Skip entries with offset-naive timestamps. The log is always written with
+            # LOCAL_TZ, so a naive timestamp means a corrupt or foreign entry; guessing
+            # its zone would silently shift a reading by hours.
+            if ts >= cutoff:
+                temps.append(float(temp))
         except (ValueError, KeyError, TypeError):
+            # Skip malformed entries: bad JSON, missing keys, invalid timestamps,
+            # or non-numeric temps. One corrupt log line should degrade the sample
+            # count instead of blinding the entire decision.
             continue
-        if temp is None:
-            continue
-        if ts >= cutoff:
-            temps.append(float(temp))
     return temps
