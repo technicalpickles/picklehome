@@ -48,9 +48,13 @@ def set_hvac_mode(ecobee, thermostat_id: str, hvac_mode: str) -> None:
 def set_hold_action(ecobee, thermostat_id: str, hold_action: str) -> None:
     """Set holdAction (how long a manual temperature bump lasts).
 
-    Valid values are believed to be useEndTime4hour, useEndTime2hour,
-    nextPeriod, indefinite, askMe. Ecobee silently rewrites values it rejects,
-    so callers must read the live program back to confirm the write took.
+    useEndTime4hour is confirmed valid: verified empirically against both
+    managed thermostats, where it stuck rather than being silently rewritten.
+    useEndTime2hour, nextPeriod, indefinite, and askMe are still unverified,
+    believed valid from the API docs only. Ecobee silently rewrites values it
+    rejects, and a 200 response proves nothing on its own — that's exactly why
+    useEndTime4hour had to be confirmed by reading the live program back, and
+    why callers must do the same for any value not yet verified here.
     """
     body = {
         "selection": {
