@@ -10,7 +10,7 @@ thermostats:
       _everyday: &downstairs_everyday
         - time: "00:00"
           climate: sleep
-        - time: "06:00"
+        - time: "07:30"
           climate: smart1  # Comfort Cool
 
       sunday: *downstairs_everyday
