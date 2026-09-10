@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -42,3 +42,55 @@ LOCAL_TZ = ZoneInfo("America/New_York")
 
 def now_iso() -> str:
     return datetime.now(LOCAL_TZ).isoformat()
+
+
+def read_recent_outdoor_temps(
+    data_dir: Path,
+    hours: int = 24,
+    now: datetime | None = None,
+    tail_bytes: int = 262144,
+) -> list[float]:
+    """Outdoor temps logged within the last `hours`, oldest first.
+
+    Only the tail of the log is read. At roughly 870 bytes/entry, 256KB covers
+    well over a day of 15-minute samples, and the log grows ~30MB/year.
+
+    Malformed lines are skipped rather than raising: one bad append should
+    degrade the sample count (which the caller already guards on) instead of
+    blinding the decision entirely.
+    """
+    path = data_dir / RUN_LOG_FILE
+    if not path.exists():
+        return []
+    if now is None:
+        now = datetime.now(LOCAL_TZ)
+    cutoff = now - timedelta(hours=hours)
+
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        f.seek(max(0, size - tail_bytes))
+        chunk = f.read()
+
+    lines = chunk.decode("utf-8", errors="replace").splitlines()
+    # A tail read almost certainly starts mid-line; that fragment is not valid
+    # JSON and would be skipped anyway, but drop it explicitly for clarity.
+    if size > tail_bytes and lines:
+        lines = lines[1:]
+
+    temps: list[float] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+            ts = datetime.fromisoformat(entry["timestamp"])
+            temp = entry["outdoor_temp_f"]
+        except (ValueError, KeyError, TypeError):
+            continue
+        if temp is None:
+            continue
+        if ts >= cutoff:
+            temps.append(float(temp))
+    return temps
