@@ -581,7 +581,14 @@ def cmd_comfort_switch(args) -> None:
     managed = get_managed_thermostats(registry)
     managed_ids = {tid for _, tid in managed}
 
-    success = ecobee.get_thermostats()
+    # This is the first network call in the function. pyecobee propagates
+    # InvalidTokenError from it directly (it does not return False), so it
+    # must be guarded here rather than relying on a later call to catch it.
+    try:
+        success = ecobee.get_thermostats()
+    except InvalidTokenError:
+        print("Tokens invalid. Re-run 'just climate-auth'.")
+        sys.exit(1)
     if not success or not ecobee.thermostats:
         print("Failed to fetch thermostat data from Ecobee.")
         sys.exit(1)
@@ -594,6 +601,14 @@ def cmd_comfort_switch(args) -> None:
 
     # Hysteresis: log and exit without changing anything
     if hysteresis:
+        # --dry-run means zero persistent writes, full stop -- including here.
+        # This path used to write unconditionally even under --dry-run, which
+        # would inject a sample into the very rolling window decide_mode reads
+        # and mutate last-state.json during what's supposed to be a preview.
+        if args.dry_run:
+            print("[dry run] Would record hysteresis no-change. No run-log or last-state written.")
+            return
+
         log_entry = {
             "timestamp": runlog.now_iso(),
             "outdoor_temp_f": outdoor_temp,
@@ -630,6 +645,20 @@ def cmd_comfort_switch(args) -> None:
         print(f"Error in schedule.yaml: {e}")
         sys.exit(1)
 
+    # The timer only ever acts on managed:true thermostats. schedule.yaml has
+    # no managed filter of its own (cmd_sync/cmd_validate intentionally act on
+    # whatever it lists, since those are explicit user-invoked commands), so
+    # without this intersection an entry like a `managed: false` property
+    # accidentally added to schedule.yaml would get pushed to and resumed by
+    # the unattended timer. Filtering here keeps the push loop and the
+    # --clear-holds loop (which already walks `managed`) operating on the
+    # same set.
+    entries = [
+        (name, thermostat_id, schedule_dict)
+        for name, thermostat_id, schedule_dict in entries
+        if thermostat_id in managed_ids
+    ]
+
     pushed = []
     any_error = False
     for name, thermostat_id, schedule_dict in entries:
@@ -652,7 +681,14 @@ def cmd_comfort_switch(args) -> None:
             print(f"  [{name}] Error: {e}")
             any_error = True
             continue
-        schedule.validate_climate_refs(schedule_dict, program)
+
+        try:
+            schedule.validate_climate_refs(schedule_dict, program)
+        except ValueError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
         desired = resolve_schedule_array(
             schedule.build_schedule_array(schedule_dict), mode
         )
@@ -663,12 +699,32 @@ def cmd_comfort_switch(args) -> None:
         if args.dry_run:
             print(f"  [{name}] Would push {len(diffs)} slot change(s).")
             continue
-        schedule.push_schedule(ecobee, thermostat_id, desired, program["climates"])
+
+        # Mirrors cmd_sync's handling of this same call (RuntimeError on a
+        # null response; InvalidTokenError propagates from the underlying
+        # request). A transient Ecobee failure on one thermostat must not
+        # abort the whole run -- the other thermostat still needs a chance to
+        # converge, and the run log / last-state write below still needs to
+        # happen for whatever did succeed.
+        try:
+            schedule.push_schedule(ecobee, thermostat_id, desired, program["climates"])
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except RuntimeError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
         print(f"  [{name}] Pushed {len(diffs)} slot change(s).")
         pushed.append((name, thermostat_id))
 
     # Resume only where we actually changed something and no one is holding.
     # An active hold is a deliberate human override and is never cleared here.
+    # Build a hold-status lookup so we can decide per-thermostat whether to
+    # resume. Ecobee API returns title-cased names ("Upstairs") but
+    # thermostats.yaml uses lowercase ("upstairs"), normalize to lowercase
+    # for the lookup.
     hold_by_name = {s["name"].lower(): s.get("hold") for s in thermostat_statuses}
     if args.clear_holds:
         for name, thermostat_id in managed:
@@ -679,40 +735,72 @@ def cmd_comfort_switch(args) -> None:
                 # human override and is only ever cleared with explicit intent.
                 print(f"  [{name}] Would clear active holds")
                 continue
-            schedule.resume_program(ecobee, thermostat_id)
+            # Mirrors cmd_sync's push_schedule handling: a transient failure
+            # on one thermostat must not abort clearing holds on the other.
+            try:
+                schedule.resume_program(ecobee, thermostat_id)
+            except InvalidTokenError:
+                print("Tokens invalid. Re-run 'just climate-auth'.")
+                sys.exit(1)
+            except RuntimeError as e:
+                print(f"  [{name}] Warning: failed to clear holds: {e}")
+                any_error = True
+                continue
             print(f"  [{name}] Cleared active holds")
             holds_cleared = True
     else:
         for name, thermostat_id in pushed:
-            if hold_by_name.get(name.lower()) is None:
-                schedule.resume_program(ecobee, thermostat_id)
+            # "unknown" (not "no hold") is the fail-closed default: the
+            # lookup keys come from the Ecobee device name while `pushed`
+            # names come from schedule.yaml, aligned only by lowercase
+            # convention -- renaming a thermostat in the app breaks the
+            # match. Treating "not found in the status snapshot" the same as
+            # "confirmed no hold" would resume (and thus clear) a real hold
+            # on a silent lookup miss. Only an explicit `None` clears it.
+            if hold_by_name.get(name.lower(), "unknown") is None:
+                try:
+                    schedule.resume_program(ecobee, thermostat_id)
+                except InvalidTokenError:
+                    print("Tokens invalid. Re-run 'just climate-auth'.")
+                    sys.exit(1)
+                except RuntimeError as e:
+                    print(f"  [{name}] Warning: failed to resume program: {e}")
+                    any_error = True
+                    continue
                 print(f"  [{name}] Resumed program so the change applies now")
 
     # hvacMode is deliberately NOT written here. A person setting Off or
     # heat-only outranks the automation; see climate/spec/hvac-spec.md.
     switched = bool(pushed)
 
-    # Write run log and last-state
-    log_entry = {
-        "timestamp": runlog.now_iso(),
-        "outdoor_temp_f": outdoor_temp,
-        "decision": mode,
-        "decision_info": decision_info,
-        "previous_mode": previous_mode,
-        "switched": switched,
-        "holds_cleared": holds_cleared,
-        "skipped": skipped,
-        "thermostats": thermostat_statuses,
-    }
-    runlog.append_run_log(data_dir, log_entry)
+    # --dry-run means zero persistent writes, full stop. The push/resume
+    # loops above already no-op their real API calls under --dry-run; this is
+    # the same rule applied to the run log and last-state file so a preview
+    # run can never inject a sample into decide_mode's rolling window or
+    # mutate last-state.json.
+    if args.dry_run:
+        print("[dry run] No run-log or last-state written.")
+    else:
+        log_entry = {
+            "timestamp": runlog.now_iso(),
+            "outdoor_temp_f": outdoor_temp,
+            "decision": mode,
+            "decision_info": decision_info,
+            "previous_mode": previous_mode,
+            "switched": switched,
+            "holds_cleared": holds_cleared,
+            "skipped": skipped,
+            "thermostats": thermostat_statuses,
+        }
+        runlog.append_run_log(data_dir, log_entry)
 
-    state = {
-        "timestamp": runlog.now_iso(),
-        "mode": mode,
-        "outdoor_temp_f": outdoor_temp,
-        "thermostats": thermostat_statuses,
-    }
-    runlog.write_last_state(data_dir, state)
+        state = {
+            "timestamp": runlog.now_iso(),
+            "mode": mode,
+            "outdoor_temp_f": outdoor_temp,
+            "thermostats": thermostat_statuses,
+        }
+        runlog.write_last_state(data_dir, state)
 
     if any_error:
         sys.exit(1)
