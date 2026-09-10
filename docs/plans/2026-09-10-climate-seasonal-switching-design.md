@@ -278,6 +278,49 @@ Cases that matter:
 
 ---
 
+## Documentation changes
+
+`climate/spec/hvac-spec.md` is the declared source of truth for thermostat
+behavior, and `climate/CLAUDE.md` mandates spec-first ordering: *"If the
+desired behavior is changing, update the spec first, then derive YAML
+changes."* This design is a behavior change, so **the spec is updated before
+`schedule.yaml` is touched**, not afterwards. That is an ordering constraint on
+the implementation plan, not a cleanup step at the end.
+
+Three of these are not additions but *corrections* — they document behavior
+this design removes, so leaving them would make the spec actively wrong rather
+than merely incomplete.
+
+### `climate/spec/hvac-spec.md`
+
+| Section | Change | Why |
+|---|---|---|
+| `### HVAC mode` | **Rewrite.** Currently states `comfort-switch` sets HVAC mode to auto after syncing and calls auto "the safe default". | Becomes false. Replace with: the timer never writes `hvacMode`; a human's choice outranks the automation; a mode that cannot deliver the active comfort mode is warned about, never corrected; `climate-hvac-mode` is the explicit lever. |
+| `### Seasonal switching` | **Replace** the "Known defect as of 2026-09-10" paragraph. | That paragraph documents the bug this design fixes. Replace with the new mechanism: 24-hour mean, thermostat as source of truth, push only on difference. |
+| Hold behavior paragraph ("If someone has manually adjusted a thermostat...") | **Amend.** | `resume_program` gating changes, and holds now expire on a fixed 4-hour timer rather than at the next transition. |
+| Downstairs / Upstairs schedule tables | **Amend** the "Comfort Heat / Comfort Cool" rows. | Intent is unchanged, but the rows should name the `comfort` ref so the spec and `schedule.yaml` use the same vocabulary. |
+| *(new)* Hold duration | **Add.** | `holdAction: useEndTime4hour` is household-visible behavior — how long a walk-up bump lasts — and belongs in the source of truth, not only in a design doc. |
+
+### `climate/config/schedule.yaml`
+
+The header comment currently reads *"Climate values must be climateRef strings
+from your Ecobee thermostat."* That becomes false — `comfort` is deliberately
+not a climateRef. Update it to describe the virtual ref and point at the spec.
+
+### `climate/README.md`
+
+- The Ecobee architecture note ("smart1 and smart2 are swappable for seasonal
+  switching") stays true in intent but describes a mechanism that no longer
+  exists; reword to the diff-and-push model.
+- Command reference gains `climate-hvac-mode` and `climate-settings-sync`.
+- The `schedule.yaml` row in the config-file table should mention the virtual
+  `comfort` ref, since that is the surprising part for anyone editing it.
+
+Per `docs/CONVENTIONS.md`, this design doc is a point-in-time artifact and does
+not get updated as the code evolves — the spec and README are the living
+documents, which is exactly why they must be corrected as part of this work
+rather than left pointing at the old behavior.
+
 ## Rollout
 
 Config change plus `just deploy-climate`, same shape as the 2026-09-10
