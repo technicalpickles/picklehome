@@ -158,7 +158,7 @@ Never change `schedule.yaml` or `comforts.yaml` without the spec as reference.
 
 ## Key design principle
 
-The goal is always ~70°F in any actively occupied space. Comfort Heat and Comfort Cool both target 70°F from opposite thermal directions. Season determines which is active; outdoor temperature thresholds trigger the switch.
+The goal is a comfortable temperature in any actively occupied space, not a fixed number — the setpoints table in `spec/hvac-spec.md` is the source of truth for what that means per zone. Comfort Heat and Comfort Cool bracket occupied slots from opposite thermal directions; season determines which is active, via outdoor temperature thresholds.
 
 ## Module structure
 
