@@ -25,22 +25,22 @@ thermostats:
         cool_temp: 82
         heat_temp: 64
       home:
-        cool_temp: 71
+        cool_temp: 73
         heat_temp: 68
       sleep:
         cool_temp: 71
         heat_temp: 66
       smart1:
-        cool_temp: 71
+        cool_temp: 73
         heat_temp: 65
         name: Comfort Cool
       smart2:
-        cool_temp: 73
+        cool_temp: 75
         heat_temp: 70
         name: Comfort Heat
       smart3:
-        cool_temp: 71
-        heat_temp: 68
+        cool_temp: 75
+        heat_temp: 66
         name: Eco
   downstairs:
     climates:
@@ -48,20 +48,20 @@ thermostats:
         cool_temp: 82
         heat_temp: 64
       home:
-        cool_temp: 71
+        cool_temp: 73
         heat_temp: 68
       sleep:
-        cool_temp: 72
+        cool_temp: 74
         heat_temp: 65
       smart1:
-        cool_temp: 71
+        cool_temp: 73
         heat_temp: 65
         name: Comfort Cool
       smart2:
-        cool_temp: 73
+        cool_temp: 77
         heat_temp: 72
         name: Comfort Heat
       smart3:
-        cool_temp: 71
-        heat_temp: 68
+        cool_temp: 75
+        heat_temp: 66
         name: Eco
