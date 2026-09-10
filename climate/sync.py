@@ -1,5 +1,4 @@
 import argparse
-import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -28,6 +27,10 @@ def cmd_list(args) -> None:
 
 
 def cmd_sync(args) -> None:
+    from climate.ambient.client import load_weather_config
+    from climate.ecobee.comfort_mode import resolve_schedule_array
+    from climate import runlog
+
     ecobee = auth.make_ecobee()
 
     schedule_data = schedule.load_schedule(args.schedule)
@@ -83,6 +86,17 @@ def cmd_sync(args) -> None:
             any_error = True
             continue
 
+        try:
+            mode, _ = _resolve_mode_for_push(
+                program, getattr(args, "mode", None), load_weather_config(args.weather),
+                runlog.get_data_dir(),
+            )
+        except RuntimeError as e:
+            print(f"  Error: {e}")
+            any_error = True
+            continue
+        schedule_array = resolve_schedule_array(schedule_array, mode)
+
         if args.dry_run:
             schedule.print_schedule_grid(schedule_array, program, name=name)
             print(f"  Dry run complete. No changes pushed.")
@@ -105,6 +119,10 @@ def cmd_sync(args) -> None:
 
 
 def cmd_validate(args) -> None:
+    from climate.ambient.client import load_weather_config
+    from climate.ecobee.comfort_mode import resolve_schedule_array
+    from climate import runlog
+
     ecobee = auth.make_ecobee()
 
     schedule_data = schedule.load_schedule(args.schedule)
@@ -144,6 +162,17 @@ def cmd_validate(args) -> None:
             print(f"  Error: {e}")
             any_mismatch = True
             continue
+
+        try:
+            mode, _ = _resolve_mode_for_push(
+                program, getattr(args, "mode", None), load_weather_config(args.weather),
+                runlog.get_data_dir(),
+            )
+        except RuntimeError as e:
+            print(f"  Error: {e}")
+            any_mismatch = True
+            continue
+        local_array = resolve_schedule_array(local_array, mode)
 
         remote_array = program["schedule"]
         diffs = schedule.diff_schedules(local_array, remote_array, program)
@@ -470,57 +499,113 @@ def cmd_weather(args) -> None:
         sys.exit(1)
 
 
-def _apply_comfort_mode(schedule_text: str, mode: str) -> str:
-    """Swap smart1↔smart2 in YAML `climate:` value positions only (not comments).
+def _resolve_mode_for_push(program, explicit_mode, weather_config, data_dir):
+    """Pick the mode to resolve `comfort` against. Returns (mode, reasoning).
 
-    mode='heat' → smart1 → smart2 (Comfort Heat)
-    mode='cool' → smart2 → smart1 (Comfort Cool)
+    Order: an explicit --mode wins; otherwise preserve whatever the thermostat
+    is already running, so a structural sync (moving a transition time) does not
+    accidentally flip the season; otherwise fall back to the rolling window.
+    Never defaults -- an undeterminable mode raises.
     """
-    if mode == "heat":
-        return re.sub(r'(climate:\s*)smart1\b', r'\1smart2', schedule_text)
-    elif mode == "cool":
-        return re.sub(r'(climate:\s*)smart2\b', r'\1smart1', schedule_text)
-    else:
-        raise ValueError(f"Unknown mode: {mode!r}. Use 'heat' or 'cool'.")
+    from climate.ecobee.comfort_mode import decide_mode, detect_live_mode
+    from climate import runlog
+
+    if explicit_mode:
+        return explicit_mode, {"reason": "explicit_mode"}
+
+    live = detect_live_mode(program)
+    if live:
+        return live, {"reason": "preserved_live_mode"}
+
+    thresholds = weather_config.get("thresholds", {})
+    temps = runlog.read_recent_outdoor_temps(data_dir)
+    decided, info = decide_mode(
+        temps,
+        thresholds.get("heat_below", 60),
+        thresholds.get("cool_above", 65),
+    )
+    if decided:
+        return decided, info
+    raise RuntimeError(
+        "Cannot determine the comfort mode: the live program uses neither "
+        "smart1 nor smart2 (or uses both), and the outdoor window was "
+        f"inconclusive ({info}). Re-run with --mode heat|cool."
+    )
 
 
 def cmd_comfort_switch(args) -> None:
     from climate.ambient.client import load_weather_config, get_configured_macs, get_outdoor_temp_from_stations
+    from climate.ecobee.comfort_mode import decide_mode, resolve_schedule_array
     from climate import runlog
 
     mode = args.mode
     outdoor_temp = None
     hysteresis = False
+    decision_info = None
     data_dir = runlog.get_data_dir()
+
+    def _log_pre_decision_failure(reason: str) -> None:
+        """Append a run-log entry before a sys.exit() that happens before
+        thermostat status is ever fetched.
+
+        Every one of these exits used to write nothing, so the run log --
+        now the unattended timer's only memory (see hvac-spec.md / the
+        2026-09-10 design) -- had no trace of *why* a 15-minute run did
+        nothing. A cold front arriving during an outage like this previously
+        left the house frozen on a stale mode with no operator-visible
+        signal beyond a red `systemctl status`. --dry-run still means zero
+        persistent writes, full stop.
+        """
+        if args.dry_run:
+            print(f"[dry run] Would record failure ({reason}). No run-log written.")
+            return
+        runlog.append_run_log(data_dir, {
+            "timestamp": runlog.now_iso(),
+            "outdoor_temp_f": outdoor_temp,
+            "decision": None,
+            "reason": reason,
+            "switched": False,
+            "holds_cleared": False,
+            "skipped": True,
+            "thermostats": [],
+        })
 
     if mode == "auto":
         config = load_weather_config(args.weather)
         macs = get_configured_macs(config)
         if not macs:
             print("No stations configured. Run 'just climate-weather-discover', then set AMBIENT_STATION_MACS in .env.")
+            _log_pre_decision_failure("no_stations_configured")
             sys.exit(1)
         result = get_outdoor_temp_from_stations(macs)
         if result is None:
             print("Could not read outdoor temp from any configured station.")
+            _log_pre_decision_failure("outdoor_temp_unavailable")
             sys.exit(1)
         mac, outdoor_temp, age_minutes = result
+        # The instantaneous reading is still fetched and logged: it is no longer
+        # what we decide from, but it is what future 24h windows are built out
+        # of. Do not remove this alongside the unconditional push.
         thresholds = config.get("thresholds", {})
-        heat_below = thresholds.get("heat_below", 60)
-        cool_above = thresholds.get("cool_above", 65)
-        if outdoor_temp < heat_below:
-            mode = "heat"
-        elif outdoor_temp > cool_above:
-            mode = "cool"
-        else:
+        temps = runlog.read_recent_outdoor_temps(data_dir)
+        decided, decision_info = decide_mode(
+            temps, thresholds.get("heat_below", 60), thresholds.get("cool_above", 65)
+        )
+        if decided is None:
+            print(f"No change: {decision_info}")
             hysteresis = True
-            print(f"Outdoor temp {outdoor_temp}°F is in hysteresis band ({heat_below}-{cool_above}°F). No change.")
+        else:
+            mode = decided
+            print(f"24h mean {decision_info['mean']}°F "
+                  f"({decision_info['samples']} samples) → {mode}")
 
-        if not hysteresis:
-            print(f"Outdoor temp: {outdoor_temp}°F → switching to {mode}")
-
-    # Check last-state for no-op
+    # Check last-state for no-op. .get(), not a bare subscript: a corrupt
+    # last-state.json now degrades to None (see runlog.read_last_state)
+    # rather than raising, and a run where nothing was ever actually pushed
+    # (see the "mode" field note near write_last_state below) omits "mode"
+    # from a well-formed file too.
     last_state = runlog.read_last_state(data_dir)
-    previous_mode = last_state["mode"] if last_state else None
+    previous_mode = last_state.get("mode") if last_state else None
 
     # Always fetch thermostat status for logging
     ecobee = auth.make_ecobee()
@@ -528,9 +613,18 @@ def cmd_comfort_switch(args) -> None:
     managed = get_managed_thermostats(registry)
     managed_ids = {tid for _, tid in managed}
 
-    success = ecobee.get_thermostats()
+    # This is the first network call in the function. pyecobee propagates
+    # InvalidTokenError from it directly (it does not return False), so it
+    # must be guarded here rather than relying on a later call to catch it.
+    try:
+        success = ecobee.get_thermostats()
+    except InvalidTokenError:
+        print("Tokens invalid. Re-run 'just climate-auth'.")
+        _log_pre_decision_failure("invalid_token")
+        sys.exit(1)
     if not success or not ecobee.thermostats:
         print("Failed to fetch thermostat data from Ecobee.")
+        _log_pre_decision_failure("thermostat_fetch_failed")
         sys.exit(1)
 
     thermostat_statuses = [
@@ -539,18 +633,43 @@ def cmd_comfort_switch(args) -> None:
         if t["identifier"] in managed_ids
     ]
 
+    # Surfaced, never corrected: a person choosing Off or heat-only outranks
+    # the automation (hvac-spec.md, "HVAC mode"). Previously this warning
+    # only reached a human running `climate-status` interactively -- the
+    # unattended timer computed nothing and the run log carried no signal,
+    # so a thermostat set to Off in October could go unnoticed indefinitely
+    # (the timer keeps finding the schedule "already correct" and printing
+    # exactly that).
+    hvac_warnings = [
+        warning
+        for s in thermostat_statuses
+        if (warning := status.hvac_mode_warning(s)) is not None
+    ]
+    for w in hvac_warnings:
+        print(f"WARNING: {w}")
+
     # Hysteresis: log and exit without changing anything
     if hysteresis:
+        # --dry-run means zero persistent writes, full stop -- including here.
+        # This path used to write unconditionally even under --dry-run, which
+        # would inject a sample into the very rolling window decide_mode reads
+        # and mutate last-state.json during what's supposed to be a preview.
+        if args.dry_run:
+            print("[dry run] Would record hysteresis no-change. No run-log or last-state written.")
+            return
+
         log_entry = {
             "timestamp": runlog.now_iso(),
             "outdoor_temp_f": outdoor_temp,
             "decision": "no_change",
             "reason": "hysteresis",
+            "decision_info": decision_info,
             "previous_mode": previous_mode,
             "switched": False,
             "holds_cleared": False,
             "skipped": True,
             "thermostats": thermostat_statuses,
+            "warnings": hvac_warnings,
         }
         runlog.append_run_log(data_dir, log_entry)
 
@@ -567,103 +686,284 @@ def cmd_comfort_switch(args) -> None:
     holds_cleared = False
     skipped = False
 
-    schedule_path = args.schedule
-    original = schedule_path.read_text()
-    updated = _apply_comfort_mode(original, mode)
-
-    if args.dry_run:
-        if updated != original:
-            print(f"[dry run] Would switch to {mode} comfort:")
-            for i, (old, new) in enumerate(zip(original.splitlines(), updated.splitlines()), 1):
-                if old != new:
-                    print(f"  line {i}: {old.strip()!r} → {new.strip()!r}")
-        else:
-            print(f"Schedule already set to {mode} comfort.")
-        print(f"[dry run] Would sync schedule to Ecobee")
-        if args.clear_holds:
-            print(f"[dry run] Would clear active holds on all managed thermostats")
-        else:
-            print(f"[dry run] Would resume program on thermostats without active holds")
-        print(f"[dry run] Would set HVAC mode to auto on all managed thermostats")
-        return
-
-    if updated == original:
-        print(f"Already in {mode} mode. No schedule change needed.")
-        skipped = True
-    else:
-        schedule_path.write_text(updated)
-        print(f"schedule.yaml updated to {mode} comfort.")
-        switched = True
-
-    print(f"Syncing schedule to Ecobee...")
-    sync_args = argparse.Namespace(
-        schedule=schedule_path,
-        thermostats=args.thermostats,
-        thermostat=None,
-        dry_run=False,
-    )
+    schedule_data = schedule.load_schedule(args.schedule)
     try:
-        cmd_sync(sync_args)
-    except SystemExit as e:
-        if e.code != 0:
-            if switched:
-                print("Ecobee sync failed. Restoring schedule.yaml to original content.")
-                schedule_path.write_text(original)
-            raise
+        entries = list(
+            schedule.iter_thermostat_entries(schedule_data, registry, None)
+        )
+    except ValueError as e:
+        print(f"Error in schedule.yaml: {e}")
+        sys.exit(1)
 
-    # Build a hold-status lookup so we can decide per-thermostat whether to resume.
-    # Ecobee API returns title-cased names ("Upstairs") but thermostats.yaml uses
-    # lowercase ("upstairs"), normalize to lowercase for the lookup.
+    # The timer only ever acts on managed:true thermostats. schedule.yaml has
+    # no managed filter of its own (cmd_sync/cmd_validate intentionally act on
+    # whatever it lists, since those are explicit user-invoked commands), so
+    # without this intersection an entry like a `managed: false` property
+    # accidentally added to schedule.yaml would get pushed to and resumed by
+    # the unattended timer. Filtering here keeps the push loop and the
+    # --clear-holds loop (which already walks `managed`) operating on the
+    # same set.
+    entries = [
+        (name, thermostat_id, schedule_dict)
+        for name, thermostat_id, schedule_dict in entries
+        if thermostat_id in managed_ids
+    ]
+
+    pushed = []
+    any_error = False
+    for name, thermostat_id, schedule_dict in entries:
+        # Mirrors cmd_sync's handling of this same call: InvalidTokenError is
+        # global (the credentials are dead for every thermostat, so stop now
+        # rather than repeating the same failure per thermostat), while
+        # LookupError/RuntimeError are per-thermostat -- one zone being
+        # unreachable or missing from the account should not stop the other
+        # zone from being corrected.
+        try:
+            program = schedule.get_current_program(ecobee, thermostat_id)
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except LookupError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+        except RuntimeError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        try:
+            schedule.validate_climate_refs(schedule_dict, program)
+        except ValueError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        # Mirrors cmd_sync:59-63's handling of this same call. This used to
+        # be unguarded here: a bad schedule.yaml would raise ValueError
+        # straight out of the function, past the try/except's sibling calls,
+        # aborting the whole run before the run-log write at the bottom --
+        # and before any other, valid thermostat entry got a chance to
+        # converge.
+        try:
+            schedule_array = schedule.build_schedule_array(schedule_dict)
+        except ValueError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        desired = resolve_schedule_array(schedule_array, mode)
+        diffs = schedule.diff_schedules(desired, program["schedule"], program)
+        if not diffs:
+            print(f"  [{name}] Already correct, nothing to push.")
+            continue
+        if args.dry_run:
+            print(f"  [{name}] Would push {len(diffs)} slot change(s).")
+            continue
+
+        # Mirrors cmd_sync's handling of this same call (RuntimeError on a
+        # null response; InvalidTokenError propagates from the underlying
+        # request). A transient Ecobee failure on one thermostat must not
+        # abort the whole run -- the other thermostat still needs a chance to
+        # converge, and the run log / last-state write below still needs to
+        # happen for whatever did succeed.
+        try:
+            schedule.push_schedule(ecobee, thermostat_id, desired, program["climates"])
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except RuntimeError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        print(f"  [{name}] Pushed {len(diffs)} slot change(s).")
+        pushed.append((name, thermostat_id))
+
+    # Resume only where we actually changed something and no one is holding.
+    # An active hold is a deliberate human override and is never cleared here.
+    # Build a hold-status lookup so we can decide per-thermostat whether to
+    # resume. Ecobee API returns title-cased names ("Upstairs") but
+    # thermostats.yaml uses lowercase ("upstairs"), normalize to lowercase
+    # for the lookup.
     hold_by_name = {s["name"].lower(): s.get("hold") for s in thermostat_statuses}
-
     if args.clear_holds:
         for name, thermostat_id in managed:
+            if args.dry_run:
+                # --dry-run means no writes, full stop -- clearing a hold for
+                # real here would violate that even though --clear-holds was
+                # also passed. See hvac-spec.md: an active hold is a deliberate
+                # human override and is only ever cleared with explicit intent.
+                print(f"  [{name}] Would clear active holds")
+                continue
+            # Mirrors cmd_sync's push_schedule handling: a transient failure
+            # on one thermostat must not abort clearing holds on the other.
             try:
                 schedule.resume_program(ecobee, thermostat_id)
-                print(f"  [{name}] Cleared active holds")
-                holds_cleared = True
+            except InvalidTokenError:
+                print("Tokens invalid. Re-run 'just climate-auth'.")
+                sys.exit(1)
             except RuntimeError as e:
                 print(f"  [{name}] Warning: failed to clear holds: {e}")
+                any_error = True
+                continue
+            print(f"  [{name}] Cleared active holds")
+            holds_cleared = True
     else:
-        # Resume program on thermostats without active holds so the new schedule
-        # takes effect immediately rather than waiting for the next slot boundary.
-        # Thermostats with holds are left alone (the hold was a deliberate override).
-        for name, thermostat_id in managed:
-            if hold_by_name.get(name.lower()) is None:
+        for name, thermostat_id in pushed:
+            # "unknown" (not "no hold") is the fail-closed default: the
+            # lookup keys come from the Ecobee device name while `pushed`
+            # names come from schedule.yaml, aligned only by lowercase
+            # convention -- renaming a thermostat in the app breaks the
+            # match. Treating "not found in the status snapshot" the same as
+            # "confirmed no hold" would resume (and thus clear) a real hold
+            # on a silent lookup miss. Only an explicit `None` clears it.
+            if hold_by_name.get(name.lower(), "unknown") is None:
                 try:
                     schedule.resume_program(ecobee, thermostat_id)
-                    print(f"  [{name}] Resumed program (no active hold, schedule applied immediately)")
+                except InvalidTokenError:
+                    print("Tokens invalid. Re-run 'just climate-auth'.")
+                    sys.exit(1)
                 except RuntimeError as e:
                     print(f"  [{name}] Warning: failed to resume program: {e}")
+                    any_error = True
+                    continue
+                print(f"  [{name}] Resumed program so the change applies now")
 
-    hvac_mode = "auto"
-    for name, thermostat_id in managed:
+    # hvacMode is deliberately NOT written here. A person setting Off or
+    # heat-only outranks the automation; see climate/spec/hvac-spec.md.
+    switched = bool(pushed)
+
+    # --dry-run means zero persistent writes, full stop. The push/resume
+    # loops above already no-op their real API calls under --dry-run; this is
+    # the same rule applied to the run log and last-state file so a preview
+    # run can never inject a sample into decide_mode's rolling window or
+    # mutate last-state.json.
+    if args.dry_run:
+        print("[dry run] No run-log or last-state written.")
+    else:
+        log_entry = {
+            "timestamp": runlog.now_iso(),
+            "outdoor_temp_f": outdoor_temp,
+            "decision": mode,
+            "decision_info": decision_info,
+            "previous_mode": previous_mode,
+            "switched": switched,
+            "holds_cleared": holds_cleared,
+            "skipped": skipped,
+            "thermostats": thermostat_statuses,
+            "warnings": hvac_warnings,
+        }
+        runlog.append_run_log(data_dir, log_entry)
+
+        state = {
+            "timestamp": runlog.now_iso(),
+            "outdoor_temp_f": outdoor_temp,
+            "thermostats": thermostat_statuses,
+        }
+        # Only claim "mode" when it is actually confirmed: either something
+        # was pushed this run (switched), or nothing needed pushing anywhere
+        # and no errors occurred (every entry's live schedule already
+        # matched the decision). If a push was attempted and failed
+        # (any_error, switched still False because `pushed` only accumulates
+        # confirmed successes), the decided mode is not what the thermostats
+        # are actually running -- writing it here previously made
+        # `just climate-check` report a mode that isn't real.
+        if switched or not any_error:
+            state["mode"] = mode
+        runlog.write_last_state(data_dir, state)
+
+    if any_error:
+        sys.exit(1)
+
+
+def cmd_hvac_mode(args) -> None:
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+
+    try:
+        entries = [(name, thermostat_id)
+                   for name, thermostat_id in get_managed_thermostats(registry)
+                   if not args.thermostat or name == args.thermostat]
+    except ValueError as e:
+        print(f"Error in thermostats.yaml: {e}")
+        sys.exit(1)
+
+    if not entries:
+        if args.thermostat:
+            print(f"No managed thermostat named '{args.thermostat}' found in thermostats.yaml.")
+        else:
+            print("No managed thermostats configured in thermostats.yaml.")
+        sys.exit(1)
+
+    any_error = False
+
+    for name, thermostat_id in entries:
+        if args.dry_run:
+            print(f"  [{name}] Would set HVAC mode to {args.mode}")
+            continue
+
         try:
-            schedule.set_hvac_mode(ecobee, thermostat_id, hvac_mode)
-            print(f"  [{name}] HVAC mode set to {hvac_mode}")
+            schedule.set_hvac_mode(ecobee, thermostat_id, args.mode)
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
         except RuntimeError as e:
-            print(f"  [{name}] Warning: failed to set HVAC mode: {e}")
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
 
-    # Write run log and last-state
-    log_entry = {
-        "timestamp": runlog.now_iso(),
-        "outdoor_temp_f": outdoor_temp,
-        "decision": mode,
-        "previous_mode": previous_mode,
-        "switched": switched,
-        "holds_cleared": holds_cleared,
-        "skipped": skipped,
-        "thermostats": thermostat_statuses,
-    }
-    runlog.append_run_log(data_dir, log_entry)
+        print(f"  [{name}] HVAC mode set to {args.mode}")
 
-    state = {
-        "timestamp": runlog.now_iso(),
-        "mode": mode,
-        "outdoor_temp_f": outdoor_temp,
-        "thermostats": thermostat_statuses,
-    }
-    runlog.write_last_state(data_dir, state)
+    if any_error:
+        sys.exit(1)
+
+
+def cmd_settings_sync(args) -> None:
+    """Push device settings from thermostats.yaml. Manual only, never the timer."""
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+
+    try:
+        entries = [(name, thermostat_id)
+                   for name, thermostat_id in get_managed_thermostats(registry)
+                   if not args.thermostat or name == args.thermostat]
+    except ValueError as e:
+        print(f"Error in thermostats.yaml: {e}")
+        sys.exit(1)
+
+    if not entries:
+        if args.thermostat:
+            print(f"No managed thermostat named '{args.thermostat}' found in thermostats.yaml.")
+        else:
+            print("No managed thermostats configured in thermostats.yaml.")
+        sys.exit(1)
+
+    any_error = False
+
+    for name, thermostat_id in entries:
+        entry = registry["thermostats"][name]
+        desired = (entry.get("settings") or {}).get("hold_action")
+        if not desired:
+            continue
+        if args.dry_run:
+            print(f"  [{name}] Would set holdAction={desired}")
+            continue
+
+        try:
+            schedule.set_hold_action(ecobee, thermostat_id, desired)
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except RuntimeError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        print(f"  [{name}] Pushed holdAction={desired}")
+
+    if any_error:
+        sys.exit(1)
 
 
 def cmd_air_quality(args) -> None:
@@ -759,6 +1059,12 @@ def main() -> None:
         default=None,
         help="Only sync the named thermostat (default: all)",
     )
+    sync_parser.add_argument(
+        "--mode",
+        choices=["heat", "cool"],
+        default=None,
+        help="Force the seasonal comfort mode instead of preserving/deciding it",
+    )
 
     validate_parser = subparsers.add_parser(
         "validate", help="Compare schedule.yaml against the live schedule on Ecobee"
@@ -783,6 +1089,23 @@ def main() -> None:
         default=None,
         help="Only validate the named thermostat (default: all)",
     )
+    validate_parser.add_argument(
+        "--mode",
+        choices=["heat", "cool"],
+        default=None,
+        help="Force the seasonal comfort mode instead of preserving/deciding it",
+    )
+
+    # NOTE: loop variable deliberately not named `parser` -- this function's
+    # top-level ArgumentParser is already bound to that name, and `for`
+    # loop variables in Python leak into the enclosing scope, so reusing it
+    # here would silently rebind `parser` to `validate_parser` for the rest
+    # of main() (breaking parser.parse_args()/parser.print_help() below).
+    for p in (sync_parser, validate_parser):
+        p.add_argument(
+            "--weather", type=Path, default=DEFAULT_WEATHER_PATH,
+            help="Path to weather.yaml (thresholds for the seasonal decision)",
+        )
 
     capture_parser = subparsers.add_parser(
         "capture-comforts", help="Snapshot current comfort mode temps from Ecobee → comforts.yaml"
@@ -955,6 +1278,55 @@ def main() -> None:
         help="Path to weather YAML (default: climate/config/weather.yaml)",
     )
 
+    hvac_mode_parser = subparsers.add_parser(
+        "hvac-mode", help="Set HVAC mode on managed thermostats"
+    )
+    hvac_mode_parser.add_argument(
+        "mode",
+        choices=["auto", "heat", "cool", "off", "auxHeatOnly"],
+        help="HVAC mode to set",
+    )
+    hvac_mode_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview what would be set without making changes",
+    )
+    hvac_mode_parser.add_argument(
+        "--thermostat",
+        metavar="NAME",
+        default=None,
+        help="Only set the named thermostat (default: all)",
+    )
+    hvac_mode_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+
+    settings_sync_parser = subparsers.add_parser(
+        "settings-sync", help="Push device settings from thermostats.yaml"
+    )
+    settings_sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview what would be set without making changes",
+    )
+    settings_sync_parser.add_argument(
+        "--thermostat",
+        metavar="NAME",
+        default=None,
+        help="Only set the named thermostat (default: all)",
+    )
+    settings_sync_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+
     air_quality_parser = subparsers.add_parser(
         "air-quality", help="Show current outdoor air quality, UV index, and pollen"
     )
@@ -977,6 +1349,8 @@ def main() -> None:
     subparsers.choices["discover-stations"].set_defaults(func=cmd_weather_discover)
     subparsers.choices["weather"].set_defaults(func=cmd_weather)
     subparsers.choices["comfort-switch"].set_defaults(func=cmd_comfort_switch)
+    subparsers.choices["hvac-mode"].set_defaults(func=cmd_hvac_mode)
+    subparsers.choices["settings-sync"].set_defaults(func=cmd_settings_sync)
     subparsers.choices["air-quality"].set_defaults(func=cmd_air_quality)
 
     args = parser.parse_args()

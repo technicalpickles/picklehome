@@ -68,6 +68,8 @@ just climate-validate                    # confirm remote matches local
 just climate-comforts-capture            # snapshot current setpoints → comforts.yaml
 just climate-comforts-sync [--dry-run]   # push comforts.yaml to Ecobee
 just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # seasonal mode switch
+just climate-hvac-mode MODE [--thermostat NAME] [--dry-run]  # set hvacMode (auto|heat|cool|off|auxHeatOnly); only manual writer, never the timer
+just climate-settings-sync [--thermostat NAME] [--dry-run]  # push per-thermostat settings (hold_action, etc.) from thermostats.yaml
 ```
 
 ### Weather
@@ -107,8 +109,8 @@ All in `config/`:
 
 | File | Purpose |
 |------|---------|
-| `thermostats.yaml` | Ecobee thermostat registry (name → ID, managed flag) |
-| `schedule.yaml` | Weekly schedule (time slots → climate refs) |
+| `thermostats.yaml` | Ecobee thermostat registry (name → ID, managed flag, per-thermostat `settings` like `hold_action`) |
+| `schedule.yaml` | Weekly schedule (time slots → climate refs). Occupied slots use the virtual `comfort` ref, not a real climateRef — see Architecture below |
 | `comforts.yaml` | Temperature setpoints per comfort mode per thermostat |
 | `weather.yaml` | Outdoor temp thresholds for seasonal comfort switching |
 | `purifiers.yaml` | BlueAir device registry (name → UUID, managed flag) |
@@ -121,7 +123,7 @@ All in `config/`:
 - **Auth:** OAuth PIN flow → access + refresh tokens, stored in `~/.local/state/picklehome/ecobee-tokens.json`. API key from `ECOBEE_API_KEY` env var (1Password via `.env`)
 - **Token refresh:** The `FileTokenEcobee` subclass overrides `_write_config()` to persist refreshed tokens back to the JSON file automatically
 - **Schedule model:** Ecobee thermostats store a weekly program with time slots referencing "climates" (named comfort modes). We define ours in YAML and push them via the API.
-- **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2). smart1 and smart2 are swappable for seasonal switching: Comfort Heat targets 70°F from below, Comfort Cool from above.
+- **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2 for Comfort Heat/Comfort Cool). The virtual `comfort` ref, its resolution to a real climateRef, and the diff-then-push logic all live in `climate.ecobee.comfort_mode` (`resolve_schedule_array`, `detect_live_mode`). See `spec/hvac-spec.md` ("Seasonal switching") for the behavior contract.
 - **Room sensors:** A SmartSensor pairs to one thermostat and reports temperature and occupancy, but a paired sensor does nothing until it's enrolled in specific comfort settings. Enrollment is per-climate. The app's pairing wizard only offers Home/Away/Sleep, so it can't enroll custom climates like Comfort Cool (smart1) and Comfort Heat (smart2), which is what the schedule actually runs, leaving the sensor idle during those modes. But the wizard is not the only path: each climate in `thermostat.program.climates` carries a writable `sensors: [{id, name}]` array, so participation (including the custom climates) can be set through the API, not just the app. When a sensor participates, the thermostat targets the **average** of all participating sensors, so adding a sensor that reads warmer than the thermostat makes the system cool more (and heat more), not less. Historical sensor data (temperature + occupancy, 5-minute intervals) is available via `just climate-history` (`--days N`, `--raw`, `--json`), which reads the Ecobee `runtimeReport` endpoint. `climate-status` still shows only the current snapshot.
 - **runtimeReport sensor columns:** Sensor capability columns use ids like `rs2:100:1` (a remote sensor's temperature) and `rs2:100:2` (its occupancy). The id is `<code>:<instance>:<capabilityIndex>`; group by the prefix (everything before the last `:`) to join a physical sensor's temperature and occupancy, since the thermostat's built-in reports them under different names ("Thermostat Temperature" vs "Thermostat Motion").
 - **runtimeReport temperatures are in display units:** A cell reads `75.6` and means 75.6°F, unlike `get_thermostats()` which returns tenths-of-a-degree ints. Do not apply `decode_temp` to runtimeReport values.
@@ -156,7 +158,7 @@ Never change `schedule.yaml` or `comforts.yaml` without the spec as reference.
 
 ## Key design principle
 
-The goal is always ~70°F in any actively occupied space. Comfort Heat and Comfort Cool both target 70°F from opposite thermal directions. Season determines which is active; outdoor temperature thresholds trigger the switch.
+The goal is a comfortable temperature in any actively occupied space, not a fixed number — the setpoints table in `spec/hvac-spec.md` is the source of truth for what that means per zone. Comfort Heat and Comfort Cool bracket occupied slots from opposite thermal directions; season determines which is active, via outdoor temperature thresholds.
 
 ## Module structure
 

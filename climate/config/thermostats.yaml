@@ -7,9 +7,13 @@ thermostats:
   downstairs:
     thermostat_id: "532572869586"
     managed: true
+    settings:
+      hold_action: useEndTime4hour
   upstairs:
     thermostat_id: "532537308613"
     managed: true
+    settings:
+      hold_action: useEndTime4hour
   cottage:
     thermostat_id: "272457106318"
     managed: false  # separate property (excluded from home automation)

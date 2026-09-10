@@ -1,261 +1,703 @@
 import argparse
-from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
+from pyecobee.errors import InvalidTokenError
 
-from climate.sync import _apply_comfort_mode
-
-SCHEDULE_WITH_COOL = "        - time: \"06:00\"\n          climate: smart1\n"
-SCHEDULE_WITH_HEAT = "        - time: \"06:00\"\n          climate: smart2\n"
-SCHEDULE_WITH_COMMENT = "          climate: smart1  # was smart2 before\n"
+from climate.ecobee.comfort_mode import COMFORT_REF, resolve_schedule_array
 
 
-def test_heat_replaces_cool_value():
-    result = _apply_comfort_mode(SCHEDULE_WITH_COOL, "heat")
-    assert "climate: smart2" in result
-    assert "climate: smart1" not in result
+def _program(ref):
+    """A live program whose occupied slots all use `ref`."""
+    return {
+        "schedule": [["sleep"] * 15 + [ref] * 33 for _ in range(7)],
+        "climates": [{"climateRef": r, "name": r} for r in
+                     ("smart1", "smart2", "sleep", "away", "home")],
+    }
 
 
-def test_cool_replaces_heat_value():
-    result = _apply_comfort_mode(SCHEDULE_WITH_HEAT, "cool")
-    assert "climate: smart1" in result
-    assert "climate: smart2" not in result
+def _local_array():
+    return [["sleep"] * 15 + [COMFORT_REF] * 33 for _ in range(7)]
 
 
-def test_comment_text_not_replaced():
-    # Comment mentions "smart2" but value is smart1, only value should flip
-    result = _apply_comfort_mode(SCHEDULE_WITH_COMMENT, "heat")
-    assert "climate: smart2" in result
-    assert "# was smart2 before" in result  # comment preserved
+def test_resolved_array_matches_live_when_mode_unchanged():
+    # The idempotence property: same decision, same live state -> nothing to push.
+    from climate.ecobee.schedule import diff_schedules
+    live = _program("smart1")
+    desired = resolve_schedule_array(_local_array(), "cool")
+    assert diff_schedules(desired, live["schedule"], live) == []
 
 
-def test_non_climate_smart_refs_untouched():
-    text = "# smart1 is for cooling\n          climate: smart1\n"
-    result = _apply_comfort_mode(text, "heat")
-    assert "# smart1 is for cooling" in result  # comment unchanged
-    assert "climate: smart2" in result
+def test_resolved_array_differs_when_mode_changes():
+    from climate.ecobee.schedule import diff_schedules
+    live = _program("smart1")
+    desired = resolve_schedule_array(_local_array(), "heat")
+    assert diff_schedules(desired, live["schedule"], live) != []
 
 
-def test_unknown_mode_raises():
-    with pytest.raises(ValueError, match="Unknown mode"):
-        _apply_comfort_mode("", "warm")
+def test_resolved_array_never_contains_the_virtual_ref():
+    # Guard the global constraint: `comfort` must never reach the Ecobee API.
+    for mode in ("cool", "heat"):
+        desired = resolve_schedule_array(_local_array(), mode)
+        assert not any(COMFORT_REF in day for day in desired)
 
 
-def test_no_change_when_already_set():
-    result = _apply_comfort_mode(SCHEDULE_WITH_HEAT, "heat")
-    assert result == SCHEDULE_WITH_HEAT
+def _write_comfort_switch_fixtures(tmp_path):
+    """A single managed thermostat ("downstairs") whose entire schedule is
+    the virtual comfort ref, on both schedule.yaml and thermostats.yaml.
+    """
+    thermostats_file = tmp_path / "thermostats.yaml"
+    thermostats_file.write_text(
+        "thermostats:\n"
+        "  downstairs:\n"
+        "    thermostat_id: \"111\"\n"
+        "    managed: true\n"
+    )
+
+    schedule_file = tmp_path / "schedule.yaml"
+    schedule_file.write_text(
+        "thermostats:\n"
+        "  downstairs:\n"
+        "    schedule:\n"
+        + "".join(
+            f"      {day}:\n        - time: \"00:00\"\n          climate: comfort\n"
+            for day in (
+                "sunday", "monday", "tuesday", "wednesday",
+                "thursday", "friday", "saturday",
+            )
+        )
+    )
+    return schedule_file, thermostats_file
 
 
-# --- cmd_comfort_switch tests ---
+def _run_comfort_switch(
+    monkeypatch, tmp_path, *, live_ref, hold, mode="heat", dry_run=False,
+    status_name="Downstairs", recent_temps=None, station_temp=68.0,
+):
+    """Drive the real cmd_comfort_switch, mocking only the Ecobee network
+    boundary (auth.make_ecobee, push_schedule, resume_program), the Ambient
+    Weather boundary (for mode="auto"), and status extraction. Everything
+    else -- load_thermostats, schedule.load_schedule,
+    iter_thermostat_entries, build_schedule_array, validate_climate_refs,
+    resolve_schedule_array, diff_schedules, get_current_program,
+    decide_mode -- runs for real against the fixture files, so a regression
+    to the unconditional-push defect this task exists to fix would actually
+    be caught here.
 
-@contextmanager
-def _mock_infrastructure(previous_mode=None):
-    """Patches auth, thermostat registry, and runlog so tests don't need real credentials or config."""
+    `live_ref` is the climateRef the live program reports in every slot
+    (controls whether the diff is empty or not); `hold` is what the mocked
+    status reports for this thermostat's active hold. `status_name` is the
+    name the status snapshot reports -- defaults to matching schedule.yaml's
+    "downstairs" (case-insensitively); pass a different value to simulate a
+    lookup miss (e.g. a thermostat renamed in the Ecobee app).
+
+    For mode="auto": `recent_temps` is the 24h window handed to decide_mode
+    (via a mocked read_recent_outdoor_temps) and `station_temp` is the
+    instantaneous reading handed to get_outdoor_temp_from_stations (the
+    value that gets logged, per hvac-spec.md, regardless of what the window
+    decides). Thresholds are fixed at heat_below=60, cool_above=65.
+
+    Returns (push_mock, resume_mock, append_run_log_mock, write_last_state_mock).
+    """
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
+
+    schedule_file, thermostats_file = _write_comfort_switch_fixtures(tmp_path)
+
+    live_program = {
+        "schedule": [[live_ref] * 48 for _ in range(7)],
+        "climates": [{"climateRef": r, "name": r} for r in
+                     ("smart1", "smart2", "sleep", "away", "home")],
+    }
+    mock_ecobee = MagicMock()
+    mock_ecobee.get_thermostats.return_value = True
+    mock_ecobee.thermostats = [{"identifier": "111", "program": live_program}]
+
+    push = MagicMock()
+    resume = MagicMock()
+    append_run_log = MagicMock()
+    write_last_state = MagicMock()
+
+    monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
+    monkeypatch.setattr(sync_mod.schedule, "push_schedule", push)
+    monkeypatch.setattr(sync_mod.schedule, "resume_program", resume)
+    monkeypatch.setattr(
+        sync_mod.status, "extract_thermostat_status",
+        lambda t: {"name": status_name, "hold": hold, "hvac_mode": "auto", "climate_ref": None},
+    )
+    monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+    monkeypatch.setattr(runlog_mod, "write_last_state", write_last_state)
+
+    if mode == "auto":
+        # These are imported with `from climate.ambient.client import ...`
+        # *inside* cmd_comfort_switch, so patching the names on the real
+        # module (not on sync_mod) is what that local import picks up.
+        monkeypatch.setattr(
+            ambient_mod, "load_weather_config",
+            lambda path: {"thresholds": {"heat_below": 60, "cool_above": 65}},
+        )
+        monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: ["AA:BB:CC"])
+        monkeypatch.setattr(
+            ambient_mod, "get_outdoor_temp_from_stations",
+            lambda macs: ("AA:BB:CC", station_temp, 5.0),
+        )
+        monkeypatch.setattr(
+            runlog_mod, "read_recent_outdoor_temps",
+            lambda data_dir: recent_temps if recent_temps is not None else [],
+        )
+
+    args = argparse.Namespace(
+        mode=mode,
+        schedule=schedule_file,
+        thermostats=thermostats_file,
+        weather=tmp_path / "unused-weather.yaml",
+        dry_run=dry_run,
+        clear_holds=False,
+    )
+    sync_mod.cmd_comfort_switch(args)
+    return push, resume, append_run_log, write_last_state
+
+
+def test_push_not_called_when_schedule_matches(monkeypatch, tmp_path):
+    # mode="heat" resolves comfort -> smart2; live is already smart2 everywhere.
+    push, resume, _, _ = _run_comfort_switch(monkeypatch, tmp_path, live_ref="smart2", hold=None, mode="heat")
+    push.assert_not_called()
+    resume.assert_not_called()
+
+
+def test_push_called_once_when_schedule_differs(monkeypatch, tmp_path):
+    # mode="heat" resolves comfort -> smart2; live is smart1 (cool) everywhere -> mismatch.
+    push, resume, _, _ = _run_comfort_switch(monkeypatch, tmp_path, live_ref="smart1", hold=None, mode="heat")
+    assert push.call_count == 1
+    # hold=None -> nothing is overriding the schedule, so the new program
+    # should be resumed immediately rather than waiting for a slot boundary.
+    resume.assert_called_once()
+
+
+def test_resume_not_called_when_thermostat_has_active_hold(monkeypatch, tmp_path):
+    # Same mismatch as above (push happens), but a real hold is active.
+    push, resume, _, _ = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart1", hold="indefinite", mode="heat"
+    )
+    assert push.call_count == 1
+    resume.assert_not_called()
+
+
+def test_resume_not_called_when_hold_status_lookup_misses(monkeypatch, tmp_path):
+    """The fail-closed regression guard: hold_by_name is keyed by the Ecobee
+    device name, `pushed` by schedule.yaml's name, joined only by lowercase
+    convention. If the Ecobee-side name doesn't match (e.g. renamed in the
+    app), the old code's `.get(name.lower()) is None` treated "not found" the
+    same as "confirmed no hold" and resumed anyway -- clearing a hold it
+    never actually observed. It must fail closed instead."""
+    push, resume, _, _ = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart1", hold=None, mode="heat",
+        status_name="Some Renamed Thermostat",
+    )
+    assert push.call_count == 1
+    resume.assert_not_called()
+
+
+def test_dry_run_writes_nothing_persistent(monkeypatch, tmp_path):
+    """--dry-run must be zero persistent writes, full stop: no push, no
+    resume, no run-log entry, no last-state mutation. This is what makes it
+    safe to run `climate-comfort-switch-dry` against real thermostats -- a
+    dry run that clears a hold or injects a sample into the rolling window
+    isn't a dry run."""
+    push, resume, append_run_log, write_last_state = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart1", hold=None, mode="heat", dry_run=True,
+    )
+    push.assert_not_called()
+    resume.assert_not_called()
+    append_run_log.assert_not_called()
+    write_last_state.assert_not_called()
+
+
+def test_unmanaged_thermostat_in_schedule_yaml_is_never_pushed_to(monkeypatch, tmp_path):
+    """schedule.yaml has no `managed` filter of its own -- cmd_sync/cmd_validate
+    intentionally act on whatever it lists. But cmd_comfort_switch is the
+    unattended timer, and thermostats.yaml's `managed: false` is the only
+    thing marking a property as out of scope for it (e.g. a `cottage` entry
+    that's a different property's thermostat). If schedule.yaml ever lists an
+    unmanaged thermostat, the timer must not act on it."""
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+
+    thermostats_file = tmp_path / "thermostats.yaml"
+    thermostats_file.write_text(
+        "thermostats:\n"
+        "  downstairs:\n"
+        "    thermostat_id: \"111\"\n"
+        "    managed: true\n"
+        "  cottage:\n"
+        "    thermostat_id: \"222\"\n"
+        "    managed: false  # separate property\n"
+    )
+    schedule_file = tmp_path / "schedule.yaml"
+    day_block = "".join(
+        f"      {day}:\n        - time: \"00:00\"\n          climate: comfort\n"
+        for day in (
+            "sunday", "monday", "tuesday", "wednesday",
+            "thursday", "friday", "saturday",
+        )
+    )
+    schedule_file.write_text(
+        "thermostats:\n"
+        "  downstairs:\n"
+        "    schedule:\n" + day_block +
+        "  cottage:\n"  # accidentally added to schedule.yaml despite managed: false
+        "    schedule:\n" + day_block
+    )
+
+    live_program = {
+        "schedule": [["smart1"] * 48 for _ in range(7)],  # mismatches mode="heat" -> would diff
+        "climates": [{"climateRef": r, "name": r} for r in
+                     ("smart1", "smart2", "sleep", "away", "home")],
+    }
+    mock_ecobee = MagicMock()
+    mock_ecobee.get_thermostats.return_value = True
+    mock_ecobee.thermostats = [
+        {"identifier": "111", "program": live_program},
+        {"identifier": "222", "program": live_program},
+    ]
+
+    push = MagicMock()
+    get_current_program = MagicMock(wraps=lambda ecobee, tid: live_program)
+
+    monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
+    monkeypatch.setattr(sync_mod.schedule, "push_schedule", push)
+    monkeypatch.setattr(sync_mod.schedule, "resume_program", MagicMock())
+    monkeypatch.setattr(sync_mod.schedule, "get_current_program", get_current_program)
+    monkeypatch.setattr(
+        sync_mod.status, "extract_thermostat_status",
+        lambda t: {"name": "Downstairs" if t["identifier"] == "111" else "Cottage", "hold": None},
+    )
+    monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", lambda *a, **kw: None)
+    monkeypatch.setattr(runlog_mod, "write_last_state", lambda *a, **kw: None)
+
+    args = argparse.Namespace(
+        mode="heat",
+        schedule=schedule_file,
+        thermostats=thermostats_file,
+        weather=tmp_path / "unused-weather.yaml",
+        dry_run=False,
+        clear_holds=False,
+    )
+    sync_mod.cmd_comfort_switch(args)
+
+    # get_current_program is only ever called for entries that survived the
+    # managed-set intersection -- if "cottage" leaked through, it would be
+    # called with thermostat_id "222".
+    called_ids = {call.args[1] for call in get_current_program.call_args_list}
+    assert called_ids == {"111"}
+    assert push.call_count == 1
+    assert push.call_args.args[1] == "111"
+
+
+def test_comfort_switch_never_sets_hvac_mode():
+    """The timer must not write hvacMode. Regression guard for 'cannot turn it off'."""
+    import climate.sync as sync_mod
+    src = __import__("inspect").getsource(sync_mod.cmd_comfort_switch)
+    assert "set_hvac_mode" not in src
+
+
+def test_apply_comfort_mode_is_gone():
+    """The text-mutation approach is deleted, not merely unused."""
+    import climate.sync as sync_mod
+    assert not hasattr(sync_mod, "_apply_comfort_mode")
+
+
+# --- _resolve_mode_for_push: not covered by the brief's test list, added
+# here because this is the function that stops the whole system from
+# silently defaulting a season it can't determine. ---
+
+
+def _live_program(*refs):
+    """A live program whose occupied slots use the given climateRefs."""
+    return {"schedule": [[r] for r in refs], "climates": []}
+
+
+def test_explicit_mode_wins_over_live_and_window():
+    from climate.sync import _resolve_mode_for_push
+    program = _live_program("smart1")  # live = cool
+    mode, info = _resolve_mode_for_push(program, "heat", {}, MagicMock())
+    assert mode == "heat"
+    assert info["reason"] == "explicit_mode"
+
+
+def test_preserves_live_mode_when_no_explicit_mode():
+    from climate.sync import _resolve_mode_for_push
+    program = _live_program("smart2")  # live = heat
+    mode, info = _resolve_mode_for_push(program, None, {}, MagicMock())
+    assert mode == "heat"
+    assert info["reason"] == "preserved_live_mode"
+
+
+def test_falls_back_to_window_when_live_mode_undeterminable(monkeypatch):
+    from climate.sync import _resolve_mode_for_push
+    from climate import runlog as runlog_mod
+
+    monkeypatch.setattr(
+        runlog_mod, "read_recent_outdoor_temps", lambda data_dir: [50.0] * 48
+    )
+    program = _live_program()  # no smart1/smart2 present -> live is None
+    mode, info = _resolve_mode_for_push(
+        program, None, {"thresholds": {"heat_below": 60, "cool_above": 65}}, MagicMock()
+    )
+    assert mode == "heat"
+    assert info["reason"] == "below_heat_threshold"
+
+
+def test_raises_rather_than_defaulting_when_undeterminable(monkeypatch):
+    from climate.sync import _resolve_mode_for_push
+    from climate import runlog as runlog_mod
+
+    monkeypatch.setattr(runlog_mod, "read_recent_outdoor_temps", lambda data_dir: [])
+    program = _live_program()  # live is None, and the window is empty too
+    with pytest.raises(RuntimeError, match="Cannot determine the comfort mode"):
+        _resolve_mode_for_push(program, None, {}, MagicMock())
+
+
+# --- cmd_comfort_switch: unattended-run error handling ---
+#
+# This runs unattended every 15 minutes on a home server. An expired token
+# must produce the actionable message and a non-zero exit, not a traceback
+# dumped into the journal for someone to find later.
+
+
+def test_invalid_token_during_get_thermostats_exits_cleanly(monkeypatch, capsys, tmp_path):
+    """The real-world failure mode: tokens expire before the *first* network
+    call in the function (ecobee.get_thermostats()), not mid-loop. pyecobee
+    propagates InvalidTokenError from that call directly rather than
+    returning False, so it must be guarded there specifically -- a guard
+    later in the function (e.g. around get_current_program) never gets a
+    chance to run.
+
+    Also covers finding 4: this exit now writes a run-log entry before
+    sys.exit(1) rather than leaving the run invisible."""
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+
+    mock_ecobee = MagicMock()
+    mock_ecobee.get_thermostats.side_effect = InvalidTokenError("expired")
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
+    monkeypatch.setattr(sync_mod, "load_thermostats", lambda path: {})
+    monkeypatch.setattr(sync_mod, "get_managed_thermostats", lambda registry: [])
+    monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+    # If the code under test reached this far, the guard failed -- the
+    # exception should stop the function before any schedule I/O happens.
+    monkeypatch.setattr(
+        sync_mod.schedule, "load_schedule",
+        MagicMock(side_effect=AssertionError("should not reach schedule I/O")),
+    )
+
+    args = argparse.Namespace(
+        mode="heat",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=False,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_mod.cmd_comfort_switch(args)
+
+    assert exc_info.value.code == 1
+    assert "Tokens invalid. Re-run 'just climate-auth'." in capsys.readouterr().out
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "invalid_token"
+    assert entry["skipped"] is True
+    assert entry["switched"] is False
+
+
+def test_invalid_token_during_push_prints_message_and_exits_nonzero(monkeypatch, capsys):
+    """A narrower case than the get_thermostats guard above: tokens are
+    valid for the initial fetch but expire before a specific thermostat's
+    get_current_program call (e.g. a long-lived process, or the token
+    expiring mid-run). Guards the per-thermostat try/except independently."""
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+
     mock_ecobee = MagicMock()
     mock_ecobee.get_thermostats.return_value = True
     mock_ecobee.thermostats = [MagicMock()]  # non-empty so the "failed to fetch" guard passes
-    last_state = {"mode": previous_mode, "outdoor_temp_f": 70.0, "thermostats": []} if previous_mode else None
-    with patch("climate.ecobee.auth.make_ecobee", return_value=mock_ecobee), \
-         patch("climate.sync.load_thermostats", return_value={}), \
-         patch("climate.sync.get_managed_thermostats", return_value=[]), \
-         patch("climate.runlog.read_last_state", return_value=last_state), \
-         patch("climate.runlog.append_run_log"), \
-         patch("climate.runlog.write_last_state"), \
-         patch("climate.runlog.get_data_dir", return_value=Path("/tmp/test")):
-        yield mock_ecobee
+
+    # `runlog` is imported locally inside cmd_comfort_switch (`from climate
+    # import runlog`), so patching the actual `climate.runlog` module -- not
+    # an attribute of `climate.sync` -- is what that local import picks up.
+    monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
+    monkeypatch.setattr(sync_mod, "load_thermostats", lambda path: {})
+    # Must include thermostat_id "123" -- cmd_comfort_switch now intersects
+    # schedule.yaml entries with the managed set before pushing to them.
+    monkeypatch.setattr(sync_mod, "get_managed_thermostats", lambda registry: [("downstairs", "123")])
+    monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: Path("/tmp/test"))
+    monkeypatch.setattr(runlog_mod, "append_run_log", lambda *a, **kw: None)
+    monkeypatch.setattr(runlog_mod, "write_last_state", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        sync_mod.schedule, "load_schedule",
+        lambda path: {"thermostats": {"downstairs": {"schedule": {}}}},
+    )
+    monkeypatch.setattr(
+        sync_mod.schedule, "iter_thermostat_entries",
+        lambda data, registry, name_filter: iter([("downstairs", "123", {})]),
+    )
+    monkeypatch.setattr(
+        sync_mod.schedule, "get_current_program",
+        MagicMock(side_effect=InvalidTokenError("expired")),
+    )
+
+    args = argparse.Namespace(
+        mode="heat",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=False,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_mod.cmd_comfort_switch(args)
+
+    assert exc_info.value.code == 1
+    assert "Tokens invalid. Re-run 'just climate-auth'." in capsys.readouterr().out
 
 
-def test_cmd_comfort_switch_heat(tmp_path):
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    schedule_file.write_text(SCHEDULE_WITH_COOL)
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
+# --- cmd_comfort_switch: pre-decision exits now write a run-log entry ---
+#
+# Every one of these used to sys.exit(1) before the run-log write at the
+# bottom of the function ever ran. On the auto-mode timer that means a
+# weather-station outage or a config error produced zero trace in
+# run-log.jsonl -- the run log is now the system's only memory, so a silent
+# gap here is a cold house with no signal beyond a red `systemctl status`.
+
+
+def test_no_stations_configured_logs_reason_before_exit(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(ambient_mod, "load_weather_config", lambda path: {})
+    monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: [])
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+
+    args = argparse.Namespace(
+        mode="auto",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=False,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_mod.cmd_comfort_switch(args)
+
+    assert exc_info.value.code == 1
+    assert "No stations configured" in capsys.readouterr().out
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "no_stations_configured"
+    assert entry["outdoor_temp_f"] is None
+    assert entry["switched"] is False
+    assert entry["skipped"] is True
+
+
+def test_no_stations_configured_dry_run_writes_nothing(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(ambient_mod, "load_weather_config", lambda path: {})
+    monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: [])
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+
+    args = argparse.Namespace(
+        mode="auto",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=True,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit):
+        sync_mod.cmd_comfort_switch(args)
+
+    append_run_log.assert_not_called()
+
+
+def test_outdoor_temp_unavailable_logs_reason_before_exit(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+    from climate.ambient import client as ambient_mod
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(ambient_mod, "load_weather_config", lambda path: {})
+    monkeypatch.setattr(ambient_mod, "get_configured_macs", lambda config: ["AA:BB:CC"])
+    monkeypatch.setattr(ambient_mod, "get_outdoor_temp_from_stations", lambda macs: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+
+    args = argparse.Namespace(
+        mode="auto",
+        schedule=Path("unused-schedule.yaml"),
+        thermostats=Path("unused-thermostats.yaml"),
+        weather=Path("unused-weather.yaml"),
+        dry_run=False,
+        clear_holds=False,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_mod.cmd_comfort_switch(args)
+
+    assert exc_info.value.code == 1
+    assert "Could not read outdoor temp" in capsys.readouterr().out
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "outdoor_temp_unavailable"
+    assert entry["outdoor_temp_f"] is None
+
+
+# --- cmd_comfort_switch: hvac_mode_warning is surfaced on the unattended path ---
+#
+# hvac_mode_warning previously had exactly one caller (format_status, only
+# reached interactively via `climate-status`). The unattended timer never
+# called it, so a thermostat set to Off in October -- correct, the
+# automation must not revert it -- produced no signal anywhere the timer
+# writes: it just kept finding the schedule "already correct".
+
+
+def test_hvac_mode_warning_surfaced_in_run_log_and_stdout(monkeypatch, capsys, tmp_path):
+    import climate.sync as sync_mod
+    from climate import runlog as runlog_mod
+
+    schedule_file, thermostats_file = _write_comfort_switch_fixtures(tmp_path)
+    live_program = {
+        "schedule": [["smart2"] * 48 for _ in range(7)],  # matches mode="heat" -> nothing to push
+        "climates": [{"climateRef": r, "name": r} for r in
+                     ("smart1", "smart2", "sleep", "away", "home")],
+    }
+    mock_ecobee = MagicMock()
+    mock_ecobee.get_thermostats.return_value = True
+    mock_ecobee.thermostats = [{"identifier": "111", "program": live_program}]
+
+    append_run_log = MagicMock()
+
+    monkeypatch.setattr(sync_mod.auth, "make_ecobee", lambda: mock_ecobee)
+    monkeypatch.setattr(sync_mod.schedule, "push_schedule", MagicMock())
+    monkeypatch.setattr(sync_mod.schedule, "resume_program", MagicMock())
+    monkeypatch.setattr(
+        sync_mod.status, "extract_thermostat_status",
+        lambda t: {"name": "Downstairs", "hold": None, "hvac_mode": "off", "climate_ref": "smart2"},
+    )
+    monkeypatch.setattr(runlog_mod, "read_last_state", lambda data_dir: None)
+    monkeypatch.setattr(runlog_mod, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(runlog_mod, "append_run_log", append_run_log)
+    monkeypatch.setattr(runlog_mod, "write_last_state", MagicMock())
+
     args = argparse.Namespace(
         mode="heat",
         schedule=schedule_file,
         thermostats=thermostats_file,
-        weather=tmp_path / "weather.yaml",
+        weather=tmp_path / "unused-weather.yaml",
         dry_run=False,
         clear_holds=False,
     )
-    with _mock_infrastructure():
-        with patch("climate.sync.cmd_sync") as mock_sync:
-            cmd_comfort_switch(args)
-    assert "smart2" in schedule_file.read_text()
-    mock_sync.assert_called_once()
+    sync_mod.cmd_comfort_switch(args)
+
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert "off" in out.lower()
+
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["warnings"]
+    assert "off" in entry["warnings"][0].lower()
 
 
-def test_cmd_comfort_switch_cool(tmp_path):
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    schedule_file.write_text(SCHEDULE_WITH_HEAT)
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
-    args = argparse.Namespace(
-        mode="cool",
-        schedule=schedule_file,
-        thermostats=thermostats_file,
-        weather=tmp_path / "weather.yaml",
-        dry_run=False,
-        clear_holds=False,
+def test_no_warning_when_hvac_mode_matches_season(monkeypatch, tmp_path, capsys):
+    """The common case: no warning text, and an empty (not missing) warnings
+    list in the run log."""
+    push, resume, append_run_log, _ = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart2", hold=None, mode="heat",
     )
-    with _mock_infrastructure():
-        with patch("climate.sync.cmd_sync") as mock_sync:
-            cmd_comfort_switch(args)
-    assert "smart1" in schedule_file.read_text()
-    mock_sync.assert_called_once()
+    assert "WARNING" not in capsys.readouterr().out
+    entry = append_run_log.call_args.args[1]
+    assert entry["warnings"] == []
 
 
-def test_cmd_comfort_switch_auto_heat(tmp_path):
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    schedule_file.write_text(SCHEDULE_WITH_COOL)
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
-    weather_file = tmp_path / "weather.yaml"
-    weather_file.write_text(
-        "stations:\n  - mac: AA:BB\nthresholds:\n  heat_below: 60\n  cool_above: 65\n"
+# --- cmd_comfort_switch: mode="auto" is an integration-tested path ---
+#
+# Every prior _run_comfort_switch call passed an explicit mode -- nothing
+# exercised the weather fetch, read_recent_outdoor_temps -> decide_mode
+# wiring, hysteresis, or the dry-run guard on the auto path as production
+# actually runs it. A regression that swapped `temps` for `outdoor_temp` in
+# the decide_mode call, or dropped the hysteresis early return, would have
+# shipped green.
+
+
+def test_auto_mode_mean_inside_band_appends_run_log_without_pushing(monkeypatch, tmp_path):
+    # 62F is inside the (60, 65) band -- decide_mode returns None -> hysteresis.
+    push, resume, append_run_log, write_last_state = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart2", hold=None, mode="auto",
+        recent_temps=[62.0] * 60, station_temp=45.0,
     )
-    args = argparse.Namespace(
-        mode="auto",
-        schedule=schedule_file,
-        thermostats=thermostats_file,
-        weather=weather_file,
-        dry_run=False,
-        clear_holds=False,
+    push.assert_not_called()
+    resume.assert_not_called()
+    append_run_log.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["reason"] == "hysteresis"
+    assert entry["decision"] == "no_change"
+    assert entry["outdoor_temp_f"] == 45.0
+    write_last_state.assert_called_once()
+
+
+def test_auto_mode_dry_run_inside_band_appends_nothing(monkeypatch, tmp_path):
+    push, resume, append_run_log, write_last_state = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart2", hold=None, mode="auto",
+        recent_temps=[62.0] * 60, station_temp=45.0, dry_run=True,
     )
-    with _mock_infrastructure():
-        with patch("climate.ambient.client.get_outdoor_temp_from_stations", return_value=("AA:BB", 45.0, 2.0)):
-            with patch("climate.sync.cmd_sync") as mock_sync:
-                cmd_comfort_switch(args)
-    assert "smart2" in schedule_file.read_text()
-    mock_sync.assert_called_once()
+    push.assert_not_called()
+    resume.assert_not_called()
+    append_run_log.assert_not_called()
+    write_last_state.assert_not_called()
 
 
-def test_cmd_comfort_switch_auto_cool(tmp_path):
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    schedule_file.write_text(SCHEDULE_WITH_HEAT)
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
-    weather_file = tmp_path / "weather.yaml"
-    weather_file.write_text(
-        "stations:\n  - mac: AA:BB\nthresholds:\n  heat_below: 60\n  cool_above: 65\n"
+def test_auto_mode_mean_below_band_decides_heat_and_pushes_when_live_differs(monkeypatch, tmp_path):
+    # 50F is below heat_below=60 -> decide_mode returns "heat". Live program
+    # is smart1 (cool) everywhere, so the resolved "heat" schedule differs
+    # and must be pushed.
+    push, resume, append_run_log, write_last_state = _run_comfort_switch(
+        monkeypatch, tmp_path, live_ref="smart1", hold=None, mode="auto",
+        recent_temps=[50.0] * 60, station_temp=63.0,
     )
-    args = argparse.Namespace(
-        mode="auto",
-        schedule=schedule_file,
-        thermostats=thermostats_file,
-        weather=weather_file,
-        dry_run=False,
-        clear_holds=False,
-    )
-    with _mock_infrastructure():
-        with patch("climate.ambient.client.get_outdoor_temp_from_stations", return_value=("AA:BB", 75.0, 2.0)):
-            with patch("climate.sync.cmd_sync") as mock_sync:
-                cmd_comfort_switch(args)
-    assert "smart1" in schedule_file.read_text()
-    mock_sync.assert_called_once()
-
-
-def test_cmd_comfort_switch_auto_hysteresis(tmp_path, capsys):
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    original = SCHEDULE_WITH_HEAT
-    schedule_file.write_text(original)
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
-    weather_file = tmp_path / "weather.yaml"
-    weather_file.write_text(
-        "stations:\n  - mac: AA:BB\nthresholds:\n  heat_below: 60\n  cool_above: 65\n"
-    )
-    args = argparse.Namespace(
-        mode="auto",
-        schedule=schedule_file,
-        thermostats=thermostats_file,
-        weather=weather_file,
-        dry_run=False,
-        clear_holds=False,
-    )
-    with _mock_infrastructure():
-        with patch("climate.ambient.client.get_outdoor_temp_from_stations", return_value=("AA:BB", 62.0, 2.0)):
-            with patch("climate.sync.cmd_sync") as mock_sync:
-                cmd_comfort_switch(args)
-    # No change, in hysteresis band
-    assert schedule_file.read_text() == original
-    mock_sync.assert_not_called()
-
-
-def test_cmd_comfort_switch_sync_failure_rollback(tmp_path):
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    original = SCHEDULE_WITH_COOL
-    schedule_file.write_text(original)
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
-    args = argparse.Namespace(
-        mode="heat",
-        schedule=schedule_file,
-        thermostats=thermostats_file,
-        weather=tmp_path / "weather.yaml",
-        dry_run=False,
-        clear_holds=False,
-    )
-    with _mock_infrastructure():
-        with patch("climate.sync.cmd_sync", side_effect=SystemExit(1)):
-            with pytest.raises(SystemExit):
-                cmd_comfort_switch(args)
-    # File should be restored to original content
-    assert schedule_file.read_text() == original
-
-
-def test_cmd_comfort_switch_skips_when_schedule_already_correct(tmp_path):
-    # If schedule.yaml already has the right comfort ref, the file should not be
-    # modified, but the schedule is still synced to Ecobee. This is intentional:
-    # the auto-switch runs inside an ephemeral Docker container where schedule.yaml
-    # is baked into the image and starts fresh each run. Always syncing ensures
-    # Ecobee stays in the right state even if a previous sync failed mid-run.
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    schedule_file.write_text(SCHEDULE_WITH_COOL)  # already smart1 = cool
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
-    args = argparse.Namespace(
-        mode="cool",
-        schedule=schedule_file,
-        thermostats=thermostats_file,
-        weather=tmp_path / "weather.yaml",
-        dry_run=False,
-        clear_holds=False,
-    )
-    with _mock_infrastructure(previous_mode="cool"):
-        with patch("climate.sync.cmd_sync") as mock_sync:
-            cmd_comfort_switch(args)
-    mock_sync.assert_called_once()  # sync always runs; container schedule.yaml is ephemeral
-    assert schedule_file.read_text() == SCHEDULE_WITH_COOL  # file unchanged (already correct)
-
-
-def test_cmd_comfort_switch_syncs_when_previous_mode_matches_but_schedule_stale(tmp_path):
-    # Regression: previous_mode=="cool" in last-state but schedule.yaml still has smart2
-    # (heat). This was the bug: the old code skipped the sync, leaving Ecobee on
-    # Comfort Heat all summer. The fix: skip based on schedule content, not last-state.
-    from climate.sync import cmd_comfort_switch
-    schedule_file = tmp_path / "schedule.yaml"
-    schedule_file.write_text(SCHEDULE_WITH_HEAT)  # stale, still has smart2
-    thermostats_file = tmp_path / "thermostats.yaml"
-    thermostats_file.write_text("")
-    args = argparse.Namespace(
-        mode="cool",
-        schedule=schedule_file,
-        thermostats=thermostats_file,
-        weather=tmp_path / "weather.yaml",
-        dry_run=False,
-        clear_holds=False,
-    )
-    with _mock_infrastructure(previous_mode="cool"):  # last-state says cool, but file is wrong
-        with patch("climate.sync.cmd_sync") as mock_sync:
-            cmd_comfort_switch(args)
-    assert "smart1" in schedule_file.read_text()
-    mock_sync.assert_called_once()
+    assert push.call_count == 1
+    resume.assert_called_once()
+    entry = append_run_log.call_args.args[1]
+    assert entry["decision"] == "heat"
+    assert entry["switched"] is True
+    assert entry["outdoor_temp_f"] == 63.0
+    write_last_state.assert_called_once()
+    state = write_last_state.call_args.args[1]
+    assert state["mode"] == "heat"

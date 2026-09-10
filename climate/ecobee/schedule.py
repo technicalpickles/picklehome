@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 from pyecobee.const import ECOBEE_ENDPOINT_THERMOSTAT
 
+from climate.ecobee.comfort_mode import COMFORT_REF
 from climate.ecobee.thermostats import get_thermostat_id
 
 
@@ -21,6 +22,23 @@ def get_current_program(ecobee, thermostat_id: str) -> dict:
     program = thermostat.get("program")
     if program is None:
         raise RuntimeError(f"Thermostat {thermostat_id} returned no program data.")
+    # diff_schedules is the only thing gating the push (see hvac-spec.md /
+    # the 2026-09-10 design), so a degenerate remote schedule (missing,
+    # empty, or wrong-shaped) must not be allowed to zip-compare as "equal"
+    # to the desired 7x48 array -- Python's zip() silently truncates to the
+    # shorter iterable, so a 0-length or ragged remote schedule would yield
+    # zero diffs and the caller would conclude "already correct" forever,
+    # with nothing to self-correct it.
+    remote_schedule = program.get("schedule")
+    if (
+        not isinstance(remote_schedule, list)
+        or len(remote_schedule) != 7
+        or any(not isinstance(day, list) or len(day) != 48 for day in remote_schedule)
+    ):
+        raise RuntimeError(
+            f"Thermostat {thermostat_id} returned a malformed schedule "
+            "(expected 7 days of 48 slots each). Refusing to diff against it."
+        )
     return program
 
 
@@ -42,6 +60,31 @@ def set_hvac_mode(ecobee, thermostat_id: str, hvac_mode: str) -> None:
     )
     if response is None:
         raise RuntimeError(f"Failed to set HVAC mode to {hvac_mode}.")
+
+
+def set_hold_action(ecobee, thermostat_id: str, hold_action: str) -> None:
+    """Set holdAction (how long a manual temperature bump lasts).
+
+    useEndTime4hour is confirmed valid: verified empirically against both
+    managed thermostats, where it stuck rather than being silently rewritten.
+    useEndTime2hour, nextPeriod, indefinite, and askMe are still unverified,
+    believed valid from the API docs only. Ecobee silently rewrites values it
+    rejects, and a 200 response proves nothing on its own — that's exactly why
+    useEndTime4hour had to be confirmed by reading the live program back, and
+    why callers must do the same for any value not yet verified here.
+    """
+    body = {
+        "selection": {
+            "selectionType": "thermostats",
+            "selectionMatch": thermostat_id,
+        },
+        "thermostat": {"settings": {"holdAction": hold_action}},
+    }
+    response = ecobee._request_with_refresh(
+        "POST", ECOBEE_ENDPOINT_THERMOSTAT, f"set holdAction to {hold_action}", body=body
+    )
+    if response is None:
+        raise RuntimeError(f"Failed to set holdAction to {hold_action}.")
 
 
 def resume_program(ecobee, thermostat_id: str) -> None:
@@ -183,7 +226,11 @@ def build_schedule_array(schedule_dict: dict) -> list[list[str]]:
 
 
 def validate_climate_refs(schedule_dict: dict, program: dict) -> None:
-    valid = {c["climateRef"] for c in program["climates"]}
+    # COMFORT_REF is virtual: it is resolved to a real climateRef immediately
+    # before a push and never sent to Ecobee, so it is valid in the file but
+    # deliberately absent from the "valid climateRefs" list in the error below.
+    real = {c["climateRef"] for c in program["climates"]}
+    valid = real | {COMFORT_REF}
     used = set()
     for transitions in schedule_dict.values():
         if not isinstance(transitions, list):
@@ -195,7 +242,7 @@ def validate_climate_refs(schedule_dict: dict, program: dict) -> None:
     if unknowns:
         raise ValueError(
             f"Unknown climate(s): {sorted(unknowns)}. "
-            f"Valid climateRefs for this thermostat: {sorted(valid)}"
+            f"Valid climateRefs for this thermostat: {sorted(real)}"
         )
 
 

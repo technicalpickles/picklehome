@@ -75,6 +75,27 @@ def extract_thermostat_status(thermostat: dict) -> dict:
     }
 
 
+def hvac_mode_warning(status: dict) -> str | None:
+    """Warn when the HVAC mode cannot deliver the active comfort mode.
+
+    Surfaced, never corrected: a person choosing Off or heat-only outranks the
+    automation (see climate/spec/hvac-spec.md, "HVAC mode"). The cost of that
+    choice is that this mismatch is possible, so it is said out loud.
+    """
+    mode = status.get("hvac_mode")
+    ref = status.get("climate_ref")
+    if mode == "off":
+        return "HVAC mode is off; neither heating nor cooling will run. Use 'just climate-hvac-mode auto' to restore."
+    # auxHeatOnly (argparse-accepted alongside heat/cool/off/auto for
+    # 'climate-hvac-mode') is just as heat-only as `heat` -- it likewise
+    # cannot deliver Comfort Cool.
+    if mode in ("heat", "auxHeatOnly") and ref == "smart1":
+        return f"HVAC mode is {mode} (heat-only) but Comfort Cool is scheduled; it cannot cool. Use 'just climate-hvac-mode auto' to restore."
+    if mode == "cool" and ref == "smart2":
+        return "HVAC mode is cool-only but Comfort Heat is scheduled; it cannot heat. Use 'just climate-hvac-mode auto' to restore."
+    return None
+
+
 def format_status(statuses: list[dict]) -> str:
     """Format a list of thermostat status dicts as a human-readable string."""
     lines = []
@@ -101,6 +122,11 @@ def format_status(statuses: list[dict]) -> str:
             climate = f"{climate} {heat_sp:.0f}/{cool_sp:.0f}°F"
         line = f"{s['name']:<14} {temp:<8} {humidity:<5} {equipment:<10} {climate:<20} {hvac}{hold_str}"
         lines.append(line.rstrip())
+
+        # Append warning line if HVAC mode cannot deliver the active comfort mode
+        warning = hvac_mode_warning(s)
+        if warning:
+            lines.append(f"  WARNING: {warning}")
 
     # Weather: use first thermostat's weather (they share the same feed by location)
     weather_added = False
