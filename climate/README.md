@@ -68,7 +68,7 @@ just climate-validate                    # confirm remote matches local
 just climate-comforts-capture            # snapshot current setpoints → comforts.yaml
 just climate-comforts-sync [--dry-run]   # push comforts.yaml to Ecobee
 just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # seasonal mode switch
-just climate-hvac-mode MODE              # set hvacMode (auto|heat|cool|off|auxHeatOnly); only manual writer, never the timer
+just climate-hvac-mode MODE [--thermostat NAME] [--dry-run]  # set hvacMode (auto|heat|cool|off|auxHeatOnly); only manual writer, never the timer
 just climate-settings-sync [--thermostat NAME] [--dry-run]  # push per-thermostat settings (hold_action, etc.) from thermostats.yaml
 ```
 
