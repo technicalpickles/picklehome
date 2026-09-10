@@ -45,6 +45,27 @@ def set_hvac_mode(ecobee, thermostat_id: str, hvac_mode: str) -> None:
         raise RuntimeError(f"Failed to set HVAC mode to {hvac_mode}.")
 
 
+def set_hold_action(ecobee, thermostat_id: str, hold_action: str) -> None:
+    """Set holdAction (how long a manual temperature bump lasts).
+
+    Valid values are believed to be useEndTime4hour, useEndTime2hour,
+    nextPeriod, indefinite, askMe. Ecobee silently rewrites values it rejects,
+    so callers must read the live program back to confirm the write took.
+    """
+    body = {
+        "selection": {
+            "selectionType": "thermostats",
+            "selectionMatch": thermostat_id,
+        },
+        "thermostat": {"settings": {"holdAction": hold_action}},
+    }
+    response = ecobee._request_with_refresh(
+        "POST", ECOBEE_ENDPOINT_THERMOSTAT, f"set holdAction to {hold_action}", body=body
+    )
+    if response is None:
+        raise RuntimeError(f"Failed to set holdAction to {hold_action}.")
+
+
 def resume_program(ecobee, thermostat_id: str) -> None:
     """Clear all holds on a thermostat, resuming the scheduled program."""
     body = {

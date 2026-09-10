@@ -66,6 +66,10 @@ climate-air-quality *ARGS:
 climate-hvac-mode MODE:
     uv run python -m climate.sync hvac-mode {{MODE}}
 
+# Push device settings from thermostats.yaml (hold_action, etc.)
+climate-settings-sync *ARGS:
+    uv run python -m climate.sync settings-sync {{ARGS}}
+
 # Switch schedule comfort mode: heat | cool | auto
 climate-comfort-switch MODE *ARGS:
     uv run python -m climate.sync comfort-switch {{MODE}} {{ARGS}}

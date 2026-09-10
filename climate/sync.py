@@ -848,6 +848,53 @@ def cmd_hvac_mode(args) -> None:
         sys.exit(1)
 
 
+def cmd_settings_sync(args) -> None:
+    """Push device settings from thermostats.yaml. Manual only, never the timer."""
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+
+    try:
+        entries = [(name, thermostat_id)
+                   for name, thermostat_id in get_managed_thermostats(registry)
+                   if not args.thermostat or name == args.thermostat]
+    except ValueError as e:
+        print(f"Error in thermostats.yaml: {e}")
+        sys.exit(1)
+
+    if not entries:
+        if args.thermostat:
+            print(f"No managed thermostat named '{args.thermostat}' found in thermostats.yaml.")
+        else:
+            print("No managed thermostats configured in thermostats.yaml.")
+        sys.exit(1)
+
+    any_error = False
+
+    for name, thermostat_id in entries:
+        entry = registry["thermostats"][name]
+        desired = (entry.get("settings") or {}).get("hold_action")
+        if not desired:
+            continue
+        if args.dry_run:
+            print(f"  [{name}] Would set holdAction={desired}")
+            continue
+
+        try:
+            schedule.set_hold_action(ecobee, thermostat_id, desired)
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except RuntimeError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        print(f"  [{name}] Pushed holdAction={desired}")
+
+    if any_error:
+        sys.exit(1)
+
+
 def cmd_air_quality(args) -> None:
     import asyncio
     from climate.outdoor_air.client import AirQualityError, format_air_quality
@@ -1187,6 +1234,28 @@ def main() -> None:
         help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
     )
 
+    settings_sync_parser = subparsers.add_parser(
+        "settings-sync", help="Push device settings from thermostats.yaml"
+    )
+    settings_sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview what would be set without making changes",
+    )
+    settings_sync_parser.add_argument(
+        "--thermostat",
+        metavar="NAME",
+        default=None,
+        help="Only set the named thermostat (default: all)",
+    )
+    settings_sync_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+
     air_quality_parser = subparsers.add_parser(
         "air-quality", help="Show current outdoor air quality, UV index, and pollen"
     )
@@ -1210,6 +1279,7 @@ def main() -> None:
     subparsers.choices["weather"].set_defaults(func=cmd_weather)
     subparsers.choices["comfort-switch"].set_defaults(func=cmd_comfort_switch)
     subparsers.choices["hvac-mode"].set_defaults(func=cmd_hvac_mode)
+    subparsers.choices["settings-sync"].set_defaults(func=cmd_settings_sync)
     subparsers.choices["air-quality"].set_defaults(func=cmd_air_quality)
 
     args = parser.parse_args()
