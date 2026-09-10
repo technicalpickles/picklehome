@@ -44,7 +44,7 @@ def detect_live_mode(program: dict) -> str | None:
     into a mixed state). Callers must not default: silently picking a season is
     how the original bug stayed invisible for months.
     """
-    refs = {slot for day in program.get("schedule", []) for slot in day}
+    refs = {slot for day in (program.get("schedule") or []) for slot in day}
     found = {REF_TO_MODE[ref] for ref in refs if ref in REF_TO_MODE}
     return found.pop() if len(found) == 1 else None
 
@@ -63,11 +63,13 @@ def decide_mode(
         return None, {
             "reason": "insufficient_samples",
             "samples": samples,
+            "mean": None,
             "min_samples": MIN_SAMPLES,
         }
 
     mean = sum(temps) / samples
-    info = {"samples": samples, "mean": round(mean, 1)}
+    # Store unrounded mean so the logged value matches what was actually compared.
+    info = {"samples": samples, "mean": mean, "min_samples": MIN_SAMPLES}
 
     if mean < heat_below:
         return "heat", {**info, "reason": "below_heat_threshold"}

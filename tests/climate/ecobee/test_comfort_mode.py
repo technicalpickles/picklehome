@@ -95,3 +95,23 @@ def test_decide_mode_averages_a_swinging_day():
     mode, info = decide_mode(temps, heat_below=60, cool_above=65)
     assert mode is None
     assert info["mean"] == 62.5
+
+
+def test_decide_mode_uniform_schema_on_insufficient_samples():
+    # All paths return {reason, samples, mean, min_samples} for greppable logs.
+    mode, info = decide_mode([20.0] * (MIN_SAMPLES - 1), heat_below=60, cool_above=65)
+    assert set(info.keys()) == {"reason", "samples", "mean", "min_samples"}
+    assert info["mean"] is None
+
+
+def test_decide_mode_uniform_schema_on_decision():
+    # Decided paths also carry the full schema.
+    mode, info = decide_mode([50.0] * MIN_SAMPLES, heat_below=60, cool_above=65)
+    assert set(info.keys()) == {"reason", "samples", "mean", "min_samples"}
+    assert info["mean"] is not None
+
+
+def test_detect_live_mode_none_when_schedule_is_none():
+    # program["schedule"] present but None: should return None, not crash.
+    program = {"schedule": None}
+    assert detect_live_mode(program) is None
