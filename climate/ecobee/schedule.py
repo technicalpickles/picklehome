@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 from pyecobee.const import ECOBEE_ENDPOINT_THERMOSTAT
 
+from climate.ecobee.comfort_mode import COMFORT_REF
 from climate.ecobee.thermostats import get_thermostat_id
 
 
@@ -183,7 +184,11 @@ def build_schedule_array(schedule_dict: dict) -> list[list[str]]:
 
 
 def validate_climate_refs(schedule_dict: dict, program: dict) -> None:
-    valid = {c["climateRef"] for c in program["climates"]}
+    # COMFORT_REF is virtual: it is resolved to a real climateRef immediately
+    # before a push and never sent to Ecobee, so it is valid in the file but
+    # deliberately absent from the "valid climateRefs" list in the error below.
+    real = {c["climateRef"] for c in program["climates"]}
+    valid = real | {COMFORT_REF}
     used = set()
     for transitions in schedule_dict.values():
         if not isinstance(transitions, list):
@@ -195,7 +200,7 @@ def validate_climate_refs(schedule_dict: dict, program: dict) -> None:
     if unknowns:
         raise ValueError(
             f"Unknown climate(s): {sorted(unknowns)}. "
-            f"Valid climateRefs for this thermostat: {sorted(valid)}"
+            f"Valid climateRefs for this thermostat: {sorted(real)}"
         )
 
 

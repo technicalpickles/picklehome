@@ -1,5 +1,12 @@
 # climate/config/schedule.yaml
-# Climate values must be climateRef strings from your Ecobee thermostat.
+# Climate values are either a climateRef from your Ecobee thermostat
+# (sleep, away, home) or the virtual ref `comfort`.
+#
+# `comfort` is resolved at push time to Comfort Cool (smart1) or Comfort Heat
+# (smart2) based on the seasonal decision, and is never sent to Ecobee. Do not
+# write smart1/smart2 here directly -- the season is not stored in this file.
+# See climate/spec/hvac-spec.md, "Seasonal switching".
+#
 # Thermostat IDs are in climate/config/thermostats.yaml.
 # All times must be on 30-minute boundaries (:00 or :30).
 # Every day must start with time: "00:00". All 7 days are required.
@@ -11,7 +18,7 @@ thermostats:
         - time: "00:00"
           climate: sleep
         - time: "07:30"
-          climate: smart1  # Comfort Cool
+          climate: comfort
 
       sunday: *downstairs_everyday
       monday: *downstairs_everyday
@@ -25,15 +32,15 @@ thermostats:
     schedule:
       _weekday: &upstairs_weekday
         - time: "00:00"
-          climate: smart1  # Comfort Cool
+          climate: comfort
         - time: "10:00"
-          climate: away    # Eco
+          climate: away
         - time: "14:30"
-          climate: smart1  # Comfort Cool
+          climate: comfort
 
       _weekend: &upstairs_weekend
         - time: "00:00"
-          climate: smart1  # Comfort Cool
+          climate: comfort
 
       sunday: *upstairs_weekend
       monday: *upstairs_weekday
