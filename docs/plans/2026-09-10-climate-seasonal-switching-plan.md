@@ -530,7 +530,7 @@ def decide_mode(
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `uv run pytest tests/climate/ecobee/test_comfort_mode.py -v`
-Expected: PASS (16 tests)
+Expected: PASS (15 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -833,8 +833,21 @@ def _resolve_mode_for_push(program, explicit_mode, weather_config, data_dir):
 Replace everything from `schedule_path = args.schedule` through the
 `set_hvac_mode` loop with:
 
+`cmd_comfort_switch` has `managed`, `registry` and `data_dir` in scope but does
+**not** build schedule entries — that happens in `cmd_sync`. Build them first,
+mirroring `cmd_sync`'s existing setup:
+
 ```python
     from climate.ecobee.comfort_mode import resolve_schedule_array
+
+    schedule_data = schedule.load_schedule(args.schedule)
+    try:
+        entries = list(
+            schedule.iter_thermostat_entries(schedule_data, registry, None)
+        )
+    except ValueError as e:
+        print(f"Error in schedule.yaml: {e}")
+        sys.exit(1)
 
     pushed = []
     for name, thermostat_id, schedule_dict in entries:
@@ -925,6 +938,18 @@ a false diff:
 ```
 
 Add `--mode` to both parsers: `choices=["heat", "cool"], default=None`.
+
+Both parsers also need `--weather`, which they do not have today (they carry
+only `--schedule`, `--thermostats`, `--thermostat` and, for sync, `--dry-run`).
+`_resolve_mode_for_push` needs it for the rolling-window fallback:
+
+```python
+    for parser in (sync_parser, validate_parser):
+        parser.add_argument(
+            "--weather", type=Path, default=DEFAULT_WEATHER_PATH,
+            help="Path to weather.yaml (thresholds for the seasonal decision)",
+        )
+```
 
 - [ ] **Step 8: Run the full climate test suite**
 
@@ -1095,25 +1120,50 @@ In `climate/config/thermostats.yaml`, add under each managed thermostat:
 
 In `climate/sync.py`:
 
+First add the writer to `climate/ecobee/schedule.py`, directly below
+`set_hvac_mode` — every Ecobee write lives in that module, and `sync.py` is
+command wiring that does not import the endpoint constant:
+
+```python
+def set_hold_action(ecobee, thermostat_id: str, hold_action: str) -> None:
+    """Set holdAction (how long a manual temperature bump lasts).
+
+    Valid values are believed to be useEndTime4hour, useEndTime2hour,
+    nextPeriod, indefinite, askMe. Ecobee silently rewrites values it rejects,
+    so callers must read the live program back to confirm the write took.
+    """
+    body = {
+        "selection": {
+            "selectionType": "thermostats",
+            "selectionMatch": thermostat_id,
+        },
+        "thermostat": {"settings": {"holdAction": hold_action}},
+    }
+    response = ecobee._request_with_refresh(
+        "POST", ECOBEE_ENDPOINT_THERMOSTAT, f"set holdAction to {hold_action}", body=body
+    )
+    if response is None:
+        raise RuntimeError(f"Failed to set holdAction to {hold_action}.")
+```
+
+Then the command in `climate/sync.py`. Note `load_thermostats` returns the
+whole YAML document, so the per-thermostat mapping is
+`registry["thermostats"][name]`, not `registry[name]`:
+
 ```python
 def cmd_settings_sync(args) -> None:
     """Push device settings from thermostats.yaml. Manual only, never the timer."""
     ecobee = auth.make_ecobee()
     registry = load_thermostats(args.thermostats)
     for name, thermostat_id in get_managed_thermostats(registry):
-        desired = (registry[name].get("settings") or {}).get("hold_action")
+        entry = registry["thermostats"][name]
+        desired = (entry.get("settings") or {}).get("hold_action")
         if not desired:
             continue
-        body = {
-            "selection": {"selectionType": "thermostats", "selectionMatch": thermostat_id},
-            "thermostat": {"settings": {"holdAction": desired}},
-        }
         if args.dry_run:
             print(f"  [{name}] Would set holdAction={desired}")
             continue
-        ecobee._request_with_refresh(
-            "POST", ECOBEE_ENDPOINT_THERMOSTAT, f"set holdAction {desired}", body=body
-        )
+        schedule.set_hold_action(ecobee, thermostat_id, desired)
         print(f"  [{name}] Pushed holdAction={desired}")
 ```
 
