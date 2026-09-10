@@ -806,6 +806,14 @@ def cmd_comfort_switch(args) -> None:
         sys.exit(1)
 
 
+def cmd_hvac_mode(args) -> None:
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+    for name, thermostat_id in get_managed_thermostats(registry):
+        schedule.set_hvac_mode(ecobee, thermostat_id, args.mode)
+        print(f"  [{name}] HVAC mode set to {args.mode}")
+
+
 def cmd_air_quality(args) -> None:
     import asyncio
     from climate.outdoor_air.client import AirQualityError, format_air_quality
@@ -1118,6 +1126,22 @@ def main() -> None:
         help="Path to weather YAML (default: climate/config/weather.yaml)",
     )
 
+    hvac_mode_parser = subparsers.add_parser(
+        "hvac-mode", help="Set HVAC mode on managed thermostats"
+    )
+    hvac_mode_parser.add_argument(
+        "mode",
+        choices=["auto", "heat", "cool", "off", "auxHeatOnly"],
+        help="HVAC mode to set",
+    )
+    hvac_mode_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+
     air_quality_parser = subparsers.add_parser(
         "air-quality", help="Show current outdoor air quality, UV index, and pollen"
     )
@@ -1140,6 +1164,7 @@ def main() -> None:
     subparsers.choices["discover-stations"].set_defaults(func=cmd_weather_discover)
     subparsers.choices["weather"].set_defaults(func=cmd_weather)
     subparsers.choices["comfort-switch"].set_defaults(func=cmd_comfort_switch)
+    subparsers.choices["hvac-mode"].set_defaults(func=cmd_hvac_mode)
     subparsers.choices["air-quality"].set_defaults(func=cmd_air_quality)
 
     args = parser.parse_args()

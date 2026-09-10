@@ -4,6 +4,7 @@ from climate.ecobee.status import (
     get_active_hold,
     extract_thermostat_status,
     format_status,
+    hvac_mode_warning,
 )
 
 
@@ -158,3 +159,25 @@ def test_format_status_shows_hold_setpoints_not_climate_setpoints():
     assert "64/70°F" in line
     assert "65/72°F" not in line
     assert "hold until 2026-07-27 00:00:00" in line
+
+
+def test_warns_when_heat_only_during_comfort_cool():
+    w = hvac_mode_warning({"hvac_mode": "heat", "climate_ref": "smart1"})
+    assert w is not None and "cannot cool" in w
+
+
+def test_warns_when_cool_only_during_comfort_heat():
+    w = hvac_mode_warning({"hvac_mode": "cool", "climate_ref": "smart2"})
+    assert w is not None and "cannot heat" in w
+
+
+def test_warns_when_off():
+    assert hvac_mode_warning({"hvac_mode": "off", "climate_ref": "smart1"}) is not None
+
+
+def test_no_warning_on_auto():
+    assert hvac_mode_warning({"hvac_mode": "auto", "climate_ref": "smart1"}) is None
+
+
+def test_no_warning_when_mode_matches_season():
+    assert hvac_mode_warning({"hvac_mode": "cool", "climate_ref": "smart1"}) is None
