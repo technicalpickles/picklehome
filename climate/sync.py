@@ -809,9 +809,43 @@ def cmd_comfort_switch(args) -> None:
 def cmd_hvac_mode(args) -> None:
     ecobee = auth.make_ecobee()
     registry = load_thermostats(args.thermostats)
-    for name, thermostat_id in get_managed_thermostats(registry):
-        schedule.set_hvac_mode(ecobee, thermostat_id, args.mode)
+
+    try:
+        entries = [(name, thermostat_id)
+                   for name, thermostat_id in get_managed_thermostats(registry)
+                   if not args.thermostat or name == args.thermostat]
+    except ValueError as e:
+        print(f"Error in thermostats.yaml: {e}")
+        sys.exit(1)
+
+    if not entries:
+        if args.thermostat:
+            print(f"No managed thermostat named '{args.thermostat}' found in thermostats.yaml.")
+        else:
+            print("No managed thermostats configured in thermostats.yaml.")
+        sys.exit(1)
+
+    any_error = False
+
+    for name, thermostat_id in entries:
+        if args.dry_run:
+            print(f"  [{name}] Would set HVAC mode to {args.mode}")
+            continue
+
+        try:
+            schedule.set_hvac_mode(ecobee, thermostat_id, args.mode)
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except RuntimeError as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
         print(f"  [{name}] HVAC mode set to {args.mode}")
+
+    if any_error:
+        sys.exit(1)
 
 
 def cmd_air_quality(args) -> None:
@@ -1133,6 +1167,17 @@ def main() -> None:
         "mode",
         choices=["auto", "heat", "cool", "off", "auxHeatOnly"],
         help="HVAC mode to set",
+    )
+    hvac_mode_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview what would be set without making changes",
+    )
+    hvac_mode_parser.add_argument(
+        "--thermostat",
+        metavar="NAME",
+        default=None,
+        help="Only set the named thermostat (default: all)",
     )
     hvac_mode_parser.add_argument(
         "--thermostats",

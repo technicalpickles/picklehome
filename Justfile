@@ -62,7 +62,7 @@ climate-locations *ARGS:
 climate-air-quality *ARGS:
     uv run python -m climate.sync air-quality {{ARGS}}
 
-# Set HVAC mode on managed thermostats (auto | heat | cool | off)
+# Set HVAC mode on managed thermostats (auto | heat | cool | off | auxHeatOnly)
 climate-hvac-mode MODE:
     uv run python -m climate.sync hvac-mode {{MODE}}
 

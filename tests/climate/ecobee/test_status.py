@@ -181,3 +181,50 @@ def test_no_warning_on_auto():
 
 def test_no_warning_when_mode_matches_season():
     assert hvac_mode_warning({"hvac_mode": "cool", "climate_ref": "smart1"}) is None
+
+
+def test_format_status_includes_hvac_mode_warning_when_mismatched():
+    """Warning should appear in format_status output when HVAC mode cannot deliver comfort mode."""
+    statuses = [
+        {
+            "name": "Downstairs",
+            "temp": 71.8,
+            "humidity": 68,
+            "equipment": "idle",
+            "hvac_mode": "heat",
+            "climate_ref": "smart1",  # Comfort Cool, but heat-only mode
+            "cool_setpoint": 72.0,
+            "heat_setpoint": 65.0,
+            "hold": None,
+            "aq_score": None,
+            "voc": None,
+            "co2": None,
+            "weather": None,
+        }
+    ]
+    output = format_status(statuses)
+    assert "WARNING:" in output
+    assert "cannot cool" in output
+
+
+def test_format_status_no_warning_when_mode_matches():
+    """No warning should appear when HVAC mode can deliver comfort mode."""
+    statuses = [
+        {
+            "name": "Downstairs",
+            "temp": 71.8,
+            "humidity": 68,
+            "equipment": "idle",
+            "hvac_mode": "cool",
+            "climate_ref": "smart1",  # Comfort Cool, cool-only mode matches
+            "cool_setpoint": 72.0,
+            "heat_setpoint": 65.0,
+            "hold": None,
+            "aq_score": None,
+            "voc": None,
+            "co2": None,
+            "weather": None,
+        }
+    ]
+    output = format_status(statuses)
+    assert "WARNING:" not in output
