@@ -197,12 +197,13 @@ ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "find ~/.local/share/m
 ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "~/.local/bin/mise exec -- node <PATH_FROM_ABOVE>"'
 ```
 
-Once `claude --version` succeeds, log in interactively:
+Once `claude --version` succeeds, log in interactively. One more gotcha here: `sudo -H` sets `$HOME` correctly but leaves `SUDO_USER`/`SUDO_UID`/`SUDO_GID` set to the invoking user (`technicalpickles`) — Claude Code evidently prefers `SUDO_USER`'s home over `$HOME` for settings resolution (observed live: it tried to read `/home/technicalpickles/.claude/settings.json` despite `$HOME=/home/second-brain`), so unset them first:
+
 ```bash
-ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "~/.local/bin/mise exec -- claude"'
+ssh -t thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "unset SUDO_USER SUDO_UID SUDO_GID SUDO_COMMAND; ~/.local/bin/mise exec -- claude"'
 ```
 
-Follow the interactive OAuth prompt. Credentials persist under `second-brain`'s home directory.
+Follow the interactive OAuth prompt (`-t` allocates a pty, needed for the interactive flow). Credentials persist under `second-brain`'s home directory.
 
 - [ ] **Step 5: Install and start the systemd user units**
 
