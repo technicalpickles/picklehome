@@ -328,6 +328,26 @@ else
     # nothing to migrate). Hit this for real on the 2026.6.11 -> 2026.8.1 bump,
     # 2026-09-02: "Unrecognized key" on memorySearch/resetOnExit/lastTouchedAt
     # aborted the tools.json5 patch step below under set -euo pipefail.
+    echo "==> Stopping the running Gateway (doctor --fix needs exclusive state ownership)"
+    # `doctor --fix`'s session-store maintenance step tries to grab an exclusive
+    # "sqlite-maintenance" lock on the state directory (250ms timeout, see
+    # vendor/openclaw's state-migrations.lock.ts in the pickleclaw repo) -- but the
+    # live gateway holds its own "gateway" role lock on that same directory for its
+    # entire uptime, so the maintenance lock always loses that race while the old
+    # container is still up. Confirmed live 2026-09-11: "Skipped: Gateway or
+    # another SQLite maintenance command owns the state directory... Doctor
+    # stopped because a state migration refused to continue" aborted the deploy
+    # entirely, with `set -euo pipefail` propagating the nonzero exit. It's not
+    # flaky -- the error message's own remedy ("Stop the Gateway, then run
+    # doctor --fix") is the actual fix. Earlier bumps (2026.8.1, 2026.9.3) likely
+    # only got away without this because the old and new binaries didn't agree on
+    # the lock file format across the version skew, not because there was no
+    # conflict. `stop` is safe to run even if already stopped (e.g. by hand) or if
+    # this is the very first deploy to hit this branch -- `|| true` covers a
+    # not-yet-loaded unit. The later `systemctl restart` brings it back up on the
+    # new image; there's no separate "start" needed here.
+    sudo systemctl stop openclaw.service || true
+
     echo "==> Doctor --fix (migrate config-schema changes from the previous image)"
     $RUN_CLI doctor --fix
 fi
