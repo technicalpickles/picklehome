@@ -84,6 +84,15 @@ services:
       # live under /srv/data (covered by backup.sh's restic job) rather than
       # /var/lib/docker/volumes (which the backup script doesn't touch).
       - /srv/data/openclaw/gog-keyring:/root/.local/share/gogcli
+      # Also bind-mounted, not left in the container's writable layer: this holds
+      # config.json's account_clients map (which email resolves to which gogcli
+      # client). Every deploy rebuilds this container from source (see deploy.sh),
+      # so anything not in a bind mount is wiped on the next deploy -- which is
+      # exactly what happened to a hand-edited copy of this file on 2026-08-27,
+      # breaking Gmail/Calendar until rediscovered on 2026-09-11. deploy.sh writes
+      # this file's content on every run, so it survives both container rebuilds
+      # and a from-scratch host.
+      - /srv/data/openclaw/gog-config:/root/.config/gogcli
 
 volumes:
   config:

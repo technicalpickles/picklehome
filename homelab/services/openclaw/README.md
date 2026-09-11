@@ -181,6 +181,12 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 /srv/data/openclaw/gog-keyring/              # gog-mcp's OAuth token file keyring, bind-mounted
                                               # into the gog-mcp container (moved off a named
                                               # Docker volume so it's covered by backup below)
+/srv/data/openclaw/gog-config/config.json    # gog-mcp's account_clients mapping, written
+                                              # declaratively by deploy.sh every run and
+                                              # bind-mounted into gog-mcp -- survives the
+                                              # gog-mcp rebuild that happens on every deploy
+                                              # (a hand-edited copy of this file didn't, see
+                                              # docs/setup-notes.md's 2026-09-11 entry)
 /opt/pickleclaw/                             # pickleclaw@main checkout, gog-mcp's build context
                                               # (host-side, NOT under /srv/data -- not backed up,
                                               # reproducible by re-cloning)

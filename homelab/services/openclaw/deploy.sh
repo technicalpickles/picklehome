@@ -26,7 +26,9 @@ echo "==> Creating data directories on the volume"
 # ssh:         the workspace + pickleclaw deploy keys, written below
 # gog-keyring: gog-mcp's OAuth token file keyring, bind-mounted into that service --
 #              under $DATA_DIR (not a named volume) so it's covered by backup.sh
-sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh" "$DATA_DIR/gog-keyring"
+# gog-config:  gog-mcp's account_clients mapping (config.json), written below --
+#              also bind-mounted so it survives the gog-mcp rebuild further down
+sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh" "$DATA_DIR/gog-keyring" "$DATA_DIR/gog-config"
 
 echo "==> Fixing data directory ownership"
 # Do this now, right after mkdir, not at the end: it makes $DATA_DIR owned by uid
@@ -51,6 +53,26 @@ echo "goplaces is node-only on this gateway -- retry via: exec host=node node=go
 exit 1
 STUB
 chmod +x "$DATA_DIR/bin/goplaces"
+
+echo "==> Writing gog-mcp's account_clients mapping (idempotent)"
+# Maps joshua.nichols@gmail.com's OAuth tokens to the "picklelab" gogcli client
+# (matching credentials-picklelab.json in the bind-mounted gog-keyring), so
+# `gog --account joshua.nichols@gmail.com` resolves without an explicit --client
+# flag. `gog auth list` doesn't need this file (it derives client names straight
+# from credentials-*.json filenames), but any bare --account call does.
+#
+# This file used to exist only as a hand-edit made directly on a running
+# container (2026-08-27, see docs/setup-notes.md in pickleclaw) and silently
+# disappeared on the next gog-mcp rebuild, since every deploy rebuilds gog-mcp
+# from source and nothing preserved the container's writable layer -- broke
+# Gmail/Calendar in production until it was rediscovered on 2026-09-11.
+# Re-written on every deploy so it self-heals from drift, same as the goplaces
+# stub above; also bind-mounted into the container (compose.yaml) as a second
+# line of defense.
+cat > "$DATA_DIR/gog-config/config.json" << 'EOF'
+{"account_clients": {"joshua.nichols@gmail.com": "picklelab"}, "no_send_accounts": {"joshua.nichols@gmail.com": true}}
+EOF
+echo "    Wrote $DATA_DIR/gog-config/config.json"
 
 echo "==> Installing the workspace-repo deploy key (if provided)"
 # The workspace (github.com/technicalpickles/openclaw-workspace) is cloned host-side,
