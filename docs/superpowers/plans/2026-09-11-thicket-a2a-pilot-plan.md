@@ -221,13 +221,19 @@ ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u
 Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user status thicket-netd thicket-agentd'`
 Expected: both `active (running)`
 
-Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) $HOME/.local/bin/thicket doctor'`
-Expected: no errors for the `second-brain` agent
+> **Corrected 2026-09-11:** plain `sudo -u second-brain $HOME/...` resolves `$HOME` to `technicalpickles`'s home (no `-H`), same gotcha as Step 4. Use `-H` plus the `SUDO_USER` unset:
+
+```bash
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H env XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) bash -c "unset SUDO_USER SUDO_UID SUDO_GID SUDO_COMMAND; \$HOME/.local/bin/thicket doctor"'
+```
+Expected: no errors for the `second-brain` agent (`[tailnet]`/`[version]` FAILs are pre-existing/cosmetic — no system `tailscale` CLI, `~/.local/bin` not on `$PATH` — not blocking; `[slack]` FAIL is expected, this pilot deploys no Slack bridge)
 
 - [ ] **Step 7: Fetch and save the agent card — Task 5 depends on this file**
 
+> **Corrected 2026-09-11:** the `VAR=value command "...$VAR..."` form doesn't make `$VAR` visible for expansion in that same command's own arguments in bash — only in the executed command's environment. Wrap in `bash -c` so the variable is set and expanded together:
+
 ```bash
-ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) curl --unix-socket "$XDG_RUNTIME_DIR/thicket/agentd.sock" http://x/.well-known/agent-card.json' > second-brain-agent-card.json
+ssh thicket-pilot@orb -- 'sudo -u second-brain bash -c "curl -s --unix-socket /run/user/\$(id -u second-brain)/thicket/agentd.sock http://x/.well-known/agent-card.json"' > second-brain-agent-card.json
 ```
 
 Read `second-brain-agent-card.json` and note: the base URL/path A2A messages get POSTed to, and the JSON-RPC method name(s) it advertises (the A2A spec's core method is `message/send`, but confirm against what this card actually declares — don't assume). This file is the actual contract Task 5's client code is written against; nothing in this plan guesses at it.
