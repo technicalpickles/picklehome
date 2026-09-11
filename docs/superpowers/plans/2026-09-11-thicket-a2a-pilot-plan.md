@@ -26,47 +26,58 @@
 **Files:** none (infrastructure only — nothing in any git repo changes in this task)
 
 **Interfaces:**
-- Produces: a running Ubuntu OrbStack VM named `thicket-pilot`, reachable via `ssh thicket-pilot`, with thicket cloned at `~/src/thicket` and its binaries built. Later tasks build on this.
+- Produces: a running Ubuntu OrbStack VM named `thicket-pilot`, reachable via `ssh thicket-pilot@orb`, with thicket cloned at `~/src/thicket` and its binaries built at `dist-bin/linux-x64/` + `netd/bin/netd`. Later tasks build on this.
 
-- [ ] **Step 1: Create the OrbStack VM**
+> **Corrected 2026-09-11 after a real dry run.** Three things the first attempt found: (1) plain `ssh thicket-pilot` doesn't resolve on this Mac — OrbStack's `<machine>@orb` form (via its local proxy on `127.0.0.1:32222`, configured in `~/.orbstack/ssh/config`) is what actually works, and it's a loopback connection so it works fine inside the sandbox too. (2) thicket's build fleet (`scripts/platforms.ts`) only supports `macos-arm64` and `linux-x64` — there is no `linux-arm64` target, so on this (Apple Silicon) Mac the VM must be created as `amd64`, not the host-default `arm64`, or `pnpm compile` throws `no fleet platform for linux-arm64`. (3) thicket's JS toolchain is **bun**, not node — `mise.toml` declares no `node` tool at all, and `pnpm compile` calls `bun run scripts/compile.ts`. Steps below reflect all three corrections; the `linux-x64` suffix is now known rather than discovered per-run.
+
+- [ ] **Step 1: Create the OrbStack VM as amd64**
 
 ```bash
-orb create ubuntu:noble thicket-pilot
+orb create -a amd64 ubuntu:noble thicket-pilot
 ```
+
+Run: `orb list`
+Expected: a `thicket-pilot` row showing `amd64` as the architecture
 
 - [ ] **Step 2: Verify SSH access**
 
-Run: `ssh thicket-pilot -- echo ok`
+Run: `ssh thicket-pilot@orb -- echo ok`
 Expected: `ok`
 
-- [ ] **Step 3: Install mise and thicket's pinned toolchain**
+- [ ] **Step 3: Install git and mise, then thicket's pinned toolchain**
+
+The base `ubuntu:noble` OrbStack image ships without `git`:
 
 ```bash
-ssh thicket-pilot -- 'curl https://mise.run | sh'
-ssh thicket-pilot -- 'echo "eval \"\$(~/.local/bin/mise activate bash)\"" >> ~/.bashrc'
+ssh thicket-pilot@orb -- 'sudo apt-get update -qq && sudo apt-get install -y -qq git'
+ssh thicket-pilot@orb -- 'curl https://mise.run | sh'
+ssh thicket-pilot@orb -- 'echo "eval \"\$(~/.local/bin/mise activate bash)\"" >> ~/.bashrc'
 ```
 
-- [ ] **Step 4: Clone thicket and install its pinned Node/Go/pnpm**
+- [ ] **Step 4: Clone thicket and install its pinned bun/Go/pnpm**
 
 ```bash
-ssh thicket-pilot -- 'git clone https://github.com/ivy/thicket ~/src/thicket'
-ssh thicket-pilot -- 'cd ~/src/thicket && ~/.local/bin/mise install'
+ssh thicket-pilot@orb -- 'git clone https://github.com/ivy/thicket ~/src/thicket'
+ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise install'
 ```
 
-Run: `ssh thicket-pilot -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- node --version'`
-Expected: `v22.x.x` (or higher, per thicket's `mise.toml` floor)
+Run: `ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- bun --version'`
+Expected: a version string (thicket pins `bun` in its own `mise.toml`; there is no `node` tool to check)
 
-- [ ] **Step 5: Install dependencies and build**
+- [ ] **Step 5: Install dependencies and build (TypeScript via bun, netd via Go)**
+
+`pnpm compile` builds the bun-compiled binaries (`agentd`, `bridge`, `thicket` CLI) for the fleet's configured platforms; it does **not** build `netd`, which has its own script:
 
 ```bash
-ssh thicket-pilot -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm install'
-ssh thicket-pilot -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm compile'
+ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm install'
+ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm compile'
+ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm run build:netd'
 ```
 
-Run: `ssh thicket-pilot -- 'ls ~/src/thicket/netd/bin/netd ~/src/thicket/dist-bin/linux-*/thicket-agentd ~/src/thicket/dist-bin/linux-*/thicket'`
-Expected: all three paths exist (exact `linux-*` arch suffix depends on the VM's architecture — note it down, it's used in every later `cp` command)
+Run: `ssh thicket-pilot@orb -- 'ls ~/src/thicket/netd/bin/netd ~/src/thicket/dist-bin/linux-x64/thicket-agentd ~/src/thicket/dist-bin/linux-x64/thicket'`
+Expected: all three paths exist. (The `linux-x64` suffix is now fixed — thicket's fleet table only ever produces this one Linux target, so every later task's `cp` command uses it literally, no per-run discovery needed.)
 
-- [ ] **Step 6: Commit nothing yet — this task has no repo changes; note the VM name and built-binary arch suffix in your working notes for later tasks**
+- [ ] **Step 6: Commit nothing yet — this task has no repo changes**
 
 ---
 
@@ -82,11 +93,11 @@ Expected: all three paths exist (exact `linux-*` arch suffix depends on the VM's
 - [ ] **Step 1: Create the unix account**
 
 ```bash
-ssh thicket-pilot -- 'sudo useradd --create-home --shell /bin/bash second-brain'
-ssh thicket-pilot -- 'sudo loginctl enable-linger second-brain'
+ssh thicket-pilot@orb -- 'sudo useradd --create-home --shell /bin/bash second-brain'
+ssh thicket-pilot@orb -- 'sudo loginctl enable-linger second-brain'
 ```
 
-Run: `ssh thicket-pilot -- 'id second-brain'`
+Run: `ssh thicket-pilot@orb -- 'id second-brain'`
 Expected: prints the new user's uid/gid, no error
 
 - [ ] **Step 2: Mint a Tailscale auth key and store it in 1Password**
@@ -97,10 +108,10 @@ In the Tailscale admin console, mint a reusable, non-ephemeral auth key tagged `
 
 ```bash
 op read 'op://picklehome/Thicket Second Brain Agent/ts_authkey' | \
-  ssh thicket-pilot -- 'sudo -u second-brain sh -c "umask 077; mkdir -p ~second-brain/.config/thicket && cat > ~second-brain/.config/thicket/tailnet-auth-key"'
+  ssh thicket-pilot@orb -- 'sudo -u second-brain sh -c "umask 077; mkdir -p ~second-brain/.config/thicket && cat > ~second-brain/.config/thicket/tailnet-auth-key"'
 ```
 
-Run: `ssh thicket-pilot -- 'sudo -u second-brain stat -c "%a" ~second-brain/.config/thicket/tailnet-auth-key'`
+Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain stat -c "%a" ~second-brain/.config/thicket/tailnet-auth-key'`
 Expected: `600`
 
 - [ ] **Step 4: Add the agent to the roster**
@@ -126,7 +137,7 @@ agents:
 
 - [ ] **Step 5: Verify the roster parses**
 
-Run: `ssh thicket-pilot -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket doctor'` (or the built `thicket` binary directly once Task 3 installs it — for now, running from the checkout is fine)
+Run: `ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket doctor'` (or the built `thicket` binary directly once Task 3 installs it — for now, running from the checkout is fine)
 Expected: no roster/schema errors mentioning `second-brain`
 
 - [ ] **Step 6: This is a local edit inside the thicket checkout on the VM, not a picklehome or pickleclaw commit — no `git commit` here. (If you forked thicket to track this roster entry, commit there instead.)**
@@ -144,36 +155,34 @@ Expected: no roster/schema errors mentioning `second-brain`
 - [ ] **Step 1: Render the agent's config**
 
 ```bash
-ssh thicket-pilot -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket provision --dry-run'
-ssh thicket-pilot -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket provision'
+ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket provision --dry-run'
+ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket provision'
 ```
 
-Run: `ssh thicket-pilot -- 'ls ~/.config/thicket/rendered/second-brain/'`
+Run: `ssh thicket-pilot@orb -- 'ls ~/.config/thicket/rendered/second-brain/'`
 Expected: a directory of rendered config files for the `second-brain` agent
 
 - [ ] **Step 2: Install the rendered config into the agent's own account**
 
 ```bash
-ssh thicket-pilot -- 'sudo cp -r ~/.config/thicket/rendered/second-brain/. ~second-brain/.config/thicket/ && sudo chown -R second-brain: ~second-brain/.config/thicket'
+ssh thicket-pilot@orb -- 'sudo cp -r ~/.config/thicket/rendered/second-brain/. ~second-brain/.config/thicket/ && sudo chown -R second-brain: ~second-brain/.config/thicket'
 ```
 
 - [ ] **Step 3: Install the binaries into the agent's account**
 
-(Replace `linux-<arch>` with the suffix noted in Task 1, Step 5.)
-
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain mkdir -p ~second-brain/.local/bin'
-ssh thicket-pilot -- 'sudo cp ~/src/thicket/netd/bin/netd ~second-brain/.local/bin/thicket-netd'
-ssh thicket-pilot -- 'sudo cp ~/src/thicket/dist-bin/linux-<arch>/thicket-agentd ~second-brain/.local/bin/'
-ssh thicket-pilot -- 'sudo cp ~/src/thicket/dist-bin/linux-<arch>/thicket ~second-brain/.local/bin/'
-ssh thicket-pilot -- 'sudo chown -R second-brain: ~second-brain/.local/bin'
+ssh thicket-pilot@orb -- 'sudo -u second-brain mkdir -p ~second-brain/.local/bin'
+ssh thicket-pilot@orb -- 'sudo cp ~/src/thicket/netd/bin/netd ~second-brain/.local/bin/thicket-netd'
+ssh thicket-pilot@orb -- 'sudo cp ~/src/thicket/dist-bin/linux-x64/thicket-agentd ~second-brain/.local/bin/'
+ssh thicket-pilot@orb -- 'sudo cp ~/src/thicket/dist-bin/linux-x64/thicket ~second-brain/.local/bin/'
+ssh thicket-pilot@orb -- 'sudo chown -R second-brain: ~second-brain/.local/bin'
 ```
 
 - [ ] **Step 4: Install Claude Code and authenticate inside the account**
 
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain -H bash -c "curl https://mise.run | sh && ~/.local/bin/mise use -g npm:@anthropic-ai/claude-code"'
-ssh thicket-pilot -- 'sudo -u second-brain -H claude'
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "curl https://mise.run | sh && ~/.local/bin/mise use -g npm:@anthropic-ai/claude-code"'
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H claude'
 ```
 
 Follow the interactive OAuth prompt. Credentials persist under `second-brain`'s home directory.
@@ -181,26 +190,26 @@ Follow the interactive OAuth prompt. Credentials persist under `second-brain`'s 
 - [ ] **Step 5: Install and start the systemd user units**
 
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain mkdir -p ~second-brain/.config/systemd/user'
-ssh thicket-pilot -- 'sudo cp ~/src/thicket/deploy/systemd/thicket-netd.service ~second-brain/.config/systemd/user/'
-ssh thicket-pilot -- 'sudo cp ~/src/thicket/deploy/systemd/thicket-agentd.service ~second-brain/.config/systemd/user/'
-ssh thicket-pilot -- 'sudo chown -R second-brain: ~second-brain/.config/systemd/user'
-ssh thicket-pilot -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user daemon-reload'
-ssh thicket-pilot -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user enable --now thicket-agentd.service thicket-netd.service'
+ssh thicket-pilot@orb -- 'sudo -u second-brain mkdir -p ~second-brain/.config/systemd/user'
+ssh thicket-pilot@orb -- 'sudo cp ~/src/thicket/deploy/systemd/thicket-netd.service ~second-brain/.config/systemd/user/'
+ssh thicket-pilot@orb -- 'sudo cp ~/src/thicket/deploy/systemd/thicket-agentd.service ~second-brain/.config/systemd/user/'
+ssh thicket-pilot@orb -- 'sudo chown -R second-brain: ~second-brain/.config/systemd/user'
+ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user daemon-reload'
+ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user enable --now thicket-agentd.service thicket-netd.service'
 ```
 
 - [ ] **Step 6: Verify both services are healthy**
 
-Run: `ssh thicket-pilot -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user status thicket-netd thicket-agentd'`
+Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user status thicket-netd thicket-agentd'`
 Expected: both `active (running)`
 
-Run: `ssh thicket-pilot -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) $HOME/.local/bin/thicket doctor'`
+Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) $HOME/.local/bin/thicket doctor'`
 Expected: no errors for the `second-brain` agent
 
 - [ ] **Step 7: Fetch and save the agent card — Task 5 depends on this file**
 
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) curl --unix-socket "$XDG_RUNTIME_DIR/thicket/agentd.sock" http://x/.well-known/agent-card.json' > second-brain-agent-card.json
+ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) curl --unix-socket "$XDG_RUNTIME_DIR/thicket/agentd.sock" http://x/.well-known/agent-card.json' > second-brain-agent-card.json
 ```
 
 Read `second-brain-agent-card.json` and note: the base URL/path A2A messages get POSTed to, and the JSON-RPC method name(s) it advertises (the A2A spec's core method is `message/send`, but confirm against what this card actually declares — don't assume). This file is the actual contract Task 5's client code is written against; nothing in this plan guesses at it.
@@ -222,7 +231,7 @@ Read `second-brain-agent-card.json` and note: the base URL/path A2A messages get
 - [ ] **Step 1: Install sshfs on thicket-pilot**
 
 ```bash
-ssh thicket-pilot -- 'sudo apt-get update && sudo apt-get install -y sshfs'
+ssh thicket-pilot@orb -- 'sudo apt-get update && sudo apt-get install -y sshfs'
 ```
 
 - [ ] **Step 2: Give the second-brain account SSH access to picklelab**
@@ -230,8 +239,8 @@ ssh thicket-pilot -- 'sudo apt-get update && sudo apt-get install -y sshfs'
 Generate a dedicated ed25519 keypair (no passphrase) on `thicket-pilot` as the `second-brain` user, and add the public key to picklelab's `technicalpickles` account `~/.ssh/authorized_keys` (read-write to the vault directory only in practice, since that's all this key will ever be used for — full account access is broader than needed, but matches how every other picklehome service reaches picklelab today; tightening this is future work, not pilot scope).
 
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain ssh-keygen -t ed25519 -f ~second-brain/.ssh/id_ed25519 -N ""'
-ssh thicket-pilot -- 'sudo -u second-brain cat ~second-brain/.ssh/id_ed25519.pub'
+ssh thicket-pilot@orb -- 'sudo -u second-brain ssh-keygen -t ed25519 -f ~second-brain/.ssh/id_ed25519 -N ""'
+ssh thicket-pilot@orb -- 'sudo -u second-brain cat ~second-brain/.ssh/id_ed25519.pub'
 ```
 
 Append the printed public key to `technicalpickles@picklelab:~/.ssh/authorized_keys`.
@@ -239,30 +248,30 @@ Append the printed public key to `technicalpickles@picklelab:~/.ssh/authorized_k
 - [ ] **Step 3: Mount the vault**
 
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain mkdir -p ~second-brain/vault'
-ssh thicket-pilot -- 'sudo -u second-brain sshfs technicalpickles@picklelab.tail2023b7.ts.net:/srv/data/obsidian-sync/vaults/pickled-knowledge ~second-brain/vault -o reconnect,ServerAliveInterval=15'
+ssh thicket-pilot@orb -- 'sudo -u second-brain mkdir -p ~second-brain/vault'
+ssh thicket-pilot@orb -- 'sudo -u second-brain sshfs technicalpickles@picklelab.tail2023b7.ts.net:/srv/data/obsidian-sync/vaults/pickled-knowledge ~second-brain/vault -o reconnect,ServerAliveInterval=15'
 ```
 
 - [ ] **Step 4: Verify read access**
 
-Run: `ssh thicket-pilot -- 'sudo -u second-brain ls ~second-brain/vault | head -5'`
+Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain ls ~second-brain/vault | head -5'`
 Expected: real vault file/directory names (not empty, not an error)
 
 - [ ] **Step 5: Verify write access and that obsidian-sync picks it up**
 
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain sh -c "echo pilot-test > ~second-brain/vault/thicket-pilot-test.md"'
+ssh thicket-pilot@orb -- 'sudo -u second-brain sh -c "echo pilot-test > ~second-brain/vault/thicket-pilot-test.md"'
 ```
 
 Run (from anywhere with picklelab access): `ssh picklelab -- 'cat /srv/data/obsidian-sync/vaults/pickled-knowledge/thicket-pilot-test.md'`
 Expected: `pilot-test`
 
-Delete the test file once confirmed: `ssh thicket-pilot -- 'sudo -u second-brain rm ~second-brain/vault/thicket-pilot-test.md'`
+Delete the test file once confirmed: `ssh thicket-pilot@orb -- 'sudo -u second-brain rm ~second-brain/vault/thicket-pilot-test.md'`
 
 - [ ] **Step 6: Make the mount survive VM reboot**
 
 ```bash
-ssh thicket-pilot -- 'sudo -u second-brain sh -c "echo \"technicalpickles@picklelab.tail2023b7.ts.net:/srv/data/obsidian-sync/vaults/pickled-knowledge /home/second-brain/vault fuse.sshfs _netdev,reconnect,ServerAliveInterval=15,IdentityFile=/home/second-brain/.ssh/id_ed25519,allow_other 0 0\" | sudo tee -a /etc/fstab"'`
+ssh thicket-pilot@orb -- 'sudo -u second-brain sh -c "echo \"technicalpickles@picklelab.tail2023b7.ts.net:/srv/data/obsidian-sync/vaults/pickled-knowledge /home/second-brain/vault fuse.sshfs _netdev,reconnect,ServerAliveInterval=15,IdentityFile=/home/second-brain/.ssh/id_ed25519,allow_other 0 0\" | sudo tee -a /etc/fstab"'`
 ```
 
 - [ ] **Step 7: No commit — host configuration only.**
