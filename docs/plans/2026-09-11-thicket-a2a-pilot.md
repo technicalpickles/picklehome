@@ -47,12 +47,24 @@ Three options were considered:
 Entirely Mac-side, entirely separate from production:
 
 - **`thicket-pilot`**: a new OrbStack VM (sibling to `pickled-coi`), running thicket's `netd` + `agentd` under a dedicated unix account for the second-brain agent. `pickled-knowledge` vault reachable from that account (mount or sync, mirroring today's `/vault` approach). Joins the tailnet with its own `tag:thicket-*` ACL tags, isolated per thicket's own model.
-- **pickleclaw dev server (local, NOT production)**: the existing Mac-side `pickleclaw` local dev instance, which already has Telegram wired up, gains an A2A client capability to call `agentd` on `thicket-pilot`. This gives a real end-to-end test surface (actual Telegram messages) without touching the production `openclaw` deploy on picklelab or production `pickleclaw`.
+- **pickleclaw dev server (local, NOT production)**: the existing Mac-side `pickleclaw` local dev instance gains an A2A client capability to call `agentd` on `thicket-pilot`. For iteration, drive it through openclaw's **gateway interface** directly (skips the Telegram round-trip, faster to test against). Once the A2A path works, do one final pass over actual **Telegram** messages (the dev server already has it wired up) as a full-path sanity check before calling the pilot done. Neither path touches the production `openclaw` deploy on picklelab or production `pickleclaw`.
 
 The current second-brain-agent container on picklelab is untouched for the duration of the pilot — this is purely additive.
 
 ## Data flow
 
+Primary (iteration):
+```
+openclaw gateway interface
+  → pickleclaw (local dev server)
+  → A2A call to agentd on thicket-pilot
+  → Claude Code session (agentd-managed, vault access)
+  → response over A2A
+  → pickleclaw (local dev server)
+  → gateway interface
+```
+
+Final check (full path, once above works):
 ```
 Telegram message
   → pickleclaw (local dev server)
@@ -76,12 +88,13 @@ Minimal — this is a pilot. Let failures surface loudly (error in Telegram or i
 
 ## Testing
 
-No automated test suite. Verification is manual: send a Telegram message via the pickleclaw dev server, confirm it reaches the vault-aware agent on `thicket-pilot` and a sensible response comes back. Success is judged against the four "what the pilot needs to prove" items above.
+No automated test suite. Verification is manual: iterate via the openclaw gateway interface against the pickleclaw dev server (faster than round-tripping through Telegram each time), confirm it reaches the vault-aware agent on `thicket-pilot` and a sensible response comes back. Once that path works, do one final pass over real Telegram messages as a full-path sanity check. Success is judged against the four "what the pilot needs to prove" items above.
 
 ## Confirmed decisions
 
 - Pilot host: new OrbStack VM (`thicket-pilot`), not an Incus container, not directly on picklelab
 - A2A caller: **pickleclaw dev server only** — production pickleclaw/openclaw are not touched
+- Test surface: openclaw's **gateway interface** for iteration, one final **Telegram** pass as a full-path sanity check
 - Scope: full thicket stack (`netd` + `agentd`), not a cherry-picked A2A-only bolt-on
 - This is the pilot for a broader agent-hosting migration, not a one-off experiment
 - Current second-brain-agent container stays running, untouched, throughout
