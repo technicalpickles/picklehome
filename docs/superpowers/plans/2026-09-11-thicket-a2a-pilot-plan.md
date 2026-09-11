@@ -183,10 +183,22 @@ ssh thicket-pilot@orb -- 'sudo chown -R second-brain: ~second-brain/.local/bin'
 
 - [ ] **Step 4: Install Claude Code and authenticate inside the account**
 
-> **Corrected 2026-09-11:** `sudo -u second-brain -H claude` fails with `command not found` — `sudo` execs the binary directly with no shell profile sourced, so `mise`'s shim for the globally-installed `claude` is never on PATH. Use `mise exec` to resolve it explicitly instead.
+> **Corrected 2026-09-11:** two issues, both fixed here. (1) `sudo -u second-brain -H claude` fails with `command not found` — `sudo` execs the binary directly with no shell profile sourced, so `mise`'s shim for the globally-installed `claude` is never on PATH; use `mise exec` to resolve it explicitly. (2) `mise exec -- claude` (or its postinstall) then fails — mise's npm backend doesn't always run `@anthropic-ai/claude-code`'s postinstall (`install.cjs`, which fetches the native binary), and even running it manually needs a `node` binary, which was never installed as a mise tool for this account (only `claude-code` itself was). Install `node` via mise first, then run the postinstall manually if `claude --version` still fails afterward.
 
 ```bash
-ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "curl https://mise.run | sh && ~/.local/bin/mise use -g npm:@anthropic-ai/claude-code"'
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "curl https://mise.run | sh && ~/.local/bin/mise use -g npm:@anthropic-ai/claude-code && ~/.local/bin/mise use -g node@22"'
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "~/.local/bin/mise exec -- claude --version"'
+```
+
+If the last command errors with `claude native binary not installed`, find and run its postinstall manually first:
+```bash
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "find ~/.local/share/mise -path \"*@anthropic-ai/claude-code/install.cjs\""'
+# then, using the path that printed:
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "~/.local/bin/mise exec -- node <PATH_FROM_ABOVE>"'
+```
+
+Once `claude --version` succeeds, log in interactively:
+```bash
 ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "~/.local/bin/mise exec -- claude"'
 ```
 
