@@ -289,6 +289,8 @@ Delete the test file once confirmed: `ssh thicket-pilot@orb -- 'sudo -u second-b
 - Create: `nodes/second-brain-bridge/vitest.config.ts`
 - Create: `nodes/second-brain-bridge/tsconfig.json`
 
+> **Corrected 2026-09-11 against the real agent card from Task 3.** The card's `supportedInterfaces[0].url` is `https://thicket-second-brain/a2a/v1` (`protocolBinding: "JSONRPC"`, `protocolVersion: "1.0"`) — an unqualified hostname (thicket's renderer only appends a tailnet domain suffix when `THICKET_TAILNET_DOMAIN` is set, which it wasn't), plus a `/a2a/v1` path. The code blocks below have already been updated to use `https://thicket-second-brain.tail2023b7.ts.net/a2a/v1` (the actual reachable form, with the tailnet's MagicDNS suffix added and the card's path appended) as the mock/real `baseUrl` — that's the real value Task 6 must set `SECOND_BRAIN_A2A_URL` to. The card does **not** enumerate JSON-RPC method names or a response shape anywhere (`skills: []`, no `methods` field) — `message/send` (used below) is a reasonable inference from `capabilities.streaming: true`/A2A's spec, not something the card confirms, and the exact `result.parts[].text` response shape is likewise unverified against thicket's real wire format. Task 6's live test against the actual running agent is where that assumption gets checked for real — if it's wrong, that's a normal Task 6 finding, not a sign Task 5 was done wrong.
+
 **Interfaces:**
 - Consumes: `second-brain-agent-card.json` from Task 3, Step 7 (base URL, method name).
 - Produces: `sendToSecondBrain(message: string): Promise<string>` from `a2a-client.ts`, used by `server.ts`'s MCP tool handler and by Task 6's container.
@@ -383,12 +385,12 @@ describe("sendToSecondBrain", () => {
     });
 
     const reply = await sendToSecondBrain("search the vault for X", {
-      baseUrl: "https://second-brain.tail2023b7.ts.net",
+      baseUrl: "https://thicket-second-brain.tail2023b7.ts.net/a2a/v1",
     });
 
     expect(reply).toBe("Found 3 notes about that.");
     expect(fetch).toHaveBeenCalledWith(
-      "https://second-brain.tail2023b7.ts.net",
+      "https://thicket-second-brain.tail2023b7.ts.net/a2a/v1",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ "content-type": "application/json" }),
@@ -400,7 +402,7 @@ describe("sendToSecondBrain", () => {
     (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("ECONNREFUSED"));
 
     await expect(
-      sendToSecondBrain("hello", { baseUrl: "https://second-brain.tail2023b7.ts.net" }),
+      sendToSecondBrain("hello", { baseUrl: "https://thicket-second-brain.tail2023b7.ts.net/a2a/v1" }),
     ).rejects.toThrow(/second-brain agent unreachable/i);
   });
 });
@@ -555,7 +557,7 @@ httpServer.listen(8787, "0.0.0.0", () => {
 
 ```bash
 npm run build
-SECOND_BRAIN_A2A_URL=https://second-brain.tail2023b7.ts.net node dist/server.js &
+SECOND_BRAIN_A2A_URL=https://thicket-second-brain.tail2023b7.ts.net/a2a/v1 node dist/server.js &
 ```
 
 Run: `curl -s http://localhost:8787/mcp -X POST -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`
@@ -585,14 +587,14 @@ This follows the exact pattern `gog-mcp` already uses in `dev-vm/compose.yaml` (
 
 - [ ] **Step 0: Confirm the dev VM can actually reach `thicket-pilot` over the tailnet, before writing any code**
 
-The `pickleclaw` dev VM's own Tailscale membership hasn't been established anywhere in this plan yet, and thicket's `netd` enforces ACLs strictly (no host-local shortcuts — see `docs/reference.md`'s trust model), so a container inside the dev VM reaching `second-brain.tail2023b7.ts.net` is not guaranteed just because the Mac itself is on the tailnet.
+The `pickleclaw` dev VM's own Tailscale membership hasn't been established anywhere in this plan yet, and thicket's `netd` enforces ACLs strictly (no host-local shortcuts — see `docs/reference.md`'s trust model), so a container inside the dev VM reaching `thicket-second-brain.tail2023b7.ts.net` is not guaranteed just because the Mac itself is on the tailnet.
 
-Run: `ssh openclaw@orb -- 'tailscale status'` (or, from inside a throwaway container on the dev VM's compose network: `docker run --rm --network dev-vm_default curlimages/curl curl -sv https://second-brain.tail2023b7.ts.net --unix-socket /dev/null 2>&1 | head -5` as a reachability smoke test)
+Run: `ssh openclaw@orb -- 'tailscale status'` (or, from inside a throwaway container on the dev VM's compose network: `docker run --rm --network dev-vm_default curlimages/curl curl -sv https://thicket-second-brain.tail2023b7.ts.net --unix-socket /dev/null 2>&1 | head -5` as a reachability smoke test)
 
 - If the dev VM (or Docker Desktop/OrbStack's VM host) is already tailnet-joined: add a Tailscale ACL rule granting that node's tag reach to `tag:thicket-second-brain` on `netd`'s port, then re-test.
 - If it isn't: install the Tailscale client inside the `pickleclaw` dev VM (not just the Mac host) and join it to the tailnet with its own tag, then add the same ACL grant.
 
-Do not proceed to Step 1 until a plain `curl` to `https://second-brain.tail2023b7.ts.net` from inside the dev VM's network succeeds (even a TLS/404 response is fine — the point is confirming the packet gets there at all, not that the request is well-formed yet).
+Do not proceed to Step 1 until a plain `curl` to `https://thicket-second-brain.tail2023b7.ts.net` from inside the dev VM's network succeeds (even a TLS/404 response is fine — the point is confirming the packet gets there at all, not that the request is well-formed yet).
 
 - [ ] **Step 1: Write the Dockerfile**
 
@@ -640,7 +642,7 @@ In `dev-vm/compose.yaml`, alongside the existing `gog-mcp`/`goplaces-node` block
       context: ../nodes/second-brain-bridge
     restart: unless-stopped
     environment:
-      SECOND_BRAIN_A2A_URL: https://second-brain.tail2023b7.ts.net
+      SECOND_BRAIN_A2A_URL: https://thicket-second-brain.tail2023b7.ts.net/a2a/v1
 ```
 
 (No `env_file`/secrets needed — the A2A endpoint isn't a credential, and thicket's Tailscale ACLs are what actually gate access, not a bearer token.)
