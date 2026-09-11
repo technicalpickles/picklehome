@@ -154,13 +154,16 @@ Expected: no roster/schema errors mentioning `second-brain`
 
 - [ ] **Step 1: Render the agent's config**
 
+> **Corrected 2026-09-11 after a real dry run.** thicket has two separate commands that a first read of the docs conflates: `provision` manages each agent's *Slack app* (creating/updating a real Slack app via `apps.manifest.create`, gated on a Slack app-configuration token, and enforcing a ≥174-character `description` per agent — all Slack-specific, confirmed straight from `apps/cli/src/bin.ts` and `provision.ts`) — completely orthogonal to this pilot, which deploys no `bridge`/Slack surface at all. `render` is the command that actually produces the per-account config tree (`agents.yaml`, `agentd.json`, `netd.json`) that `netd`/`agentd` read; it shares the exact same output path (`~/.config/thicket/rendered/<agent>/` by default) and touches nothing Slack-related. Use `render`, not `provision`, here.
+
 ```bash
-ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket provision --dry-run'
-ssh thicket-pilot@orb -- 'cd ~/src/thicket && ~/.local/bin/mise exec -- pnpm exec thicket provision'
+ssh thicket-pilot@orb -- 'cd ~/src/thicket && THICKET_AGENTS_FILE=$HOME/src/thicket/agents.yaml ~/.local/bin/mise exec -- ./dist-bin/linux-x64/thicket render'
 ```
 
+(`pnpm exec thicket` doesn't resolve as a command — use the built binary directly, same as every other `thicket` invocation in this plan. `THICKET_AGENTS_FILE` is needed because the binary otherwise looks for `~/.config/thicket/agents.yaml`, which doesn't exist — the roster lives in the checkout at `~/src/thicket/agents.yaml`.)
+
 Run: `ssh thicket-pilot@orb -- 'ls ~/.config/thicket/rendered/second-brain/'`
-Expected: a directory of rendered config files for the `second-brain` agent
+Expected: a directory of rendered config files for the `second-brain` agent (`agents.yaml`, `agentd.json`, `netd.json`)
 
 - [ ] **Step 2: Install the rendered config into the agent's own account**
 
