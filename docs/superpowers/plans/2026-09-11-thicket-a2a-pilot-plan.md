@@ -183,9 +183,11 @@ ssh thicket-pilot@orb -- 'sudo chown -R second-brain: ~second-brain/.local/bin'
 
 - [ ] **Step 4: Install Claude Code and authenticate inside the account**
 
+> **Corrected 2026-09-11:** `sudo -u second-brain -H claude` fails with `command not found` — `sudo` execs the binary directly with no shell profile sourced, so `mise`'s shim for the globally-installed `claude` is never on PATH. Use `mise exec` to resolve it explicitly instead.
+
 ```bash
 ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "curl https://mise.run | sh && ~/.local/bin/mise use -g npm:@anthropic-ai/claude-code"'
-ssh thicket-pilot@orb -- 'sudo -u second-brain -H claude'
+ssh thicket-pilot@orb -- 'sudo -u second-brain -H bash -c "~/.local/bin/mise exec -- claude"'
 ```
 
 Follow the interactive OAuth prompt. Credentials persist under `second-brain`'s home directory.
