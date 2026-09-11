@@ -4,7 +4,7 @@
 
 **Goal:** Stand up thicket's `netd`+`agentd` on a new, isolated OrbStack VM (`thicket-pilot`) hosting a second-brain agent with vault access, then give the local `pickleclaw` dev server an A2A client so it can delegate vault work to that agent — verified first through openclaw's gateway interface, then through one real Telegram round-trip.
 
-**Architecture:** `thicket-pilot` (new OrbStack VM) runs thicket's `netd` (Tailscale node + unix-socket proxy) and `agentd` (A2A server + Claude Code session) under a dedicated `second-brain` unix account, with the `pickled-knowledge` vault reachable from that account over an SSHFS mount back to picklelab. A new `nodes/second-brain-bridge` MCP server in the `pickleclaw` repo exposes one tool (`ask_second_brain`) that speaks A2A to `agentd` over the tailnet; it's registered with pickleclaw's dev-VM gateway the same way `gog-mcp` already is. Nothing in production (picklelab's `second-brain-agent`, `openclaw`, or `pickleclaw`) is touched.
+**Architecture:** `thicket-pilot` (new OrbStack VM) runs thicket's `netd` (Tailscale node + unix-socket proxy) and `agentd` (A2A server + Claude Code session) under a dedicated `second-brain` unix account, with the user's `~/Vaults/pickled-knowledge` vault reachable from that account via a symlink onto OrbStack's existing virtiofs mount of the Mac's filesystem (no SSHFS, no picklelab involvement — see Task 4's corrected text). A new `nodes/second-brain-bridge` MCP server in the `pickleclaw` repo exposes one tool (`ask_second_brain`) that speaks A2A to `agentd` over the tailnet; it's registered with pickleclaw's dev-VM gateway the same way `gog-mcp` already is. Nothing in production (picklelab's `second-brain-agent`, `openclaw`, or `pickleclaw`) is touched.
 
 **Tech Stack:** thicket (Go `netd`, TypeScript `agentd`), Node/TypeScript + vitest for the new MCP bridge, Docker Compose (pickleclaw dev VM), Tailscale, OrbStack.
 
@@ -247,58 +247,35 @@ Read `second-brain-agent-card.json` and note: the base URL/path A2A messages get
 **Files:** none in any repo — this is host-level VM configuration.
 
 **Interfaces:**
-- Consumes: the `second-brain` account from Task 2/3, and picklelab's existing `pickled-knowledge` vault at `/srv/data/obsidian-sync/vaults/pickled-knowledge` (read-write, reachable over Tailscale via `picklelab.tail2023b7.ts.net`).
-- Produces: `/home/second-brain/vault` on `thicket-pilot`, mounted read-write via SSHFS onto picklelab's vault directory — the path the roster's `workspaces.vault` entry (Task 2) already points at.
+- Consumes: the `second-brain` account from Task 2/3, and this Mac's `~/Vaults/pickled-knowledge` (the user's directly-edited copy of the vault — not picklelab's `obsidian-sync` copy).
+- Produces: `~second-brain/vault` on `thicket-pilot`, symlinked to the vault — the path the roster's `workspaces.vault` entry (Task 2) already points at.
 
-`thicket-pilot` is a separate VM from picklelab (where `obsidian-sync` and the vault actually live), so this can't be a bind mount like the current container uses — it needs a network mount. SSHFS over the existing tailnet reuses infrastructure that's already proven (the same SSH access this plan uses everywhere else), rather than inventing a new sync mechanism for a pilot.
+> **Corrected 2026-09-11 — this task is far simpler than originally planned.** The original plan assumed `thicket-pilot` (an OrbStack VM) needed a network mount (SSHFS) to reach the vault, since it's a separate machine from wherever the vault lives — and initially targeted picklelab's `obsidian-sync` copy, matching the existing production `second-brain-agent` container's pattern. Two corrections, from directly checking reality instead of assuming: (1) the vault this pilot should target is the user's own directly-edited copy at `~/Vaults/pickled-knowledge` **on this Mac**, not picklelab's sync copy. (2) `thicket-pilot`, being an OrbStack VM, already has this Mac's entire filesystem mounted read-write via virtiofs at the same path (`/Users/technicalpickles/...`) — confirmed live (`mount | grep mac` inside the VM shows `mac on /Users type virtiofs (rw,relatime)`), and the `second-brain` account can already read and write through it with no extra configuration (verified with an actual write-then-readback test). So: no SSHFS, no new SSH keypair, no picklelab, no `/etc/fstab` entry, no touching production anything — just a symlink.
 
-- [ ] **Step 1: Install sshfs on thicket-pilot**
-
-```bash
-ssh thicket-pilot@orb -- 'sudo apt-get update && sudo apt-get install -y sshfs'
-```
-
-- [ ] **Step 2: Give the second-brain account SSH access to picklelab**
-
-Generate a dedicated ed25519 keypair (no passphrase) on `thicket-pilot` as the `second-brain` user, and add the public key to picklelab's `technicalpickles` account `~/.ssh/authorized_keys` (read-write to the vault directory only in practice, since that's all this key will ever be used for — full account access is broader than needed, but matches how every other picklehome service reaches picklelab today; tightening this is future work, not pilot scope).
+- [ ] **Step 1: Symlink the agent's vault workspace to the virtiofs-mounted vault**
 
 ```bash
-ssh thicket-pilot@orb -- 'sudo -u second-brain ssh-keygen -t ed25519 -f ~second-brain/.ssh/id_ed25519 -N ""'
-ssh thicket-pilot@orb -- 'sudo -u second-brain cat ~second-brain/.ssh/id_ed25519.pub'
+ssh thicket-pilot@orb -- 'sudo -u second-brain ln -s /Users/technicalpickles/Vaults/pickled-knowledge ~second-brain/vault'
 ```
 
-Append the printed public key to `technicalpickles@picklelab:~/.ssh/authorized_keys`.
-
-- [ ] **Step 3: Mount the vault**
-
-```bash
-ssh thicket-pilot@orb -- 'sudo -u second-brain mkdir -p ~second-brain/vault'
-ssh thicket-pilot@orb -- 'sudo -u second-brain sshfs technicalpickles@picklelab.tail2023b7.ts.net:/srv/data/obsidian-sync/vaults/pickled-knowledge ~second-brain/vault -o reconnect,ServerAliveInterval=15'
-```
-
-- [ ] **Step 4: Verify read access**
+- [ ] **Step 2: Verify read access**
 
 Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain ls ~second-brain/vault | head -5'`
 Expected: real vault file/directory names (not empty, not an error)
 
-- [ ] **Step 5: Verify write access and that obsidian-sync picks it up**
+- [ ] **Step 3: Verify write access, readable back on the Mac directly**
 
 ```bash
 ssh thicket-pilot@orb -- 'sudo -u second-brain sh -c "echo pilot-test > ~second-brain/vault/thicket-pilot-test.md"'
+cat ~/Vaults/pickled-knowledge/thicket-pilot-test.md
 ```
-
-Run (from anywhere with picklelab access): `ssh picklelab -- 'cat /srv/data/obsidian-sync/vaults/pickled-knowledge/thicket-pilot-test.md'`
-Expected: `pilot-test`
+Expected: `pilot-test` (no sync delay — it's the same underlying files via virtiofs, not a copy)
 
 Delete the test file once confirmed: `ssh thicket-pilot@orb -- 'sudo -u second-brain rm ~second-brain/vault/thicket-pilot-test.md'`
 
-- [ ] **Step 6: Make the mount survive VM reboot**
+- [ ] **Step 4: No further action needed for reboot survival.** OrbStack's virtiofs mounts are set up by the VM's own init on every boot (they're how `/Users`, `/Applications`, etc. get mounted at all) — there's no `/etc/fstab` entry for this pilot to add. The symlink itself persists on the VM's own disk.
 
-```bash
-ssh thicket-pilot@orb -- 'sudo -u second-brain sh -c "echo \"technicalpickles@picklelab.tail2023b7.ts.net:/srv/data/obsidian-sync/vaults/pickled-knowledge /home/second-brain/vault fuse.sshfs _netdev,reconnect,ServerAliveInterval=15,IdentityFile=/home/second-brain/.ssh/id_ed25519,allow_other 0 0\" | sudo tee -a /etc/fstab"'`
-```
-
-- [ ] **Step 7: No commit — host configuration only.**
+- [ ] **Step 5: No commit — host configuration only.**
 
 ---
 
