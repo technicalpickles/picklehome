@@ -1,8 +1,10 @@
 # Floorplan Markup Legend
 
-How to mark up the MagicPlan export so it's consistent and machine/human-readable
-later. Companion to `floorplan-capture-checklist.md` (what to capture) — this is *how*
-to annotate it once you have the exported image.
+How to mark up the MagicPlan export so it's consistent and human-readable later.
+Companion to `floorplan-capture-checklist.md` (what to capture) — this is *how* to
+annotate it once you have the exported image. For the machine-readable counterpart
+(GeoJSON, for anything that wants to compute with the data instead of reading it),
+see `floorplan-geojson-schema.md`.
 
 Room IDs referenced here are the canonical ones in `TOPOLOGY.md`'s Room Registry —
 don't invent room names/IDs on the floorplan that don't exist there; add new rooms to
@@ -55,6 +57,8 @@ directly above it on floor 2. Before annotating:
 6. Add a short "Room Layout" text summary to `TOPOLOGY.md` (adjacency, materials,
    distances) referencing the room IDs, so the facts are readable without opening the
    image.
+7. Transcribe the same markup into GeoJSON per `floorplan-geojson-schema.md`, so the
+   data is also machine-readable, not just prose.
 
 ## Storage
 
