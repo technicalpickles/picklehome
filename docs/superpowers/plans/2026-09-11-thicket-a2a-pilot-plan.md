@@ -216,6 +216,14 @@ ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u
 ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user enable --now thicket-agentd.service thicket-netd.service'
 ```
 
+> **Corrected 2026-09-12 after Task 6's live A2A test.** A real `SendMessage` call reached `agentd` fine but every task failed: `"Agent execution error: Native CLI binary for linux-x64 not found."` `agentd`'s config (`apps/agentd/src/config.ts`) resolves the Claude binary via `findOnPath("claude")` against its own process `PATH` (or `THICKET_CLAUDE_EXECUTABLE`/`claude_executable`, if set) -- and the unit file's `Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin` (added above) never included where Step 4's `mise use -g npm:@anthropic-ai/claude-code` actually installed it (`~/.local/share/mise/installs/npm-anthropic-ai-claude-code/latest/node_modules/.bin/claude`), so it silently fell through to `"sdk-bundled"`, which isn't present. Fix: add a second `Environment=` line to `~second-brain/.config/systemd/user/thicket-agentd.service`, right after the `PATH` one:
+
+```
+Environment=THICKET_CLAUDE_EXECUTABLE=%h/.local/share/mise/installs/npm-anthropic-ai-claude-code/latest/node_modules/.bin/claude
+```
+
+then `systemctl --user daemon-reload && systemctl --user restart thicket-agentd` (same `sudo -u second-brain -H ... XDG_RUNTIME_DIR=...` invocation as Step 6 below). Confirm via the startup log line: `"agentd listening", ..., "claude":"<that path>"`.
+
 - [ ] **Step 6: Verify both services are healthy**
 
 Run: `ssh thicket-pilot@orb -- 'sudo -u second-brain XDG_RUNTIME_DIR=/run/user/$(id -u second-brain) systemctl --user status thicket-netd thicket-agentd'`
@@ -585,18 +593,11 @@ git commit -m "feat(second-brain-bridge): add A2A client and MCP server for seco
 
 This follows the exact pattern `gog-mcp` already uses in `dev-vm/compose.yaml` (own container, no host port, gateway reaches it by service name).
 
-- [ ] **Step 0: Confirm the dev VM can actually reach `thicket-pilot` over the tailnet, before writing any code**
+- [x] **Step 0: Confirm the dev VM can actually reach `thicket-pilot` over the tailnet, before writing any code**
 
-The `pickleclaw` dev VM's own Tailscale membership hasn't been established anywhere in this plan yet, and thicket's `netd` enforces ACLs strictly (no host-local shortcuts — see `docs/reference.md`'s trust model), so a container inside the dev VM reaching `thicket-second-brain.tail2023b7.ts.net` is not guaranteed just because the Mac itself is on the tailnet.
+> **Corrected 2026-09-12, by actually running it.** `docker compose` here does NOT run on the `openclaw` OrbStack VM (per this file's own header note) — it runs against OrbStack's *shared* Docker engine, which backs every OrbStack container on this Mac. A `docker run --rm --network dev-vm_default curlimages/curl curl ... https://thicket-second-brain.tail2023b7.ts.net` timed out (DNS resolved to the tailnet IP; TCP never connected), confirming the container isn't a tailnet node. The plan's original two options (join the dev VM itself, or the shared engine) were both rejected here: joining the *shared* engine would put every OrbStack container on this Mac onto the tailnet, not just this pilot — too broad a blast radius for something that's supposed to stay isolated. **Decision: a dedicated Tailscale sidecar in `dev-vm/compose.yaml`** (`tailscale/tailscale` image, own `tag:thicket-bridge`, kernel/TUN mode via `TS_USERSPACE=false` + `/dev/net/tun` + `NET_ADMIN` — the same "container-as-node" pattern as `homelab/services/second-brain-agent`'s `ts-agent` sidecar in this repo), with `second-brain-bridge` sharing its netns via `network_mode: service:second-brain-bridge-ts`. Required, done manually (admin-console/1Password access, not something this session could reach): a `tag:thicket-bridge` `tagOwners` entry + a grant `tag:thicket-bridge -> tag:thicket-second-brain:443` in the tailnet ACL, and a reusable non-ephemeral auth key minted for that tag, written to `~/OrbStack/openclaw/home/technicalpickles/.openclaw/secrets/thicket-bridge-ts-authkey.env` as `TS_AUTHKEY=...` (same env_file convention this compose file already uses for every other secret). Verified after both were in place: `tailscale ping`/`tailscale nc ... 443` from inside the sidecar succeeded, and a real `curl` reached `thicket-second-brain`'s agent-card endpoint.
 
-Run: `ssh openclaw@orb -- 'tailscale status'` (or, from inside a throwaway container on the dev VM's compose network: `docker run --rm --network dev-vm_default curlimages/curl curl -sv https://thicket-second-brain.tail2023b7.ts.net --unix-socket /dev/null 2>&1 | head -5` as a reachability smoke test)
-
-- If the dev VM (or Docker Desktop/OrbStack's VM host) is already tailnet-joined: add a Tailscale ACL rule granting that node's tag reach to `tag:thicket-second-brain` on `netd`'s port, then re-test.
-- If it isn't: install the Tailscale client inside the `pickleclaw` dev VM (not just the Mac host) and join it to the tailnet with its own tag, then add the same ACL grant.
-
-Do not proceed to Step 1 until a plain `curl` to `https://thicket-second-brain.tail2023b7.ts.net` from inside the dev VM's network succeeds (even a TLS/404 response is fine — the point is confirming the packet gets there at all, not that the request is well-formed yet).
-
-- [ ] **Step 1: Write the Dockerfile**
+- [x] **Step 1: Write the Dockerfile**
 
 `nodes/second-brain-bridge/Dockerfile`:
 
@@ -616,7 +617,9 @@ EXPOSE 8787
 CMD ["node", "dist/server.js"]
 ```
 
-- [ ] **Step 2: Register the MCP server**
+- [x] **Step 2: Register the MCP server**
+
+> **Corrected 2026-09-12, by actually running it.** Editing `openclaw-config/mcp.json5` in the repo has **no effect** on the running dev-VM gateway. `compose.yaml`'s `openclaw` service mounts a named `config` volume (`external: true`, populated once), not this repo file — same "cattle" convention the compose file already documents for provider secrets ("Rotation is therefore 'copy the updated file in again'"). The live file is `/home/node/.openclaw/includes/mcp.json5` *inside* `dev-vm-openclaw-1`; `openclaw mcp list` reads the merged `openclaw.json`, not the repo. To actually register a new server: `docker cp openclaw-config/mcp.json5 dev-vm-openclaw-1:/home/node/.openclaw/includes/mcp.json5 && docker compose restart openclaw`, then confirm with `docker exec dev-vm-openclaw-1 openclaw mcp list`.
 
 Add to the local (dev-only, non-symlinked) `openclaw-config/mcp.json5`:
 
@@ -632,41 +635,49 @@ Add to the local (dev-only, non-symlinked) `openclaw-config/mcp.json5`:
 }
 ```
 
-- [ ] **Step 3: Add the compose service**
+- [x] **Step 3: Add the compose service**
 
-In `dev-vm/compose.yaml`, alongside the existing `gog-mcp`/`goplaces-node` blocks:
+> **Corrected 2026-09-12** per Step 0's ruling: `second-brain-bridge` has no `environment:`/own network of its own — it shares `second-brain-bridge-ts`'s netns via `network_mode: service:second-brain-bridge-ts`, and that sidecar service carries the `networks.default.aliases: [second-brain-bridge]` entry instead (a service with `network_mode: service:X` has no network attachment of its own to hang a compose alias on). See the actual committed blocks in `dev-vm/compose.yaml` (commit `87bb693`) rather than re-deriving them here.
 
-```yaml
-  second-brain-bridge:
-    build:
-      context: ../nodes/second-brain-bridge
-    restart: unless-stopped
-    environment:
-      SECOND_BRAIN_A2A_URL: https://thicket-second-brain.tail2023b7.ts.net/a2a/v1
-```
-
-(No `env_file`/secrets needed — the A2A endpoint isn't a credential, and thicket's Tailscale ACLs are what actually gate access, not a bearer token.)
-
-- [ ] **Step 4: Build and start it**
+- [x] **Step 4: Build and start it**
 
 ```bash
 cd dev-vm
-docker compose up -d --build second-brain-bridge
+docker compose up -d --build second-brain-bridge-ts second-brain-bridge
 ```
 
-Run: `docker compose logs second-brain-bridge`
-Expected: no crash-loop; process stays up
+Run: `docker compose logs second-brain-bridge-ts second-brain-bridge`
+Expected: no crash-loop; sidecar logs `joined tailnet as pickleclaw-dev-second-brain-bridge` (or similar), bridge logs `second-brain-bridge listening on :8787/mcp`
 
-- [ ] **Step 5: Verify the gateway sees the tool**
+- [x] **Step 5: Verify the gateway sees the tool**
 
-Run: `docker exec dev-vm-openclaw-1 curl -s http://second-brain-bridge:8787/mcp -X POST -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`
-Expected: JSON response listing `ask_second_brain` among the tools
-
-- [ ] **Step 6: Commit**
+> **Corrected 2026-09-12, by actually running it.** Two things this step's original curl missed: (1) `second-brain-bridge` publishes no host port (same as `gog-mcp`) and now also has no network of its own (`network_mode: service:...`), so it's only reachable from other dev-VM containers by the sidecar's alias, never from the Mac directly. (2) the MCP streamable-HTTP transport requires an `initialize` handshake before `tools/list`/`tools/call` — hitting either without one first returns `"Bad Request: Server not initialized"`.
 
 ```bash
-git add nodes/second-brain-bridge/Dockerfile dev-vm/compose.yaml openclaw-config/mcp.json5
-git commit -m "feat(dev-vm): wire second-brain-bridge into the gateway"
+# 1) initialize — grab the mcp-session-id from the response headers
+docker exec dev-vm-openclaw-1 curl -sD - http://second-brain-bridge:8787/mcp -X POST \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"0"}}}'
+
+# 2) tools/list, with that session id
+docker exec dev-vm-openclaw-1 curl -s http://second-brain-bridge:8787/mcp -X POST \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -H "mcp-session-id: <id from step 1>" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
+Expected: `tools/list` response includes `ask_second_brain`. Confirmed live, plus a real `tools/call` end to end: asked it "what kind of vault is this?" and got back an accurate, vault-derived answer (Johnny Decimal/PARA Obsidian vault) — the actual pilot proof, not just plumbing.
+
+While debugging the live `tools/call`, two more real findings surfaced and got fixed (not simulated/guessed):
+
+- **`agentd` couldn't find the `claude` binary** (`"Native CLI binary for linux-x64 not found"`, every task failed). Root cause and fix recorded in Task 3 Step 5's 2026-09-12 correction (`THICKET_CLAUDE_EXECUTABLE` env var on the systemd unit).
+- **Task 5's `a2a-client.ts` was written against the wrong wire format** — the real agentd needs an `A2A-Version: 1.0` header, method `"SendMessage"` (not `"message/send"`), `messageId`/`role` on the message, untyped `parts`, and the reply nested under `result.task.status.message.parts`. Fixed and re-verified (3/3 tests) in commit `40f36e2`.
+
+- [x] **Step 6: Commit**
+
+Landed as two commits instead of one — the wire-format fix belongs to Task 5's code, discovered here, so it got its own commit rather than being folded into Task 6's:
+
+```
+40f36e2 fix(second-brain-bridge): match the real thicket agentd wire format
+87bb693 feat(dev-vm): wire second-brain-bridge into the gateway
 ```
 
 ---
@@ -679,21 +690,21 @@ git commit -m "feat(dev-vm): wire second-brain-bridge into the gateway"
 - Consumes: everything from Tasks 1–6.
 - Produces: the pilot's pass/fail verdict against the spec's four "what the pilot needs to prove" criteria.
 
-- [ ] **Step 1: Iterate via the gateway interface**
+- [x] **Step 1: Iterate via the gateway interface**
 
-Open the dev VM's Control UI (`ssh -N -L 18789:127.0.0.1:18789 openclaw@orb`, then `http://127.0.0.1:18789`) or use the `openclaw` CLI directly against the dev gateway. Send a message that should trigger `ask_second_brain` (e.g. "ask the second brain to list recent notes").
+> **Corrected 2026-09-12, by actually running it.** No Control UI browser session used — the `openclaw` CLI's `agent` command drives a real turn through the gateway directly: `docker exec dev-vm-openclaw-1 openclaw agent --session-key "agent:main:<key>" --message "..." --json`. First attempt (before Step 2's `mcp.json5` propagation fix existed) failed — the gateway's own agent had never heard of a "second brain" and tried to look it up via its native `sessions_send` multi-agent feature instead. After `docker cp`-ing the updated `includes/mcp.json5` in and restarting `openclaw` (see Task 6 Step 2's correction), re-ran it: asked in plain language what kind of vault it manages, and the response JSON's `agentMeta.terminalReceipt.successfulToolNames` showed `["second_brain__ask_second_brain"]` — the model's own tool-selection reasoning picked it, called it over the real A2A path, and returned an accurate, vault-derived answer. This *is* the real gateway-interface proof, not raw MCP protocol calls against the bridge directly (Task 6's verification).
 
-Expected: the gateway calls the tool, `second-brain-bridge`'s logs show the outbound A2A call, and a real vault-derived answer comes back — not a canned/error response.
+- [x] **Step 2: Fix anything broken, re-run Step 1 until it's clean**
 
-- [ ] **Step 2: Fix anything broken, re-run Step 1 until it's clean**
+Only the `mcp.json5`-propagation gap above; fixed once, re-ran clean.
 
-This is the fast-iteration loop the spec calls for — don't move to Telegram until Step 1 is reliably working.
+- [x] **Step 3: Final full-path check over real Telegram** — **skipped by decision, 2026-09-12**
 
-- [ ] **Step 3: Final full-path check over real Telegram**
+Telegram is disabled on this dev gateway (`channels.telegram.enabled: false`), with no dev surface currently running. Asked; decided Step 1's gateway-interface proof (real tool-selection reasoning + real A2A round-trip) is sufficient for the pilot's purposes, and not worth standing up a Telegram surface just for this check. Recorded as a deliberate scope decision, not a blocker, in the spec doc's findings.
 
-Send an actual Telegram message to the pickleclaw dev bot with the same kind of vault request. Confirm the round-trip completes through Telegram → pickleclaw dev → second-brain-bridge → thicket-pilot → vault → back.
+- [x] **Step 4: Record the pilot's findings**
 
-- [ ] **Step 4: Record the pilot's findings**
+Written into `docs/plans/2026-09-11-thicket-a2a-pilot.md`'s new "Findings (2026-09-12)" section.
 
 Write up, in the spec doc (`docs/plans/2026-09-11-thicket-a2a-pilot.md`) or a follow-up note, how each of these held up:
 1. A2A round-trip end-to-end — pass/fail

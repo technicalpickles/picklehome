@@ -113,3 +113,35 @@ No automated test suite. Verification is manual: iterate via the openclaw gatewa
 - Exact mechanism for vault access from the thicket unix account (bind mount if colocated with obsidian-sync data, or a sync mechanism if `thicket-pilot` is a separate VM from wherever obsidian-sync runs)
 - Whether pickleclaw's A2A client is a new dedicated tool/node or wired into its existing message-handling path
 - Tailscale ACL tag design for `tag:thicket-*` given the existing tailnet ACL structure
+
+## Findings (2026-09-12)
+
+Full implementation history is in `docs/superpowers/plans/2026-09-11-thicket-a2a-pilot-plan.md`'s per-task "Corrected" notes. This section judges the pilot against the four criteria in "What the pilot needs to prove."
+
+### 1. A2A round-trip end-to-end — **pass**
+
+Confirmed twice, both through the real stack (Telegram excepted — see below): a raw MCP `tools/call` to `ask_second_brain`, and — the stronger proof — a plain-language message to the actual `openclaw` gateway, where the model's own tool-selection reasoning chose `second_brain__ask_second_brain` on its own and got back an accurate, vault-derived answer (confirmed via `agentMeta.terminalReceipt.successfulToolNames` in the response). The path exercised was: gateway → MCP → `second-brain-bridge` → Tailscale sidecar → tailnet → `agentd` on `thicket-pilot` → Claude Agent SDK → vault (via OrbStack virtiofs symlink) → back.
+
+Not done: the final real-Telegram pass. The dev gateway has `channels.telegram.enabled: false` right now — no dev Telegram surface exists to test against — and the call was made to skip standing one up just for this check, since the gateway-interface proof already exercises the same tool-selection path a Telegram message would.
+
+### 2. `agentd` session reliability vs. today's tmux setup — **insufficient data**
+
+Observed clean over the pilot's ~4-hour session (no crash-loop, no restart storms), but that's far short of the days-long window needed to see whether Claude Code's known update-nagging or logout friction (the spec's "Known friction") recurs under `agentd`'s session management. Would need a real soak period, not a same-day pilot, to answer this one either way.
+
+### 3. Unix-account + Tailscale ACL isolation — worth it in principle, rough in practice today
+
+The isolation model itself held up: nothing was reachable that shouldn't have been, and closing the gap required an actual, deliberate ACL grant + auth key — no accidental exposure. But getting there took more manual work than expected, none of it thicket's fault exactly, but real cost nonetheless:
+
+- OrbStack's actual architecture (`docker compose` here runs against a *shared* Docker engine backing every container on this Mac, not a per-project VM) meant the plan's assumed "join the dev VM to the tailnet" didn't map cleanly — needed a dedicated Tailscale sidecar container instead to keep the blast radius scoped to this one compose project.
+- Provisioning had several silent gotchas needing hand-debugging: `agentd` silently fell back to a broken `"sdk-bundled"` Claude Code path because its systemd unit's `PATH` didn't include where the CLI was actually installed (mise), with no error until the very first live task ("Native CLI binary for linux-x64 not found"); `sudo -u <account>` without `-H` resolves to the *invoking* user's home; the interactive `claude` login needed `SUDO_USER`/`SUDO_UID` explicitly unset.
+- The A2A wire contract itself needed live reverse-engineering: the agent card advertises no method names or response shape (`skills: []`), and the real requirements — an `A2A-Version: 1.0` header (silently defaults to a rejected legacy mode without it), proto-derived JSON-RPC method names (`SendMessage`, not the A2A spec's `message/send`), and a specific message/response shape — only surfaced by making real calls and reading error messages.
+
+None of this is disqualifying — it's what "early, no installer yet" (thicket's own description) actually costs a new adopter. But it's a real cost, not a hypothetical one.
+
+### 4. Cost estimate for migrating `second-brain-agent` onto this model — **not recommended yet**
+
+Today's picklelab pattern (Docker Compose + systemd + `ts-agent` sidecar) is simple, well-understood, and already proven in production. Moving to thicket would mean: a real per-agent Linux unix account (thicket has no installer — building from source with its pinned bun/Go toolchain is the only path), the same PATH/env and wire-protocol rough edges hit here landing on the one production homelab box instead of a throwaway VM, and manual Tailscale ACL/auth-key provisioning per agent with no automation. Given thicket itself describes this stage as "running, for one operator" with multi-host deployment unfinished, a production migration now would inherit all of this pilot's rough edges directly. Revisit once thicket ships an installer and the agent card actually documents its wire contract — the A2A idea and the unix-account isolation model are both sound, the tooling around them just isn't production-ready yet.
+
+### Overall verdict
+
+The pilot succeeded at what it set out to prove — a real Telegram-adjacent (gateway-driven) A2A round-trip with genuine vault access, isolated from production the whole time. It also surfaced enough integration friction that the broader migration this was meant to pilot for should wait.
