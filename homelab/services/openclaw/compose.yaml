@@ -78,6 +78,12 @@ services:
     environment:
       GOG_MCP_TOKEN: ${GOG_MCP_TOKEN:?required}
       GOG_KEYRING_PASSWORD: ${GOG_KEYRING_PASSWORD:?required}
+      # Phase 2 (gmail.modify): the joshua.nichols@gmail.com OAuth grant now
+      # holds gmail.modify (re-granted 2026-09-12), dropping the forced
+      # --readonly flag gmailReadonlyFlag() applies at phase 1. See
+      # pickleclaw docs/setup-notes.md's Gmail Phase 2 rollout entries (dev
+      # VM: 2026-09-11, picklelab: 2026-09-12).
+      GOG_MCP_GMAIL_PHASE: "2"
     volumes:
       # Bind mount, not a named volume: this holds Gmail/Calendar OAuth refresh
       # tokens that take a human browser consent flow to recreate, so it needs to
