@@ -54,6 +54,27 @@ Replace "Mac materializes `.env`, scp's it to host" with 1Password injecting sec
 - `.env.template` (already checked in, already the source of truth for which secrets exist) becomes the file actually passed to `op run`.
 - The Mac-local `.env`/`just dotenv` workflow stays available for local dev/testing, but deploy no longer depends on it. Note: `.env.template` also has a `Personal`-vault reference (`VICOHOME_*`), but no homelab service's `.env.vars` list draws from it — local-dev-only, out of scope for the service account tokens.
 
+**Refinements from 2026-09-13 review** (nothing in this section was implemented between 2026-08-22 and then):
+
+- **`op run` takes one service account token per invocation.** Two consequences for the wiring:
+  - `--env-file=.env.template` as-is would fail on any reference to a vault the active token can't read. `deploy.sh` needs a per-service filtered template instead (point `scripts/service-env`'s existing `.env.vars` filtering at the template rather than at `.env`).
+  - openclaw and open-webui draw from *both* vaults (`picklehome` too, not only `Brent Pickleclaw`), so they need two chained `op run` invocations, one per token and filtered template. Every other service needs only the `picklehome` token.
+- **Not everything is in the `.env` pipeline.** openclaw also reads `openclaw.image.env` (symlinked from the private `pickleclaw` repo) and files under `~/.openclaw/secrets/` placed with `op read | install -m 600`. `op run` doesn't cover those; they stay manual unless the plan says otherwise.
+- **Values entered with `just secret-entry` never reach a deploy.** Once `.env.template` is the only input, a value that exists only in a local `.env` or in Automic Vault (below) is invisible to `op run`. 1Password stays the single source of truth for anything a homelab service needs.
+- **Service account tokens also fix agent-side `op` on the Mac.** Agent shells have repeatedly failed to reach the 1Password desktop integration (2026-07-26 remote-control session; 2026-09-11, where `op whoami` worked in a human terminal but not from the agent's shell even with the sandbox disabled, apparently a macOS process-trust boundary). A token-authenticated `op` doesn't go through the desktop app at all. The tradeoff is a long-lived secret on disk; read-only, single-vault scoping is the mitigation.
+- **Validate before writing the plan:** mint the `picklehome` token, place it on picklelab, and run `op run` against a one-variable filtered template. Confirm (a) a bad or revoked token aborts loudly rather than starting a container with empty env, and (b) the Linux `op` install path on picklelab.
+
+### 3a. Dev side: Automic Vault on the Mac
+
+Section 3 covers picklelab. On the Mac, where `just dotenv` materializes a plaintext `.env` per checkout, [Automic Vault](https://github.com/automic-vault/automic-vault) (macOS-only) can hold dev copies of the same secrets instead:
+
+- **Project Values at the main checkout root.** A value saved with `av save --project-directory=<picklehome root>` is selected for any working directory beneath it, so one save covers every worktree under `.claude/worktrees/`. Commands run as `av inject +KEY... -- <command>`.
+- **1Password remains the source of truth; Automic Vault is a mirror.** Two ways in: `op read 'op://…' | av save --stdin --project-directory=<root> KEY` from a terminal where `op` works, or `just secret-entry --sink av KEY...` from a phone, approved with Automic Vault's iPhone Approval. Nothing keeps the mirror in sync, so rotation means re-mirroring.
+- **Verified 2026-09-13** with `FLO_USERNAME`/`FLO_PASSWORD`: entered from a phone, approved per key, then `av inject +FLO_USERNAME +FLO_PASSWORD -- uv run python water/water_cli.py status` succeeded with no `.env` reachable. Test by calling the module directly, not through `just`: `set dotenv-load` walks parent directories and will load the main checkout's `.env`, masking whether injection worked.
+- **Cost: approval volume.** Every `av inject` launched by an agent needed a fresh human approval (no reuse across distinct commands), and every `av save` needs one too. Blessed Scripts or a read-only policy for the agent's launcher are the likely mitigations; untested.
+- **Unsolved for dev use:** modules load everything from `.env` implicitly, but `av inject` names keys explicitly, and outside `homelab/services/*/.env.vars` there's no per-module list of which keys a command needs.
+- **Doesn't change deploys.** Deploying from the Mac still builds and scp's a `.env`; only section 3's host-side `op run` removes that.
+
 ### 4. Sensitive-data hygiene in docs
 
 - Tighten `docs/CONVENTIONS.md`'s sensitivity table: currently reads "MAC, internal IP, geolocatable." Make explicit that WAN/public IPs, lat/lng, WiFi SSIDs, router admin credentials, and physical addresses are covered too, so it's unambiguous this applies to `homelab/` and `network/` docs, not just device MACs.
@@ -65,4 +86,5 @@ Replace "Mac materializes `.env`, scp's it to host" with 1Password injecting sec
 - ~~Exact repo name/visibility settings for `second-brain-agent` and the dev container~~ **Resolved:** `technicalpickles/second-brain-agent` and `technicalpickles/homelab-dev`, both private, each its own repo.
 - ~~Whether `homelab/dev/` shares a repo with `second-brain-agent` or gets its own~~ **Resolved:** separate repos, no code or lifecycle coupling between them beyond superficial shape similarity.
 - ~~Whether one Service Account can span multiple vaults~~ **Resolved:** yes, but vault access/permissions are immutable after creation, which is why the design uses two single-vault tokens rather than one multi-vault token — see section 3.
-- Remaining mechanics of the 1Password Service Account setup on picklelab: exact token provisioning steps, rotation policy (service account tokens don't auto-expire; default to no scheduled rotation, document revoke/reissue steps inline at the point of use), and how `deploy.sh` picks the right token per service — still open, resolve during plan-writing.
+- Remaining mechanics of the 1Password Service Account setup on picklelab: exact token provisioning steps, rotation policy (service account tokens don't auto-expire; default to no scheduled rotation, document revoke/reissue steps inline at the point of use), and how `deploy.sh` picks the right token per service — still open, resolve during plan-writing. The 2026-09-13 refinements in section 3 narrow the last one: per-service filtered templates, with chained `op run` for the two dual-vault services.
+- Whether section 3a (Automic Vault on the Mac) becomes part of this plan or its own follow-up. It's independent of the picklelab changes and can be adopted module by module.
