@@ -443,19 +443,28 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 #
 # agents.defaults.bootstrapMaxChars: raised from the unset 20_000-char runtime
 # default (src/agents/embedded-agent-helpers/bootstrap.ts in vendor/openclaw)
-# to 28_000. `openclaw doctor` flagged AGENTS.md as truncated on the 2026.8.1
-# upgrade deploy (2026-09-02, taskwarrior 517) -- not because we added content,
-# but because upstream commit 669db2968fc ("retire TOOLS.md into an AGENTS.md
-# section with a doctor migration", openclaw/openclaw#113966, first shipped
-# v2026.7.2-beta.5, not present in picklelab's prior v2026.7.1) folded
-# TOOLS.md's ~165 lines and HEARTBEAT.md's few lines into AGENTS.md via a
-# doctor migration during this same upgrade -- nearly doubling it (confirmed
-# via openclaw-workspace repo history: 9,793 -> 19,836 chars in one commit
-# when the dev VM got the same migration 2026-08-20). Real, wanted content
-# just moved into the one file with a per-file cap; nothing to prune. 28_000
-# leaves headroom for both AGENTS.md and MEMORY.md (each ~20k as of
-# 2026-09-03) well under the unchanged 60_000
-# agents.defaults.bootstrapTotalMaxChars default (28_000 x 2 = 56_000 <
+# to 28_000 on 2026-09-03 after `openclaw doctor` flagged AGENTS.md as
+# truncated on the 2026.8.1 upgrade deploy (taskwarrior 517) -- upstream
+# commit 669db2968fc ("retire TOOLS.md into an AGENTS.md section with a
+# doctor migration", openclaw/openclaw#113966) had folded TOOLS.md's ~165
+# lines and HEARTBEAT.md's few lines into AGENTS.md via a doctor migration
+# during that same upgrade, nearly doubling it (9,793 -> 19,836 chars).
+#
+# Dropped back to 25_000 on 2026-09-13 after an openclaw-workspace content
+# audit found and fixed real duplication rather than just raising the cap
+# further: AGENTS.md had two full copies of the migrated TOOLS.md
+# boilerplate pasted in (one was pure dead template, no unique content);
+# MEMORY.md was carrying closed/resolved todo items, a stale duplicate
+# subset of memory/todo.md's Home/Office TODO sections, and restated facts
+# (gym contact info, HydroMassage code) that already live in
+# memory/workouts/preferences.md. Post-cleanup sizes: AGENTS.md ~21.8k,
+# MEMORY.md ~15.2k (was ~20k/~20k before). Two rules were also added to
+# AGENTS.md's Memory section to keep it from silently regrowing: action
+# items only ever live in memory/todo.md, and a topic with its own detail
+# file gets one pointer line here, never restated facts. 25_000 leaves
+# ~3.2k (~15%) headroom over the larger file (AGENTS.md) rather than the
+# ~6.2k slack 28_000 left, while staying well under the unchanged 60_000
+# agents.defaults.bootstrapTotalMaxChars default (25_000 x 2 = 50_000 <
 # 60_000) -- raise bootstrapTotalMaxChars too if a third bootstrap file is
 # ever added or these two keep growing. See docs/setup-notes.md's "openclaw
 # doctor review, picklelab, 2026.8.1" section in the pickleclaw repo.
@@ -499,7 +508,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
     {"path":"agents.defaults.heartbeat.lightContext","value":true},
     {"path":"agents.defaults.imageModel.primary","value":"ollama-cloud/kimi-k2.7-code"},
-    {"path":"agents.defaults.bootstrapMaxChars","value":28000},
+    {"path":"agents.defaults.bootstrapMaxChars","value":25000},
     {"path":"agents.defaults.models","value":{
         "ollama-cloud/glm-5.2":{},
         "ollama-cloud/glm-5.1":{},
