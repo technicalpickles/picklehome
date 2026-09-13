@@ -1,6 +1,6 @@
 services:
   openclaw:
-    image: ${OPENCLAW_IMAGE:?pin a version, e.g. ghcr.io/openclaw/openclaw:2026.6.11}   # full ref incl. tag
+    image: ${OPENCLAW_IMAGE:?pin a version, e.g. ghcr.io/openclaw/openclaw:2026.9.3}   # full ref incl. tag
     # No `build:` key on purpose: pairing `image:` with `build:` makes `docker compose pull`
     # ambiguous about whether to pull or build. We don't ship a Dockerfile, so omitting `build:`
     # keeps `docker compose pull` unambiguous — it only ever pulls the named image.
@@ -53,6 +53,11 @@ services:
   goplaces-node:
     build:
       context: ./goplaces-node
+      # Keep in sync with OPENCLAW_IMAGE's tag above (no automatic link --
+      # compose can't parse a version out of an image ref). Override with
+      # OPENCLAW_VERSION=... in the environment when bumping.
+      args:
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-2026.9.3}
     restart: unless-stopped
     # Start-order only, not a readiness guarantee -- the node retries its own
     # connection (restart: unless-stopped) until the gateway's actually up.

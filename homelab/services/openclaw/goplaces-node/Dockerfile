@@ -3,7 +3,7 @@ FROM node:24-bookworm
 
 ARG TARGETARCH
 ARG GOPLACES_VERSION=0.4.4
-ARG OPENCLAW_VERSION=2026.6.11
+ARG OPENCLAW_VERSION=2026.9.3
 
 # goplaces: Google Places CLI, baked in at build time (installing at container
 # runtime is a trap -- anything installed after build is lost on restart).
