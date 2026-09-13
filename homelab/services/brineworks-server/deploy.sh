@@ -73,7 +73,7 @@ for i in 1 2 3 4 5; do
     fi
     if [ "$i" -eq 5 ]; then
         echo "    WARNING: local health check failed after 5 attempts"
-        echo "    Check container logs: docker compose -f compose.yaml -f compose.picklelab.yaml logs"
+        echo "    Check container logs: docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs"
         exit 1
     fi
     echo "    Waiting for server to start (attempt $i/5)..."

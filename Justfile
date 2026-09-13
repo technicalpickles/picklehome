@@ -259,11 +259,11 @@ taskchampion-status host="picklelab":
 
 # Tail TaskChampion container logs from picklelab
 taskchampion-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow TaskChampion container logs live from picklelab
 taskchampion-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Brineworks PRM server to picklelab (idempotent: first setup or update)
 deploy-brineworks-server host="picklelab":
@@ -296,11 +296,11 @@ deploy-brineworks-server host="picklelab":
 
 # Tail Brineworks server container logs from picklelab
 brineworks-server-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow Brineworks server container logs live from picklelab
 brineworks-server-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Brineworks mobile agent to picklelab (idempotent: first setup or update)
 deploy-brineworks-agent host="picklelab":
