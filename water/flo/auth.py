@@ -36,17 +36,16 @@ def get_credentials() -> tuple[str, str]:
     """Read (username, password) from the environment.
 
     Raises MoenFloConfigError naming every missing or blank variable, and
-    pointing at both credential paths: `just secret-entry` for right now, and
-    the 1Password item once it exists.
+    pointing at `just dotenv` (the normal path) or `just secret-entry` (when op
+    can't reach 1Password).
     """
     values = {name: os.environ.get(name) for name in _REQUIRED_ENV_VARS}
     missing = [name for name, value in values.items() if not value or not value.strip()]
     if missing:
         raise MoenFloConfigError(
-            f"{', '.join(missing)} not set (or blank). Run "
-            f"'just secret-entry {' '.join(missing)}' to enter them now, or create "
-            f"{ONEPASSWORD_ITEM}, un-comment the FLO_* lines in .env.template, and "
-            "run 'just dotenv'."
+            f"{', '.join(missing)} not set (or blank). Run 'just dotenv' to pull them "
+            f"from {ONEPASSWORD_ITEM}, or 'just secret-entry {' '.join(missing)}' if "
+            "op can't reach 1Password."
         )
     return values["FLO_USERNAME"], values["FLO_PASSWORD"]
 

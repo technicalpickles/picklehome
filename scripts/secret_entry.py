@@ -121,9 +121,9 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
 
     # Write to a sibling temp file (created 0600 from the start, same as
     # before) and os.replace() it into place, rather than truncating path
-    # in place. FLO_USERNAME/FLO_PASSWORD have no other copy once written
-    # here (they're deliberately absent from .env.template -- see
-    # water/README.md), and `set dotenv-load` means a malformed .env breaks
+    # in place. A value entered here may have no other copy (that's the
+    # point of an escape hatch for when 1Password is unreachable), and
+    # `set dotenv-load` means a malformed .env breaks
     # every recipe in the repo, not just this one -- an interrupt between
     # O_TRUNC and the write used to be able to leave a truncated file with
     # nothing to recover it. os.replace() is atomic on POSIX, so readers

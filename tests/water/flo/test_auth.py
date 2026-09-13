@@ -41,13 +41,18 @@ def test_treats_blank_as_missing(monkeypatch):
         get_credentials()
 
 
-def test_error_points_at_secret_entry_and_the_vault_item(monkeypatch):
+def test_error_points_at_dotenv_and_the_vault_item(monkeypatch):
     monkeypatch.delenv("FLO_USERNAME", raising=False)
     monkeypatch.delenv("FLO_PASSWORD", raising=False)
     with pytest.raises(MoenFloConfigError) as excinfo:
         get_credentials()
-    assert "just secret-entry" in str(excinfo.value)
-    assert "Moen Flo" in str(excinfo.value)
+    message = str(excinfo.value)
+    assert "just dotenv" in message
+    assert "Moen Flo" in message
+    # The item and its .env.template refs exist now; don't send anyone to
+    # create or un-comment them again.
+    assert "un-comment" not in message
+    assert "create" not in message
 
 
 @pytest.mark.parametrize("raw,expected", [
