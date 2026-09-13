@@ -190,7 +190,7 @@ Smallest possible diff: this service already uses the single-ssh-call Justfile p
 **Files:**
 - Modify: `homelab/services/climate-auto-switch/climate-auto-switch.service`
 - Modify: `Justfile` (`deploy-climate` recipe, ~line 138)
-- Read only: `homelab/services/climate-auto-switch/deploy.sh` (confirm it doesn't itself reference `.env` — check first)
+- Modify: `homelab/services/climate-auto-switch/deploy.sh` (Step 1 first confirms it doesn't already reference `.env`, Step 3 adds the filtered-template write)
 
 - [ ] **Step 1: Check whether `deploy.sh` or the systemd unit currently reads `.env`.**
 
@@ -420,7 +420,7 @@ Two worked examples in, the repeated shape (pre-flight checks + one ssh call) is
 
 Applies the exact mechanism from Tasks 4/5/6 to every remaining service whose secrets live only in the `picklehome` vault: `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `github-actions-runner`, `woodpecker`, `nikke` (no `.env.vars` — this one is execution-model-only, no template to write). Each is the identical three-part change (systemd unit `ExecStart` wrap, `deploy.sh` writes `.env.op.template`, Justfile recipe calls `_deploy-remote`) — call out only what's different per service below.
 
-**Files:** for each service `<name>` in the list: `homelab/services/<name>/<name>.service`, `homelab/services/<name>/deploy.sh`, `Justfile`.
+**Files:** for each service `<name>` in the list: `homelab/services/<name>/<name>.service`, `homelab/services/<name>/deploy.sh`. (The Justfile collapse onto `_deploy-remote` is Task 9's job, not this task's — don't touch `Justfile` here.)
 
 - [ ] **Step 1: `brineworks-agent`.** Same pattern as Task 5. Note: its `.env.vars` includes `TS_AUTHKEY` (ts-agent sidecar) alongside `KEYRING_CRYPTFILE_PASSWORD`/`BRINEWORKS_API_KEY`/`WORKSPACE_DEPLOY_KEY_B64` — all four are `picklehome`-vault, single token, no special handling needed. Verify with `ssh picklelab "timeout 2 bash -c 'cat < /dev/null > /dev/tcp/brineworks-agent.$(...)/22'"` (same check `deploy.sh` already does).
 
