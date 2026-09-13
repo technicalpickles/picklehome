@@ -84,6 +84,16 @@ services:
       # pickleclaw docs/setup-notes.md's Gmail Phase 2 rollout entries (dev
       # VM: 2026-09-11, picklelab: 2026-09-12).
       GOG_MCP_GMAIL_PHASE: "2"
+      # Without this, gog-mcp's attachment-links.ts falls back to
+      # http://localhost:8787 for the signed attachment URLs it hands the pdf
+      # tool -- correct only from inside this container itself. The openclaw
+      # service is the one that actually fetches these URLs, and it reaches
+      # this container by the compose service name, not localhost -- so the
+      # signed URL has to say gog-mcp, not localhost, or every fetch
+      # connection-refuses. See pickleclaw PR
+      # https://github.com/technicalpickles/pickleclaw/pull/2 and taskwarrior
+      # 2d389e41.
+      GOG_MCP_PUBLIC_URL: "http://gog-mcp:8787"
     volumes:
       # Bind mount, not a named volume: this holds Gmail/Calendar OAuth refresh
       # tokens that take a human browser consent flow to recreate, so it needs to
