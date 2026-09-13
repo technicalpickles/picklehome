@@ -5,32 +5,17 @@ Read-only status for the Moen Flo smart water shutoff valve (`aioflo`). See
 
 ## Setup
 
-1. For now, type credentials straight into `.env` from a phone over the tailnet:
-   `just secret-entry FLO_USERNAME FLO_PASSWORD`.
-2. Later: create the `Moen Flo` item in the `picklehome` 1Password vault (username + password
-   fields), un-comment the `FLO_USERNAME` / `FLO_PASSWORD` lines in `.env.template`, and run
-   `just dotenv`. Until that item exists, `op inject` fails hard on a reference to a missing item,
-   which would break `just dotenv` for the whole repo -- not just water -- so those lines stay
-   commented out on purpose.
-3. Check status: `just water status`
+1. Credentials come from the `Moen Flo` item (username + password) in the `picklehome` 1Password
+   vault, referenced by the `FLO_USERNAME` / `FLO_PASSWORD` lines in `.env.template`. Run
+   `just dotenv`.
+2. Check status: `just water status`
 
-### `just dotenv` will refuse to run until step 2 is done
-
-Because `FLO_USERNAME`/`FLO_PASSWORD` live in `.env` (via `just secret-entry`) but are
-deliberately absent from `.env.template`, `scripts/dotenv`'s key-snapshot check sees them
-disappear on every regeneration and refuses rather than silently dropping them:
-
-```
-ERROR: these keys were in .env but are missing from the new one:
-FLO_PASSWORD FLO_USERNAME
-Add them to .env.template and re-run.
-```
-
-This is a loud reminder, not a bug -- it's cheaper to hit this once than to silently lose
-credentials `just dotenv` has no way to regenerate. The fix is step 2 above: create the `Moen
-Flo` 1Password item and un-comment the `FLO_*` lines in `.env.template`. Until then, avoid running
-`just dotenv` while Flo credentials are the only copy in `.env`, and re-enter them with
-`just secret-entry` if it happens anyway.
+When `op` can't reach 1Password (a phone-driven session, say), enter them from a phone over the
+tailnet instead: `just secret-entry FLO_USERNAME FLO_PASSWORD` writes them into `.env`, or add
+`--sink av` to store them as Automic Vault Project Values and run
+`av inject +FLO_USERNAME +FLO_PASSWORD -- uv run python water/water_cli.py status`. Either way
+1Password stays the source of truth: a value entered only this way is gone the next time
+`just dotenv` regenerates `.env`.
 
 ## Commands
 

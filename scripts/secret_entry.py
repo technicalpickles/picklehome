@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""scripts/secret_entry.py -- type secrets into .env from a phone, over the tailnet.
+"""scripts/secret_entry.py -- type secrets from a phone, over the tailnet.
 
 An escape hatch for entering secrets when `op` cannot reach the 1Password desktop
 app (a phone-driven session, or the sandbox blocking the socket -- see root
 CLAUDE.md's Sandbox section). The alternative is pasting a password into an agent
 transcript.
+
+Two sinks: `env` (default) upserts into a .env file; `av` stores Automic Vault
+Project Values via `av save --stdin`, approved on the Mac or an enrolled iPhone,
+so nothing lands on disk in plaintext.
 
 Values are never printed, logged, or echoed. See
 docs/plans/2026-09-04-moen-flo-design.md, Phase 0.
@@ -23,6 +27,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -44,7 +49,7 @@ PAGE = """<!doctype html>
  button{{margin-top:1.5rem;padding:.85rem 1.5rem;font-size:1rem;width:100%}}
 </style></head>
 <body><form method="post"><h1>Enter secrets</h1>{fields}
-<button type="submit">Save to .env</button></form></body></html>
+<button type="submit">Save to {target}</button></form></body></html>
 """
 
 
@@ -116,9 +121,9 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
 
     # Write to a sibling temp file (created 0600 from the start, same as
     # before) and os.replace() it into place, rather than truncating path
-    # in place. FLO_USERNAME/FLO_PASSWORD have no other copy once written
-    # here (they're deliberately absent from .env.template -- see
-    # water/README.md), and `set dotenv-load` means a malformed .env breaks
+    # in place. A value entered here may have no other copy (that's the
+    # point of an escape hatch for when 1Password is unreachable), and
+    # `set dotenv-load` means a malformed .env breaks
     # every recipe in the repo, not just this one -- an interrupt between
     # O_TRUNC and the write used to be able to leave a truncated file with
     # nothing to recover it. os.replace() is atomic on POSIX, so readers
@@ -140,6 +145,67 @@ def upsert_env_vars(path: Path, values: dict[str, str]) -> None:
     path.chmod(0o600)
 
 
+class AvSaveError(Exception):
+    """`av save` exited nonzero for one key.
+
+    Carries which keys already landed, because each key is a separate save
+    (and a separate Approval), so a failure partway through is a real state
+    the person on the phone needs to know about.
+    """
+
+    def __init__(self, key: str, saved: list[str], returncode: int, detail: str) -> None:
+        self.key = key
+        self.saved = saved
+        landed = ", ".join(saved) if saved else "none"
+        super().__init__(f"av save {key} failed (exit {returncode}): {detail} [saved: {landed}]")
+
+
+def save_to_av(values: dict[str, str], project_dir: Path) -> None:
+    """Store each value as an Automic Vault Project Value, one `av save` per key.
+
+    The value goes over stdin, never argv or env, so it can't show up in `ps`
+    or in anything that logs the command line. `--stdin` stores the bytes
+    verbatim, so none of upsert_env_vars' python-dotenv restrictions apply.
+
+    Blocks until the Approval is decided (on the Mac, or the iPhone when iPhone
+    Approval is enabled). Stops at the first failure.
+    """
+    for key in values:
+        if not VALID_KEY.match(key):
+            raise ValueError(f"{key!r} is not a valid env var name")
+
+    saved: list[str] = []
+    for key, value in values.items():
+        result = subprocess.run(
+            ["av", "save", "--stdin", f"--project-directory={project_dir}", key],
+            input=value.encode(),
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            # av's stderr is shown on the phone; scrub the value in case a
+            # future av version ever echoes input back in an error.
+            detail = result.stderr.decode(errors="replace").strip().replace(value, "[redacted]")
+            raise AvSaveError(key, saved, result.returncode, detail or "no output")
+        saved.append(key)
+
+
+def default_project_dir() -> Path:
+    """The main checkout's root, so one Project Value covers every worktree.
+
+    Worktrees live under <root>/.claude/worktrees/, and av selects the nearest
+    physical parent directory holding a Project Value. `--show-toplevel` would
+    give the worktree itself, scoping the secret to a directory that gets
+    deleted when the branch merges.
+    """
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return Path(result.stdout.strip()).parent
+
+
 def _tailscale_binary() -> str:
     """Locate the tailscale CLI, which the macOS GUI app does not put on PATH."""
     found = shutil.which("tailscale")
@@ -153,7 +219,13 @@ def _tailscale_binary() -> str:
     )
 
 
-def _make_handler(token: str, names: list[str], env_path: Path, done: threading.Event):
+def _make_handler(
+    token: str,
+    names: list[str],
+    save: Callable[[dict[str, str]], None],
+    target: str,
+    done: threading.Event,
+):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args) -> None:
             """Silence the default access log; it would record the URL token."""
@@ -173,7 +245,7 @@ def _make_handler(token: str, names: list[str], env_path: Path, done: threading.
                 f'autocorrect="off" spellcheck="false" required>'
                 for n in names
             )
-            self._respond(200, PAGE.format(fields=fields))
+            self._respond(200, PAGE.format(fields=fields, target=html.escape(target)))
 
         def do_POST(self) -> None:
             if not self._authorized():
@@ -187,13 +259,14 @@ def _make_handler(token: str, names: list[str], env_path: Path, done: threading.
                 self._respond(400, f"<p>Blank: {html.escape(', '.join(blank))}. Go back.</p>")
                 return
             try:
-                upsert_env_vars(env_path, values)
-            except ValueError as exc:
+                save(values)
+            except (ValueError, AvSaveError) as exc:
                 # upsert_env_vars raises on unsafe values (e.g. "${" which
                 # python-dotenv would interpolate, or literal newlines) or an
-                # invalid key. Render the message, but never the submitted
-                # value, so the person on their phone knows what to fix
-                # without a stack trace or their password on screen.
+                # invalid key; save_to_av raises when av exits nonzero (denied
+                # Approval, locked Keychain). Render the message, but never the
+                # submitted value, so the person on their phone knows what to
+                # fix without a stack trace or their password on screen.
                 self._respond(
                     400,
                     f"<h1>Could not save</h1><p>{html.escape(str(exc))}</p>"
@@ -216,10 +289,18 @@ def _make_handler(token: str, names: list[str], env_path: Path, done: threading.
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Serve a one-shot form over the tailnet to write secrets into .env"
+        description="Serve a one-shot form over the tailnet to save secrets to .env or Automic Vault"
     )
     parser.add_argument("names", nargs="+", metavar="VAR", help="Env var names to prompt for")
-    parser.add_argument("--env-file", default=".env", type=Path, help="Target env file")
+    parser.add_argument(
+        "--sink", choices=["env", "av"], default="env", help="Where values go (default: env)"
+    )
+    parser.add_argument("--env-file", default=".env", type=Path, help="Target env file (env sink)")
+    parser.add_argument(
+        "--project-directory",
+        type=Path,
+        help="av Project Value directory (av sink; default: main checkout root)",
+    )
     parser.add_argument(
         "--timeout", type=int, default=IDLE_TIMEOUT_SECONDS, help="Give up after N seconds"
     )
@@ -228,6 +309,16 @@ def main() -> None:
     for name in args.names:
         if not VALID_KEY.match(name):
             sys.exit(f"error: {name!r} is not a valid env var name")
+
+    if args.sink == "av":
+        if not shutil.which("av"):
+            sys.exit("error: `av` not found on PATH. Is Automic Vault installed?")
+        project_dir = args.project_directory or default_project_dir()
+        save = lambda values: save_to_av(values, project_dir)
+        target = f"Automic Vault ({project_dir})"
+    else:
+        save = lambda values: upsert_env_vars(args.env_file, values)
+        target = str(args.env_file)
 
     tailscale = _tailscale_binary()
     try:
@@ -251,7 +342,7 @@ def main() -> None:
 
     token = secrets.token_urlsafe(24)
     done = threading.Event()
-    handler = _make_handler(token, args.names, args.env_file, done)
+    handler = _make_handler(token, args.names, save, target, done)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     port = server.server_address[1]
 
@@ -276,6 +367,8 @@ def main() -> None:
         )
         print(f"Open on your phone:\n\n  https://{dns_name}:{SERVE_PORT}/{token}\n", flush=True)
         print(f"Waiting up to {args.timeout}s for: {', '.join(args.names)}", flush=True)
+        if args.sink == "av":
+            print("Each key needs its own av Approval after you submit.", flush=True)
 
         if not done.wait(timeout=args.timeout):
             sys.exit("\nerror: timed out, nothing written")
@@ -303,7 +396,7 @@ def main() -> None:
 
     for name in args.names:
         print(f"  {name} written", flush=True)
-    print(f"Wrote {len(args.names)} value(s) to {args.env_file}", flush=True)
+    print(f"Wrote {len(args.names)} value(s) to {target}", flush=True)
 
 
 if __name__ == "__main__":

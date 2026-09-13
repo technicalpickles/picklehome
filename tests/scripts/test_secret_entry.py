@@ -1,9 +1,11 @@
 import os
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 import pytest
 from dotenv import dotenv_values
 
-from scripts.secret_entry import upsert_env_vars
+from scripts.secret_entry import AvSaveError, default_project_dir, save_to_av, upsert_env_vars
 
 
 def test_creates_file_when_missing(tmp_path):
@@ -170,3 +172,71 @@ def test_appends_multiple_new_keys_in_order(tmp_path):
     # Python 3.7+ dicts preserve insertion order; call with three new keys
     upsert_env_vars(env, {"FLO_USERNAME": "user1", "FLO_PASSWORD": "pass1", "FLO_TOKEN": "token1"})
     assert env.read_text() == 'FLO_USERNAME="user1"\nFLO_PASSWORD="pass1"\nFLO_TOKEN="token1"\n'
+
+
+# --- av sink -----------------------------------------------------------------
+
+
+def _ok(*args, **kwargs):
+    return CompletedProcess(args[0], 0, b"", b"")
+
+
+def test_av_saves_each_key_via_stdin_not_argv(tmp_path):
+    with patch("scripts.secret_entry.subprocess.run", side_effect=_ok) as run:
+        save_to_av({"FLO_USERNAME": "a@b.com", "FLO_PASSWORD": "hunter2"}, tmp_path)
+
+    assert [c.args[0] for c in run.call_args_list] == [
+        ["av", "save", "--stdin", f"--project-directory={tmp_path}", "FLO_USERNAME"],
+        ["av", "save", "--stdin", f"--project-directory={tmp_path}", "FLO_PASSWORD"],
+    ]
+    assert [c.kwargs["input"] for c in run.call_args_list] == [b"a@b.com", b"hunter2"]
+
+
+def test_av_passes_value_bytes_exactly(tmp_path):
+    # No trimming or quoting: av stores bytes verbatim, and the dotenv-only
+    # restrictions (${, newlines) don't apply to this sink.
+    with patch("scripts.secret_entry.subprocess.run", side_effect=_ok) as run:
+        save_to_av({"P": " a${b}\nc "}, tmp_path)
+    assert run.call_args.kwargs["input"] == b" a${b}\nc "
+
+
+def test_av_rejects_invalid_key_before_running_anything(tmp_path):
+    with patch("scripts.secret_entry.subprocess.run") as run:
+        with pytest.raises(ValueError):
+            save_to_av({"BAD-KEY": "x"}, tmp_path)
+    run.assert_not_called()
+
+
+def test_av_failure_reports_which_keys_landed_and_redacts_value(tmp_path):
+    def fail_second(args, **kwargs):
+        if args[-1] == "B":
+            return CompletedProcess(args, 1, b"", b"denied: hunter2 was rejected")
+        return CompletedProcess(args, 0, b"", b"")
+
+    with patch("scripts.secret_entry.subprocess.run", side_effect=fail_second):
+        with pytest.raises(AvSaveError) as exc_info:
+            save_to_av({"A": "x", "B": "hunter2", "C": "y"}, tmp_path)
+
+    err = exc_info.value
+    assert err.key == "B"
+    assert err.saved == ["A"]
+    assert "hunter2" not in str(err)
+    assert "denied" in str(err)
+
+
+def test_av_stops_at_first_failure(tmp_path):
+    fail = lambda args, **kw: CompletedProcess(args, 2, b"", b"nope")
+    with patch("scripts.secret_entry.subprocess.run", side_effect=fail) as run:
+        with pytest.raises(AvSaveError):
+            save_to_av({"A": "x", "B": "y"}, tmp_path)
+    assert run.call_count == 1
+
+
+def test_default_project_dir_is_main_checkout_root(tmp_path):
+    common = tmp_path / "repo" / ".git"
+    result = CompletedProcess([], 0, f"{common}\n", "")
+    with patch("scripts.secret_entry.subprocess.run", return_value=result) as run:
+        assert default_project_dir() == tmp_path / "repo"
+    assert run.call_args.args[0] == [
+        "git", "rev-parse", "--path-format=absolute", "--git-common-dir"
+    ]
