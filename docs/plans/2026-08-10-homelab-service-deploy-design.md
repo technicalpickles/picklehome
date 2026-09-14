@@ -27,6 +27,8 @@ Separately, picklehome is a public repo. `docs/CONVENTIONS.md` already has a rul
 
 ## Design
 
+**Sections 1-3 implemented 2026-09-14** per `docs/superpowers/plans/2026-09-13-homelab-service-deploy-redesign.md` — see that plan and its ledger for the concrete task-by-task history, findings, and rulings. Sections 3a, 4, and 5 remain deferred (see "Explicitly deferred" at the bottom of that plan).
+
 ### 1. Compose/app-repo ownership
 
 For services with a split app repo (brineworks-server, brineworks-agent, nikke), the app repo becomes the single source of truth for its *portable* production compose definition (`compose.yaml`), not just a dev one. picklehome's `homelab/services/<name>/` shrinks to: systemd unit, `deploy.sh` (clone/pull the app repo, `docker compose -f <path-in-app-repo>` up), `.env.vars` filter list, and a README pointing at the app repo's own docs. No more parallel `compose.yaml` re-deriving the same service definition that has to be hand-synced.
@@ -54,7 +56,7 @@ Replace "Mac materializes `.env`, scp's it to host" with 1Password injecting sec
 - `.env.template` (already checked in, already the source of truth for which secrets exist) becomes the file actually passed to `op run`.
 - The Mac-local `.env`/`just dotenv` workflow stays available for local dev/testing, but deploy no longer depends on it. Note: `.env.template` also has a `Personal`-vault reference (`VICOHOME_*`), but no homelab service's `.env.vars` list draws from it — local-dev-only, out of scope for the service account tokens.
 
-**Refinements from 2026-09-13 review** (nothing in this section was implemented between 2026-08-22 and then):
+**Refinements from 2026-09-13 review** (nothing in this section was implemented between 2026-08-22 and the 2026-09-13 review; all of it is now implemented, see the pointer at the top of this Design section):
 
 - **`op run` takes one service account token per invocation.** Two consequences for the wiring:
   - `--env-file=.env.template` as-is would fail on any reference to a vault the active token can't read. `deploy.sh` needs a per-service filtered template instead (point `scripts/service-env`'s existing `.env.vars` filtering at the template rather than at `.env`).
@@ -103,7 +105,7 @@ This is also tangled up with whether `provision.sh` itself still has a job: pick
 - ~~Exact repo name/visibility settings for `second-brain-agent` and the dev container~~ **Resolved:** `technicalpickles/second-brain-agent` and `technicalpickles/homelab-dev`, both private, each its own repo.
 - ~~Whether `homelab/dev/` shares a repo with `second-brain-agent` or gets its own~~ **Resolved:** separate repos, no code or lifecycle coupling between them beyond superficial shape similarity.
 - ~~Whether one Service Account can span multiple vaults~~ **Resolved:** yes, but vault access/permissions are immutable after creation, which is why the design uses two single-vault tokens rather than one multi-vault token — see section 3.
-- Remaining mechanics of the 1Password Service Account setup on picklelab: exact token provisioning steps, rotation policy (service account tokens don't auto-expire; default to no scheduled rotation, document revoke/reissue steps inline at the point of use), and how `deploy.sh` picks the right token per service — still open, resolve during plan-writing. The 2026-09-13 refinements in section 3 narrow the last one: per-service filtered templates, with chained `op run` for the two dual-vault services.
+- ~~Remaining mechanics of the 1Password Service Account setup on picklelab: exact token provisioning steps, rotation policy, and how `deploy.sh` picks the right token per service~~ **Resolved:** implemented per `docs/superpowers/plans/2026-09-13-homelab-service-deploy-redesign.md` (sections 1-3 of this design). Tokens: two read-only, single-vault service-account tokens at `/etc/opt/homelab/op-token-{picklehome,pickleclaw}` (0600), no scheduled rotation (service-account tokens don't auto-expire; revoke/reissue via `op service-account` if ever needed). Per-service token selection: single-vault services reference their vault's token file directly via systemd `EnvironmentFile=`; the two dual-vault services (`openclaw`, `open-webui`) chain both via a small wrapper script (`op-run-dual.sh`) that overrides `OP_SERVICE_ACCOUNT_TOKEN` for the inner `op run` call.
 - Whether section 3a (Automic Vault on the Mac) becomes part of this plan or its own follow-up. It's independent of the picklelab changes and can be adopted module by module.
 - Section 5's app/host `deploy.sh` split for brineworks-server, brineworks-agent, and nikke: not yet scoped as an implementation plan, just the boundary rule and calling convention.
 - Section 5's pickleclaw shared config-application step is blocked on [pickleclaw#4](https://github.com/technicalpickles/pickleclaw/issues/4) (whether `provision.sh` or `dev-vm/compose.yaml` is the real dev-VM mechanism going forward) — resolve that first.
