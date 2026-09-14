@@ -3,19 +3,23 @@
 # op run supports exactly one OP_SERVICE_ACCOUNT_TOKEN at a time -- there is no
 # file-path override (see this task's revision note for how that was confirmed
 # false; re-check `op run --help` yourself before trusting this note on a future
-# op version). No secret value is written to disk anywhere in this script --
-# the second token is held only in a shell variable for the lifetime of the
-# process that reads it.
+# op version). No secret value is written to disk anywhere in this script, and
+# the second token never appears as a command-line argument to any process
+# either: it's read directly by a sourced EnvironmentFile-style file in the
+# inner `bash -c` process (same technique the outer op run uses for the first
+# token), never captured into a shell variable and passed via `env VAR=value`
+# the way the first token is. That `env VAR=value` shape would otherwise put
+# the raw token in that process's argv, readable via `ps aux` /
+# /proc/<pid>/cmdline by any local user for the entire lifetime of the wrapped
+# command (which can be a long-running container, e.g. `up -d --build`
+# blocking until the container starts).
 # Usage: op-run-dual.sh <picklehome-template> <pickleclaw-template> -- <command...>
 set -euo pipefail
 PH_TEMPLATE="$1"; PC_TEMPLATE="$2"; shift 2
 [ "${1:-}" = "--" ] && shift
 
-PC_TOKEN=$(grep '^OP_SERVICE_ACCOUNT_TOKEN=' /etc/opt/homelab/op-token-pickleclaw | cut -d= -f2-)
-
 set -a
 . /etc/opt/homelab/op-token-picklehome
 set +a
 exec op run --env-file="$PH_TEMPLATE" -- \
-  env OP_SERVICE_ACCOUNT_TOKEN="$PC_TOKEN" \
-  op run --env-file="$PC_TEMPLATE" -- "$@"
+  bash -c 'set -a; . /etc/opt/homelab/op-token-pickleclaw; set +a; exec op run --env-file="$1" -- "${@:2}"' _ "$PC_TEMPLATE" "$@"
