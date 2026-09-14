@@ -280,22 +280,15 @@ deploy-brineworks-server host="picklelab":
         git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/brineworks-server/.env.vars > tmp/brineworks-server.env
-    scp tmp/brineworks-server.env {{host}}:/opt/homelab/homelab/services/brineworks-server/.env
-    rm tmp/brineworks-server.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/brineworks-server/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/brineworks-server/deploy.sh"
 
 # Tail Brineworks server container logs from picklelab
 brineworks-server-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow Brineworks server container logs live from picklelab
 brineworks-server-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Brineworks mobile agent to picklelab (idempotent: first setup or update)
 deploy-brineworks-agent host="picklelab":

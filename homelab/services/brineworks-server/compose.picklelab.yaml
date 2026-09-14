@@ -10,7 +10,6 @@ services:
       args:
         GIT_SHA: ${BRINEWORKS_GIT_SHA:-unknown}
     env_file:
-      - /opt/homelab/.env
       - .env.build
     # Identity auth, enabled 2026-08-17 after phase 1 (sha 95244bf) verified healthy.
     # Neither value is a secret, which is why they sit here rather than in 1Password.
