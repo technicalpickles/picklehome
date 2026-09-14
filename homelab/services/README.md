@@ -22,13 +22,19 @@ Secrets never touch the Mac or scp anywhere. Each service directory in
 | `compose.picklelab.yaml` | Production overrides (volumes, restart policy) |
 | `deploy.sh` | Called by `just deploy-<name>` (via the shared `_deploy-remote` Justfile recipe); writes the filtered op-run template, handles systemd + Tailscale |
 | `.env.vars` | Which env vars this service needs, filtered from `.env.template` (not `.env`) into a per-service op-run template by `scripts/service-env` |
+| `Dockerfile` | Custom image build (if applicable) |
 | `<name>.service` | systemd unit; `ExecStart` wraps `docker compose up` in `op run --env-file=<filtered-template>`, resolving secrets from 1Password directly on the host |
+| `<name>.timer` | systemd timer (timer-based services only: `backup`, `climate-auto-switch`) |
 
 On picklelab, `/etc/opt/homelab/op-token-picklehome` and `/etc/opt/homelab/op-token-pickleclaw`
 are read-only, single-vault 1Password service-account tokens (0600), referenced by each
 service's systemd unit via `EnvironmentFile=`. No `.env` file exists anywhere under
 `homelab/services/*/` on picklelab — only `.env.op.template` (or `.env.op.<vault>.template`
 for the two dual-vault services), which contain `op://` references, never resolved secrets.
+**Exception: `backup`.** Its systemd unit still uses `EnvironmentFile=.../backup/.env` and
+`deploy.sh` still `source`s that file directly — deliberately out of scope for this migration,
+tracked separately as taskwarrior `4ea7fee5-a274-4a1a-9b20-aecda2cda569`. Don't delete
+`backup`'s `.env` on the strength of the "no `.env` file exists" claim above.
 
 `just dotenv` still exists for **local Mac dev/test** (`climate/`, `garage/`, etc. load `.env`
 directly via `python-dotenv`), but is no longer part of the deploy path.
