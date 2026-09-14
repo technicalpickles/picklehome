@@ -6,7 +6,18 @@ set -euo pipefail
 
 REMOTE_DIR="/opt/homelab"
 HOMELAB_DEV_DIR="/opt/homelab-dev"
-COMPOSE_FILES="-f compose.yaml -f compose.picklelab.yaml"
+# Both compose.yaml and compose.picklelab.yaml now live in the extracted
+# homelab-dev repo (HOMELAB_DEV_DIR), so relative-path resolution inside them
+# is unaffected by where this script's cwd is. But Compose also derives its
+# default *project name* from cwd when every -f path is relative, so without
+# --project-directory the project would be named "homelab-dev" (this repo's
+# checkout dir) instead of this service's original picklehome directory
+# ("dev"), which would orphan any already-running containers under the old
+# project name on the first deploy after merge. homelab-dev's
+# compose.picklelab.yaml has no env_file:/build: directive of its own, so this
+# is a rename-only fix, not a path-resolution one.
+ORIGINAL_SERVICE_DIR="$REMOTE_DIR/homelab/dev"
+COMPOSE_FILES="--project-directory $ORIGINAL_SERVICE_DIR -f compose.yaml -f compose.picklelab.yaml"
 CONTAINER_SSH_PORT=2222
 CONTAINER_USER="technicalpickles"
 
