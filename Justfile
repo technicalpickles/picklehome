@@ -130,7 +130,8 @@ wifi-diag *ARGS:
 install:
     uv sync
 
-# Generate .env from 1Password (run after clone or when secrets change)
+# Generate .env from 1Password (local Mac dev only; run after clone or when secrets change).
+# Deploy recipes don't use this—they resolve secrets host-side via op run.
 dotenv *ARGS:
     scripts/dotenv {{ARGS}}
 
