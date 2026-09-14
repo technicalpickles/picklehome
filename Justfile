@@ -656,15 +656,28 @@ open-webui-status host="picklelab":
     fi
     echo ""
     echo "==> Open Terminal (internal container, no host port)"
-    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml exec -T open-terminal curl -fsS http://localhost:8000/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "Open Terminal health check FAILED"
+    # compose.yaml's environment: entries use ${VAR:?required}, so compose
+    # refuses to even parse the file unless every var is set in the process
+    # environment -- regardless of whether `exec` actually consumes them. This
+    # execs into the already-running open-terminal container (started by the
+    # real op-run-dual-wrapped systemd unit), so placeholder values just
+    # satisfy compose's interpolation check here, same rule as deploy.sh's own
+    # Open Terminal health check. Placeholder names are derived from
+    # .env.vars (via `env \$(...)`, escaped so the substitution runs on the
+    # remote host, not locally) so adding/removing a var propagates
+    # automatically.
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml exec -T open-terminal curl -fsS http://localhost:8000/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "Open Terminal health check FAILED"
 
 # Tail Open WebUI container logs
 open-webui-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    # See open-webui-status's Open Terminal check for why `logs` needs
+    # placeholder env vars too: compose.yaml's ${VAR:?required} guards are
+    # evaluated at parse time for every subcommand, not just `up`.
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow Open WebUI container logs
 open-webui-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Inspect Open WebUI's persistent config (web search, RAG, etc.) and per-model
 # capability overrides. No sqlite3 CLI in the image, so this pipes the local
