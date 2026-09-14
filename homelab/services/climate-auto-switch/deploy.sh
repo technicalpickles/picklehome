@@ -26,15 +26,16 @@ cd "$SERVICE_DIR"
 # ARGs and never reads these at build time; only the systemd unit's `op run`-wrapped
 # ExecStart needs the real values. Placeholder values here just satisfy compose's
 # interpolation check so the build step (unwrapped, unprivileged) can run standalone.
-HOME_LAT=build-placeholder \
-HOME_LON=build-placeholder \
-AMBIENT_STATION_MACS=build-placeholder \
-ECOBEE_API_KEY=build-placeholder \
-BLUEAIR_USERNAME=build-placeholder \
-BLUEAIR_PASSWORD=build-placeholder \
-BLUEAIR_REGION=build-placeholder \
-GOOGLE_POLLEN_API_KEY=build-placeholder \
-  docker compose -f compose.yaml -f compose.picklelab.yaml build
+# Derive placeholder assignments from .env.vars so adding/removing a var propagates
+# automatically with no separate manual edit.
+declare -a env_overrides
+while IFS= read -r line; do
+  # Skip comments and blank lines
+  [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
+  env_overrides+=("${line}=build-placeholder")
+done < "$SERVICE_DIR/.env.vars"
+
+env "${env_overrides[@]}" docker compose -f compose.yaml -f compose.picklelab.yaml build
 
 echo "==> Linking systemd units"
 sudo ln -sf "$SERVICE_DIR/climate-auto-switch.service" /etc/systemd/system/
