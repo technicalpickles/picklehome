@@ -212,12 +212,19 @@ taskchampion-status host="picklelab":
     fi
 
 # Tail TaskChampion container logs from picklelab
+# compose.yaml's environment: entries use ${VAR:?required}, so compose refuses
+# to even parse the file unless every var is set in the process environment --
+# regardless of whether `logs` actually consumes them. `--env-file .env` used
+# to satisfy this from a scp'd .env file; that file no longer exists (secrets
+# now flow through op run at container-start time only), so placeholder
+# values are derived from .env.vars instead, same pattern as open-webui-logs.
+# .env.build still supplies the real TASKCHAMPION_SYNC_PORT (not a secret).
 taskchampion-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow TaskChampion container logs live from picklelab
 taskchampion-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Brineworks PRM server to picklelab (idempotent: first setup or update)
 deploy-brineworks-server host="picklelab":
@@ -264,12 +271,17 @@ deploy-woodpecker host="picklelab":
     just _deploy-remote woodpecker {{host}}
 
 # Tail Woodpecker container logs from picklelab
+# compose.yaml's environment: entries use ${VAR:?required} (WOODPECKER_GITHUB_CLIENT,
+# WOODPECKER_GITHUB_SECRET, WOODPECKER_AGENT_SECRET, WOODPECKER_TS_AUTHKEY),
+# evaluated at parse time for every subcommand including `logs`/`ps` --
+# placeholder values derived from .env.vars satisfy that, same pattern as
+# open-webui-logs.
 woodpecker-logs host="picklelab":
-    ssh {{host}} "cd /opt/homelab/homelab/services/woodpecker && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f --tail=100"
+    ssh {{host}} "cd /opt/homelab/homelab/services/woodpecker && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs -f --tail=100"
 
 # Woodpecker systemd + container status from picklelab
 woodpecker-status host="picklelab":
-    ssh {{host}} "systemctl status woodpecker.service --no-pager; echo; cd /opt/homelab/homelab/services/woodpecker && docker compose -f compose.yaml -f compose.picklelab.yaml ps"
+    ssh {{host}} "systemctl status woodpecker.service --no-pager; echo; cd /opt/homelab/homelab/services/woodpecker && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml ps"
 
 # Tailscale VPN overlay: just tailscale [status]
 tailscale *ARGS:
