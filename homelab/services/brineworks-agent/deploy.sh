@@ -20,6 +20,9 @@ cd "$REPO_DIR"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Writing filtered op-run template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
+
 echo "==> Updating brineworks source (lockstep build input, shared with the server)"
 if [ -d "$BRINEWORKS_REPO/.git" ]; then
     git -C "$BRINEWORKS_REPO" pull --ff-only
@@ -53,6 +56,12 @@ echo "==> Installing the workspace-repo deploy key (if provided)"
 # agent user both clones at boot and pushes interactively with it.
 # No Obsidian-vault mount is wired (grep -n 'pickled-knowledge\|obsidian'
 # compose.picklelab.yaml is empty); rules reach the agent via this clone, not a mount.
+# NOTE: unlike the other secrets here, WORKSPACE_DEPLOY_KEY_B64 never flows through
+# compose/op run -- it's consumed directly by this script to write a key file. It
+# still depends on the Justfile's `just deploy-brineworks-agent` recipe scp'ing a
+# real (resolved-value) .env to this path; that recipe is untouched in this pass
+# (Justfile changes are Task 9's job), so the scp'd .env keeps supplying this value
+# until Task 9 rewires deploy-brineworks-agent onto _deploy-remote.
 ENV_FILE="$SERVICE_DIR/.env"
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
 KEY_B64=""

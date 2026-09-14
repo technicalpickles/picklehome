@@ -8,12 +8,16 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/brineworks-agent
-# Secrets reach the container via env_file (.env, written by deploy.sh); non-secret
-# config is hardcoded in compose.yaml. The one ${VAR} the compose files interpolate
-# is BRINEWORKS_SHA (the GIT_SHA build arg for image provenance) -- computed inline
-# here from the /opt/brineworks tree being baked, so the status-bar sha matches the
-# image. `|| echo unknown` keeps a fresh box (no /opt/brineworks yet) building clean.
-ExecStart=/bin/sh -c 'BRINEWORKS_SHA=$(git -C /opt/brineworks rev-parse --short HEAD 2>/dev/null || echo unknown) /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build'
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+# Secrets (KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY, TS_AUTHKEY) resolve via
+# `op run` from .env.op.template (written by deploy.sh) into the process env, which
+# compose's `environment: ${VAR:?required}` entries interpolate -- never env_file:,
+# which reads a literal file off disk and is inert against op run's injection.
+# BRINEWORKS_SHA (not a secret) is computed inline from the /opt/brineworks tree
+# being baked, so the status-bar sha matches the image; `op run` passes ambient env
+# through to its wrapped command, so this reaches the build arg unchanged.
+# `|| echo unknown` keeps a fresh box (no /opt/brineworks yet) building clean.
+ExecStart=/bin/sh -c 'BRINEWORKS_SHA=$(git -C /opt/brineworks rev-parse --short HEAD 2>/dev/null || echo unknown) /usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-agent/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build'
 ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 
 [Install]
