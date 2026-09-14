@@ -8,7 +8,12 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/github-actions-runner
-ExecStart=/usr/bin/docker compose -f compose.yaml up -d --pull always
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+# GITHUB_RUNNER_REPO_URL / GITHUB_RUNNER_TOKEN resolve via `op run` from
+# .env.op.template (written by deploy.sh) into the process env, which compose's
+# `environment: ${VAR:?required}` entries interpolate -- see
+# homelab/services/climate-auto-switch/deploy.sh for the established pattern.
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/github-actions-runner/.env.op.template -- /usr/bin/docker compose -f compose.yaml up -d --pull always
 ExecStop=/usr/bin/docker compose -f compose.yaml down
 
 [Install]
