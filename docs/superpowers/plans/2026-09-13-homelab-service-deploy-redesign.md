@@ -630,9 +630,11 @@ Task 7 already migrated these services' secrets; this task is the mechanical Jus
 
 `just dotenv` still exists and still matters — it's how the Mac's own local dev/test `.env` gets refreshed (Python modules under `climate/`, `garage/`, etc. still load it directly). What changes is that it's no longer *load-bearing for deploys*. Make that explicit so nobody re-adds a deploy-time dependency on it later.
 
-**Files:** `Justfile` (comment above the `dotenv` recipe), `homelab/services/README.md`.
+**Files:** `Justfile` (comment above the `dotenv` recipe).
 
-- [ ] **Step 1:** Add a comment above the `dotenv` recipe in `Justfile` noting it's local-dev-only as of this redesign, and update `homelab/services/README.md`'s "Deployment pattern" section (see Task 11 for the full rewrite — do both edits together).
+> **Revised 2026-09-14 — dropped the `homelab/services/README.md` edit from this task.** The original text asked for a README update here too, but Task 11 immediately does a full, verbatim replacement of the exact same "Deployment pattern" section right after (see its Step 1) — any edit made here would just be overwritten seconds later. Redundant work, not a defect, but no reason to do it twice. This task is now Justfile-only.
+
+- [ ] **Step 1:** Add a comment above the `dotenv` recipe in `Justfile` noting it's local-dev-only as of this redesign — `climate/`/`garage/`/etc. still load the Mac's own `.env` directly via `python-dotenv`, but no `deploy-<service>` recipe depends on it anymore (they all resolve secrets host-side via `op run`).
 
 ## Task 11: Rewrite `homelab/services/README.md`'s deployment pattern
 
