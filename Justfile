@@ -571,11 +571,11 @@ deploy-nikke host="picklelab":
 
 # Tail nikke container logs from picklelab
 nikke-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --env-file .env.build -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow nikke container logs live from picklelab
 nikke-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --env-file .env.build -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Run a blablalink sync right now instead of waiting for the timer
 nikke-sync-now host="picklelab":

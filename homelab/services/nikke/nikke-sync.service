@@ -11,4 +11,4 @@ Type=oneshot
 TimeoutStartSec=900
 WorkingDirectory=/opt/homelab/homelab/services/nikke
 EnvironmentFile=-/opt/homelab/homelab/services/nikke/.env.build
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml run --rm sync
+ExecStart=/usr/bin/docker compose -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml run --rm sync
