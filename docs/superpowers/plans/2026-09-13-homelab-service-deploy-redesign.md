@@ -194,10 +194,16 @@ Same as Task 1 Steps 1 and 3, for the vault openclaw/open-webui need, done once 
 
 Smallest possible diff: this service already uses the single-ssh-call Justfile pattern (`git pull && deploy.sh` in one `ssh`), so this task isolates *just* the secrets-mechanism change without also touching the execution-model shape.
 
+> **Revised 2026-09-14, before implementation — real finding from the first implementer dispatch (BLOCKED, no commits):** the brief below originally assumed the systemd unit or `deploy.sh` reads `.env` directly. Neither does. The actual current mechanism is `compose.yaml`'s `env_file: - .env` directive, which docker compose reads as a **literal file path** — completely independent of the process environment `op run` populates. Wrapping `ExecStart` in `op run` alone is inert: compose would fail hard with `env file .env not found` the moment `deploy.sh` stops writing that file, verified live by the implementer via `docker compose run` against a missing `env_file` target. The fix is to convert `climate-auto-switch`'s `env_file:` entries to bare `environment:` entries with `${VAR:?required}` interpolation instead — that form **does** read from the process environment `op run` sets up, matching the pattern `taskchampion-sync`/`openclaw`/`open-webui`'s compose files already use today (confirmed: those three, plus `second-brain-agent`, already use `environment: ${VAR:?required}` for their secrets and need **no** compose changes in Task 7). Checked which of the remaining services this affects: **`climate-auto-switch`, `brineworks-server`, `brineworks-agent`, `github-actions-runner`, `woodpecker`** all currently use `env_file: - .env` for secrets and need the same conversion (folded into Task 5 for brineworks-server, and called out per-service in Task 7 for the rest). `nikke`'s `env_file:` usage is build metadata (`.env.build`) only, unaffected.
+>
+> Also discovered while investigating: `compose.picklelab.yaml` for both `climate-auto-switch` and `brineworks-server` additionally declares `env_file: - /opt/homelab/.env` — a **repo-root-level** `.env` that no current Justfile recipe or `deploy.sh` writes. It exists on picklelab today (`ssh picklelab "ls -la /opt/homelab/.env"` → a real file, `-rw-------`, dated well before this plan) but nothing in the tracked tooling explains how it got there or keeps it current — almost certainly a stale artifact predating the per-service `.env.vars` filtering scheme. Once `climate-auto-switch`/`brineworks-server` declare their real vars via `environment:` (this task and Task 5), that `env_file: - /opt/homelab/.env` line becomes dead weight — remove it as part of each task's compose edit. **Flagging to the human separately: an unrotated, untracked root `.env` sitting on a production host for months is worth its own look independent of this plan** (what's in it, is any of it stale/leaked, should it just be deleted now) — not blocking this task, but don't let it get lost.
+
 **Files:**
 - Modify: `homelab/services/climate-auto-switch/climate-auto-switch.service`
 - Modify: `Justfile` (`deploy-climate` recipe, ~line 138)
 - Modify: `homelab/services/climate-auto-switch/deploy.sh` (Step 1 first confirms it doesn't already reference `.env`, Step 3 adds the filtered-template write)
+- Modify: `homelab/services/climate-auto-switch/compose.yaml` (convert `env_file: - .env` to explicit `environment:` entries for all 8 `.env.vars` — see revised Step 2 below)
+- Modify: `homelab/services/climate-auto-switch/compose.picklelab.yaml` (drop the `env_file: - /opt/homelab/.env` line entirely)
 
 - [ ] **Step 1: Check whether `deploy.sh` or the systemd unit currently reads `.env`.**
 
@@ -205,18 +211,61 @@ Smallest possible diff: this service already uses the single-ssh-call Justfile p
   grep -n "\.env" homelab/services/climate-auto-switch/climate-auto-switch.service homelab/services/climate-auto-switch/deploy.sh
   ```
 
-  Record what you find — this determines whether the wrap goes in the unit's `ExecStart` or `deploy.sh` itself.
-
-- [ ] **Step 2: Wrap the unit's `ExecStart` in `op run`.**
-
-  Edit `homelab/services/climate-auto-switch/climate-auto-switch.service`. If today's line is (adjust to whatever Step 1 actually found):
+  Confirmed (2026-09-14): this returns nothing. The unit's actual current shape is:
 
   ```ini
-  EnvironmentFile=-/opt/homelab/homelab/services/climate-auto-switch/.env
+  [Service]
+  Type=oneshot
+  TimeoutStartSec=300
+  WorkingDirectory=/opt/homelab/homelab/services/climate-auto-switch
   ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml run --rm climate-auto-switch
   ```
 
-  change it to:
+  No `EnvironmentFile=` line to begin with — don't go looking for one to replace, just add what Step 2 below specifies.
+
+- [ ] **Step 1a: Convert `compose.yaml`'s `env_file:` to `environment:` entries.**
+
+  Current `homelab/services/climate-auto-switch/compose.yaml`:
+
+  ```yaml
+  services:
+    climate-auto-switch:
+      build: ...
+      env_file:
+        - .env
+      environment:
+        - ECOBEE_TOKEN_PATH=/data/ecobee-tokens.json
+        - CLIMATE_DATA_DIR=/data
+  ```
+
+  New:
+
+  ```yaml
+  services:
+    climate-auto-switch:
+      build: ...
+      environment:
+        - ECOBEE_TOKEN_PATH=/data/ecobee-tokens.json
+        - CLIMATE_DATA_DIR=/data
+        - HOME_LAT=${HOME_LAT:?required}
+        - HOME_LON=${HOME_LON:?required}
+        - AMBIENT_STATION_MACS=${AMBIENT_STATION_MACS:?required}
+        - ECOBEE_API_KEY=${ECOBEE_API_KEY:?required}
+        - BLUEAIR_USERNAME=${BLUEAIR_USERNAME:?required}
+        - BLUEAIR_PASSWORD=${BLUEAIR_PASSWORD:?required}
+        - BLUEAIR_REGION=${BLUEAIR_REGION:?required}
+        - GOOGLE_POLLEN_API_KEY=${GOOGLE_POLLEN_API_KEY:?required}
+  ```
+
+  (the 8 vars are exactly `.env.vars`'s list — cross-check, don't hand-copy from memory). `:?required` matches the convention `taskchampion-sync`/`openclaw` compose files already use, so a missing var fails compose's own config-load step loudly rather than starting a container with an empty value.
+
+- [ ] **Step 1b: Drop the stale `env_file:` line from `compose.picklelab.yaml`.**
+
+  Remove the `env_file: - /opt/homelab/.env` entry from `homelab/services/climate-auto-switch/compose.picklelab.yaml` entirely, leaving the `volumes:` block untouched.
+
+- [ ] **Step 2: Wrap the unit's `ExecStart` in `op run`.**
+
+  Edit `homelab/services/climate-auto-switch/climate-auto-switch.service`:
 
   ```ini
   EnvironmentFile=/etc/opt/homelab/op-token-picklehome
@@ -274,10 +323,32 @@ Smallest possible diff: this service already uses the single-ssh-call Justfile p
 
 This is the more complex worked example: it has `.env.build` (deploy-time metadata, unrelated to secrets — leave that mechanism alone), a health-check loop, and today's Justfile recipe does two separate `ssh` calls plus a local scp.
 
+> **Revised 2026-09-14** — see Task 4's revision note for the full `env_file:`-vs-`environment:` investigation. `brineworks-server` turns out to be the easy case: its base `compose.yaml` already declares `BRINEWORKS_DB_PASSWORD`/`BRINEWORKS_API_KEY` via `environment: ${VAR}` interpolation (confirmed by reading the file) — that mechanism already reads from the process environment `op run` will populate. The only thing to fix is `compose.picklelab.yaml`'s `server` service, which additionally declares `env_file: - /opt/homelab/.env` (the same stale repo-root file flagged in Task 4) alongside `.env.build`. Drop the `/opt/homelab/.env` line, keep `.env.build` (deploy metadata, unrelated to secrets) — no new `environment:` entries needed here, unlike `climate-auto-switch`.
+
 **Files:**
 - Modify: `homelab/services/brineworks-server/brineworks-server.service`
 - Modify: `homelab/services/brineworks-server/deploy.sh`
 - Modify: `Justfile` (`deploy-brineworks-server` recipe, ~line 269)
+- Modify: `homelab/services/brineworks-server/compose.picklelab.yaml` (remove `env_file: - /opt/homelab/.env` from the `server` service, keep `- .env.build`)
+
+- [ ] **Step 0: Drop the stale `env_file:` entry from `compose.picklelab.yaml`.**
+
+  In `homelab/services/brineworks-server/compose.picklelab.yaml`, the `server` service has:
+
+  ```yaml
+      env_file:
+        - /opt/homelab/.env
+        - .env.build
+  ```
+
+  Change to:
+
+  ```yaml
+      env_file:
+        - .env.build
+  ```
+
+  (`BRINEWORKS_DB_PASSWORD`/`BRINEWORKS_API_KEY` are already delivered via `${VAR}` interpolation in the base `compose.yaml` — confirmed by reading it — so removing the `/opt/homelab/.env` line doesn't lose anything real, it just stops reading a stale file that was never part of this service's own filtered-secrets scheme.)
 
 - [ ] **Step 1: Wrap the systemd unit's `ExecStart`/`ExecStop`.**
 
@@ -427,7 +498,9 @@ Two worked examples in, the repeated shape (pre-flight checks + one ssh call) is
 
 Applies the exact mechanism from Tasks 4/5/6 to every remaining service whose secrets live only in the `picklehome` vault: `brineworks-agent`, `second-brain-agent`, `taskchampion-sync`, `github-actions-runner`, `woodpecker`, `nikke` (no `.env.vars` — this one is execution-model-only, no template to write). Each is the identical three-part change (systemd unit `ExecStart` wrap, `deploy.sh` writes `.env.op.template`, Justfile recipe calls `_deploy-remote`) — call out only what's different per service below.
 
-**Files:** for each service `<name>` in the list: `homelab/services/<name>/<name>.service`, `homelab/services/<name>/deploy.sh`. (The Justfile collapse onto `_deploy-remote` is Task 9's job, not this task's — don't touch `Justfile` here.)
+> **Revised 2026-09-14 — carry Task 4/5's `env_file:`-vs-`environment:` check into every step below.** Task 4 discovered that `op run`'s process-env injection is inert against a compose `env_file:` directive (which reads a literal file path, ignoring the process environment) — only bare `environment: ${VAR}` interpolation actually receives what `op run` resolves. Before wrapping any of this task's systemd units, `grep -n "env_file:" homelab/services/<name>/compose*.yaml` for that service and reason about each hit: if the same vars are *already* also declared via `environment: ${VAR}` (or `${VAR:?required}`) elsewhere in the same compose stack, the `env_file:` line is redundant — drop it. If a var is delivered *only* via `env_file:` with no `environment:` fallback, it needs a new `environment: ${VAR:?required}` entry before the `env_file:` line can be safely removed (same shape as Task 4's `climate-auto-switch` fix). Already checked and confirmed clean, no compose changes needed: `second-brain-agent`, `taskchampion-sync`, `openclaw`, `open-webui` (all already use `environment: ${VAR:?required})` for every secret). Confirmed needing a compose change: `github-actions-runner` and `woodpecker`'s server both already declare their secrets via `environment: ${VAR}` *alongside* a same-scope `env_file: - .env` — almost certainly redundant (drop the `env_file:` line after confirming no var is env_file-only), but verify per the rule above rather than trusting this summary. `brineworks-agent` needs a closer look: its base `compose.yaml` only declares non-secret `environment:` entries, and the picklelab overlay has *two* `env_file: - .env` blocks (one on the `ts-agent` sidecar for `TS_AUTHKEY`, one on the main agent service, per a comment there about deliberately scoping which secrets that container sees) — actually read both files before deciding whether `KEYRING_CRYPTFILE_PASSWORD`/`BRINEWORKS_API_KEY` need new `environment:` entries or whether `TS_AUTHKEY`'s sidecar usage is a special case (a `tailscale/tailscale` image reading `TS_AUTHKEY` from its own env is a different code path than this repo's own containers, so don't assume it works identically). Also drop any `env_file: - /opt/homelab/.env` you find anywhere in this pass — same stale file Task 4 flagged, not this service's concern to preserve.
+
+**Files:** for each service `<name>` in the list: `homelab/services/<name>/<name>.service`, `homelab/services/<name>/deploy.sh`, and (per the `env_file:` investigation above) possibly `homelab/services/<name>/compose.yaml` and/or `compose.picklelab.yaml`. (The Justfile collapse onto `_deploy-remote` is Task 9's job, not this task's — don't touch `Justfile` here.)
 
 - [ ] **Step 1: `brineworks-agent`.** Same pattern as Task 5. Note: its `.env.vars` includes `TS_AUTHKEY` (ts-agent sidecar) alongside `KEYRING_CRYPTFILE_PASSWORD`/`BRINEWORKS_API_KEY`/`WORKSPACE_DEPLOY_KEY_B64` — all four are `picklehome`-vault, single token, no special handling needed. Verify with `ssh picklelab "timeout 2 bash -c 'cat < /dev/null > /dev/tcp/brineworks-agent.$(...)/22'"` (same check `deploy.sh` already does).
 
