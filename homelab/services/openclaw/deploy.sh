@@ -13,10 +13,56 @@ CONTAINER_UID=1000
 CONTAINER_GID=1000
 
 COMPOSE="docker compose -f compose.yaml -f compose.picklelab.yaml"
-RUN_CLI="$COMPOSE run --rm --no-deps --entrypoint node openclaw dist/index.js"
 
 cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
+
+echo "==> Writing filtered op-run templates (dual vault)"
+# openclaw draws secrets from both 1Password vaults (see .env.template): most
+# vars are picklehome-vault, but OLLAMA_API_KEY/OPENROUTER_API_KEY/
+# TELEGRAM_BOT_TOKEN/GEMINI_API_KEY are Brent Pickleclaw-vault. op run only
+# authenticates against one service-account token at a time, so these are
+# filtered into two templates and chained via op-run-dual.sh -- the same
+# mechanism openclaw.service's ExecStart/ExecStop use for the long-running
+# gateway container.
+# [A-Z0-9_]*, not [A-Z_]*: a var-name class without digits silently drops any
+# var whose name contains one (e.g. OPENCLAW_WORKSPACE_DEPLOY_KEY_B64,
+# OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 -- the "B64" suffix) from BOTH filtered
+# templates, since the anchored `^...=` match fails outright rather than
+# matching a shorter prefix. Caught locally by diffing `service-env`'s full
+# (unfiltered) line count against picklehome+pickleclaw's combined count for
+# both services (13 vs 7+4=11 for openclaw before this fix).
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
+    | grep '^[A-Z0-9_]*=op://picklehome/' > "$SERVICE_DIR/.env.op.picklehome.template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
+    | grep '^[A-Z0-9_]*=op://Brent Pickleclaw/' > "$SERVICE_DIR/.env.op.pickleclaw.template"
+
+# $RUN_CLI actually executes openclaw logic in a throwaway container (onboard /
+# config set / doctor / config patch, below) -- those need the SAME real
+# secrets the long-running gateway gets (e.g. doctor and onboard both touch
+# provider config), not placeholders, so every $RUN_CLI invocation is wrapped
+# through op-run-dual.sh (both vaults). This is different from the plain
+# $COMPOSE pull/build calls further down: those never run openclaw itself, so
+# placeholder values are enough to satisfy compose's ${VAR:?required}
+# parse-time check (compose validates every service's environment block on
+# every invocation, not just the one being pulled/built -- see that section).
+OP_RUN_DUAL="$SERVICE_DIR/op-run-dual.sh $SERVICE_DIR/.env.op.picklehome.template $SERVICE_DIR/.env.op.pickleclaw.template --"
+RUN_CLI="$OP_RUN_DUAL $COMPOSE run --rm --no-deps --entrypoint node openclaw dist/index.js"
+
+# Resolves a single picklehome-vault var into THIS script's own shell (not the
+# container's) -- for host-side logic that runs before the gateway container
+# even exists: writing deploy-key files, deciding whether to wire up workspace
+# git auth, building the config-set JSON payload below. Every var deploy.sh
+# reads directly (as opposed to only through compose interpolation) happens to
+# be picklehome-vault (see .env.template), so this never needs the pickleclaw
+# token. Same pattern as brineworks-agent's WORKSPACE_DEPLOY_KEY_B64
+# resolution -- see that service's deploy.sh for precedent.
+resolve_picklehome_var() {
+    set -a
+    . /etc/opt/homelab/op-token-picklehome
+    set +a
+    op run --env-file="$SERVICE_DIR/.env.op.picklehome.template" -- printenv "$1"
+}
 
 echo "==> Creating data directories on the volume"
 # config:      writable root config (openclaw.json), created by `onboard`, plus memory/sessions/credentials
@@ -76,29 +122,26 @@ echo "    Wrote $DATA_DIR/gog-config/config.json"
 
 echo "==> Installing the workspace-repo deploy key (if provided)"
 # The workspace (github.com/technicalpickles/openclaw-workspace) is cloned host-side,
-# once, using a scoped write deploy key. It arrives base64-encoded in the filtered
-# .env (single line, so service-env's line-based filter keeps it whole) and must land
-# 0600: ssh refuses a private key with looser permissions. Same pattern as
-# brineworks-agent's WORKSPACE_DEPLOY_KEY_B64, different var name (each service's
-# deploy key is scoped to a different repo, so they can't share one .env key name).
-ENV_FILE="$SERVICE_DIR/.env"
-
-# Load .env HERE, not further down. docker compose auto-loads it for interpolation
-# inside compose files, but this script's own shell logic needs it exported too --
-# and some of that logic runs well before the "Pulling image" step. This used to be
-# sourced at the compose step, ~37 lines *after* the workspace-git-auth block below
-# tests `-n "${OPENCLAW_WORKSPACE_GITHUB_TOKEN:-}"`. That test therefore read an
-# unset var on every single deploy, silently skipped writing the askpass helper and
-# setting core.askPass, and printed "token not in .env" while the token sat right
-# there in the file. Net effect: the in-container workspace-git-sync cron could not
-# authenticate to GitHub ("could not read Username for 'https://github.com'"), so it
-# failed 99 runs straight and the agent's memory went ~13 days with no backup, with
-# nothing surfacing it. Found 2026-07-14. Keep this above the first consumer.
-if [ -f "$ENV_FILE" ]; then
-    set -a
-    source "$ENV_FILE"
-    set +a
-fi
+# once, using a scoped write deploy key. It resolves base64-encoded via
+# resolve_picklehome_var (single line, so op run's dotenv-style template keeps it
+# whole) and must land 0600: ssh refuses a private key with looser permissions.
+# Same pattern as brineworks-agent's WORKSPACE_DEPLOY_KEY_B64, different var name
+# (each service's deploy key is scoped to a different repo, so they can't share
+# one op-run var name).
+# Resolve OPENCLAW_WORKSPACE_GITHUB_TOKEN HERE, not further down. It used to
+# come from `source`-ing a real, scp'd .env file at this exact point -- not at
+# the compose step, ~37 lines *after* the workspace-git-auth block below tests
+# `-n "${OPENCLAW_WORKSPACE_GITHUB_TOKEN:-}"`. That test therefore read an
+# unset var on every single deploy, silently skipped writing the askpass helper
+# and setting core.askPass, and printed "token not in .env" while the token sat
+# right there in the file. Net effect: the in-container workspace-git-sync cron
+# could not authenticate to GitHub ("could not read Username for
+# 'https://github.com'"), so it failed 99 runs straight and the agent's memory
+# went ~13 days with no backup, with nothing surfacing it. Found 2026-07-14.
+# Keep this above the first consumer -- op run's resolution cost is the same
+# wherever it's called, so there's no reason to reintroduce the old ordering
+# bug just because the mechanism changed.
+OPENCLAW_WORKSPACE_GITHUB_TOKEN=$(resolve_picklehome_var OPENCLAW_WORKSPACE_GITHUB_TOKEN 2>/dev/null || true)
 
 # OPENCLAW_IMAGE (pinned image tag, not a secret) lives in the private pickleclaw
 # repo (openclaw-config/openclaw.env), scp'd here by `just deploy-openclaw` the same
@@ -116,18 +159,17 @@ else
 fi
 
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
-KEY_B64=""
-if [ -f "$ENV_FILE" ]; then
-    KEY_B64=$(grep -m1 '^OPENCLAW_WORKSPACE_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
-fi
+KEY_B64=$(resolve_picklehome_var OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 2>/dev/null || true)
 if [ -n "$KEY_B64" ]; then
     ( umask 077; echo "$KEY_B64" | base64 -d > "$DEPLOY_KEY_FILE" )
     echo "    Wrote $DEPLOY_KEY_FILE (0600, uid $CONTAINER_UID)"
 else
-    echo "    WARNING: OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 not in $ENV_FILE."
+    echo "    WARNING: OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 didn't resolve via op run."
     echo "    Can't clone openclaw-workspace, so the agent starts with an empty"
-    echo "    workspace instead of its migrated memory/identity. Add the var to"
-    echo "    .env.vars + .env.template (see README), re-run 'just dotenv', redeploy."
+    echo "    workspace instead of its migrated memory/identity. Confirm the"
+    echo "    1Password item/field referenced by OPENCLAW_WORKSPACE_DEPLOY_KEY_B64"
+    echo "    in .env.template exists and the host's op-token-picklehome token can"
+    echo "    read it, then redeploy."
 fi
 
 echo "==> Cloning the workspace repo (if not already present)"
@@ -151,17 +193,16 @@ echo "==> Installing the pickleclaw deploy key (if provided)"
 # See docs/superpowers/specs/2026-08-26-gog-mcp-picklelab-rollout-design.md in the
 # pickleclaw repo.
 PICKLECLAW_DEPLOY_KEY_FILE="$DATA_DIR/ssh/pickleclaw_deploy_key"
-PICKLECLAW_KEY_B64=""
-if [ -f "$ENV_FILE" ]; then
-    PICKLECLAW_KEY_B64=$(grep -m1 '^OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
-fi
+PICKLECLAW_KEY_B64=$(resolve_picklehome_var OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 2>/dev/null || true)
 if [ -n "$PICKLECLAW_KEY_B64" ]; then
     ( umask 077; echo "$PICKLECLAW_KEY_B64" | base64 -d > "$PICKLECLAW_DEPLOY_KEY_FILE" )
     echo "    Wrote $PICKLECLAW_DEPLOY_KEY_FILE (0600)"
 else
-    echo "    WARNING: OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 not in $ENV_FILE."
-    echo "    Can't clone/update pickleclaw, so gog-mcp won't build. Add the var to"
-    echo "    .env.vars + .env.template (see README), re-run 'just dotenv', redeploy."
+    echo "    WARNING: OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 didn't resolve via op run."
+    echo "    Can't clone/update pickleclaw, so gog-mcp won't build. Confirm the"
+    echo "    1Password item/field referenced by OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64"
+    echo "    in .env.template exists and the host's op-token-picklehome token can"
+    echo "    read it, then redeploy."
 fi
 
 echo "==> Cloning/updating pickleclaw (gog-mcp's build context)"
@@ -241,32 +282,53 @@ ASKPASS
     git -C "$DATA_DIR/workspace" config user.email "picklelab@localhost"
     echo "    Wrote workspace-git-askpass.sh, set core.askPass + commit identity"
 elif [ -d "$DATA_DIR/workspace/.git" ]; then
-    echo "    WARNING: OPENCLAW_WORKSPACE_GITHUB_TOKEN not in $ENV_FILE."
+    echo "    WARNING: OPENCLAW_WORKSPACE_GITHUB_TOKEN didn't resolve via op run."
     echo "    Skipping git auth wiring -- the workspace-git-sync cron job would fail to"
-    echo "    push/pull. Add the var to .env.vars + .env.template (see README), re-run"
-    echo "    'just dotenv', redeploy."
+    echo "    push/pull. Confirm the 1Password item/field referenced by"
+    echo "    OPENCLAW_WORKSPACE_GITHUB_TOKEN in .env.template exists and the host's"
+    echo "    op-token-picklehome token can read it, then redeploy."
 else
     echo "    Skipping (workspace not cloned yet)"
 fi
 
 cd "$SERVICE_DIR"
 
-# .env is already sourced (exported) up near ENV_FILE -- see the note there for why it
-# has to happen before the workspace-git-auth block, not here.
+# OPENCLAW_WORKSPACE_GITHUB_TOKEN is already resolved (via resolve_picklehome_var)
+# up near its first use above -- see the note there for why it has to happen
+# before the workspace-git-auth block, not here.
 
 echo "==> Pulling image"
-$COMPOSE pull
+# compose.yaml's environment: entries use ${VAR:?required} for every service in
+# the file (openclaw, goplaces-node, gog-mcp) -- compose refuses to even parse
+# the file unless every one of those is set in the process environment,
+# regardless of which service/subcommand is actually being run. `pull` only
+# ever pulls the `openclaw` image (goplaces-node/gog-mcp are build-only, no
+# `image:` key), so placeholder values are enough here: this is a plain image
+# pull, not a `docker compose run` that executes openclaw itself (that's
+# $RUN_CLI below, which goes through the real op-run-dual wrap instead -- see
+# that variable's definition up top for why). Derive placeholder assignments
+# from .env.vars so adding/removing a var propagates automatically; the same
+# array is reused for the two build calls right below since they hit the same
+# parse-time check. `|| [[ -n "$line" ]]` also picks up a final line with no
+# trailing newline, which a plain `while read` would otherwise silently drop.
+declare -a env_overrides
+while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
+    env_overrides+=("${line}=build-placeholder")
+done < "$SERVICE_DIR/.env.vars"
+
+env "${env_overrides[@]}" $COMPOSE pull
 
 # goplaces-node is the only service in this stack built from source rather than
 # pulled -- 'pull' above skips build-only services, and 'up -d' won't rebuild an
 # existing image on its own even if the Dockerfile changed, so it needs this
 # explicit rebuild step to pick up Dockerfile/entrypoint edits.
 echo "==> Building goplaces-node"
-$COMPOSE build goplaces-node
+env "${env_overrides[@]}" $COMPOSE build goplaces-node
 
 if [ -d "$PICKLECLAW_DIR/nodes/gog-mcp" ]; then
     echo "==> Building gog-mcp"
-    $COMPOSE build gog-mcp
+    env "${env_overrides[@]}" $COMPOSE build gog-mcp
 else
     echo "==> Skipping gog-mcp build (no $PICKLECLAW_DIR/nodes/gog-mcp)"
 fi
@@ -381,7 +443,11 @@ echo "==> Applying declarative config (model chain, channel policy, hardening)"
 # values. Excludes channels.telegram.enabled and the tools/mcp $include pointers
 # on purpose — see the onboarding step above.
 # OPENCLAW_ALLOWED_CHAT_IDS is comma-separated (README/.env.template); turn it into
-# a proper JSON array of strings rather than one string containing commas.
+# a proper JSON array of strings rather than one string containing commas. This
+# is a real, must-have value (it's the front door -- see the security note
+# further down), so resolve it with a hard failure if it's missing, same as
+# the old `${VAR:?required}` did against the scp'd .env.
+OPENCLAW_ALLOWED_CHAT_IDS=$(resolve_picklehome_var OPENCLAW_ALLOWED_CHAT_IDS)
 ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | jq -R . | jq -sc .)
 # gateway.bind=lan is non-loopback, which `openclaw security audit` flags twice if
 # left at defaults: Control UI needs an explicit origin allowlist (else it falls
@@ -482,6 +548,7 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # This address is assigned by Docker's IPAM at network-creation time and is
 # stable across restarts/redeploys, but would need re-verifying (same log
 # grep) if the compose project's network is ever removed and recreated.
+OPENCLAW_HOST=$(resolve_picklehome_var OPENCLAW_HOST)
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},

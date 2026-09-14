@@ -587,11 +587,6 @@ deploy-openclaw host="picklelab":
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     echo "==> Pulling on {{host}}"
     ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/openclaw/.env.vars > tmp/openclaw.env
-    scp tmp/openclaw.env {{host}}:/opt/homelab/homelab/services/openclaw/.env
-    rm tmp/openclaw.env
     echo "==> Copying include files (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/openclaw.tools.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.tools.json5
     scp homelab/services/openclaw/openclaw.mcp.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.mcp.json5
