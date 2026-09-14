@@ -20,7 +20,7 @@ EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # spawns CI step containers via DOCKER_HOST, not when this stack's own containers
 # are created. See homelab/services/climate-auto-switch/deploy.sh for the pattern.
 ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/woodpecker/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --pull always
-ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/woodpecker/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 
 [Install]
 WantedBy=multi-user.target

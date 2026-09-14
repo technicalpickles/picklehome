@@ -14,7 +14,7 @@ EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # `environment: ${VAR:?required}` entries interpolate -- see
 # homelab/services/climate-auto-switch/deploy.sh for the established pattern.
 ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/github-actions-runner/.env.op.template -- /usr/bin/docker compose -f compose.yaml up -d --pull always
-ExecStop=/usr/bin/docker compose -f compose.yaml down
+ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/github-actions-runner/.env.op.template -- /usr/bin/docker compose -f compose.yaml down
 
 [Install]
 WantedBy=multi-user.target
