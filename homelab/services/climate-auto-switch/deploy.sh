@@ -29,7 +29,7 @@ cd "$SERVICE_DIR"
 # Derive placeholder assignments from .env.vars so adding/removing a var propagates
 # automatically with no separate manual edit.
 declare -a env_overrides
-while IFS= read -r line; do
+while IFS= read -r line || [[ -n "$line" ]]; do
   # Skip comments and blank lines
   [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
   env_overrides+=("${line}=build-placeholder")
