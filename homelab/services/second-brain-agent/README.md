@@ -33,7 +33,7 @@ just dotenv          # pull secrets from 1Password (incl. SECOND_BRAIN_AGENT_TS_
 just deploy-second-brain-agent
 ```
 
-`deploy.sh` creates the `/data` volume directories, builds the image from picklehome, and starts the systemd service (the `ts-agent` node sidecar plus the agent container).
+`deploy.sh` creates the `/data` volume directories, builds the image from `/opt/second-brain-agent`, and starts the systemd service (the `ts-agent` node sidecar plus the agent container).
 
 ### Approve the node (first deploy only)
 

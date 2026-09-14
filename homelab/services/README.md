@@ -246,7 +246,7 @@ Always-on Claude Code session with the `pickled-knowledge` Obsidian vault mounte
 | | |
 |---|---|
 | **Purpose** | Phone-reachable Claude Code session for reading and writing the pickled-knowledge vault |
-| **Compose** | `/opt/homelab/homelab/services/second-brain-agent/` |
+| **Compose** | `/opt/second-brain-agent` |
 | **Data** | `/srv/data/second-brain-agent/` (sshd host keys, Claude state, tmux sessions) |
 | **Vault** | `/srv/data/obsidian-sync/vaults/pickled-knowledge/` (mounted read-write at `/vault`) |
 | **Access** | `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net` (Tailscale node) |
