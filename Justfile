@@ -179,30 +179,7 @@ climate-log host="picklelab" lines="10":
 
 # Deploy github-actions-runner to picklelab
 deploy-github-runner host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/github-actions-runner/.env.vars > tmp/github-actions-runner.env
-    scp tmp/github-actions-runner.env {{host}}:/opt/homelab/homelab/services/github-actions-runner/.env
-    rm tmp/github-actions-runner.env
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/github-actions-runner/deploy.sh"
+    just _deploy-remote github-actions-runner {{host}}
 
 # Tail github-actions-runner container logs from picklelab
 github-runner-logs host="picklelab":
@@ -214,32 +191,7 @@ github-runner-status host="picklelab":
 
 # Deploy TaskChampion sync server to picklelab (idempotent: first setup or update)
 deploy-taskchampion host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/taskchampion-sync/.env.vars > tmp/taskchampion-sync.env
-    scp tmp/taskchampion-sync.env {{host}}:/opt/homelab/homelab/services/taskchampion-sync/.env
-    rm tmp/taskchampion-sync.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/taskchampion-sync/deploy.sh"
+    just _deploy-remote taskchampion-sync {{host}}
 
 # Status check for TaskChampion sync (systemd + loopback HTTP + tailscale routing)
 taskchampion-status host="picklelab":
@@ -280,32 +232,7 @@ brineworks-server-logs-follow host="picklelab":
 
 # Deploy Brineworks mobile agent to picklelab (idempotent: first setup or update)
 deploy-brineworks-agent host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/brineworks-agent/.env.vars > tmp/brineworks-agent.env
-    scp tmp/brineworks-agent.env {{host}}:/opt/homelab/homelab/services/brineworks-agent/.env
-    rm tmp/brineworks-agent.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/brineworks-agent/deploy.sh"
+    just _deploy-remote brineworks-agent {{host}}
 
 # Tail Brineworks agent container logs from picklelab
 brineworks-agent-logs host="picklelab" lines="50":
@@ -317,32 +244,7 @@ brineworks-agent-logs-follow host="picklelab":
 
 # Deploy second-brain-agent to picklelab (idempotent: first setup or update)
 deploy-second-brain-agent host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/second-brain-agent/.env.vars > tmp/second-brain-agent.env
-    scp tmp/second-brain-agent.env {{host}}:/opt/homelab/homelab/services/second-brain-agent/.env
-    rm tmp/second-brain-agent.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/second-brain-agent/deploy.sh"
+    just _deploy-remote second-brain-agent {{host}}
 
 # Tail second-brain-agent container logs from picklelab
 second-brain-agent-logs host="picklelab" lines="50":
@@ -354,32 +256,7 @@ second-brain-agent-logs-follow host="picklelab":
 
 # Deploy Woodpecker CI to picklelab (idempotent: first setup or update)
 deploy-woodpecker host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/woodpecker/.env.vars > tmp/woodpecker.env
-    scp tmp/woodpecker.env {{host}}:/opt/homelab/homelab/services/woodpecker/.env
-    rm tmp/woodpecker.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/woodpecker/deploy.sh"
+    just _deploy-remote woodpecker {{host}}
 
 # Tail Woodpecker container logs from picklelab
 woodpecker-logs host="picklelab":
@@ -689,31 +566,7 @@ open-webui-inspect-config host="picklelab" prefix="":
 
 # Deploy the nikke roster dashboard to picklelab (idempotent: first setup or update)
 deploy-nikke host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    # No .env scp: nikke has no secrets, so there is no .env.vars to filter.
-    # scripts/service-env exits 1 on an empty/comment-only vars file, which
-    # would kill this recipe. See the plan's Global Constraints. Add the
-    # service-env + scp block back if nikke ever gains a secret.
-    ssh {{host}} "cd /opt/homelab && homelab/services/nikke/deploy.sh"
+    just _deploy-remote nikke {{host}}
 
 # Tail nikke container logs from picklelab
 nikke-logs host="picklelab" lines="50":
