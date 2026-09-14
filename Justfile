@@ -155,11 +155,6 @@ deploy-climate host="picklelab":
         git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/climate-auto-switch/.env.vars > tmp/climate-auto-switch.env
-    scp tmp/climate-auto-switch.env {{host}}:/opt/homelab/homelab/services/climate-auto-switch/.env
-    rm tmp/climate-auto-switch.env
     ssh {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
 
 # Seed ecobee token file to picklelab (one-time, from Mac)

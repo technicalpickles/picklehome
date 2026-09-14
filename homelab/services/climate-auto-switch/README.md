@@ -14,7 +14,8 @@ just the deployment wrapper that runs it on a schedule on picklelab.
   uv-locked deps into a `python:3.12-slim` image. The entrypoint is
   `python -m climate.sync comfort-switch auto`.
 - **Trigger:** `climate-auto-switch.timer` (`OnCalendar=*:0/15`, `Persistent=true`) fires the
-  oneshot `climate-auto-switch.service`, which runs `docker compose run --rm`.
+  oneshot `climate-auto-switch.service`, which runs `op run -- docker compose run --rm` (see
+  "Env vars" below for what `op run` resolves).
 - **State:** mounted at `/data` in the container, backed by `/srv/data/climate-auto-switch` on
   the host:
   - `ecobee-tokens.json`: OAuth tokens (refreshed in place on each run)
@@ -24,9 +25,8 @@ just the deployment wrapper that runs it on a schedule on picklelab.
 ## First-time setup (from Mac)
 
 ```bash
-just dotenv               # generate .env from 1Password
 just seed-climate-tokens  # one-time: copy the local ecobee token file onto the host
-just deploy-climate       # copy .env, build image, install systemd units, enable timer
+just deploy-climate       # build image, install systemd units, enable timer
 ```
 
 `just seed-climate-tokens` matters: the container can't run the interactive Ecobee PIN flow,
@@ -39,7 +39,11 @@ so it needs an already-authorized token file seeded from a machine where you've 
 just deploy-climate       # rebuilds the image and restarts the timer
 ```
 
-After changing secrets, run `just dotenv` first, then `just deploy-climate`.
+Secrets aren't scp'd anymore: `deploy.sh` regenerates a filtered, checked-in-safe
+`.env.op.template` (bare `op://` references, never a resolved secret) from the repo's
+`.env.template` on every deploy, and the systemd unit resolves it live via `op run` each time
+it fires. A secret change in 1Password takes effect on the *next* timer run with no deploy
+needed; run `just deploy-climate` only when `.env.vars` itself changes (a var added/removed).
 
 ## Monitoring
 
@@ -55,6 +59,8 @@ ssh picklelab "sudo journalctl -u climate-auto-switch.service -n 50"
 
 ## Env vars
 
-Listed in `.env.vars` (filtered from the master `.env` at deploy time): `HOME_LAT`,
-`HOME_LON`, `AMBIENT_STATION_MACS`, `ECOBEE_API_KEY`, `BLUEAIR_USERNAME`, `BLUEAIR_PASSWORD`,
-`BLUEAIR_REGION`, `GOOGLE_POLLEN_API_KEY`.
+Listed in `.env.vars`: `HOME_LAT`, `HOME_LON`, `AMBIENT_STATION_MACS`, `ECOBEE_API_KEY`,
+`BLUEAIR_USERNAME`, `BLUEAIR_PASSWORD`, `BLUEAIR_REGION`, `GOOGLE_POLLEN_API_KEY`. Resolved
+from 1Password at run time by `op run` (see `climate-auto-switch.service`'s `ExecStart`), not
+from a `.env` file — `compose.yaml` declares each as `environment: ${VAR:?required}`, so a
+missing value fails the run loudly instead of starting the container with an empty secret.

@@ -3,10 +3,16 @@ services:
     build:
       context: ../../..
       dockerfile: homelab/services/climate-auto-switch/Dockerfile
-    env_file:
-      - .env
     volumes:
       - ${CLIMATE_DATA_DIR:-~/.local/state/picklehome}:/data
     environment:
       - ECOBEE_TOKEN_PATH=/data/ecobee-tokens.json
       - CLIMATE_DATA_DIR=/data
+      - HOME_LAT=${HOME_LAT:?required}
+      - HOME_LON=${HOME_LON:?required}
+      - AMBIENT_STATION_MACS=${AMBIENT_STATION_MACS:?required}
+      - ECOBEE_API_KEY=${ECOBEE_API_KEY:?required}
+      - BLUEAIR_USERNAME=${BLUEAIR_USERNAME:?required}
+      - BLUEAIR_PASSWORD=${BLUEAIR_PASSWORD:?required}
+      - BLUEAIR_REGION=${BLUEAIR_REGION:?required}
+      - GOOGLE_POLLEN_API_KEY=${GOOGLE_POLLEN_API_KEY:?required}
