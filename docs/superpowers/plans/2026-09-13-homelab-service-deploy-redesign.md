@@ -55,6 +55,13 @@
 
 ## Task 1: Validate `op run` + service-account behavior on picklelab (spike)
 
+> **Findings (2026-09-14):**
+> (a) `op service-account create <name> --vault <vault>:read_items --raw` is the real, current syntax (confirmed via `op service-account create --help` and two successful real invocations, one per vault — `Brent Pickleclaw` needs quoting around the vault name for the space). `--raw` prints only the bare token, nothing else.
+> (b) `op run --env-file` wants bare `KEY=op://vault/item/field` lines — **no** `{{ }}` mustache wrapping (that syntax is `op inject`-only). Confirmed live: `HOME_LAT=op://picklehome/Home/latitude` resolved correctly. This settles Task 3's `--strip-mustache` design as necessary and correct.
+> (c) Bad/invalid token fails loud: exit code 1, with `op`'s CLI printing a client-side SDK decode error (`failed to DecodeSACredentials`) rather than a server-rejection message — the exact wording differs from what might be expected (a "bad token" test with a well-formed-but-revoked token might produce a different message than the malformed `ops_invalid` placeholder used here), but the important property holds: nonzero exit, wrapped command never runs, no silent empty-env success.
+> (d) Install command confirmed for Ubuntu 24.04.4 LTS (picklelab's actual OS): `curl -sS https://downloads.1password.com/linux/debian/amd64/stable/1password-cli-amd64-latest.deb -o /tmp/op.deb && sudo apt-get install -y /tmp/op.deb` — **not** `dpkg -i`, which isn't in picklelab's passwordless sudoers list (`apt-get install *` is). `op` 2.39.0 is now installed on picklelab.
+> (e) Process note: verifying `op run` against the placed token files required real interactive `sudo` (the token files are correctly `0600 root:root`, unreadable by the non-root deploy user an agent session runs as) — done via a single script scp'd to picklelab and run with `ssh -t` so `sudo` had a pty to prompt on. `homelab/services/README.md`'s systemd-unit approach doesn't hit this at all, since `EnvironmentFile=` is read by `systemd` itself (root), not by a shell needing its own `sudo`.
+
 This is the design doc's own explicit prerequisite ("Validate before writing the plan") — it wasn't done before the doc was written, so it's the first task here instead. Everything downstream assumes the answers this task produces.
 
 **Files:** none changed yet — this is pure investigation, done live against picklelab. Record findings in this plan file's Task 1 notes (edit this file, add a `> Findings:` blockquote under this task) before moving on, so this plan isn't itself stale the moment the CLI's real behavior turns out to differ from what's assumed below.
