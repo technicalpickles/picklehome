@@ -61,7 +61,14 @@ resolve_picklehome_var() {
     set -a
     . /etc/opt/homelab/op-token-picklehome
     set +a
-    op run --env-file="$SERVICE_DIR/.env.op.picklehome.template" -- printenv "$1"
+    # --no-masking: op run conceals secrets printed to stdout/stderr by default,
+    # which would otherwise turn this capture into the literal string
+    # "<concealed by 1Password>" instead of the real value -- silent
+    # corruption, not a loud failure. Safe here: none of this function's
+    # callers print the captured value to a terminal a human is watching; it's
+    # captured straight into a shell variable (a key-file write, or a
+    # docker compose config-set argument).
+    op run --no-masking --env-file="$SERVICE_DIR/.env.op.picklehome.template" -- printenv "$1"
 }
 
 echo "==> Creating data directories on the volume"

@@ -57,16 +57,20 @@ echo "==> Installing the workspace-repo deploy key (if provided)"
 # compose.picklelab.yaml is empty); rules reach the agent via this clone, not a mount.
 # NOTE: unlike the other secrets here, WORKSPACE_DEPLOY_KEY_B64 never flows through
 # compose/op run at container-start time -- it's consumed directly by this script
-# to write a key file, so deploy.sh resolves it itself via `op run` against the
-# same .env.op.template written above (same pattern the Justfile's *-logs recipes
-# use: source the host's service-account token file, then `op run --env-file=...
-# -- printenv VAR`). Nothing resolved lands on disk except the key file itself.
+# to write a key file, so deploy.sh resolves it itself: source the host's
+# service-account token file, then `op run --no-masking --env-file=... --
+# printenv VAR`. --no-masking is required here because `op run` conceals
+# secrets printed to stdout/stderr by default, which would otherwise turn this
+# capture into the literal string "<concealed by 1Password>" instead of the
+# real key -- silent corruption, not a loud failure. Nothing resolved lands on
+# disk except the key file itself (this captured value is never echoed/printed
+# anywhere in this script).
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
 KEY_B64=$(
     set -a
     . /etc/opt/homelab/op-token-picklehome
     set +a
-    op run --env-file="$SERVICE_DIR/.env.op.template" -- printenv WORKSPACE_DEPLOY_KEY_B64
+    op run --no-masking --env-file="$SERVICE_DIR/.env.op.template" -- printenv WORKSPACE_DEPLOY_KEY_B64
 ) || KEY_B64=""
 if [ -n "$KEY_B64" ]; then
     # The chown -R above made $DATA_DIR (incl. ssh/) owned by uid $CONTAINER_UID,
