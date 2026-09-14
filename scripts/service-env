@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # scripts/service-env: extract a subset of .env for a specific service
-# Usage: scripts/service-env <path/to/.env.vars> [--env <path/to/.env>]
+# Usage: scripts/service-env <path/to/.env.vars> [--env <path/to/.env>] [--template <path>] [--strip-mustache]
 #
 # Reads the listed var names from .env.vars and outputs only those key=value
 # pairs from .env (or the specified env file). Unrecognized vars in .env.vars
 # are silently skipped (service may define its own defaults).
+#
+# Modes:
+#   --env (default):      source is .env (resolved values)
+#   --template <path>:    source is .env.template (op:// references, with mustache wrapper stripped)
 #
 # Intended use: generate a minimal .env to copy to a remote host at deploy time,
 # so each service only receives the secrets it actually needs.
@@ -13,17 +17,19 @@ set -euo pipefail
 
 VARS_FILE=""
 ENV_FILE=".env"
+STRIP_MUSTACHE=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --env) ENV_FILE="$2"; shift 2 ;;
+        --template) ENV_FILE="$2"; STRIP_MUSTACHE=1; shift 2 ;;
         -*) echo "Unknown argument: $1" >&2; exit 1 ;;
         *) VARS_FILE="$1"; shift ;;
     esac
 done
 
 if [[ -z "$VARS_FILE" ]]; then
-    echo "Usage: scripts/service-env <path/to/.env.vars> [--env <path>]" >&2
+    echo "Usage: scripts/service-env <path/to/.env.vars> [--env <path>] [--template <path>]" >&2
     exit 1
 fi
 
@@ -44,6 +50,10 @@ wanted=$(grep -v '^#' "$VARS_FILE" | grep -v '^[[:space:]]*$')
 while IFS= read -r key; do
     match=$(grep -m1 "^${key}=" "$ENV_FILE" || true)
     if [[ -n "$match" ]]; then
+        if [[ "${STRIP_MUSTACHE:-0}" -eq 1 ]]; then
+            # KEY={{ op://vault/item/field }}  ->  KEY=op://vault/item/field
+            match=$(echo "$match" | sed -E 's/\{\{[[:space:]]*(.*[^[:space:]])[[:space:]]*\}\}/\1/')
+        fi
         echo "$match"
     fi
 done <<< "$wanted"
