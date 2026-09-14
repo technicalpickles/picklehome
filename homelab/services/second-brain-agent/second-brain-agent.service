@@ -8,7 +8,12 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/second-brain-agent
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+# SECOND_BRAIN_AGENT_TS_AUTHKEY resolves via `op run` from .env.op.template (written
+# by deploy.sh) into the process env, which compose's `environment:` entry
+# interpolates as TS_AUTHKEY -- see homelab/services/climate-auto-switch/deploy.sh
+# for the established op-run-wrap pattern.
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/second-brain-agent/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build
 ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 
 [Install]
