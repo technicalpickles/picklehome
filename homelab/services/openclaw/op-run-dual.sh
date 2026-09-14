@@ -22,4 +22,4 @@ set -a
 . /etc/opt/homelab/op-token-picklehome
 set +a
 exec op run --env-file="$PH_TEMPLATE" -- \
-  bash -c 'set -a; . /etc/opt/homelab/op-token-pickleclaw; set +a; exec op run --env-file="$1" -- "${@:2}"' _ "$PC_TEMPLATE" "$@"
+  bash -c 'set -eu; set -a; . /etc/opt/homelab/op-token-pickleclaw; set +a; exec op run --env-file="$1" -- "${@:2}"' _ "$PC_TEMPLATE" "$@"

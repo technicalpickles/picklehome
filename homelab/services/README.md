@@ -24,7 +24,7 @@ Secrets never touch the Mac or scp anywhere. Each service directory in
 | `.env.vars` | Which env vars this service needs, filtered from `.env.template` (not `.env`) into a per-service op-run template by `scripts/service-env` |
 | `Dockerfile` | Custom image build (if applicable) |
 | `<name>.service` | systemd unit; `ExecStart` wraps `docker compose up` in `op run --env-file=<filtered-template>`, resolving secrets from 1Password directly on the host |
-| `<name>.timer` | systemd timer (timer-based services only: `backup`, `climate-auto-switch`) |
+| `<name>.timer` | systemd timer (timer-based services only, e.g. `backup`, `climate-auto-switch`, `nikke-sync`) |
 
 On picklelab, `/etc/opt/homelab/op-token-picklehome` and `/etc/opt/homelab/op-token-pickleclaw`
 are read-only, single-vault 1Password service-account tokens (0600), referenced by each
