@@ -5,6 +5,7 @@
 set -euo pipefail
 
 REMOTE_DIR="/opt/homelab"
+HOMELAB_DEV_DIR="/opt/homelab-dev"
 COMPOSE_FILES="-f compose.yaml -f compose.picklelab.yaml"
 CONTAINER_SSH_PORT=2222
 CONTAINER_USER="technicalpickles"
@@ -22,8 +23,11 @@ fi
 echo "==> Pulling latest"
 run "cd $REMOTE_DIR && git pull"
 
+echo "==> Updating homelab-dev source"
+run "if [ -d $HOMELAB_DEV_DIR/.git ]; then git -C $HOMELAB_DEV_DIR pull --ff-only; else sudo mkdir -p $HOMELAB_DEV_DIR && sudo chown \$(id -u):\$(id -g) $HOMELAB_DEV_DIR && git clone git@github.com:technicalpickles/homelab-dev.git $HOMELAB_DEV_DIR; fi"
+
 echo "==> Building and starting dev container"
-run "cd $REMOTE_DIR/homelab/dev && docker compose $COMPOSE_FILES up -d --build"
+run "cd $HOMELAB_DEV_DIR && docker compose $COMPOSE_FILES up -d --build"
 
 echo "==> Updating known_hosts for container"
 ssh-keygen -R "[$CONTAINER_HOST]:$CONTAINER_SSH_PORT" 2>/dev/null || true
@@ -59,7 +63,7 @@ else
 fi
 
 echo "==> Running bootstrap inside container"
-ssh -A -p "$CONTAINER_SSH_PORT" "$CONTAINER_USER@$CONTAINER_HOST" "bash /workspace/homelab/dev/bootstrap.sh"
+ssh -A -p "$CONTAINER_SSH_PORT" "$CONTAINER_USER@$CONTAINER_HOST" "bash /opt/homelab-dev/bootstrap.sh"
 
 echo ""
 echo "Done! Connect with: ssh picklelab-dev"

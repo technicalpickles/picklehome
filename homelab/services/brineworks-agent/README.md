@@ -8,7 +8,7 @@ An always-on, phone-reachable Claude Code session on picklelab that runs the bri
 
 A self-contained Ubuntu container with a real `sshd` (key-only, `authorized_keys` pulled from your GitHub keys), Claude Code, the brineworks CLI (`bw`), and tmux (resurrect/continuum). You SSH in from a phone, `tmux attach`, and you're in a full Claude Code session with `bw` wired to the prod server and prod Gmail.
 
-Modeled on `homelab/dev/` (the container internals: sshd, GitHub-keys auth, host keys on a volume) and `homelab/services/brineworks-server/` (the deploy/orchestration shape).
+Modeled on `technicalpickles/homelab-dev` (the container internals: sshd, GitHub-keys auth, host keys on a volume) and `homelab/services/brineworks-server/` (the deploy/orchestration shape).
 
 ## Prerequisites (one-time)
 

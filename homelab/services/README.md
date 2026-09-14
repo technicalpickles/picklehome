@@ -231,7 +231,7 @@ Always-on, phone-reachable Claude Code session running the brineworks CLI agains
 | **Restart** | `restart: unless-stopped` |
 | **Source** | `technicalpickles/brineworks` (private repo), built from `/opt/brineworks` on host |
 
-The homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). Container internals copy `homelab/dev/`; deploy/orchestration shape copies `brineworks-server`.
+The homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). Container internals copy `technicalpickles/homelab-dev`; deploy/orchestration shape copies `brineworks-server`.
 
 Commands: `just deploy-brineworks-agent`, `just brineworks-agent-logs`, `just brineworks-agent-logs-follow`
 
