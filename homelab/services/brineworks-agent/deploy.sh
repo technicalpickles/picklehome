@@ -50,24 +50,24 @@ sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
 
 echo "==> Installing the workspace-repo deploy key (if provided)"
 # The agent clones/pushes the brineworks-workspace repo (triage rules + session
-# data) with a scoped read-write deploy key. It arrives base64-encoded in the
-# filtered .env (single line, so service-env's line-based filter keeps it whole)
-# and must land uid-owned 0600: ssh refuses a private key it does not own, and the
-# agent user both clones at boot and pushes interactively with it.
+# data) with a scoped read-write deploy key. It arrives base64-encoded (single
+# line) and must land uid-owned 0600: ssh refuses a private key it does not own,
+# and the agent user both clones at boot and pushes interactively with it.
 # No Obsidian-vault mount is wired (grep -n 'pickled-knowledge\|obsidian'
 # compose.picklelab.yaml is empty); rules reach the agent via this clone, not a mount.
 # NOTE: unlike the other secrets here, WORKSPACE_DEPLOY_KEY_B64 never flows through
-# compose/op run -- it's consumed directly by this script to write a key file. It
-# still depends on the Justfile's `just deploy-brineworks-agent` recipe scp'ing a
-# real (resolved-value) .env to this path; that recipe is untouched in this pass
-# (Justfile changes are Task 9's job), so the scp'd .env keeps supplying this value
-# until Task 9 rewires deploy-brineworks-agent onto _deploy-remote.
-ENV_FILE="$SERVICE_DIR/.env"
+# compose/op run at container-start time -- it's consumed directly by this script
+# to write a key file, so deploy.sh resolves it itself via `op run` against the
+# same .env.op.template written above (same pattern the Justfile's *-logs recipes
+# use: source the host's service-account token file, then `op run --env-file=...
+# -- printenv VAR`). Nothing resolved lands on disk except the key file itself.
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
-KEY_B64=""
-if [ -f "$ENV_FILE" ]; then
-    KEY_B64=$(grep -m1 '^WORKSPACE_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
-fi
+KEY_B64=$(
+    set -a
+    . /etc/opt/homelab/op-token-picklehome
+    set +a
+    op run --env-file="$SERVICE_DIR/.env.op.template" -- printenv WORKSPACE_DEPLOY_KEY_B64
+) || KEY_B64=""
 if [ -n "$KEY_B64" ]; then
     # The chown -R above made $DATA_DIR (incl. ssh/) owned by uid $CONTAINER_UID,
     # which is the deploy user's own uid -- the host<->container volume-sharing
@@ -79,10 +79,11 @@ if [ -n "$KEY_B64" ]; then
     ( umask 077; echo "$KEY_B64" | base64 -d > "$DEPLOY_KEY_FILE" )
     echo "    Wrote $DEPLOY_KEY_FILE (0600, uid $CONTAINER_UID)"
 else
-    echo "    WARNING: WORKSPACE_DEPLOY_KEY_B64 not in $ENV_FILE."
+    echo "    WARNING: WORKSPACE_DEPLOY_KEY_B64 didn't resolve via op run."
     echo "    The agent can't clone or push brineworks-workspace, so the rules"
-    echo "    pipeline is unavailable. Add WORKSPACE_DEPLOY_KEY_B64 to .env.vars +"
-    echo "    .env.template (see README 'Prerequisites'), re-run 'just dotenv', redeploy."
+    echo "    pipeline is unavailable. Confirm the 1Password item/field referenced"
+    echo "    by WORKSPACE_DEPLOY_KEY_B64 in .env.template exists and the host's"
+    echo "    /etc/opt/homelab/op-token-picklehome token can read it, then redeploy."
 fi
 
 echo "==> Linking systemd unit"
