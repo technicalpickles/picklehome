@@ -134,11 +134,13 @@ install:
 dotenv *ARGS:
     scripts/dotenv {{ARGS}}
 
-# Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
-deploy-climate host="picklelab":
+# Shared implementation for every deploy-<service> recipe: pre-flight checks,
+# push if needed, then one ssh call that pulls and runs that service's deploy.sh
+# on the host. No local .env involved -- deploy.sh resolves its own secrets via
+# op run against the host's 1Password service-account token.
+_deploy-remote service host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
-    # Pre-flight: check for uncommitted changes
     if [ -n "$(git status --porcelain)" ]; then
         echo "ERROR: uncommitted changes. Commit or stash first."
         exit 1
@@ -155,7 +157,11 @@ deploy-climate host="picklelab":
         git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/{{service}}/deploy.sh"
+
+# Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
+deploy-climate host="picklelab":
+    just _deploy-remote climate-auto-switch {{host}}
 
 # Seed ecobee token file to picklelab (one-time, from Mac)
 seed-climate-tokens host="picklelab":
@@ -262,25 +268,7 @@ taskchampion-logs-follow host="picklelab":
 
 # Deploy Brineworks PRM server to picklelab (idempotent: first setup or update)
 deploy-brineworks-server host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/brineworks-server/deploy.sh"
+    just _deploy-remote brineworks-server {{host}}
 
 # Tail Brineworks server container logs from picklelab
 brineworks-server-logs host="picklelab" lines="50":
