@@ -17,8 +17,8 @@ EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # being baked, so the status-bar sha matches the image; `op run` passes ambient env
 # through to its wrapped command, so this reaches the build arg unchanged.
 # `|| echo unknown` keeps a fresh box (no /opt/brineworks yet) building clean.
-ExecStart=/bin/sh -c 'BRINEWORKS_SHA=$(git -C /opt/brineworks rev-parse --short HEAD 2>/dev/null || echo unknown) /usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-agent/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build'
-ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-agent/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+ExecStart=/bin/sh -c 'BRINEWORKS_SHA=$(git -C /opt/brineworks rev-parse --short HEAD 2>/dev/null || echo unknown) /usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-agent/.env.op.template -- /usr/bin/docker compose -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml up -d --build'
+ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-agent/.env.op.template -- /usr/bin/docker compose -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml down
 
 [Install]
 WantedBy=multi-user.target
