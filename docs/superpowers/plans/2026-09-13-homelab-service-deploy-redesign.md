@@ -531,7 +531,7 @@ These two need **both** tokens: per `.env.vars`, `openclaw` needs `OPENCLAW_HOST
 
 > **Also carry forward — unwrapped `docker compose` subcommands need placeholder values (see Task 7's note for the general rule: compose interpolates `${VAR:?required}` at parse time for every subcommand, not just `up`).** Both services' compose files already use `environment: ${VAR:?required}` for every secret (confirmed clean in Task 7's investigation — no `env_file:` changes needed here), but this task's own unwrapped invocations need checking against the general rule: **`openclaw/deploy.sh`** currently reads a real, already-resolved `.env` file at line 86 ("Load `.env` HERE... docker compose auto-loads it for interpolation") specifically so its own unwrapped `$COMPOSE pull` (`:258`) and `$COMPOSE build goplaces-node`/`gog-mcp` (`:265`, `:269`) calls parse successfully — that mechanism disappears once the scp'd `.env` is gone, so those three calls need either placeholder values for all 13 vars (both vaults) or a minimal placeholder `.env` dropped just for parse purposes; pick whichever fits the surrounding script better, since this deploy.sh is unusually long and may have other `.env`-dependent logic between lines 86 and 258 worth reading fully before deciding. **`open-webui/deploy.sh`**'s unwrapped Open Terminal health-check `$COMPOSE exec` (`:74`) needs the same placeholder-value treatment as woodpecker's equivalent `exec` call in Task 7 — it execs into an already-running container, so placeholder values (not real ones) are sufficient there too.
 >
-> **Also carry forward — `ExecStop=... down` needs wrapping too (found in Task 7's review, missed during Task 7's own implementation).** Both `openclaw.service:19` and `open-webui.service:12` have an unwrapped `ExecStop=/usr/bin/docker compose ... down` line, and both services' compose files use `${VAR:?required}` guards — so once no `.env` remains on the host, `systemctl stop`/the stop phase of `systemctl restart` will fail to parse the compose file and silently fail to stop the containers (empirically confirmed for this same shape of bug in Task 7 via `env -i PATH="$PATH" docker compose ... config`). Wrap `ExecStop=` in `op run --env-file=<template> --` the same way `ExecStart=` already is, rather than inventing a separate hardcoded-placeholder-list mechanism for it — `down` doesn't need real secret values operationally, but reusing the real `op run` wrap means no new list of var names to keep in sync anywhere, unlike a static `Environment=` placeholder line would require. Since this task's two services need two chained `op run` calls for `ExecStart` (dual-vault), `ExecStop` likely needs the same two-token chain — verify against whatever chained-call shape Steps 2+ below establish for `ExecStart` and mirror it.
+> **Also carry forward — `ExecStop=... down` needs wrapping too (found in Task 7's review, missed during Task 7's own implementation).** Both `openclaw.service:19` and `open-webui.service:12` have an unwrapped `ExecStop=/usr/bin/docker compose ... down` line, and both services' compose files use `${VAR:?required}` guards — so once no `.env` remains on the host, `systemctl stop`/the stop phase of `systemctl restart` will fail to parse the compose file and silently fail to stop the containers (empirically confirmed for this same shape of bug in Task 7 via `env -i PATH="$PATH" docker compose ... config`). **Superseded by Step 2's revision below** — the `op-run-dual.sh` wrapper it introduces is called from both `ExecStart=` and `ExecStop=`, so this is already handled there; no separate mechanism needed.
 
 **Files:** `homelab/services/openclaw/openclaw.service`, `homelab/services/openclaw/deploy.sh`, `homelab/services/open-webui/open-webui.service` (or equivalent unit name — check), `homelab/services/open-webui/deploy.sh`, `Justfile`.
 
@@ -547,19 +547,47 @@ These two need **both** tokens: per `.env.vars`, `openclaw` needs `OPENCLAW_HOST
       | grep '^[A-Z_]*=op://Brent Pickleclaw/' > "$SERVICE_DIR/.env.op.pickleclaw.template"
   ```
 
-- [ ] **Step 2: Chain both `op run` calls in the systemd unit.**
+- [ ] **Step 2: Chain both `op run` calls via a small wrapper script (not a one-line `ExecStart=`).**
+
+  > **Revised 2026-09-14 — the `OP_SERVICE_ACCOUNT_TOKEN_FILE` override this step originally proposed does not exist.** Verified empirically against the real `op` CLI (v2.34.1, the version available for this check): `OP_SERVICE_ACCOUNT_TOKEN_FILE=/some/path op whoami` is silently ignored and falls through to "account is not signed in" — identical to having no auth env var set at all. Only `OP_SERVICE_ACCOUNT_TOKEN=<raw token value>` is real (confirmed: an invalid value produces a token-decode error, proving the CLI actually reads it). `op run --help` documents no file-path variant of this at all. Do not reintroduce this pattern without re-verifying against `op run --help` on whatever `op` version picklelab actually runs — this finding is version-specific in principle, even though nothing in 1Password's CLI history suggests they've added this since.
+
+  The corrected mechanism: a wrapper script that reads the *second* vault's token value into a shell variable (not into a competing `OP_SERVICE_ACCOUNT_TOKEN` env-var-from-file trick) and overrides `OP_SERVICE_ACCOUNT_TOKEN` for the inner `op run` invocation only, via a plain `env VAR=value` prefix — a real, always-supported shell/`env` mechanism, not an `op`-specific feature that needs verifying:
+
+  ```bash
+  #!/usr/bin/env bash
+  # Chains op run against two 1Password vaults for services needing both tokens.
+  # op run supports exactly one OP_SERVICE_ACCOUNT_TOKEN at a time -- there is no
+  # file-path override (see this task's revision note for how that was confirmed
+  # false; re-check `op run --help` yourself before trusting this note on a future
+  # op version). No secret value is written to disk anywhere in this script --
+  # the second token is held only in a shell variable for the lifetime of the
+  # process that reads it.
+  # Usage: op-run-dual.sh <picklehome-template> <pickleclaw-template> -- <command...>
+  set -euo pipefail
+  PH_TEMPLATE="$1"; PC_TEMPLATE="$2"; shift 2
+  [ "${1:-}" = "--" ] && shift
+
+  PC_TOKEN=$(grep '^OP_SERVICE_ACCOUNT_TOKEN=' /etc/opt/homelab/op-token-pickleclaw | cut -d= -f2-)
+
+  set -a
+  . /etc/opt/homelab/op-token-picklehome
+  set +a
+  exec op run --env-file="$PH_TEMPLATE" -- \
+    env OP_SERVICE_ACCOUNT_TOKEN="$PC_TOKEN" \
+    op run --env-file="$PC_TEMPLATE" -- "$@"
+  ```
+
+  Land this at `homelab/services/openclaw/op-run-dual.sh` (`chmod +x`, committed with the executable bit — git preserves it, same as `deploy.sh`). Both `ExecStart=` and `ExecStop=` call it (this also resolves this task's separate `ExecStop`-needs-wrapping carry-forward note below — no separate mechanism needed for that, the wrapper covers both):
 
   ```ini
   EnvironmentFile=/etc/opt/homelab/op-token-picklehome
-  ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/openclaw/.env.op.picklehome.template -- \
-            /usr/bin/env OP_SERVICE_ACCOUNT_TOKEN_FILE=/etc/opt/homelab/op-token-pickleclaw \
-            /usr/bin/op run --env-file=/opt/homelab/homelab/services/openclaw/.env.op.pickleclaw.template -- \
-            /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d
+  ExecStart=/opt/homelab/homelab/services/openclaw/op-run-dual.sh /opt/homelab/homelab/services/openclaw/.env.op.picklehome.template /opt/homelab/homelab/services/openclaw/.env.op.pickleclaw.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d
+  ExecStop=/opt/homelab/homelab/services/openclaw/op-run-dual.sh /opt/homelab/homelab/services/openclaw/.env.op.picklehome.template /opt/homelab/homelab/services/openclaw/.env.op.pickleclaw.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
   ```
 
-  Verify during Task 1 whether `op run` actually supports an `OP_SERVICE_ACCOUNT_TOKEN_FILE`-style override for a *nested* invocation, or whether the inner `op run` needs its own `set -a; source .../op-token-pickleclaw; set +a` wrapper instead (both env vars can't simultaneously be named `OP_SERVICE_ACCOUNT_TOKEN` in the same process without the second overriding the first before the first `op run` reads it — this needs a real live test, don't ship this exact line unverified). If chaining two token env vars in one `ExecStart=` proves awkward, fall back to a wrapper script (`homelab/services/openclaw/op-run-dual.sh`) that `deploy.sh` installs and the unit calls instead — simpler to get right than a one-line `ExecStart`.
+  Verify locally (this environment has `op` installed and can exercise the CLI's actual flag-parsing/env-var behavior, even without live 1Password credentials): confirm `env VAR=value command...` really does override an inherited env var for the child process only (standard POSIX behavior, but confirm rather than assume given how wrong the original assumption in this step turned out to be), and confirm the script's argument-parsing handles the `--` separator correctly with `bash -n` plus manual tracing.
 
-- [ ] **Step 3: Same for `open-webui`**, with its own two filtered templates.
+- [ ] **Step 3: Same for `open-webui`**, with its own two filtered templates and its own copy of the `op-run-dual.sh` wrapper (`homelab/services/open-webui/op-run-dual.sh` — small enough that per-service duplication is fine; don't introduce a new shared repo-level script location for two consumers).
 
 - [ ] **Step 4: Deploy and verify both.**
 
