@@ -55,5 +55,12 @@ while IFS= read -r key; do
             match=$(echo "$match" | sed -E 's/\{\{[[:space:]]*(.*[^[:space:]])[[:space:]]*\}\}/\1/')
         fi
         echo "$match"
+    else
+        # The filtered template is now the only path a secret travels to a
+        # service, so a requested key with no line in $ENV_FILE (typo,
+        # rename, not-yet-added op:// reference) should be visible, not a
+        # silent omission. This doesn't change exit code or the normal-case
+        # output -- it only adds a warning alongside it.
+        echo "WARNING: $key not found in $ENV_FILE" >&2
     fi
 done <<< "$wanted"
