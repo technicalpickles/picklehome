@@ -249,11 +249,11 @@ deploy-second-brain-agent host="picklelab":
 
 # Tail second-brain-agent container logs from picklelab
 second-brain-agent-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow second-brain-agent container logs live from picklelab
 second-brain-agent-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Woodpecker CI to picklelab (idempotent: first setup or update)
 deploy-woodpecker host="picklelab":

@@ -7,12 +7,23 @@ set -euo pipefail
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/second-brain-agent"
 DATA_DIR=/srv/data/second-brain-agent
+AGENT_REPO=/opt/second-brain-agent
 CONTAINER_UID=1000
 CONTAINER_GID=1000
 
 cd "$REPO_DIR"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
+
+echo "==> Updating second-brain-agent source"
+if [ -d "$AGENT_REPO/.git" ]; then
+    git -C "$AGENT_REPO" pull --ff-only
+else
+    echo "    Cloning second-brain-agent to $AGENT_REPO"
+    sudo mkdir -p "$AGENT_REPO"
+    sudo chown "$(id -u):$(id -g)" "$AGENT_REPO"
+    git clone git@github.com:technicalpickles/second-brain-agent.git "$AGENT_REPO"
+fi
 
 echo "==> Writing filtered op-run template"
 "$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
@@ -64,6 +75,6 @@ echo "    WARNING: ${AGENT_HOST}:22 not reachable after 10 attempts"
 echo ""
 echo "    Check the node registered:"
 echo "      tailscale status | grep second-brain-agent"
-echo "      docker compose -f compose.yaml -f compose.picklelab.yaml logs ts-agent"
+echo "      docker compose -f $AGENT_REPO/compose.yaml -f $AGENT_REPO/compose.picklelab.yaml logs ts-agent"
 echo "    First deploy only: approve the device at https://login.tailscale.com/admin/machines"
 echo "    MagicDNS for a fresh node can lag a few seconds after approval."

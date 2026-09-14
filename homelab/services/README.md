@@ -253,7 +253,7 @@ Always-on Claude Code session with the `pickled-knowledge` Obsidian vault mounte
 | **Env vars** | `SECOND_BRAIN_AGENT_TS_AUTHKEY` (filtered `.env` only, never the master env) |
 | **Backup** | Not yet |
 | **Restart** | `restart: unless-stopped` |
-| **Source** | Built from picklehome at `homelab/services/second-brain-agent/Dockerfile` (no external app repo) |
+| **Source** | `technicalpickles/second-brain-agent` (private repo), cloned to `/opt/second-brain-agent` on host |
 
 Depends on `obsidian-sync` being running to keep the vault current; systemd `After=obsidian-sync.service` ensures ordering on boot.
 

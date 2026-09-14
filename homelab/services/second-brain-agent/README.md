@@ -2,7 +2,9 @@
 
 An always-on, phone-reachable Claude Code session on picklelab with the `pickled-knowledge` Obsidian vault mounted read-write at `/vault`. Reached over Tailscale by SSH; work happens in a long-lived tmux session.
 
-Modeled on `homelab/services/brineworks-agent/` (Tailscale node sidecar for mosh UDP, persistent `/data` volume, filtered secrets) but with no external app repo — the image is built directly from picklehome.
+Modeled on `homelab/services/brineworks-agent/` (Tailscale node sidecar for mosh UDP, persistent `/data` volume, filtered secrets).
+
+**Source repo:** `technicalpickles/second-brain-agent` (private) — Dockerfile, entrypoint, tmux config, and compose files. This picklehome directory keeps only the deploy plumbing (`deploy.sh`, the systemd unit, `.env.vars`, this README).
 
 ## What it is
 
@@ -76,11 +78,11 @@ The tmux session is long-lived and survives disconnects. A redeploy recreates th
 just deploy-second-brain-agent
 ```
 
-Pulls latest picklehome, rebuilds the image, restarts the service. The vault bind-mount is re-attached automatically.
+Pulls latest picklehome, clones/pulls the `second-brain-agent` app repo to `/opt/second-brain-agent`, rebuilds the image, and restarts the service. The vault bind-mount is re-attached automatically.
 
 ## Architecture
 
-- **Build from picklehome:** the image builds from `/opt/homelab` (the whole picklehome repo) with `homelab/services/second-brain-agent/Dockerfile`. No separate app repo.
+- **Build from source:** the `technicalpickles/second-brain-agent` repo is cloned to `/opt/second-brain-agent` on picklelab (`deploy.sh` clones on first run, `git pull --ff-only` on every deploy after). The compose files and `Dockerfile` live there, not in picklehome — see that repo for app internals.
 - **Compose layering:** `compose.yaml` is the portable base (non-secret config). `compose.picklelab.yaml` adds the `build:` directive, the `ts-agent` Tailscale node sidecar, `network_mode: service:ts-agent`, the `/data` volume, and the vault mount.
 - **Vault mount:** `/srv/data/obsidian-sync/vaults/pickled-knowledge` is bind-mounted read-write at `/vault`. Writes are picked up by obsidian-sync and synced to the cloud.
 - **Secrets:** the container receives only its filtered `.env` (`SECOND_BRAIN_AGENT_TS_AUTHKEY`), never the master `/opt/homelab/.env`. Claude credentials live on the `/data` volume.
@@ -97,6 +99,7 @@ Pulls latest picklehome, rebuilds the image, restarts the service. The vault bin
 ## Data Locations (on picklelab)
 
 ```
+/opt/second-brain-agent/                       # app repo clone (Dockerfile, compose files)
 /srv/data/second-brain-agent/ssh/host_keys     # persistent sshd host keys
 /srv/data/second-brain-agent/ts-state/         # ts-agent Tailscale node identity
 /srv/data/second-brain-agent/claude/           # ~/.claude (credentials, settings, transcripts)

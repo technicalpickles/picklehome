@@ -7,7 +7,12 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/homelab/homelab/services/second-brain-agent
+# The compose files (and Dockerfile) live in the technicalpickles/second-brain-agent
+# repo, cloned/pulled to $AGENT_REPO by deploy.sh -- not in this picklehome checkout.
+# WorkingDirectory points there so the relative `-f compose...yaml` paths below
+# resolve correctly; it does NOT affect the --env-file path, which stays absolute
+# and pointed at the picklehome-side .env.op.template (that file isn't moving).
+WorkingDirectory=/opt/second-brain-agent
 EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # SECOND_BRAIN_AGENT_TS_AUTHKEY resolves via `op run` from .env.op.template (written
 # by deploy.sh) into the process env, which compose's `environment:` entry
