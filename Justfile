@@ -636,32 +636,7 @@ openclaw-logs-follow host="picklelab":
 
 # Deploy Open WebUI to picklelab (idempotent: first setup or update)
 deploy-open-webui host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/open-webui/.env.vars > tmp/open-webui.env
-    scp tmp/open-webui.env {{host}}:/opt/homelab/homelab/services/open-webui/.env
-    rm tmp/open-webui.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/open-webui/deploy.sh"
+    just _deploy-remote open-webui {{host}}
 
 # Status check for Open WebUI (systemd + loopback HTTP + tailscale routing)
 open-webui-status host="picklelab":
