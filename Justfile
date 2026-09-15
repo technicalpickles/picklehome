@@ -347,7 +347,7 @@ backup-now host="picklelab":
 # .env exists on picklelab anymore, so this reads RESTIC_REPOSITORY/
 # RESTIC_PASSWORD via the root-owned read-picklehome-var.sh wrapper.
 backup-snapshots host="picklelab":
-    ssh {{host}} "export RESTIC_REPOSITORY=\$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_REPOSITORY) RESTIC_PASSWORD=\$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_PASSWORD) && sudo -u backup -E restic snapshots --tag nightly"
+    ssh {{host}} "export RESTIC_REPOSITORY=\$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_REPOSITORY) RESTIC_PASSWORD=\$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_PASSWORD) RESTIC_CACHE_DIR=/srv/backups/restic-cache && sudo -u backup -E restic snapshots --tag nightly"
 
 # Show backup timer status on picklelab
 backup-status host="picklelab":
