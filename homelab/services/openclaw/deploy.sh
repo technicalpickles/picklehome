@@ -62,18 +62,14 @@ RUN_CLI="sudo $SERVICE_DIR/run-doctor-cli.sh"
 # be picklehome-vault (see .env.template), so this never needs the pickleclaw
 # token. Same pattern as brineworks-agent's WORKSPACE_DEPLOY_KEY_B64
 # resolution -- see that service's deploy.sh for precedent.
+#
+# Routed through sudo + read-picklehome-var.sh, same reason RUN_CLI is: the
+# token file this needs to read is 0600 root:root, and deploy.sh runs as the
+# unprivileged deploy user. See that script and
+# homelab/config/sudoers-deploy-ops for why this is scoped narrower than
+# granting raw token-file read access.
 resolve_picklehome_var() {
-    set -a
-    . /etc/opt/homelab/op-token-picklehome
-    set +a
-    # --no-masking: op run conceals secrets printed to stdout/stderr by default,
-    # which would otherwise turn this capture into the literal string
-    # "<concealed by 1Password>" instead of the real value -- silent
-    # corruption, not a loud failure. Safe here: none of this function's
-    # callers print the captured value to a terminal a human is watching; it's
-    # captured straight into a shell variable (a key-file write, or a
-    # docker compose config-set argument).
-    op run --no-masking --env-file="$SERVICE_DIR/.env.op.picklehome.template" -- printenv "$1"
+    sudo "$SERVICE_DIR/read-picklehome-var.sh" "$1"
 }
 
 echo "==> Creating data directories on the volume"
@@ -601,6 +597,7 @@ else
     echo "    unavailable' until it's configured. See README 'Widget sandbox host'."
 fi
 $RUN_CLI config set --batch-json '[
+    {"path":"secrets.providers.team-store","value":{"source":"store"}},
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},

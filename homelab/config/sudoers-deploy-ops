@@ -45,6 +45,12 @@ technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/backup/reappl
 # as root -- only the openclaw CLI, against openclaw's fixed compose project.
 technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/openclaw/run-doctor-cli.sh *
 
+# openclaw's resolve_picklehome_var() (deploy-key files, workspace git auth,
+# config-set JSON payloads) needs the same root read of op-token-picklehome.
+# read-picklehome-var.sh only ever prints one named var from openclaw's own
+# vault-filtered template -- not an arbitrary command, not the raw token.
+technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/openclaw/read-picklehome-var.sh *
+
 # Backup user management (backup deploy)
 technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/useradd *
 technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/usermod *
