@@ -36,8 +36,6 @@ climate/floorplan
 # Claude Code local state: personal memory and machine-specific settings
 .claude/projects/
 .claude/settings.local.json
-# BMAD skills are sourced from _bmad/; leave other local skills committable
-.claude/skills/bmad-*/
 
 # Vendor / reference repos
 vendor/

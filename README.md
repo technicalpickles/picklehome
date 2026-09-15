@@ -240,7 +240,6 @@ How they're written:
 - `tests/`: pytest tests, mirroring source layout
 - `scripts/`: shared utilities: `dotenv` (builds `.env`), `service-env` (filters `.env.template` per service for `op run`), `quote-env-values`, `locations-filter.jq` (1Password items to the locations registry), `secret_entry.py` (`just secret-entry`, the escape hatch when 1Password is unreachable)
 - `.parkinglot/`: gitignored session handoffs for the agent's park/unpark workflow
-- `_bmad/`, `_bmad-output/`: BMAD-method tooling and its output (not part of the home-automation code)
 
 ## Network Topology
 
