@@ -62,7 +62,13 @@ technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/apt-get install *
 # Run restic as backup user (backup deploy init/check). Runas is scoped to
 # `backup` specifically, not ALL -- sudoers matches the resolved command
 # (restic), not the `sudo -u backup` invocation syntax deploy.sh uses.
-technicalpickles ALL=(backup) NOPASSWD: /usr/bin/restic *
+# SETENV is required because deploy.sh/backup-snapshots call this with `-E`
+# to hand RESTIC_REPOSITORY/RESTIC_PASSWORD through -- global `env_reset`
+# blocks env preservation on any NOPASSWD rule that doesn't opt in via
+# SETENV, even though the rule matched. Confirmed live 2026-09-15: this was
+# already broken (deploy.sh's restic-init check has been silently failing
+# every deploy), not something the op-run migration introduced.
+technicalpickles ALL=(backup) NOPASSWD: SETENV: /usr/bin/restic *
 
 # backup's deploy-time restic-init check (and `just backup-snapshots`) need
 # a root read of RESTIC_REPOSITORY/RESTIC_PASSWORD from op-token-picklehome,
