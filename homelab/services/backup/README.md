@@ -40,9 +40,12 @@ Create a `Restic Backup` item in the `picklehome` 1Password vault:
 ## First-time Setup
 
 ```bash
-just dotenv          # pull restic secrets from 1Password
 just deploy-backup   # install restic, create backup user, set up ACLs, init repo, enable timer
 ```
+
+No local `.env` needed — secrets resolve host-side via `op run` against picklelab's
+1Password service-account token, same as every other service (see
+[homelab/services/README.md](../README.md)).
 
 `deploy.sh` is idempotent. It creates the `backup` system user (in `docker` group so `docker exec` works for pg_dump), sets up ACLs on service data dirs (so the backup user can read files owned by container UIDs), and initializes the restic repo if not already initialized.
 
@@ -80,8 +83,9 @@ A dump failure doesn't block the rest of the backup: restic still runs, other du
 Restores use `restic restore`. The restic repo and password are in 1Password (`op://picklehome/Restic Backup`).
 
 ```bash
-# On the target host, after installing restic and pulling secrets:
-source /opt/homelab/homelab/services/backup/.env
+# On the target host:
+export RESTIC_REPOSITORY=$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_REPOSITORY)
+export RESTIC_PASSWORD=$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_PASSWORD)
 sudo -u backup -E restic snapshots             # list available snapshots
 sudo -u backup -E restic restore latest --target /srv/data
 ```
@@ -114,7 +118,11 @@ cat /srv/data/<service>/dumps/pg_dumpall.sql | docker exec -i <service>-db-1 psq
 
 - Backup runs as the `backup` system user (no login shell, `/var/backups` home)
 - Member of `docker` group (effectively root-equivalent, but that's the nature of Docker access)
-- `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` injected via systemd `EnvironmentFile` from `.env`
+- `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` resolve at `ExecStart` time via `op run` against
+  the host's 1Password service-account token (`/etc/opt/homelab/op-token-picklehome`, 0600
+  root:root) — no plaintext `.env` on disk. `deploy.sh`'s restic-init check and
+  `just backup-snapshots` resolve the same way, via the root-owned `read-picklehome-var.sh`
+  wrapper (same pattern as openclaw's, see `homelab/services/openclaw/README.md`)
 - ACLs grant read-only access to service data without changing file ownership
 - Restic encrypts all snapshots at rest, so it's safe to ship the repo offsite
 

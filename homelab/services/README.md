@@ -31,10 +31,10 @@ are read-only, single-vault 1Password service-account tokens (0600), referenced 
 service's systemd unit via `EnvironmentFile=`. No `.env` file exists anywhere under
 `homelab/services/*/` on picklelab — only `.env.op.template` (or `.env.op.<vault>.template`
 for the two dual-vault services), which contain `op://` references, never resolved secrets.
-**Exception: `backup`.** Its systemd unit still uses `EnvironmentFile=.../backup/.env` and
-`deploy.sh` still `source`s that file directly — deliberately out of scope for this migration,
-tracked separately as taskwarrior `4ea7fee5-a274-4a1a-9b20-aecda2cda569`. Don't delete
-`backup`'s `.env` on the strength of the "no `.env` file exists" claim above.
+`backup` follows the same rule despite running as a dedicated system user rather than in a
+container: its `deploy.sh` resolves `RESTIC_REPOSITORY`/`RESTIC_PASSWORD` host-side via a
+root-owned `read-picklehome-var.sh` wrapper (same pattern as openclaw's, see that service's
+README) rather than sourcing a plaintext file.
 
 `just dotenv` still exists for **local Mac dev/test** (`climate/`, `garage/`, etc. load `.env`
 directly via `python-dotenv`), but is no longer part of the deploy path.

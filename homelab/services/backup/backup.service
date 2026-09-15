@@ -11,9 +11,11 @@ Group=backup
 # Restic cache lives alongside the repo so the backup user can write to it
 # without needing a writable home directory.
 Environment=RESTIC_CACHE_DIR=/srv/backups/restic-cache
-EnvironmentFile=/opt/homelab/homelab/services/backup/.env
+# Read by systemd itself (root) before it drops to User=backup below, so this
+# works even though backup.sh never runs as root. See homelab/services/README.md.
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # The '+' runs this one line as root regardless of the unit's own User=/Group=,
 # so it can re-apply ACLs that other services' chmod() calls may have wiped
 # since the last run. See reapply-acls.sh for why this has to be unconditional.
 ExecStartPre=+/opt/homelab/homelab/services/backup/reapply-acls.sh
-ExecStart=/opt/homelab/homelab/services/backup/backup.sh
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/backup/.env.op.template -- /opt/homelab/homelab/services/backup/backup.sh

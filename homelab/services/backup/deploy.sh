@@ -15,6 +15,9 @@ BACKUP_USER="backup"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Writing filtered op-run template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
+
 echo "==> Installing dependencies"
 NEEDED=()
 command -v restic  &> /dev/null || NEEDED+=(restic)
@@ -47,10 +50,14 @@ echo "==> Granting backup user read ACLs on service data"
 sudo "$SERVICE_DIR/reapply-acls.sh"
 
 echo "==> Initializing restic repo (if needed)"
-# Source the env file for RESTIC_REPOSITORY and RESTIC_PASSWORD.
-set -a
-source "$SERVICE_DIR/.env"
-set +a
+# deploy.sh runs as the unprivileged deploy user, so it can't read
+# /etc/opt/homelab/op-token-picklehome (0600 root:root) itself. Resolve
+# RESTIC_REPOSITORY/RESTIC_PASSWORD via the root-owned wrapper instead, then
+# hand them to restic (running as $BACKUP_USER) with `sudo -E`.
+export RESTIC_REPOSITORY
+export RESTIC_PASSWORD
+RESTIC_REPOSITORY=$(sudo "$SERVICE_DIR/read-picklehome-var.sh" RESTIC_REPOSITORY)
+RESTIC_PASSWORD=$(sudo "$SERVICE_DIR/read-picklehome-var.sh" RESTIC_PASSWORD)
 if ! sudo -u "$BACKUP_USER" -E restic snapshots &> /dev/null; then
     echo "    Initializing new restic repository at $RESTIC_REPOSITORY"
     sudo -u "$BACKUP_USER" -E restic init

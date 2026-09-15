@@ -63,3 +63,10 @@ technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/apt-get install *
 # `backup` specifically, not ALL -- sudoers matches the resolved command
 # (restic), not the `sudo -u backup` invocation syntax deploy.sh uses.
 technicalpickles ALL=(backup) NOPASSWD: /usr/bin/restic *
+
+# backup's deploy-time restic-init check (and `just backup-snapshots`) need
+# a root read of RESTIC_REPOSITORY/RESTIC_PASSWORD from op-token-picklehome,
+# same reason and same narrow shape as openclaw's read-picklehome-var.sh
+# above -- deploy.sh runs as the unprivileged deploy user and can't read the
+# 0600 root:root token file itself.
+technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/backup/read-picklehome-var.sh *

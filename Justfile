@@ -336,38 +336,18 @@ secret-entry *ARGS:
 
 # Deploy backup service to picklelab (idempotent: first setup or update)
 deploy-backup host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/backup/.env.vars > tmp/backup.env
-    scp tmp/backup.env {{host}}:/opt/homelab/homelab/services/backup/.env
-    rm tmp/backup.env
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/backup/deploy.sh"
+    just _deploy-remote backup {{host}}
 
 # Run backup now on picklelab (manual trigger)
 backup-now host="picklelab":
     ssh {{host}} "sudo systemctl start backup.service"
 
 # Show recent restic snapshots from picklelab
+# Same secret-resolution path as deploy.sh's restic-init check: no plaintext
+# .env exists on picklelab anymore, so this reads RESTIC_REPOSITORY/
+# RESTIC_PASSWORD via the root-owned read-picklehome-var.sh wrapper.
 backup-snapshots host="picklelab":
-    ssh {{host}} "set -a && source /opt/homelab/homelab/services/backup/.env && restic snapshots --tag nightly"
+    ssh {{host}} "export RESTIC_REPOSITORY=\$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_REPOSITORY) RESTIC_PASSWORD=\$(sudo /opt/homelab/homelab/services/backup/read-picklehome-var.sh RESTIC_PASSWORD) && sudo -u backup -E restic snapshots --tag nightly"
 
 # Show backup timer status on picklelab
 backup-status host="picklelab":
