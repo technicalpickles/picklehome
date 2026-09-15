@@ -31,11 +31,16 @@ TREES=(
 # Narrower grants: only a specific subpath needs it, the rest of the service
 # dir is already readable (or intentionally excluded).
 #
-# openclaw is scoped to config/ and workspace/ deliberately -- NOT the whole
-# /srv/data/openclaw tree. gog-keyring/ and ssh/ hold live secrets
-# (auth-profile keyring, deploy keys); granting backup standing plaintext
-# read there was explicitly rejected as a tradeoff, not just unaddressed --
-# do not add /srv/data/openclaw itself, or those, to this list.
+# openclaw is scoped to config/, workspace/, and gog-config/ deliberately --
+# NOT the whole /srv/data/openclaw tree. gog-keyring/ and ssh/ hold live
+# secrets (auth-profile keyring, deploy keys); granting backup standing
+# plaintext read there was explicitly rejected as a tradeoff, not just
+# unaddressed -- do not add /srv/data/openclaw itself, or those two, to this
+# list. gog-config/config.json holds only account references (no tokens --
+# those live in gog-keyring), and gmail-attachments/ holds real downloaded
+# email content worth not losing, so that one's a grant rather than an
+# exclude. backup.sh's restic --exclude list is what keeps gog-keyring/ and
+# ssh/ from showing up as unreadable-file warnings every run.
 #
 # config/ includes config/state/ (openclaw.sqlite), which is the one whose
 # ACL mask kept getting reset between backups even after a one-shot setfacl
@@ -43,9 +48,15 @@ TREES=(
 # taskwarrior a949871a. This recursive re-grant may well fix that gap for
 # real now that it re-runs before every backup; worth confirming on the
 # first post-deploy run rather than assuming.
+#
+# obsidian-sync/config holds per-vault auth_token and sync/<hash>/config.json
+# files that obsidian-headless re-locks to 600 on write, same ACL-mask-reset
+# pattern as openclaw/config/state above.
 PATHS=(
     /srv/data/openclaw/config
     /srv/data/openclaw/workspace
+    /srv/data/openclaw/gog-config
+    /srv/data/obsidian-sync/config
     /srv/data/woodpecker/ts-state
 )
 
