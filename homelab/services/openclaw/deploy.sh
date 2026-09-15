@@ -541,6 +541,19 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # 60_000) -- raise bootstrapTotalMaxChars too if a third bootstrap file is
 # ever added or these two keep growing. See docs/setup-notes.md's "openclaw
 # doctor review, picklelab, 2026.8.1" section in the pickleclaw repo.
+#
+# agents.defaults.userTimezone: unset defaults to the container's host timezone,
+# which is UTC (no TZ= env var on this service) -- so every model-visible
+# timestamp, prompt date, and heartbeat active-hours window was being computed
+# in UTC instead of Josh's actual timezone. This had been worked around
+# entirely in openclaw-workspace's AGENTS.md/MEMORY.md (a "Timezone Rules, read
+# these every time" section telling the model to manually convert), which is
+# fragile -- it depends on the model actually applying the instruction, and it
+# doesn't fix heartbeat scheduling, which reads this config value directly
+# (src/infra/heartbeat-active-hours.ts in vendor/openclaw), not the prompt.
+# Hot-reloadable, confirmed against vendor/openclaw's
+# src/gateway/config-reload.test.ts (restartGateway: false, restartHeartbeat:
+# false) -- no restart needed, unlike thinkingDefault above.
 # tools.exec uses "mode" (not "security"/"ask") as of the 2026.8.1 upgrade
 # (2026-09-02) -- the old shape triggers "tools.exec.mode cannot be combined
 # with tools.exec.security or tools.exec.ask" once doctor has migrated the
@@ -583,6 +596,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.heartbeat.lightContext","value":true},
     {"path":"agents.defaults.imageModel.primary","value":"ollama-cloud/kimi-k2.7-code"},
     {"path":"agents.defaults.bootstrapMaxChars","value":25000},
+    {"path":"agents.defaults.userTimezone","value":"America/New_York"},
     {"path":"agents.defaults.models","value":{
         "ollama-cloud/glm-5.2":{},
         "ollama-cloud/glm-5.1":{},
