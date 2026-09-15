@@ -11,6 +11,12 @@ Group=backup
 # Restic cache lives alongside the repo so the backup user can write to it
 # without needing a writable home directory.
 Environment=RESTIC_CACHE_DIR=/srv/backups/restic-cache
+# backup's User=backup has no writable home (/var/backups is root-owned, a
+# stock Debian system account); `op` otherwise tries to create
+# ~/.config/op for its own cache and fails. Caching buys nothing for a
+# one-shot nightly job, so just turn it off instead of carving out a
+# writable home for a deliberately minimal service account.
+Environment=OP_CACHE=false
 # Read by systemd itself (root) before it drops to User=backup below, so this
 # works even though backup.sh never runs as root. See homelab/services/README.md.
 EnvironmentFile=/etc/opt/homelab/op-token-picklehome
