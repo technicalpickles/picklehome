@@ -578,12 +578,29 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # stable across restarts/redeploys, but would need re-verifying (same log
 # grep) if the compose project's network is ever removed and recreated.
 OPENCLAW_HOST=$(resolve_picklehome_var OPENCLAW_HOST)
+# Widget/MCP-App sandbox origin -- optional, not :?required. Until a dedicated
+# Tailscale Service is defined and OPENCLAW_WIDGETS_HOST is set (see README's
+# Port & bind topology and "Widget sandbox host" sections), OpenClaw falls
+# back to inferring the sandbox origin from the Control UI's own origin plus
+# one, which is wrong behind this Tailscale-fronted setup and makes every
+# show_widget/MCP App call fail with "Widget sandbox host is unavailable."
+OPENCLAW_WIDGETS_HOST=$(resolve_picklehome_var OPENCLAW_WIDGETS_HOST 2>/dev/null || true)
+WIDGET_CONFIG_JSON=""
+if [ -n "$OPENCLAW_WIDGETS_HOST" ]; then
+    WIDGET_CONFIG_JSON=',
+    {"path":"mcp.apps.sandboxPort","value":18790},
+    {"path":"mcp.apps.sandboxOrigin","value":"https://'"${OPENCLAW_WIDGETS_HOST}"'"}'
+else
+    echo "    NOTE: OPENCLAW_WIDGETS_HOST not set -- skipping mcp.apps.sandboxOrigin;"
+    echo "    widgets (show_widget/MCP Apps) will fail with 'Widget sandbox host is"
+    echo "    unavailable' until it's configured. See README 'Widget sandbox host'."
+fi
 $RUN_CLI config set --batch-json '[
     {"path":"gateway.bind","value":"lan"},
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
     {"path":"gateway.trustedProxies","value":["172.21.0.1"]},
-    {"path":"tools.exec","value":{"mode":"full"}},
+    {"path":"tools.exec","value":{"mode":"full"}}'"${WIDGET_CONFIG_JSON}"',
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"channels.telegram.execApprovals.enabled","value":true},
@@ -618,6 +635,15 @@ $RUN_CLI doctor || echo "    WARNING: doctor reported an issue — check output 
 
 echo "==> Configuring Tailscale serve for openclaw"
 sudo tailscale serve --service=svc:openclaw --https=443 http://127.0.0.1:18789
+
+if [ -n "$OPENCLAW_WIDGETS_HOST" ]; then
+    echo "==> Configuring Tailscale serve for the widget sandbox origin"
+    # Must be a genuinely separate Tailscale Service/hostname from svc:openclaw --
+    # docs/cli/mcp.md: "The sandbox origin must differ from the Control UI origin.
+    # Do not host other authenticated or sensitive content on it." Each Tailscale
+    # Service gets its own hostname, so both can independently serve 443.
+    sudo tailscale serve --service=svc:openclaw-widgets --https=443 http://127.0.0.1:18790
+fi
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/openclaw.service" /etc/systemd/system/

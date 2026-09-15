@@ -13,6 +13,7 @@ This deploy is a **migration** from `pickleclaw` (an OrbStack-VM spike on the Ma
 - `tag:server` applied to picklelab (same as the other HTTPS services).
 - HTTPS enabled on the tailnet.
 - **Define the Service before the first deploy** — `tailscale serve --service=svc:openclaw` on the host has nothing to attach a pending-host-approval to until the Service exists in the admin console; it won't create one for you. At [Tailscale Services](https://login.tailscale.com/admin/services), click "Define Service": Name `openclaw`, Ports `443`. Same gotcha as `taskchampion`'s original setup — see its README/impl doc if this needs re-deriving later.
+- **Optional, only if you want widgets (`show_widget`/MCP Apps) to work:** define a SECOND Service the same way — Name `openclaw-widgets`, Ports `443` — then set `OPENCLAW_WIDGETS_HOST` (see below). See "Widget sandbox host" for why this needs its own Service instead of reusing `svc:openclaw`.
 
 ### 1Password item: `picklehome/OpenClaw`
 
@@ -154,6 +155,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 |----------|--------|-------------|
 | `OPENCLAW_GATEWAY_BIND` | compose | `lan` — required internally even though the only host-side exposure is `127.0.0.1:18789`, see design doc "Port & bind topology" |
 | `OPENCLAW_HOST` | `.env` (1Password) | Tailscale Services hostname |
+| `OPENCLAW_WIDGETS_HOST` | `.env` (1Password), optional | Second Tailscale Services hostname dedicated to the widget sandbox origin. See "Widget sandbox host" below. |
 | `OPENCLAW_GATEWAY_TOKEN` | `.env` (1Password) | Control-UI/API bearer token |
 | `OLLAMA_API_KEY` | `.env` (1Password) | Ollama Cloud subscription key (chat/heartbeat) |
 | `OPENROUTER_API_KEY` | `.env` (1Password) | Embeddings only — Ollama Cloud doesn't support them |
@@ -166,6 +168,22 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `GOG_MCP_TOKEN` | `.env` (1Password) | Bearer token gog-mcp's HTTP endpoint requires; set on both the `openclaw` service (interpolated into `mcp.json5`'s Authorization header) and the `gog-mcp` service (to check incoming requests) |
 | `GOG_KEYRING_PASSWORD` | `.env` (1Password) | Decryption password for gog-mcp's file keyring (OAuth refresh tokens); set only on the `gog-mcp` service |
 | `OPENCLAW_IMAGE` | `openclaw.image.env` (pickleclaw, symlinked) | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.8.1` -- shared source of truth with the dev VM, not this repo's `.env` |
+
+## Widget sandbox host
+
+`show_widget` and MCP Apps render through a dedicated-origin, double-iframe sandbox that OpenClaw serves on a second, unauthenticated HTTP(S) listener — the Gateway port plus one (`18790` here). The Control UI's browser loads widgets from that separate origin, not from the Control UI's own origin. Without a working path to it, every widget fails with `Widget sandbox host is unavailable`. See vendor/openclaw's `docs/tools/show-widget.md` and `docs/cli/mcp.md` (MCP Apps section) in the `pickleclaw` repo.
+
+This is optional — skip it if you don't need widgets. `compose.yaml` always publishes `127.0.0.1:18790`, but `deploy.sh` only wires `mcp.apps.sandboxOrigin`/`sandboxPort` and the second `tailscale serve` when `OPENCLAW_WIDGETS_HOST` is set; otherwise it prints a note and moves on.
+
+To enable it:
+
+1. Define a second Tailscale Service (see "Tailscale admin" above): Name `openclaw-widgets`, Ports `443`.
+2. Add `widgets_host` to the `picklehome/OpenClaw` 1Password item (e.g. `openclaw-widgets.tail2023b7.ts.net`) and `OPENCLAW_WIDGETS_HOST={{ op://picklehome/OpenClaw/widgets_host }}` to `.env.template`.
+3. Redeploy (`just deploy-openclaw`). `deploy.sh` then sets `mcp.apps.sandboxOrigin` to `https://${OPENCLAW_WIDGETS_HOST}` and `mcp.apps.sandboxPort` to `18790`, and runs a second `tailscale serve --service=svc:openclaw-widgets --https=443 http://127.0.0.1:18790`.
+
+**It must be a genuinely separate origin from `OPENCLAW_HOST`** — `docs/cli/mcp.md`: "The sandbox origin must differ from the Control UI origin. Do not host other authenticated or sensitive content on it." A Tailscale Service's hostname is fixed to its Service name, so a second Service is the only way to get a second HTTPS origin out of one Tailscale node.
+
+Also confirm `show_widget` is actually allowlisted — it's `profiles: []` in OpenClaw's tool catalog (opted out of every profile, same as `canvas`/`nodes`), so `pickleclaw`'s `openclaw-config/tools.json5` has to list it in `alsoAllow` or the agent has no tool to call.
 
 **Why `OPENCLAW_HOST` also has to be pushed into `gateway.controlUi.allowedOrigins` (`deploy.sh`'s `config set --batch-json` step):** OpenClaw doesn't auto-discover its own Tailscale hostname for browser-Origin validation on a non-loopback bind (`lan`/`tailnet`/`auto`) — it only auto-seeds `http://localhost:<port>`/`http://127.0.0.1:<port>` (`gateway-control-ui-origins.ts` in the vendored source). Without an explicit entry, the Control UI would still often work anyway: `origin-check.ts` has a same-origin fallback that trusts any `*.ts.net` hostname when the `Origin` and `Host` headers match — but that's an implicit fallback, not a guarantee (e.g. it breaks if something ever proxies with a different `Host`), so keep setting `allowedOrigins` explicitly rather than relying on it.
 

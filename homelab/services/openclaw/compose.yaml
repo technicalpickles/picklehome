@@ -31,6 +31,16 @@ services:
       PATH: "/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  # live-tested: PATH additions picked up with no gateway restart
     ports:
       - "127.0.0.1:18789:18789"
+      # Widget/MCP-App sandbox host: OpenClaw lazily binds a second,
+      # unauthenticated listener on gatewayPort+1 the first time a
+      # show_widget/MCP-App HTML document needs the dedicated-origin
+      # double-iframe sandbox (vendor/openclaw docs/tools/show-widget.md,
+      # docs/cli/mcp.md's MCP Apps section, in the pickleclaw repo). Without
+      # this published and given its own Tailscale Service (see deploy.sh's
+      # "Configuring Tailscale serve" step and mcp.apps.sandboxOrigin below),
+      # every widget fails in the Control UI with "Widget sandbox host is
+      # unavailable."
+      - "127.0.0.1:18790:18790"
     volumes:
       - config:/home/node/.openclaw                                            # writable — onboarding creates openclaw.json here
       - workspace:/home/node/.openclaw/workspace
