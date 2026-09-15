@@ -38,6 +38,13 @@ technicalpickles ALL=(ALL) NOPASSWD: /usr/bin/setfacl *
 # rule above doesn't match because sudo sees the script path, not `setfacl`)
 technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/backup/reapply-acls.sh
 
+# openclaw's deploy-time doctor/onboard/config-set/config-patch calls need to
+# read the 0600 root:root op-token files to resolve real secrets (not just
+# placeholders). run-doctor-cli.sh hardcodes everything but the trailing
+# openclaw CLI args, so this grant can't be used to run an arbitrary command
+# as root -- only the openclaw CLI, against openclaw's fixed compose project.
+technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/openclaw/run-doctor-cli.sh *
+
 # Backup user management (backup deploy)
 technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/useradd *
 technicalpickles ALL=(ALL) NOPASSWD: /usr/sbin/usermod *

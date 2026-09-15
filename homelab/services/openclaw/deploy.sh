@@ -40,14 +40,19 @@ echo "==> Writing filtered op-run templates (dual vault)"
 # $RUN_CLI actually executes openclaw logic in a throwaway container (onboard /
 # config set / doctor / config patch, below) -- those need the SAME real
 # secrets the long-running gateway gets (e.g. doctor and onboard both touch
-# provider config), not placeholders, so every $RUN_CLI invocation is wrapped
-# through op-run-dual.sh (both vaults). This is different from the plain
-# $COMPOSE pull/build calls further down: those never run openclaw itself, so
-# placeholder values are enough to satisfy compose's ${VAR:?required}
-# parse-time check (compose validates every service's environment block on
-# every invocation, not just the one being pulled/built -- see that section).
-OP_RUN_DUAL="$SERVICE_DIR/op-run-dual.sh $SERVICE_DIR/.env.op.picklehome.template $SERVICE_DIR/.env.op.pickleclaw.template --"
-RUN_CLI="$OP_RUN_DUAL $COMPOSE run --rm --no-deps --entrypoint node openclaw dist/index.js"
+# provider config), not placeholders. Resolving those secrets means reading
+# /etc/opt/homelab/op-token-{picklehome,pickleclaw}, which are 0600 root:root
+# by design -- deploy.sh runs as the unprivileged deploy user, so it can't
+# read them itself. run-doctor-cli.sh is the sudo boundary: a narrow,
+# passwordless-sudoers-allowlisted root wrapper that hardcodes everything but
+# the trailing CLI args (see that script and homelab/config/sudoers-deploy-ops
+# for why this is scoped tighter than granting raw token-file read access).
+# This is different from the plain $COMPOSE pull/build calls further down:
+# those never run openclaw itself, so placeholder values are enough to
+# satisfy compose's ${VAR:?required} parse-time check (compose validates
+# every service's environment block on every invocation, not just the one
+# being pulled/built -- see that section).
+RUN_CLI="sudo $SERVICE_DIR/run-doctor-cli.sh"
 
 # Resolves a single picklehome-vault var into THIS script's own shell (not the
 # container's) -- for host-side logic that runs before the gateway container
