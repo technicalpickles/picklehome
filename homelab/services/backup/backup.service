@@ -12,10 +12,10 @@ Group=backup
 # without needing a writable home directory.
 Environment=RESTIC_CACHE_DIR=/srv/backups/restic-cache
 # backup's User=backup has no writable home (/var/backups is root-owned, a
-# stock Debian system account); `op` otherwise tries to create
-# ~/.config/op for its own cache and fails. Caching buys nothing for a
-# one-shot nightly job, so just turn it off instead of carving out a
-# writable home for a deliberately minimal service account.
+# stock Debian system account, not one this deploy created); `op` otherwise
+# tries to create ~/.config/op and fails. OP_CACHE=false alone isn't enough
+# -- op still wants a config dir regardless of caching -- so point it at a
+# directory deploy.sh creates and chowns to backup:backup instead.
 Environment=OP_CACHE=false
 # Read by systemd itself (root) before it drops to User=backup below, so this
 # works even though backup.sh never runs as root. See homelab/services/README.md.
@@ -24,4 +24,4 @@ EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # so it can re-apply ACLs that other services' chmod() calls may have wiped
 # since the last run. See reapply-acls.sh for why this has to be unconditional.
 ExecStartPre=+/opt/homelab/homelab/services/backup/reapply-acls.sh
-ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/backup/.env.op.template -- /opt/homelab/homelab/services/backup/backup.sh
+ExecStart=/usr/bin/op --config /srv/backups/op-config run --env-file=/opt/homelab/homelab/services/backup/.env.op.template -- /opt/homelab/homelab/services/backup/backup.sh

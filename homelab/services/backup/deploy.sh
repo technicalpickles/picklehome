@@ -8,6 +8,7 @@ REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/backup"
 BACKUP_DIR=/srv/backups/restic
 CACHE_DIR=/srv/backups/restic-cache
+OP_CONFIG_DIR=/srv/backups/op-config
 
 cd "$REPO_DIR"
 
@@ -37,8 +38,8 @@ if ! id -nG "$BACKUP_USER" | grep -qw docker; then
 fi
 
 echo "==> Creating directories"
-sudo mkdir -p "$BACKUP_DIR" "$CACHE_DIR"
-sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR"
+sudo mkdir -p "$BACKUP_DIR" "$CACHE_DIR" "$OP_CONFIG_DIR"
+sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR" "$OP_CONFIG_DIR"
 # Pre-create dump directories so backup user can write to them.
 # No Postgres services currently deployed. When one returns, add it here:
 #   for svc in <service>; do
