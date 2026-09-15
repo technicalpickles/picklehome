@@ -154,7 +154,7 @@ The percentage shown there is the last read, not necessarily current.
 
 ### A misaligned back plate can block the bridge connection, not just the battery
 
-Observed on the Marann Front Door, after a routine AA battery swap: a screw
+Observed on the main-house Front Door, after a routine AA battery swap: a screw
 poking out from the door's back plate kept the plate from seating flush on
 reassembly, which broke the lock's connection to the bridge. Symptoms looked
 identical to a dead-battery/wedged-lock case -- `lock unreachable`, stuck low

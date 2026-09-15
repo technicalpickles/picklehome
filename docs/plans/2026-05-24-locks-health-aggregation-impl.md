@@ -685,12 +685,12 @@ Expected: `Health: UNHEALTHY` (red) followed by one or more `✗ <message>` line
 
 - [ ] **Step 5: Run against the warning lock**
 
-Run: `just locks status front` (the Marann Front Door, currently at 31%)
+Run: `just locks status front` (the main-house Front Door, currently at 31%)
 Expected: `Health: WARNING` (yellow) with `⚠ low battery (31%)` listed.
 
 - [ ] **Step 6: Run against a bridge that has a WiFi issue logged**
 
-Run: `just locks status storage` (8 Hacker St Storage Door, its bridge had `WifiModuleConnectionIssue` ~92 days ago)
+Run: `just locks status storage` (beach house Storage Door, its bridge had `WifiModuleConnectionIssue` ~92 days ago)
 Expected: in the `Bridge:` block, a new `WiFi issue:` line appears with the timestamp.
 
 - [ ] **Step 7: Commit**

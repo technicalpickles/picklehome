@@ -23,10 +23,10 @@ All came back empty. These devices offer no local services whatsoever.
 
 | # | MAC | IP | AP | Signal | Lifetime Traffic |
 |---|-----|----|----|--------|-----------------|
-| 1 | `2c:9f:fb:f8:96:bb` | .100 | Tracy Office AC Pro | -48 dBm | 28.6 MB |
-| 2 | `2c:9f:fb:f8:98:dd` | .95 (static) | Living Room AC LR | -34 dBm | 29.3 MB |
-| 3 | `2c:9f:fb:f8:99:01` | .101 (static) | Josh Office AC Pro | -51 dBm | 6.0 MB |
-| 4 | `2c:9f:fb:f8:99:17` | .97 | Tracy Office AC Pro | -47 dBm | 28.7 MB |
+| 1 | `2c:9f:fb:xx:xx:xx` | .100 | Tracy Office AC Pro | -48 dBm | 28.6 MB |
+| 2 | `2c:9f:fb:xx:xx:xx` | .95 (static) | Living Room AC LR | -34 dBm | 29.3 MB |
+| 3 | `2c:9f:fb:xx:xx:xx` | .101 (static) | Josh Office AC Pro | -51 dBm | 6.0 MB |
+| 4 | `2c:9f:fb:xx:xx:xx` | .97 | Tracy Office AC Pro | -47 dBm | 28.7 MB |
 
 - **First seen:** All on 2021-08-17 (installed together as a batch)
 - **Hostname:** "connect" (source: `uap`, AP-reported, not device-provided)
@@ -52,7 +52,7 @@ All came back empty. These devices offer no local services whatsoever.
 
 | Field | Value |
 |-------|-------|
-| MAC | `f0:ad:4e:17:08:5c` |
+| MAC | `f0:ad:4e:xx:xx:xx` |
 | IP | .119 |
 | AP | Josh Office AC Pro |
 | Signal | -64 dBm (weakest of all mystery devices) |
@@ -81,7 +81,7 @@ Globalscale makes Marvell ARM-based embedded platforms: single-board computers, 
 
 | Field | Value |
 |-------|-------|
-| MAC | `d4:ad:fc:ac:9b:16` |
+| MAC | `d4:ad:fc:xx:xx:xx` |
 | IP | .155 |
 | AP | Josh Office AC Pro |
 | Signal | -51 dBm |
@@ -112,8 +112,8 @@ Also in Josh Office alongside the Globalscale device. Slightly more talkative (3
 
 | # | MAC | IP | First Seen | Signal |
 |---|-----|-----|-----------|--------|
-| 1 | `d4:d4:da:74:14:ec` | .251 | 2023-08-24 | -53 dBm |
-| 2 | `d4:d4:da:73:ec:cc` | .253 | 2025-06-02 | -48 dBm |
+| 1 | `d4:d4:da:xx:xx:xx` | .251 | 2023-08-24 | -53 dBm |
+| 2 | `d4:d4:da:xx:xx:xx` | .253 | 2025-06-02 | -48 dBm |
 
 - **AP:** Both on Living Room AC LR, 2.4GHz
 - **Hostname:** "espressif" (source: `usw`, reported by the UniFi *switch*, not the AP, which is unusual)

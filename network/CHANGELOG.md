@@ -169,7 +169,7 @@ via UniFi APs; BGW WiFi is redundant.
 - [x] `just unifi-wifi rfscan`: `ATTt6kgiKH` gone ✓ (confirmed 2026-03-20, no SSID or BSSID in scan)
 
 **2026-03-18 follow-up:** BGW UI shows both bands Disabled, but `ATTt6kgiKH`
-(BSSID `bc:9a:8e:ed:fe:ec`, base MAC `bc:9a:8e:ed:fe:e0`) continued beaconing
+(BSSID `bc:9a:8e:xx:xx:xc`, base MAC `bc:9a:8e:xx:xx:x0`) continued beaconing
 on 5GHz ch 149 at -50 dBm, confirmed via `just unifi-wifi rfscan --fresh 5`
 both before and after a BGW restart. Channel also shifted from ch 48 → ch 149,
 suggesting the radio is still active and running auto channel selection despite
@@ -177,7 +177,7 @@ the UI reporting Disabled. Likely a firmware bug or AT&T remote management
 overriding the setting. Next step: factory reset, re-disable WiFi, re-verify.
 
 **2026-03-20 follow-up:** Resolved without factory reset. RF scan shows no
-`ATTt6kgiKH` SSID and no `bc:9a:8e:ed:fe:ec` BSSID on any channel. The disable
+`ATTt6kgiKH` SSID and no `bc:9a:8e:xx:xx:xc` BSSID on any channel. The disable
 eventually took effect (possibly after the BGW restart propagated).
 
 ---

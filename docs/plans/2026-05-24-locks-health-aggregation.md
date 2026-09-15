@@ -119,8 +119,8 @@ Yale locks: 7 across 2 homes
 **Per-home table**: leading status glyph column, existing columns retained:
 
 ```
-2108 Marann Dr NE
-═════════════════
+Main house
+══════════
   ✗  Basement Door     unknown   unknown   97%  online     34m
   ✗  Garage Side Door  unknown   n/a        --  no bridge
   ⚠  Front Door        unlocked  closed    31%  online     34m
@@ -136,7 +136,7 @@ Yale locks: 7 across 2 homes
 **Detail view**: add a Health block at the top of `_print_detail`:
 
 ```
-2108 Marann Dr NE > Pantry Door
+Main house > Pantry Door
   Health:    UNHEALTHY
     ✗ lock unreachable
     ✗ battery unknown
@@ -175,20 +175,20 @@ Snapshot taken 2026-05-24 against the live Yale account:
 
 | Lock | Bridge | Lock state | Battery | Data age | Verdict | Issues |
 |---|---|---|---|---|---|---|
-| Front Door (Marann) | online | unlocked | 31% | 34m | warning | low battery (31%) |
+| Front Door (main house) | online | unlocked | 31% | 34m | warning | low battery (31%) |
 | Office Door | online | locked | 97% | 33m | healthy | n/a |
 | Basement Door | online | unknown | 97% | 34m | unhealthy | lock unreachable |
 | Pantry Door | online | unknown | -100% | 34m | unhealthy | lock unreachable, battery unknown |
 | Garage Side Door | (none) | n/a | n/a | n/a | unhealthy | no bridge |
-| Front Door (8 Hacker) | offline | n/a | n/a | n/a | unhealthy | bridge offline |
-| Storage Door (8 Hacker) | offline | n/a | n/a | n/a | unhealthy | bridge offline |
+| Front Door (beach house) | offline | n/a | n/a | n/a | unhealthy | bridge offline |
+| Storage Door (beach house) | offline | n/a | n/a | n/a | unhealthy | bridge offline |
 
 Aggregate: **1 healthy / 1 warning / 5 unhealthy**.
 
 ### Observations from validation
 
 - All seven `lock_status_datetime` values cluster at 33-34 minutes. This strongly suggests Yale's API updates this field on a polling cadence, not per-lock telemetry. Implication: staleness check effectively asks "did Yale's poller skip this lock for hours," which is still a useful signal.
-- Two locks at Marann (Pantry, Basement) show `lock_status=unknown`; both BLE links are intermittent. Same hardware generation (78:9C:85:1x MAC prefix). Worth tracking as a separate diagnostic thread, not addressed by this design.
+- Two locks at the main house (Pantry, Basement) show `lock_status=unknown`; both BLE links are intermittent. Same hardware generation (same OUI). Worth tracking as a separate diagnostic thread, not addressed by this design.
 - `WifiModuleConnectionIssue` ages range from 92d to 387d, a low-rate event, confirming it's not viable as a real-time health gate.
 
 ## Testing
@@ -225,7 +225,7 @@ Parser test: one case asserting `WifiModuleConnectionIssue` (Unix ms) → `datet
 
 - Alerting / push notifications when health transitions
 - Tracking health history over time (would require a sqlite or jsonl log)
-- Diagnosing the BLE flap pattern on Marann locks (separate thread)
+- Diagnosing the BLE flap pattern on the main-house locks (separate thread)
 - Promoting `WifiModuleConnectionIssue` from diagnostic to health gate
 - Tightening the staleness threshold once we have more data
 

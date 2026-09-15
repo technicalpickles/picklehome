@@ -43,10 +43,10 @@ def test_mapped_groups_use_labels_in_registry_order(monkeypatch):
         {"slug": "home", "label": "Main House", "lat": 1, "lon": 2,
          "nest_structures": ["Atlanta"]},
         {"slug": "beachhouse", "label": "Beach House", "lat": 3, "lon": 4,
-         "nest_structures": ["8 Hacker St"]},
+         "nest_structures": ["Beach House"]},
     ])
     devices = [_make_device("Deck Cam", "s-beach"), _make_device("Front Cam", "s-atl")]
-    names = {"s-beach": "8 Hacker St", "s-atl": "Atlanta"}
+    names = {"s-beach": "Beach House", "s-atl": "Atlanta"}
     groups = group_devices(devices, names)
     assert _labels(groups) == ["Main House", "Beach House"]
     assert [d.custom_name for d in groups[0].devices] == ["Front Cam"]

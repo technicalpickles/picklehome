@@ -38,9 +38,9 @@ def test_nest_structures_defaults_empty(monkeypatch):
 def test_nest_structures_parsed(monkeypatch):
     _set_locations(monkeypatch, [
         {"slug": "beachhouse", "lat": 41.9, "lon": -70.6,
-         "nest_structures": ["8 Hacker St"]},
+         "nest_structures": ["Beach House"]},
     ])
-    assert load_locations()[0].nest_structures == ["8 Hacker St"]
+    assert load_locations()[0].nest_structures == ["Beach House"]
 
 
 def test_comfort_mode_defaults_false(monkeypatch):

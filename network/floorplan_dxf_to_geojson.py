@@ -1,5 +1,6 @@
 """Build first-pass GeoJSON per docs/floorplan-geojson-schema.md from the MagicPlan
-exports (DXF + Report PDF) in ~/Dropbox/2108 Marann Dr Floor Plans/.
+exports (DXF + Report PDF) in $FLOORPLAN_DXF_DIR (the MagicPlan export folder in
+Dropbox; its name is a street address, so it is never hardcoded here).
 
 Two data sources, combined:
 
@@ -37,17 +38,36 @@ import itertools
 import json
 import math
 import re
+import os
 from pathlib import Path
 
 import ezdxf
 
-DXF_DIR = Path.home() / "Dropbox" / "2108 Marann Dr Floor Plans"
+def dxf_dir() -> Path:
+    """MagicPlan export folder, from the environment.
+
+    The real folder name contains the house's street address, which never gets
+    committed (docs/CONVENTIONS.md). Set FLOORPLAN_DXF_DIR in .env or inline:
+    FLOORPLAN_DXF_DIR=~/Dropbox/... uv run --with ezdxf network/floorplan_dxf_to_geojson.py
+    """
+    raw = os.environ.get("FLOORPLAN_DXF_DIR")
+    if not raw:
+        raise SystemExit(
+            "FLOORPLAN_DXF_DIR is not set. Point it at the MagicPlan export folder "
+            "(the Dropbox folder holding the DXF + Report PDF exports)."
+        )
+    return Path(raw).expanduser()
+
+
 OUT_DIR = Path(__file__).parent / "floorplan"
 
-FLOORS = [
-    (1, DXF_DIR / "Atlanta - 1st Floor.dxf"),
-    (2, DXF_DIR / "Atlanta - 2nd Floor.dxf"),
-]
+
+def floors() -> list[tuple[int, Path]]:
+    d = dxf_dir()
+    return [
+        (1, d / "Atlanta - 1st Floor.dxf"),
+        (2, d / "Atlanta - 2nd Floor.dxf"),
+    ]
 
 FT_IN = re.compile(r"(\d+)'\s*(?:(\d+)(?:\s+(\d+)/(\d+))?)?\"?")
 
@@ -440,7 +460,7 @@ def build_floor(level, dxf_path):
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    for level, dxf_path in FLOORS:
+    for level, dxf_path in floors():
         fc, distances = build_floor(level, dxf_path)
 
         geojson_path = OUT_DIR / f"floor-{level}.geojson"
