@@ -62,7 +62,7 @@ directly above it on floor 2. Before annotating:
 
 ## Storage
 
-Raw exports (PNG/JPG/SVG/DXF/PDF) live in `~/Dropbox/2108 Marann Dr Floor Plans/` —
+Raw exports (PNG/JPG/SVG/DXF/PDF) live in a Dropbox folder (path in `$FLOORPLAN_DXF_DIR`; the folder name is the street address, so it stays out of the repo) —
 moved here 2026-08-22 instead of the vault-symlinked `network/floorplan/`, since the
 DXF exports are multi-MB and Dropbox handles that better than the vault sync. The
 `network/floorplan/` symlink still exists (see `.claude/second-brain.local.md`) but is

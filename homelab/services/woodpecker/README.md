@@ -36,7 +36,7 @@ The Woodpecker stack itself runs on the normal root daemon; only the agent is *p
 
 ## Prerequisites (one-time)
 
-1. **Host: rootless docker for the `ci` user** (uid 2000). Create the `ci` user, run `dockerd-rootless-setuptool.sh install` as `ci`, `loginctl enable-linger ci`, set up subuid/subgid maps. See [`homelab/plans/homelab_03_host_setup.md`](../../plans/homelab_03_host_setup.md). The deploy script pre-flight checks for `/run/user/2000/docker.sock` and fails loudly if it's missing.
+1. **Host: rootless docker for the `ci` user** (uid 2000). Create the `ci` user, run `dockerd-rootless-setuptool.sh install` as `ci`, `loginctl enable-linger ci`, set up subuid/subgid maps. See [`homelab/docs/homelab_03_host_setup.md`](../../docs/homelab_03_host_setup.md). The deploy script pre-flight checks for `/run/user/2000/docker.sock` and fails loudly if it's missing.
 
 2. **Tailscale ACL**: grant the `funnel` nodeAttr to `tag:ci`, and define `tag:ci` with `technicalpickles` as tagOwner. Funnel runs inside the sidecar, so picklelab's own `:443` and identity stay untouched.
 

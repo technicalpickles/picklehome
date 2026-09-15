@@ -12,8 +12,8 @@ Captured 2026-03-18 via `http://192.168.8.254/cgi-bin/sysinfo.ha`.
 | Model | BGW320-500 |
 | Hardware Version | 02001F00460050 |
 | Software Version | 6.34.7 |
-| Serial Number | D93LD4GJ303300 |
-| WAN MAC | `bc:9a:8e:ed:fe:e0` |
+| Serial Number | (redacted) |
+| WAN MAC | `bc:9a:8e:xx:xx:x0` |
 | First Use Date | 2024-11-19 |
 
 WiFi BSSIDs follow base MAC pattern: `e0` → `e4` (2.4GHz home), `e8`/`ec` (5GHz home/guest).
@@ -24,7 +24,7 @@ WiFi BSSIDs follow base MAC pattern: `e0` → `e4` (2.4GHz home), `e8`/`ec` (5GH
 |---|---|
 | Vendor | NOKIA |
 | Part Number | 3FE46899AB |
-| Serial Number | ALCLEC158B58 |
+| Serial Number | (redacted) |
 | Date Code | 240530 (May 2024) |
 
 ## Access Model

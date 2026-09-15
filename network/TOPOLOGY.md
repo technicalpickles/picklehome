@@ -162,7 +162,7 @@ probably MagicPlan scan artifacts rather than real spaces.
 ### Room Layout
 
 From the MagicPlan "Sketch Files" export (both floors, dimensioned; captured 2026-08-22,
-stored in `~/Dropbox/2108 Marann Dr Floor Plans/` rather than the vault — see Storage
+stored in the Dropbox MagicPlan export folder (`$FLOORPLAN_DXF_DIR`) rather than the vault — see Storage
 note in `docs/floorplan-markup-legend.md`). This prose section is adjacency + rough
 distance, deliberately generic; the precision wall-material/AP/RF-hostile-object
 markup pass (per `docs/floorplan-capture-checklist.md`) is done and lives in
@@ -381,7 +381,7 @@ Hardware details and CGI endpoint reference: [`docs/bgw-reference.md`](docs/bgw-
 ### Resolved: WiFi "Disabled" but still beaconing (2026-03-18, resolved 2026-03-20)
 
 Both radios set to Disabled via `wconfig_unified.ha`. UI and `just bgw wifi` confirm
-Disabled, but `ATTt6kgiKH` (BSSID `bc:9a:8e:ed:fe:ec`) continued beaconing on 5GHz
+Disabled, but `ATTt6kgiKH` (BSSID `bc:9a:8e:xx:xx:xc`) continued beaconing on 5GHz
 ch 149 at -50 dBm after a full restart, confirmed via `just unifi wifi rfscan --fresh 5`.
 Channel also shifted from ch 48 → ch 149 while "disabled," indicating the radio is still
 active. Resolved without factory reset: 2026-03-20 RF scan shows no trace of the SSID

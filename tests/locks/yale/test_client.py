@@ -112,7 +112,7 @@ def _offline_bridge(last_online: datetime | None) -> BridgeStatus:
 
 
 def test_bridge_offline_with_lock_dying_together_labels_dead_battery():
-    # Classic 8 Hacker St pattern: bridge and lock both went dark within
+    # Classic beach-house pattern: bridge and lock both went dark within
     # ~minutes of each other, 60 days ago.
     sixty_days_ago = datetime.now(timezone.utc) - timedelta(days=60)
     lock = _make_lock(

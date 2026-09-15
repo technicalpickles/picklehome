@@ -30,7 +30,7 @@ def test_garage_door_dataclass():
         ble_strength=0,
         is_enabled=True,
         updated_at="123456",
-        mac="F0:AD:4E:17:08:5C",
+        mac="AA:BB:CC:00:11:22",
         rssi=-65,
         device_status="connected",
         software_version="6.20.00",
@@ -42,7 +42,7 @@ def test_garage_door_dataclass():
     assert door.status == "closed"
     assert door.fault == "none"
     assert door.rssi == -65
-    assert door.mac == "F0:AD:4E:17:08:5C"
+    assert door.mac == "AA:BB:CC:00:11:22"
     assert door.ssid == "picklehome-iot"
 
 
@@ -65,7 +65,7 @@ def test_device_status_mapping():
 
 
 def test_format_mac_valid():
-    assert _format_mac("F0AD4E17085C") == "F0:AD:4E:17:08:5C"
+    assert _format_mac("AABBCC001122") == "AA:BB:CC:00:11:22"
     assert _format_mac("aabbccddeeff") == "AA:BB:CC:DD:EE:FF"
 
 

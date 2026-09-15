@@ -52,7 +52,7 @@ Concrete, actionable items: things to do, optionally with dates. Not prose about
 
 The agent keeps a file-based memory outside the repo. It is not version controlled, so unlike everything above it has no forcing function to stay in sync with the code: no PR reviews it, no docs pass sweeps it. Two things belong there and nowhere else:
 
-- **Sensitive data that can't be committed:** device MACs, internal IPs, anything geolocatable. (Secrets go in 1Password instead.)
+- **Geolocatable data that can't be committed:** street addresses, coordinates, full MAC addresses and BSSIDs, device serials. WiFi MACs near a home are in wardriving databases, so a full one is effectively a location. Private LAN IPs (`192.168.x.x`) and OUI prefixes (`aa:bb:cc:xx:xx:xx`) are fine to commit; `network/TOPOLOGY.md` is an IP inventory on purpose. `tests/test_no_sensitive_identifiers.py` enforces the MAC rule. (Secrets go in 1Password instead.)
 - **Things with no repo home:** who you are, how you want the agent to work, and in-flight thinking not yet reflected in the code.
 
 Memory points at the repo, it does not copy it. A memory entry that restates the directory layout, an API quirk, or a test count drifts silently the moment the code changes. If a fact is true about the code and not sensitive, it lives in the repo (code, README, or CLAUDE.md) and memory at most links to where.
@@ -61,7 +61,7 @@ Memory points at the repo, it does not copy it. A memory entry that restates the
 
 | The fact is... | Goes in |
 |----------------|---------|
-| Sensitive (MAC, internal IP, geolocatable) | Memory, or 1Password for secrets. Never committed. |
+| Geolocatable (address, coordinates, full MAC, serial) | Memory, or 1Password for secrets. Never committed. Private LAN IPs and OUI prefixes are fine. |
 | Current truth about how the code works | Code comment, README, or CLAUDE.md (it travels with the code) |
 | Something concrete to do | Taskwarrior |
 | About you, how to work, or thinking not yet in code | Memory |

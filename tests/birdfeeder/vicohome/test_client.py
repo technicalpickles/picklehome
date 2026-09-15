@@ -28,19 +28,20 @@ def _mock_session(response_body: dict):
 
 
 # Trimmed but structurally faithful to a real /device/listuserdevices response.
+# Identifiers (serial, MAC) are synthetic; only the shape matters.
 DEVICE_LIST_RESPONSE = {
     "result": 0,
     "msg": "Success",
     "data": {
         "list": [
             {
-                "serialNumber": "e543324f7e596ac176836c8781177558",
+                "serialNumber": "0123456789abcdef0123456789abcdef",
                 "deviceName": "Smart Camera",
                 "modelNo": "CG625-BD2-ST1BQJ",
                 "locationName": "Front door",
                 "homeName": "My House",
                 "ip": "192.168.1.86",
-                "macAddress": "14:92:f9:93:fe:78",
+                "macAddress": "02:00:00:00:00:01",
                 "batteryLevel": 55,
                 "isCharging": 1,
                 "signalStrength": -65,
@@ -65,7 +66,7 @@ EVENTS_RESPONSE = {
                 "timestamp": 1785676267,
                 "period": 10.037,
                 "deviceName": "Smart Camera",
-                "serialNumber": "e543324f7e596ac176836c8781177558",
+                "serialNumber": "0123456789abcdef0123456789abcdef",
                 "birdName": "Cardinalis cardinalis",
                 "imageUrl": "https://example.com/image.jpg",
                 "videoUrl": "https://example.com/video.m3u8",
@@ -84,7 +85,7 @@ EVENTS_RESPONSE = {
                 "timestamp": 1785682352,
                 "period": 10.037,
                 "deviceName": "Smart Camera",
-                "serialNumber": "e543324f7e596ac176836c8781177558",
+                "serialNumber": "0123456789abcdef0123456789abcdef",
                 "birdName": None,
                 "imageUrl": "https://example.com/image2.jpg",
                 "videoUrl": "https://example.com/video2.m3u8",
@@ -106,13 +107,13 @@ def test_get_devices_parses_response():
         assert len(devices) == 1
         device = devices[0]
         assert device == Device(
-            serial_number="e543324f7e596ac176836c8781177558",
+            serial_number="0123456789abcdef0123456789abcdef",
             device_name="Smart Camera",
             model_no="CG625-BD2-ST1BQJ",
             location_name="Front door",
             home_name="My House",
             ip="192.168.1.86",
-            mac_address="14:92:f9:93:fe:78",
+            mac_address="02:00:00:00:00:01",
             battery_level=55,
             is_charging=True,
             signal_strength=-65,
@@ -151,7 +152,7 @@ def test_get_events_parses_identified_bird():
             timestamp=datetime.fromtimestamp(1785676267, tz=timezone.utc),
             duration_seconds=10.037,
             device_name="Smart Camera",
-            serial_number="e543324f7e596ac176836c8781177558",
+            serial_number="0123456789abcdef0123456789abcdef",
             species_name="Northern Cardinal",
             species_latin="Cardinalis cardinalis",
             confidence=87,

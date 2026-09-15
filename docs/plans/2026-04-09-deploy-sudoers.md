@@ -158,10 +158,10 @@ chore(homelab): drop ssh -t from deploy tasks (passwordless sudo)
 
 ### Task 4: Document in host setup
 
-Add a section to `homelab/plans/homelab_03_host_setup.md` so this is reproducible from bare metal.
+Add a section to `homelab/docs/homelab_03_host_setup.md` so this is reproducible from bare metal.
 
 **Files:**
-- Modify: `homelab/plans/homelab_03_host_setup.md`
+- Modify: `homelab/docs/homelab_03_host_setup.md`
 
 **Step 1: Add deploy access section after the "Infra repo" section**
 

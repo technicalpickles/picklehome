@@ -143,7 +143,7 @@ source control per `homelab_03`. (HUMAN-RUN: interactive sudo on picklelab.)
 
 **Files:**
 - Create: `homelab/scripts/setup-rootless-ci-docker.sh` (done)
-- Reference from: `homelab/plans/homelab_03_host_setup.md`
+- Reference from: `homelab/docs/homelab_03_host_setup.md`
 
 What the script does (idempotent): creates the `ci` user at fixed uid 2000, ensures
 subuid/subgid ranges, installs rootless prerequisites, enables linger, relocates
@@ -738,7 +738,7 @@ Expected: the runner remains online; the auto-merge workflow is unaffected by re
 **Files:**
 - Modify: `homelab/services/README.md` (registry entry)
 - Create: `homelab/services/woodpecker/README.md`
-- Modify: `homelab/plans/homelab_03_host_setup.md` (rootless-docker-for-ci section — already added alongside Task 3's script; just confirm it's current)
+- Modify: `homelab/docs/homelab_03_host_setup.md` (rootless-docker-for-ci section — already added alongside Task 3's script; just confirm it's current)
 - Modify: `homelab/README.md` (services table row)
 
 - [ ] **Step 1: Verify Woodpecker data is on the restic path**
@@ -774,7 +774,7 @@ task add project:picklehome.homelab "Decide pirpg dependabot-auto-merge under Wo
 - [ ] **Step 7: Commit the docs**
 
 ```bash
-git add homelab/services/woodpecker/README.md homelab/services/README.md homelab/plans/homelab_03_host_setup.md homelab/README.md
+git add homelab/services/woodpecker/README.md homelab/services/README.md homelab/docs/homelab_03_host_setup.md homelab/README.md
 git commit -m "docs(woodpecker): service README, registry, host-setup, services table"
 ```
 

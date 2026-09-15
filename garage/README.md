@@ -78,7 +78,7 @@ Direct HTTP calls to `api.smartgarage.systems` with Bearer token auth. Two endpo
 
 ### Device identification
 
-The API device ID is the WiFi MAC address (e.g. `F0AD4E17085C` = `F0:AD:4E:17:08:5C`). The OUI is Globalscale Technologies, which manufactures the embedded WiFi module. This MAC can be used to find the device in UniFi client lists.
+The API device ID is the WiFi MAC address (e.g. `F0AD4Exxxxxx` = `F0:AD:4E:xx:xx:xx`). The OUI is Globalscale Technologies, which manufactures the embedded WiFi module. This MAC can be used to find the device in UniFi client lists.
 
 ## Module structure
 

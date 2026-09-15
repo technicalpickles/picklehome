@@ -29,7 +29,7 @@ of silently vanishing).
 ```yaml
 speakers:
   - name: Kitchen
-    uid: RINCON_7828CA06736E01400   # stable identity, preferred for matching
+    uid: RINCON_XXXXXXXXXXXX01400   # stable identity, preferred for matching
   - name: Alex's Room               # offline now: name-only, uid matched once seen
 ```
 
