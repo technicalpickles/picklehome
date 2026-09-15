@@ -11,6 +11,9 @@ DATA_DIR=/srv/data/woodpecker
 cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Writing filtered op-run template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
+
 echo "==> Checking rootless docker socket for the ci user"
 # /run/user/2000 is the ci user's XDG_RUNTIME_DIR (mode 0700, owned by ci), so the
 # deploy user (technicalpickles) can't stat the socket directly. Probe from a root
@@ -35,7 +38,23 @@ sudo chown 1000:1000 "$DATA_DIR/server"
 
 echo "==> Pulling images"
 cd "$SERVICE_DIR"
-docker compose -f compose.yaml -f compose.picklelab.yaml pull
+# compose.yaml's environment: entries use ${VAR:?required}, so compose refuses to even
+# parse the file unless every var is set in the process environment - regardless of
+# whether the command being run (pull) actually consumes them. All three images here
+# are pulled pre-built (no Dockerfile/build ARGs in this service), so placeholder
+# values just satisfy compose's interpolation check for this unwrapped, unprivileged
+# step; only the systemd unit's `op run`-wrapped ExecStart needs the real values.
+# Derive placeholder assignments from .env.vars so adding/removing a var propagates
+# automatically. `|| [[ -n "$line" ]]` also picks up a final line with no trailing
+# newline, which a plain `while read` would otherwise silently drop.
+declare -a env_overrides
+while IFS= read -r line || [[ -n "$line" ]]; do
+  # Skip comments and blank lines
+  [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
+  env_overrides+=("${line}=build-placeholder")
+done < "$SERVICE_DIR/.env.vars"
+
+env "${env_overrides[@]}" docker compose -f compose.yaml -f compose.picklelab.yaml pull
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/woodpecker.service" /etc/systemd/system/
@@ -53,7 +72,11 @@ echo "==> Checking Woodpecker health endpoint"
 # The server shares the ts-woodpecker sidecar's network namespace (network_mode:
 # service:...), so :8000 only exists on THAT netns's loopback, not the host's.
 # Probe from inside the sidecar (busybox wget) rather than host curl.
-COMPOSE="docker compose -f compose.yaml -f compose.picklelab.yaml"
+# `exec` into an already-running container doesn't need the placeholder values to
+# match what the container actually started with (that came from the real
+# op-run-wrapped unit) -- it only needs the compose file to parse, same as `pull`
+# above, so the same env_overrides placeholders apply here.
+COMPOSE="env ${env_overrides[*]} docker compose -f compose.yaml -f compose.picklelab.yaml"
 for i in 1 2 3 4 5; do
     if $COMPOSE exec -T ts-woodpecker wget -qO- "http://127.0.0.1:8000/healthz" > /dev/null 2>&1; then
         echo "    Health check passed"
@@ -71,4 +94,4 @@ done
 TAILNET=$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix')
 echo ""
 echo "Done! Woodpecker should be reachable at https://woodpecker.${TAILNET}"
-echo "If the funnel hostname does not resolve yet, check: docker compose exec ts-woodpecker tailscale funnel status"
+echo "If the funnel hostname does not resolve yet, check: $COMPOSE exec ts-woodpecker tailscale funnel status"

@@ -130,15 +130,18 @@ wifi-diag *ARGS:
 install:
     uv sync
 
-# Generate .env from 1Password (run after clone or when secrets change)
+# Generate .env from 1Password (local Mac dev only; run after clone or when secrets change).
+# Deploy recipes don't use this—they resolve secrets host-side via op run.
 dotenv *ARGS:
     scripts/dotenv {{ARGS}}
 
-# Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
-deploy-climate host="picklelab":
+# Shared implementation for every deploy-<service> recipe: pre-flight checks,
+# push if needed, then one ssh call that pulls and runs that service's deploy.sh
+# on the host. No local .env involved -- deploy.sh resolves its own secrets via
+# op run against the host's 1Password service-account token.
+_deploy-remote service host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
-    # Pre-flight: check for uncommitted changes
     if [ -n "$(git status --porcelain)" ]; then
         echo "ERROR: uncommitted changes. Commit or stash first."
         exit 1
@@ -155,12 +158,11 @@ deploy-climate host="picklelab":
         git push
     fi
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/climate-auto-switch/.env.vars > tmp/climate-auto-switch.env
-    scp tmp/climate-auto-switch.env {{host}}:/opt/homelab/homelab/services/climate-auto-switch/.env
-    rm tmp/climate-auto-switch.env
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/climate-auto-switch/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/{{service}}/deploy.sh"
+
+# Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
+deploy-climate host="picklelab":
+    just _deploy-remote climate-auto-switch {{host}}
 
 # Seed ecobee token file to picklelab (one-time, from Mac)
 seed-climate-tokens host="picklelab":
@@ -178,30 +180,7 @@ climate-log host="picklelab" lines="10":
 
 # Deploy github-actions-runner to picklelab
 deploy-github-runner host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/github-actions-runner/.env.vars > tmp/github-actions-runner.env
-    scp tmp/github-actions-runner.env {{host}}:/opt/homelab/homelab/services/github-actions-runner/.env
-    rm tmp/github-actions-runner.env
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/github-actions-runner/deploy.sh"
+    just _deploy-remote github-actions-runner {{host}}
 
 # Tail github-actions-runner container logs from picklelab
 github-runner-logs host="picklelab":
@@ -213,32 +192,7 @@ github-runner-status host="picklelab":
 
 # Deploy TaskChampion sync server to picklelab (idempotent: first setup or update)
 deploy-taskchampion host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/taskchampion-sync/.env.vars > tmp/taskchampion-sync.env
-    scp tmp/taskchampion-sync.env {{host}}:/opt/homelab/homelab/services/taskchampion-sync/.env
-    rm tmp/taskchampion-sync.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/taskchampion-sync/deploy.sh"
+    just _deploy-remote taskchampion-sync {{host}}
 
 # Status check for TaskChampion sync (systemd + loopback HTTP + tailscale routing)
 taskchampion-status host="picklelab":
@@ -258,160 +212,76 @@ taskchampion-status host="picklelab":
     fi
 
 # Tail TaskChampion container logs from picklelab
+# compose.yaml's environment: entries use ${VAR:?required}, so compose refuses
+# to even parse the file unless every var is set in the process environment --
+# regardless of whether `logs` actually consumes them. `--env-file .env` used
+# to satisfy this from a scp'd .env file; that file no longer exists (secrets
+# now flow through op run at container-start time only), so placeholder
+# values are derived from .env.vars instead, same pattern as open-webui-logs.
+# .env.build still supplies the real TASKCHAMPION_SYNC_PORT (not a secret).
 taskchampion-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow TaskChampion container logs live from picklelab
 taskchampion-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Brineworks PRM server to picklelab (idempotent: first setup or update)
 deploy-brineworks-server host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/brineworks-server/.env.vars > tmp/brineworks-server.env
-    scp tmp/brineworks-server.env {{host}}:/opt/homelab/homelab/services/brineworks-server/.env
-    rm tmp/brineworks-server.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/brineworks-server/deploy.sh"
+    just _deploy-remote brineworks-server {{host}}
 
 # Tail Brineworks server container logs from picklelab
 brineworks-server-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow Brineworks server container logs live from picklelab
 brineworks-server-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Brineworks mobile agent to picklelab (idempotent: first setup or update)
 deploy-brineworks-agent host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/brineworks-agent/.env.vars > tmp/brineworks-agent.env
-    scp tmp/brineworks-agent.env {{host}}:/opt/homelab/homelab/services/brineworks-agent/.env
-    rm tmp/brineworks-agent.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/brineworks-agent/deploy.sh"
+    just _deploy-remote brineworks-agent {{host}}
 
 # Tail Brineworks agent container logs from picklelab
+# compose.yaml's environment: entries use ${VAR:?required} (TS_AUTHKEY,
+# KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY), evaluated at parse time for
+# every subcommand including `logs` -- placeholder values derived from
+# .env.vars satisfy that, same pattern as open-webui-logs.
 brineworks-agent-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --project-directory /opt/homelab/homelab/services/brineworks-agent -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow Brineworks agent container logs live from picklelab
 brineworks-agent-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --project-directory /opt/homelab/homelab/services/brineworks-agent -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy second-brain-agent to picklelab (idempotent: first setup or update)
 deploy-second-brain-agent host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/second-brain-agent/.env.vars > tmp/second-brain-agent.env
-    scp tmp/second-brain-agent.env {{host}}:/opt/homelab/homelab/services/second-brain-agent/.env
-    rm tmp/second-brain-agent.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/second-brain-agent/deploy.sh"
+    just _deploy-remote second-brain-agent {{host}}
 
 # Tail second-brain-agent container logs from picklelab
 second-brain-agent-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow second-brain-agent container logs live from picklelab
 second-brain-agent-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/second-brain-agent && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Woodpecker CI to picklelab (idempotent: first setup or update)
 deploy-woodpecker host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/woodpecker/.env.vars > tmp/woodpecker.env
-    scp tmp/woodpecker.env {{host}}:/opt/homelab/homelab/services/woodpecker/.env
-    rm tmp/woodpecker.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/woodpecker/deploy.sh"
+    just _deploy-remote woodpecker {{host}}
 
 # Tail Woodpecker container logs from picklelab
+# compose.yaml's environment: entries use ${VAR:?required} (WOODPECKER_GITHUB_CLIENT,
+# WOODPECKER_GITHUB_SECRET, WOODPECKER_AGENT_SECRET, WOODPECKER_TS_AUTHKEY),
+# evaluated at parse time for every subcommand including `logs`/`ps` --
+# placeholder values derived from .env.vars satisfy that, same pattern as
+# open-webui-logs.
 woodpecker-logs host="picklelab":
-    ssh {{host}} "cd /opt/homelab/homelab/services/woodpecker && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f --tail=100"
+    ssh {{host}} "cd /opt/homelab/homelab/services/woodpecker && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs -f --tail=100"
 
 # Woodpecker systemd + container status from picklelab
 woodpecker-status host="picklelab":
-    ssh {{host}} "systemctl status woodpecker.service --no-pager; echo; cd /opt/homelab/homelab/services/woodpecker && docker compose -f compose.yaml -f compose.picklelab.yaml ps"
+    ssh {{host}} "systemctl status woodpecker.service --no-pager; echo; cd /opt/homelab/homelab/services/woodpecker && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml ps"
 
 # Tailscale VPN overlay: just tailscale [status]
 tailscale *ARGS:
@@ -611,11 +481,6 @@ deploy-openclaw host="picklelab":
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     echo "==> Pulling on {{host}}"
     ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/openclaw/.env.vars > tmp/openclaw.env
-    scp tmp/openclaw.env {{host}}:/opt/homelab/homelab/services/openclaw/.env
-    rm tmp/openclaw.env
     echo "==> Copying include files (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/openclaw.tools.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.tools.json5
     scp homelab/services/openclaw/openclaw.mcp.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.mcp.json5
@@ -665,32 +530,7 @@ openclaw-logs-follow host="picklelab":
 
 # Deploy Open WebUI to picklelab (idempotent: first setup or update)
 deploy-open-webui host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    echo "==> Copying .env to {{host}}"
-    mkdir -p tmp
-    scripts/service-env homelab/services/open-webui/.env.vars > tmp/open-webui.env
-    scp tmp/open-webui.env {{host}}:/opt/homelab/homelab/services/open-webui/.env
-    rm tmp/open-webui.env
-    ssh {{host}} "cd /opt/homelab && homelab/services/open-webui/deploy.sh"
+    just _deploy-remote open-webui {{host}}
 
 # Status check for Open WebUI (systemd + loopback HTTP + tailscale routing)
 open-webui-status host="picklelab":
@@ -710,15 +550,28 @@ open-webui-status host="picklelab":
     fi
     echo ""
     echo "==> Open Terminal (internal container, no host port)"
-    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml exec -T open-terminal curl -fsS http://localhost:8000/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "Open Terminal health check FAILED"
+    # compose.yaml's environment: entries use ${VAR:?required}, so compose
+    # refuses to even parse the file unless every var is set in the process
+    # environment -- regardless of whether `exec` actually consumes them. This
+    # execs into the already-running open-terminal container (started by the
+    # real op-run-dual-wrapped systemd unit), so placeholder values just
+    # satisfy compose's interpolation check here, same rule as deploy.sh's own
+    # Open Terminal health check. Placeholder names are derived from
+    # .env.vars (via `env \$(...)`, escaped so the substitution runs on the
+    # remote host, not locally) so adding/removing a var propagates
+    # automatically.
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml exec -T open-terminal curl -fsS http://localhost:8000/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "Open Terminal health check FAILED"
 
 # Tail Open WebUI container logs
 open-webui-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    # See open-webui-status's Open Terminal check for why `logs` needs
+    # placeholder env vars too: compose.yaml's ${VAR:?required} guards are
+    # evaluated at parse time for every subcommand, not just `up`.
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow Open WebUI container logs
 open-webui-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Inspect Open WebUI's persistent config (web search, RAG, etc.) and per-model
 # capability overrides. No sqlite3 CLI in the image, so this pipes the local
@@ -730,39 +583,15 @@ open-webui-inspect-config host="picklelab" prefix="":
 
 # Deploy the nikke roster dashboard to picklelab (idempotent: first setup or update)
 deploy-nikke host="picklelab":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
-    echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
-    # No .env scp: nikke has no secrets, so there is no .env.vars to filter.
-    # scripts/service-env exits 1 on an empty/comment-only vars file, which
-    # would kill this recipe. See the plan's Global Constraints. Add the
-    # service-env + scp block back if nikke ever gains a secret.
-    ssh {{host}} "cd /opt/homelab && homelab/services/nikke/deploy.sh"
+    just _deploy-remote nikke {{host}}
 
 # Tail nikke container logs from picklelab
 nikke-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --project-directory /opt/homelab/homelab/services/nikke --env-file .env.build -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow nikke container logs live from picklelab
 nikke-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/nikke && docker compose --project-directory /opt/homelab/homelab/services/nikke --env-file .env.build -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Run a blablalink sync right now instead of waiting for the timer
 nikke-sync-now host="picklelab":

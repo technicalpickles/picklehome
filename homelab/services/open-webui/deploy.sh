@@ -17,6 +17,24 @@ CONTAINER_GID=1000
 cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Writing filtered op-run templates (dual vault)"
+# open-webui draws secrets from both 1Password vaults (see .env.template):
+# OPEN_WEBUI_HOST/ADMIN_EMAIL/ADMIN_PASSWORD/SECRET_KEY/OPEN_TERMINAL_API_KEY
+# are picklehome-vault, but OLLAMA_API_KEY is Brent Pickleclaw-vault. op run
+# only authenticates against one service-account token at a time, so these
+# are filtered into two templates and chained via op-run-dual.sh -- same
+# mechanism open-webui.service's ExecStart/ExecStop use.
+# [A-Z0-9_]*, not [A-Z_]*: a var-name class without digits silently drops any
+# var whose name contains one from BOTH filtered templates, since the anchored
+# `^...=` match fails outright rather than matching a shorter prefix. No
+# open-webui var name currently contains a digit, but openclaw's deploy.sh hit
+# this for real (OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 et al) -- same script
+# shape, so fixed here too rather than leaving a latent trap for the next var.
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
+    | grep '^[A-Z0-9_]*=op://picklehome/' > "$SERVICE_DIR/.env.op.picklehome.template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
+    | grep '^[A-Z0-9_]*=op://Brent Pickleclaw/' > "$SERVICE_DIR/.env.op.pickleclaw.template"
+
 echo "==> Creating data directory"
 sudo mkdir -p "$DATA_DIR"
 sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
@@ -70,6 +88,22 @@ done
 echo ""
 echo "==> Checking Open Terminal health"
 COMPOSE="docker compose -f $SERVICE_DIR/compose.yaml -f $SERVICE_DIR/compose.picklelab.yaml"
+# compose.yaml's environment: entries use ${VAR:?required}, so compose refuses to
+# even parse the file unless every var is set in the process environment --
+# regardless of whether the command being run (exec) actually consumes them.
+# This execs into the already-running open-terminal container (started by the
+# real op-run-dual-wrapped systemd unit), so placeholder values just satisfy
+# compose's interpolation check for this unwrapped, unprivileged step -- same
+# rule as woodpecker's equivalent health-check exec (Task 7). Derive placeholder
+# assignments from .env.vars so adding/removing a var propagates automatically.
+# `|| [[ -n "$line" ]]` also picks up a final line with no trailing newline,
+# which a plain `while read` would otherwise silently drop.
+declare -a env_overrides
+while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
+    env_overrides+=("${line}=build-placeholder")
+done < "$SERVICE_DIR/.env.vars"
+COMPOSE="env ${env_overrides[*]} $COMPOSE"
 for i in $(seq 1 12); do
     if $COMPOSE exec -T open-terminal curl -fsS http://localhost:8000/health -o /dev/null 2>&1; then
         echo "    Open Terminal health check passed"

@@ -6,34 +6,42 @@ For per-service setup details, see the service's own `README.md`.
 
 ## Deployment pattern
 
-All services follow the same shape. Deploy from Mac:
+All services follow the same shape. Deploy from any machine with an `ssh` config
+entry for `picklelab` (no local picklehome checkout needed):
 
 ```bash
-just dotenv                    # refresh secrets from 1Password
-just deploy-<service>          # git pull on host, scp filtered .env, docker compose up
+just deploy-<service>          # push if needed, ssh in, git pull, run deploy.sh
 ```
 
-Each service directory in `homelab/services/<name>/` contains:
+Secrets never touch the Mac or scp anywhere. Each service directory in
+`homelab/services/<name>/` contains:
 
 | File | Purpose |
 |------|---------|
-| `compose.yaml` | Local dev compose |
+| `compose.yaml` | Local dev compose (or, for extracted services, lives in the app's own repo — see that service's README) |
 | `compose.picklelab.yaml` | Production overrides (volumes, restart policy) |
-| `deploy.sh` | Called by `just deploy-<name>`, handles scp + compose up + systemd |
-| `.env.vars` | Which env vars this service needs (filtered from master `.env` by `scripts/service-env`) |
+| `deploy.sh` | Called by `just deploy-<name>` (via the shared `_deploy-remote` Justfile recipe); writes the filtered op-run template, handles systemd + Tailscale |
+| `.env.vars` | Which env vars this service needs, filtered from `.env.template` (not `.env`) into a per-service op-run template by `scripts/service-env` |
 | `Dockerfile` | Custom image build (if applicable) |
-| `<name>.service` | systemd unit (every service has one; long-lived services run a `oneshot`+`RemainAfterExit` unit, timer-based ones a triggered unit) |
-| `<name>.timer` | systemd timer (timer-based services only: `backup`, `climate-auto-switch`) |
+| `<name>.service` | systemd unit; `ExecStart` wraps `docker compose up` in `op run --env-file=<filtered-template>`, resolving secrets from 1Password directly on the host |
+| `<name>.timer` | systemd timer (timer-based services only, e.g. `backup`, `climate-auto-switch`, `nikke-sync`) |
 
-On picklelab, services land at:
+On picklelab, `/etc/opt/homelab/op-token-picklehome` and `/etc/opt/homelab/op-token-pickleclaw`
+are read-only, single-vault 1Password service-account tokens (0600), referenced by each
+service's systemd unit via `EnvironmentFile=`. No `.env` file exists anywhere under
+`homelab/services/*/` on picklelab — only `.env.op.template` (or `.env.op.<vault>.template`
+for the two dual-vault services), which contain `op://` references, never resolved secrets.
+**Exception: `backup`.** Its systemd unit still uses `EnvironmentFile=.../backup/.env` and
+`deploy.sh` still `source`s that file directly — deliberately out of scope for this migration,
+tracked separately as taskwarrior `4ea7fee5-a274-4a1a-9b20-aecda2cda569`. Don't delete
+`backup`'s `.env` on the strength of the "no `.env` file exists" claim above.
 
-- **Compose files:** `/opt/homelab/homelab/services/<service>/`, this is a full `picklehome` checkout kept fast-forwarded by `git pull`, not a scp'd subset. Verify against a specific service's `<service>.service` `WorkingDirectory` if unsure; every service's `deploy.sh` sets `REPO_DIR=/opt/homelab`. (`/srv/containers/<service>/` shows up in early planning docs but no service actually deploys there, don't trust that path.)
-- **Persistent data:** `/srv/data/<service>/`
-- **Env file:** `/opt/homelab/homelab/services/<service>/.env`, scp'd by `just deploy-<service>` from a filtered subset of the master `.env` (via `scripts/service-env`), landing alongside that service's compose files.
+`just dotenv` still exists for **local Mac dev/test** (`climate/`, `garage/`, etc. load `.env`
+directly via `python-dotenv`), but is no longer part of the deploy path.
 
 TLS and external access use **Tailscale Services**: `tailscaled` on the host terminates HTTPS and proxies to the local container port. No reverse proxy container needed. Container ports bind to `127.0.0.1:<port>` only — this loopback-only bind is what makes it safe for a service to trust Tailscale's identity headers; see the `tailscale-serve-patterns` skill for why, and before deviating from this default.
 
-Per-service hostname is stored in 1Password as `<SERVICE>_HOST` and pulled into `.env`. The tailnet suffix is documented in the project [CLAUDE.md](../../CLAUDE.md).
+Per-service hostname is stored in 1Password as `<SERVICE>_HOST`. The tailnet suffix is documented in the project [CLAUDE.md](../../CLAUDE.md).
 
 **Debugging a Tailscale Service (`svc:<name>`)** — status looking wrong, self-curl hanging, etc: use the `tailscale-cli` skill rather than re-deriving these gotchas.
 
@@ -229,7 +237,7 @@ Always-on, phone-reachable Claude Code session running the brineworks CLI agains
 | **Restart** | `restart: unless-stopped` |
 | **Source** | `technicalpickles/brineworks` (private repo), built from `/opt/brineworks` on host |
 
-The homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). Container internals copy `homelab/dev/`; deploy/orchestration shape copies `brineworks-server`.
+The homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). Container internals copy `technicalpickles/homelab-dev`; deploy/orchestration shape copies `brineworks-server`.
 
 Commands: `just deploy-brineworks-agent`, `just brineworks-agent-logs`, `just brineworks-agent-logs-follow`
 
@@ -244,14 +252,14 @@ Always-on Claude Code session with the `pickled-knowledge` Obsidian vault mounte
 | | |
 |---|---|
 | **Purpose** | Phone-reachable Claude Code session for reading and writing the pickled-knowledge vault |
-| **Compose** | `/opt/homelab/homelab/services/second-brain-agent/` |
+| **Compose** | `/opt/second-brain-agent` |
 | **Data** | `/srv/data/second-brain-agent/` (sshd host keys, Claude state, tmux sessions) |
 | **Vault** | `/srv/data/obsidian-sync/vaults/pickled-knowledge/` (mounted read-write at `/vault`) |
 | **Access** | `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net` (Tailscale node) |
 | **Env vars** | `SECOND_BRAIN_AGENT_TS_AUTHKEY` (filtered `.env` only, never the master env) |
 | **Backup** | Not yet |
 | **Restart** | `restart: unless-stopped` |
-| **Source** | Built from picklehome at `homelab/services/second-brain-agent/Dockerfile` (no external app repo) |
+| **Source** | `technicalpickles/second-brain-agent` (private repo), cloned to `/opt/second-brain-agent` on host |
 
 Depends on `obsidian-sync` being running to keep the vault current; systemd `After=obsidian-sync.service` ensures ordering on boot.
 
@@ -295,7 +303,7 @@ Self-hosted GitHub Actions runner for the pirpg repo (GitHub-hosted runners are 
 | **Backup** | No (re-bootstrappable from a fresh registration token) |
 | **Restart** | `restart: unless-stopped` |
 
-Unlike other services, this one has **no `compose.picklelab.yaml`**: it only ever runs on picklelab and has no prod-vs-local difference, and an `env_file: [/opt/homelab/.env]` override would have leaked the entire homelab secret set into a container that runs arbitrary CI jobs.
+Unlike other services, this one has **no `compose.picklelab.yaml`**: it only ever runs on picklelab and has no prod-vs-local difference. Secrets are resolved via `op run` at the host level, never passed through compose files, which protects against accidental leaks into containers running arbitrary CI jobs.
 
 Commands: `just deploy-github-runner`, `just github-runner-logs`, `just github-runner-status`
 
@@ -377,7 +385,7 @@ Roster dashboard for NIKKE, backed by a SQLite store synced from blablalink.com 
 | **Compose** | `/opt/homelab/homelab/services/nikke/` |
 | **Data** | `/srv/data/nikke/` (`roster.db`, `.blablalink-session.json`) |
 | **Access** | `https://nikke.<tailnet>.ts.net` (Tailscale Services, port 8770 internally) |
-| **Env vars** | None (`.env.vars` doesn't exist; `deploy-nikke` skips the `.env` scp) |
+| **Env vars** | None (no secrets; no `.env.vars` file or op-run template needed) |
 | **Backup** | Yes, nightly (`/srv/data/nikke` picked up by the `/srv/data` restic job, no per-service registration) |
 | **Restart** | `serve`: `restart: unless-stopped`; `sync`: `run --rm` from `nikke-sync.timer` (every 6h) |
 | **Source** | `technicalpickles/nikke-roster-scanner` (private repo), cloned to `/opt/nikke-roster-scanner` on host |

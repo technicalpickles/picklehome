@@ -20,6 +20,9 @@ cd "$REPO_DIR"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Writing filtered op-run template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
+
 echo "==> Updating brineworks source (lockstep build input, shared with the server)"
 if [ -d "$BRINEWORKS_REPO/.git" ]; then
     git -C "$BRINEWORKS_REPO" pull --ff-only
@@ -47,18 +50,28 @@ sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"
 
 echo "==> Installing the workspace-repo deploy key (if provided)"
 # The agent clones/pushes the brineworks-workspace repo (triage rules + session
-# data) with a scoped read-write deploy key. It arrives base64-encoded in the
-# filtered .env (single line, so service-env's line-based filter keeps it whole)
-# and must land uid-owned 0600: ssh refuses a private key it does not own, and the
-# agent user both clones at boot and pushes interactively with it.
+# data) with a scoped read-write deploy key. It arrives base64-encoded (single
+# line) and must land uid-owned 0600: ssh refuses a private key it does not own,
+# and the agent user both clones at boot and pushes interactively with it.
 # No Obsidian-vault mount is wired (grep -n 'pickled-knowledge\|obsidian'
 # compose.picklelab.yaml is empty); rules reach the agent via this clone, not a mount.
-ENV_FILE="$SERVICE_DIR/.env"
+# NOTE: unlike the other secrets here, WORKSPACE_DEPLOY_KEY_B64 never flows through
+# compose/op run at container-start time -- it's consumed directly by this script
+# to write a key file, so deploy.sh resolves it itself: source the host's
+# service-account token file, then `op run --no-masking --env-file=... --
+# printenv VAR`. --no-masking is required here because `op run` conceals
+# secrets printed to stdout/stderr by default, which would otherwise turn this
+# capture into the literal string "<concealed by 1Password>" instead of the
+# real key -- silent corruption, not a loud failure. Nothing resolved lands on
+# disk except the key file itself (this captured value is never echoed/printed
+# anywhere in this script).
 DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
-KEY_B64=""
-if [ -f "$ENV_FILE" ]; then
-    KEY_B64=$(grep -m1 '^WORKSPACE_DEPLOY_KEY_B64=' "$ENV_FILE" | cut -d= -f2- || true)
-fi
+KEY_B64=$(
+    set -a
+    . /etc/opt/homelab/op-token-picklehome
+    set +a
+    op run --no-masking --env-file="$SERVICE_DIR/.env.op.template" -- printenv WORKSPACE_DEPLOY_KEY_B64
+) || KEY_B64=""
 if [ -n "$KEY_B64" ]; then
     # The chown -R above made $DATA_DIR (incl. ssh/) owned by uid $CONTAINER_UID,
     # which is the deploy user's own uid -- the host<->container volume-sharing
@@ -70,10 +83,11 @@ if [ -n "$KEY_B64" ]; then
     ( umask 077; echo "$KEY_B64" | base64 -d > "$DEPLOY_KEY_FILE" )
     echo "    Wrote $DEPLOY_KEY_FILE (0600, uid $CONTAINER_UID)"
 else
-    echo "    WARNING: WORKSPACE_DEPLOY_KEY_B64 not in $ENV_FILE."
+    echo "    WARNING: WORKSPACE_DEPLOY_KEY_B64 didn't resolve via op run."
     echo "    The agent can't clone or push brineworks-workspace, so the rules"
-    echo "    pipeline is unavailable. Add WORKSPACE_DEPLOY_KEY_B64 to .env.vars +"
-    echo "    .env.template (see README 'Prerequisites'), re-run 'just dotenv', redeploy."
+    echo "    pipeline is unavailable. Confirm the 1Password item/field referenced"
+    echo "    by WORKSPACE_DEPLOY_KEY_B64 in .env.template exists and the host's"
+    echo "    /etc/opt/homelab/op-token-picklehome token can read it, then redeploy."
 fi
 
 echo "==> Linking systemd unit"
@@ -112,7 +126,7 @@ echo "    WARNING: ${AGENT_HOST}:22 not reachable after 10 attempts"
 echo ""
 echo "    Check the node registered:"
 echo "      tailscale status | grep brineworks-agent"
-echo "      docker compose -f compose.yaml -f compose.picklelab.yaml logs ts-agent"
+echo "      docker compose --project-directory $SERVICE_DIR -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml logs ts-agent"
 echo "    First deploy only: approve the device at https://login.tailscale.com/admin/machines"
 echo "    (and remove the old 'brineworks-agent' Service at .../admin/services so the"
 echo "     name doesn't collide with the node). MagicDNS for the node can lag a few seconds."

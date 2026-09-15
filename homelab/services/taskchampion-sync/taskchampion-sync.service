@@ -8,9 +8,14 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/taskchampion-sync
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 EnvironmentFile=/opt/homelab/homelab/services/taskchampion-sync/.env.build
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --pull always
-ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+# TASKCHAMPION_SYNC_SERVER_CLIENT_ID resolves via `op run` from .env.op.template
+# (written by deploy.sh) into the process env, which compose's
+# `environment: ${VAR:?required}` entry interpolates -- see
+# homelab/services/climate-auto-switch/deploy.sh for the established pattern.
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/taskchampion-sync/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --pull always
+ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/taskchampion-sync/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 
 [Install]
 WantedBy=multi-user.target

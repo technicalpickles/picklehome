@@ -15,8 +15,19 @@ WorkingDirectory=/opt/homelab/homelab/services/openclaw
 # "required variable OPENCLAW_IMAGE is missing a value". Hit live 2026-09-02
 # during the 2026.8.1 upgrade deploy -- see docs/setup-notes.md in pickleclaw.
 EnvironmentFile=/opt/homelab/homelab/services/openclaw/openclaw.image.env
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d
-ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+# openclaw draws secrets from both the picklehome and Brent Pickleclaw 1Password
+# vaults (see .env.template / deploy.sh's "Writing filtered op-run templates"
+# step), and op run only authenticates against one service-account token at a
+# time -- so ExecStart/ExecStop go through op-run-dual.sh, which chains both
+# `op run` calls (picklehome first, overriding OP_SERVICE_ACCOUNT_TOKEN for the
+# inner pickleclaw call). This EnvironmentFile line still sets the picklehome
+# token for the wrapper's own outer sourcing step, matching every other
+# single-vault service's unit -- see op-run-dual.sh's own comments for why it
+# re-sources it anyway (self-contained, callable outside systemd too, e.g. from
+# deploy.sh directly).
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+ExecStart=/opt/homelab/homelab/services/openclaw/op-run-dual.sh /opt/homelab/homelab/services/openclaw/.env.op.picklehome.template /opt/homelab/homelab/services/openclaw/.env.op.pickleclaw.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d
+ExecStop=/opt/homelab/homelab/services/openclaw/op-run-dual.sh /opt/homelab/homelab/services/openclaw/.env.op.picklehome.template /opt/homelab/homelab/services/openclaw/.env.op.pickleclaw.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 
 [Install]
 WantedBy=multi-user.target

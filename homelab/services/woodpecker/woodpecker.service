@@ -8,8 +8,19 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/woodpecker
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --pull always
-ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+# WOODPECKER_GITHUB_CLIENT/SECRET, WOODPECKER_AGENT_SECRET, and WOODPECKER_TS_AUTHKEY
+# resolve via `op run` from .env.op.template (written by deploy.sh) into the process
+# env, which compose's `environment: ${VAR:?required}` entries interpolate -- never
+# env_file:, which reads a literal file off disk and is inert against that
+# injection (Task 4/5 finding). This single `docker compose up` starts all three
+# containers (ts-woodpecker, woodpecker-server, woodpecker-agent) on the host's
+# normal root dockerd, so one op-run wrap here covers the agent's secret too -- the
+# separate rootless `ci`-user dockerd only comes into play later, when the agent
+# spawns CI step containers via DOCKER_HOST, not when this stack's own containers
+# are created. See homelab/services/climate-auto-switch/deploy.sh for the pattern.
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/woodpecker/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --pull always
+ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/woodpecker/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 
 [Install]
 WantedBy=multi-user.target

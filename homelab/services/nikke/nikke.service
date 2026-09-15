@@ -17,8 +17,8 @@ EnvironmentFile=-/opt/homelab/homelab/services/nikke/.env.build
 # independently by nikke-sync.timer/service). systemctl restart nikke.service
 # runs on every deploy, so an unscoped down would kill sync's SQLite writes
 # out from under it whenever the two overlap.
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d --build serve
-ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down serve
+ExecStart=/usr/bin/docker compose --project-directory /opt/homelab/homelab/services/nikke -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml up -d --build serve
+ExecStop=/usr/bin/docker compose --project-directory /opt/homelab/homelab/services/nikke -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml down serve
 
 [Install]
 WantedBy=multi-user.target

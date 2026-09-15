@@ -5,6 +5,12 @@ services:
   # alternatives: brineworks repo ADR 0006, and homelab/services/README.md
   # "container-as-node".
   ts-agent:
+    # Secrets (TS_AUTHKEY below) reach this container via `environment:` interpolation,
+    # never `env_file:`: the systemd unit wraps ExecStart in `op run`, which resolves
+    # op:// references from .env.op.template into the process environment -- a
+    # env_file: directive reads a literal file off disk and ignores that injection
+    # entirely (Task 4/5 finding). See homelab/services/climate-auto-switch/deploy.sh.
+    #
     # Pinned to an exact version, NOT :latest. `:latest` is a moving tag: any
     # re-pull can silently swap the version. On 2026-06-14 a `docker rmi -f &&
     # pull` of :latest (run to clear unrelated containerd corruption) drifted the
@@ -23,8 +29,6 @@ services:
     # Full writeup: brineworks docs/runbooks/phone-ssh-agent-setup.md.
     image: tailscale/tailscale:v1.98.4
     hostname: brineworks-agent          # MagicDNS name -- same as the old Service
-    env_file:
-      - .env                            # supplies TS_AUTHKEY (filtered into .env)
     environment:
       - TS_STATE_DIR=/var/lib/tailscale  # node identity persists across recreates
       - TS_USERSPACE=false               # kernel/TUN mode: required for mosh UDP
@@ -32,6 +36,7 @@ services:
       # here, so a containerboot version bump can't deadlock on "must mention all
       # non-default flags" against the persisted state. Idempotent across recreates.
       - TS_EXTRA_ARGS=--reset --advertise-tags=tag:server
+      - TS_AUTHKEY=${TS_AUTHKEY:?required}
     volumes:
       - /srv/data/brineworks-agent/ts-state:/var/lib/tailscale
     devices:
@@ -60,11 +65,14 @@ services:
     network_mode: service:ts-agent
     depends_on:
       - ts-agent
-    # Filtered service secrets ONLY (KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY).
+    # Filtered service secrets ONLY (KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY),
+    # via `environment:` interpolation so op run's process-env injection reaches the
+    # container (env_file: would be inert against it -- see ts-agent above).
     # Deliberately NOT /opt/homelab/.env: this container runs arbitrary Claude
     # sessions, so it must not receive the whole homelab secret set
     # (cf. github-actions-runner, homelab/services/README.md).
-    env_file:
-      - .env
+    environment:
+      - KEYRING_CRYPTFILE_PASSWORD=${KEYRING_CRYPTFILE_PASSWORD:?required}
+      - BRINEWORKS_API_KEY=${BRINEWORKS_API_KEY:?required}
     volumes:
       - /srv/data/brineworks-agent:/data

@@ -22,6 +22,9 @@ echo "==> Writing build metadata"
 # restarts the service with an otherwise-empty user env.
 echo "TASKCHAMPION_SYNC_PORT=$TASKCHAMPION_SYNC_PORT" > "$SERVICE_DIR/.env.build"
 
+echo "==> Writing filtered op-run template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
+
 echo "==> Creating data directory"
 sudo mkdir -p "$DATA_DIR"
 
@@ -51,7 +54,7 @@ for i in 1 2 3 4 5; do
     fi
     if [ "$i" -eq 5 ]; then
         echo "    WARNING: local health check failed after 5 attempts"
-        echo "    Check container logs: docker compose --env-file .env --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs"
+        echo "    Check container logs: set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs"
         exit 1
     fi
     echo "    Waiting for server to start (attempt $i/5)..."

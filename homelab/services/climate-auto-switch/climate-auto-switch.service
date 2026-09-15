@@ -8,4 +8,5 @@ Requires=docker.service
 Type=oneshot
 TimeoutStartSec=300
 WorkingDirectory=/opt/homelab/homelab/services/climate-auto-switch
-ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml run --rm climate-auto-switch
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/climate-auto-switch/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml run --rm climate-auto-switch
