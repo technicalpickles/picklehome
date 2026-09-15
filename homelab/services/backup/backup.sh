@@ -48,14 +48,13 @@ dump_postgres() {
 }
 
 DUMP_FAILURES=0
-# No Postgres services currently deployed, so nothing calls dump_postgres.
-# Add a `dump_postgres "<service>" "<db_user>"` line here when one returns.
+dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 
 # --- Restic backup ---
-# When a Postgres service is deployed, exclude its raw data dir here: the
-# pg_dump SQL files are the authoritative database backup. Raw data dirs are
-# large, owned by container UIDs (unreadable by the backup user), and not
-# consistent unless postgres is stopped. (None deployed currently.)
+# Exclude /srv/data/brineworks-server/db: the raw Postgres data dir. The
+# pg_dumpall above is the authoritative database backup -- the raw dir is
+# large, owned by the postgres container's uid (unreadable by the backup
+# user), and not consistent unless postgres is stopped.
 #
 # Exclude /srv/data/dev-home: that's the dev container's home directory,
 # unrelated to homelab services. Has its own backup concerns.
@@ -64,10 +63,20 @@ DUMP_FAILURES=0
 # the chat AI's sandboxed shell sessions. Disposable AI-experiment data, not
 # source of truth -- anything worth keeping gets moved to a real vault/repo/
 # service during the session. See docs/plans/2026-07-21-open-terminal-design.md.
+#
+# Exclude /srv/data/openclaw/ssh and /srv/data/openclaw/gog-keyring: live
+# secrets (deploy keys, OAuth keyring) that reapply-acls.sh deliberately does
+# NOT grant the backup user read access to -- see that script's comment.
+# Without this exclude, restic would try to read them every run and always
+# come back exit 3 (partial/unreadable), which is what was silently failing
+# backup.service every night.
 echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
+    --exclude "$DATA_DIR/brineworks-server/db" \
     --exclude "$DATA_DIR/dev-home" \
-    --exclude "$DATA_DIR/open-terminal"
+    --exclude "$DATA_DIR/open-terminal" \
+    --exclude "$DATA_DIR/openclaw/ssh" \
+    --exclude "$DATA_DIR/openclaw/gog-keyring"
 RESTIC_EXIT=$?
 
 # Restic exit codes: 0 = success, 3 = partial (some files unreadable but snapshot saved).

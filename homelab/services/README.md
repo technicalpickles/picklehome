@@ -212,7 +212,7 @@ FastAPI REST API for personal relationship management (contacts, interactions, o
 | **Data** | `/srv/data/brineworks-server/` (Postgres) |
 | **Access** | `https://brineworks-server.<tailnet>.ts.net` (Tailscale Services) |
 | **Env vars** | `BRINEWORKS_DB_PASSWORD`, `BRINEWORKS_API_KEY` |
-| **Backup** | Not yet (needs adding to backup service) |
+| **Backup** | Yes, nightly (`pg_dumpall` via the `backup` service's `dump_postgres`) |
 | **Restart** | `restart: unless-stopped` |
 | **Source** | `technicalpickles/brineworks` (private repo), cloned to `/opt/brineworks` on host |
 

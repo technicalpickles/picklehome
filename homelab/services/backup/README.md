@@ -4,13 +4,14 @@ Nightly restic backups of `/srv/data` with Postgres database dumps. Runs as a de
 
 ## What's backed up
 
-Everything under `/srv/data`, except the raw Postgres data directories (backed up via SQL dumps instead) and the dev-container home.
+Everything under `/srv/data`, except the raw Postgres data directories (backed up via SQL dumps instead), the dev-container home, and a few paths deliberately excluded because the `backup` user has no read access to them by design (see [Security Model](#security-model)).
 
 | Service | Captured | How |
 |---------|----------|-----|
 | climate-auto-switch | OAuth tokens, last-state, run log | restic snapshots `/srv/data/climate-auto-switch/` directly (flat files, no database) |
+| brineworks-server | Postgres data | `dump_postgres` runs `pg_dumpall` into `/srv/data/brineworks-server/dumps/pg_dumpall.sql`; the raw `db/` dir is excluded from the restic run |
 
-No Postgres-backed services are deployed right now, so no SQL dumps run. The dump machinery (`dump_postgres` in `backup.sh`) stays in place for when one returns; see [How Database Dumps Work](#how-database-dumps-work).
+See [How Database Dumps Work](#how-database-dumps-work) for the `dump_postgres` mechanics.
 
 ## Retention
 
@@ -124,6 +125,10 @@ cat /srv/data/<service>/dumps/pg_dumpall.sql | docker exec -i <service>-db-1 psq
   `just backup-snapshots` resolve the same way, via the root-owned `read-picklehome-var.sh`
   wrapper (same pattern as openclaw's, see `homelab/services/openclaw/README.md`)
 - ACLs grant read-only access to service data without changing file ownership
+- `/srv/data/openclaw/ssh` (deploy keys) and `/srv/data/openclaw/gog-keyring` (OAuth keyring) are
+  never ACL-granted to `backup` -- standing plaintext read access there was explicitly rejected
+  as a tradeoff. `backup.sh` excludes both from the restic run so this stays a deliberate gap,
+  not a permission-denied warning on every run.
 - Restic encrypts all snapshots at rest, so it's safe to ship the repo offsite
 
 ### Why ACLs get re-applied every run
