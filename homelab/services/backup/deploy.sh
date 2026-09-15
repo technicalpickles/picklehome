@@ -40,6 +40,8 @@ fi
 echo "==> Creating directories"
 sudo mkdir -p "$BACKUP_DIR" "$CACHE_DIR" "$OP_CONFIG_DIR"
 sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR" "$OP_CONFIG_DIR"
+# op refuses to use a config dir with permissions broader than 700.
+sudo chmod 700 "$OP_CONFIG_DIR"
 # Pre-create dump directories so backup user can write to them.
 # No Postgres services currently deployed. When one returns, add it here:
 #   for svc in <service>; do
