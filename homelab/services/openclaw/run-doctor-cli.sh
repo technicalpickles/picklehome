@@ -16,6 +16,16 @@ set -euo pipefail
 SERVICE_DIR="/opt/homelab/homelab/services/openclaw"
 cd "$SERVICE_DIR"
 
+# OPENCLAW_IMAGE (pinned image tag, not a secret -- see deploy.sh's own comment
+# on IMAGE_ENV_FILE) is exported into deploy.sh's shell, but sudo's env_reset
+# strips it before it reaches this script. Source it independently rather than
+# relying on the caller's environment surviving the privilege boundary.
+if [ -f "$SERVICE_DIR/openclaw.image.env" ]; then
+    set -a
+    . "$SERVICE_DIR/openclaw.image.env"
+    set +a
+fi
+
 exec "$SERVICE_DIR/op-run-dual.sh" \
     "$SERVICE_DIR/.env.op.picklehome.template" "$SERVICE_DIR/.env.op.pickleclaw.template" -- \
     docker compose -f compose.yaml -f compose.picklelab.yaml run --rm --no-deps --entrypoint node openclaw dist/index.js "$@"
