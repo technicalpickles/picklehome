@@ -234,7 +234,7 @@ How they're written:
   - `homelab/services/<name>/`: one directory per deployed service (systemd unit, `deploy.sh`, compose overrides); registry in `homelab/services/README.md`
   - `homelab/config/`: host-side config applied by deploy scripts (the passwordless-sudo allowlist `sudoers-deploy-ops`, among others)
   - `homelab/scripts/`: host setup helpers (`setup-deploy-access.sh`)
-  - `homelab/plans/`: the original host design docs (overview, architecture, host setup, backup, operations runbook)
+  - `homelab/docs/`: host setup, operations runbook, agent access model
   - `homelab/seapickle/`: beach house Raspberry Pi 3B+ (Tailscale jump box, subnet router, connectivity probes); see `homelab/seapickle/README.md`
 - `docs/`: `CONVENTIONS.md` (where information belongs), `plans/` (point-in-time design docs + implementation plans), `superpowers/plans/` (plans written by the superpowers planning skills, same rules), `research/` (deep-dive findings), `climate-setup.md`
 - `tests/`: pytest tests, mirroring source layout

@@ -239,7 +239,7 @@ runs as the `ci` uid and mounts *only* the rootless socket, never the root
 socket, so the agent itself cannot escalate either. Step containers spawn on the
 rootless daemon, confined to `ci`.
 
-Host setup (one-time, lands in `homelab/plans/homelab_03_host_setup.md`):
+Host setup (one-time, lands in `homelab/docs/homelab_03_host_setup.md`):
 
 - Create dedicated `ci` user owning nothing sensitive.
 - `dockerd-rootless-setuptool.sh install` as `ci`; `loginctl enable-linger ci`;

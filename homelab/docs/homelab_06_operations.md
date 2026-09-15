@@ -10,45 +10,25 @@ The goal is to make common actions predictable and safe.
 
 ### Deploy or Update a Service
 
-1. Edit the Compose configuration in:
+From the Mac, on a clean `main` that matches `origin/main`:
 
 ```
-/opt/homelab/compose/<service>
+just deploy-<service>
 ```
 
-2. Apply the change:
+That pushes if needed, then runs one ssh command on picklelab: `cd /opt/homelab && git pull && homelab/services/<service>/deploy.sh`. The deploy script is idempotent (first setup or update), writes the service's filtered op-run template, and (re)starts the unit. Secrets resolve from 1Password inside the unit at container start; see [services/README.md](../services/README.md#deployment-pattern). `openclaw` and `backup` add an scp step before the ssh call; everything else goes straight through the shared `_deploy-remote` recipe.
 
-```
-homelab apply service <service>
-```
-
-3. Validate:
-
-```
-homelab check
-```
-
-4. Inspect logs if needed:
-
-```
-docker compose -p <service> logs -f
-```
+Tail logs afterwards with the service's recipe (`just <service>-logs`, `just <service>-logs-follow`). Those wrap `docker compose` with placeholder env so it parses without secrets.
 
 ---
 
 ## Restarting Services
 
-Preferred approach:
-
 ```
-homelab restart service <service>
+sudo systemctl restart <service>.service
 ```
 
-Alternative using systemd:
-
-```
-sudo systemctl restart docker-compose@<service>
-```
+Units are named after the service directory (`climate-auto-switch.service`, `openclaw.service`). `systemctl` is on the passwordless-sudo allowlist, so this works over non-interactive ssh.
 
 ---
 
@@ -63,14 +43,18 @@ docker ps
 ### Check Service Status
 
 ```
-systemctl status docker-compose@<service>
+systemctl status <service>.service
 ```
+
+Most services also have a `just <service>-status` recipe that checks systemd, the loopback port, and Tailscale routing together.
 
 ### View Logs
 
 ```
-journalctl -u docker-compose@<service>
+journalctl -u <service>.service
 ```
+
+The unit's journal has compose's own output (op run, image pull, build). Container logs come from `just <service>-logs`, which is `docker compose logs` with the placeholder env.
 
 ---
 

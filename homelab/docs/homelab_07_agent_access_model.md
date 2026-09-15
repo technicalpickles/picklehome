@@ -190,17 +190,12 @@ This keeps the useful operational path short and intentional.
 
 ## Wrapper Command Strategy
 
-A small wrapper CLI should become the standard interface for operational changes.
+The original plan was a single `homelab` CLI (`homelab apply service <name>`, `homelab check`, `homelab backup`, and so on). That was never built. What the wrapper layer became instead:
 
-Possible commands:
-
-- `homelab bootstrap`
-- `homelab apply host`
-- `homelab apply service <name>`
-- `homelab restart service <name>`
-- `homelab check`
-- `homelab backup`
-- `homelab restore <target>`
+- `just deploy-<service>` on the Mac, which runs the service's `deploy.sh` on the host over one ssh call
+- per-service `deploy.sh` scripts as the only sanctioned way to mutate the host
+- the passwordless-sudo allowlist in `config/sudoers-deploy-ops`, which is what actually bounds what those scripts can do
+- `just <service>-status` / `-logs` recipes for inspection
 
 Benefits:
 
@@ -227,7 +222,7 @@ Validation may include:
 - disk space thresholds
 - backup timer and job presence
 
-Tools such as goss are a good fit for this layer.
+goss was the planned tool for this layer and was never adopted. Today the checks are the health-check loops at the end of each `deploy.sh` and the `just <service>-status` recipes.
 
 The goal is not just to apply changes, but to verify that the system still matches expectations afterward.
 
