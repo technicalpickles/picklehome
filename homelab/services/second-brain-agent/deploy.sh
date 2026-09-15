@@ -22,7 +22,11 @@ else
     echo "    Cloning second-brain-agent to $AGENT_REPO"
     sudo mkdir -p "$AGENT_REPO"
     sudo chown "$(id -u):$(id -g)" "$AGENT_REPO"
-    git clone git@github.com:technicalpickles/second-brain-agent.git "$AGENT_REPO"
+    # github-second-brain-agent, not github.com: second-brain-agent is private, and
+    # the default github.com identity (scoped to picklehome only) gets "repository not
+    # found". The github-second-brain-agent alias in ~/.ssh/config points at a dedicated
+    # read-only deploy key (~/.ssh/id_second_brain_agent), same pattern as github-brineworks/github-nikke.
+    git clone git@github-second-brain-agent:technicalpickles/second-brain-agent.git "$AGENT_REPO"
 fi
 
 echo "==> Writing filtered op-run template"
