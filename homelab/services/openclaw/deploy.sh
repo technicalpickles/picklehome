@@ -579,22 +579,22 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # stable across restarts/redeploys, but would need re-verifying (same log
 # grep) if the compose project's network is ever removed and recreated.
 OPENCLAW_HOST=$(resolve_picklehome_var OPENCLAW_HOST)
-# Widget/MCP-App sandbox origin -- optional, not :?required. Until a dedicated
-# Tailscale Service is defined and OPENCLAW_WIDGETS_HOST is set (see README's
-# Port & bind topology and "Widget sandbox host" sections), OpenClaw falls
-# back to inferring the sandbox origin from the Control UI's own origin plus
-# one, which is wrong behind this Tailscale-fronted setup and makes every
-# show_widget/MCP App call fail with "Widget sandbox host is unavailable."
+# Widget/MCP-App sandbox origin -- optional, not :?required. Still resolved
+# here (used below for the Tailscale serve wiring), but no longer written via
+# `config set`: mcp.apps.* is declared statically in the checked-in mcp.json5
+# now (openclaw-config/mcp.manifest.mjs in pickleclaw's `apps` export), because
+# picklelab bind-mounts mcp.json5 :ro from that generated file and a runtime
+# `config set mcp.apps.*` fails EBUSY trying to rewrite it -- hit this
+# 2026-09-16, aborted this whole batch under set -euo pipefail and took the
+# gateway down until a manual restart (it had already been stopped for
+# doctor --fix above and the script died before reaching the restart step).
+# See taskwarrior 607 for the dev/prod mcp.json5-mounting divergence that
+# made this bite only here and not the dev VM (which has no such mount).
 OPENCLAW_WIDGETS_HOST=$(resolve_picklehome_var OPENCLAW_WIDGETS_HOST 2>/dev/null || true)
-WIDGET_CONFIG_JSON=""
-if [ -n "$OPENCLAW_WIDGETS_HOST" ]; then
-    WIDGET_CONFIG_JSON=',
-    {"path":"mcp.apps.sandboxPort","value":18790},
-    {"path":"mcp.apps.sandboxOrigin","value":"https://'"${OPENCLAW_WIDGETS_HOST}"'"}'
-else
-    echo "    NOTE: OPENCLAW_WIDGETS_HOST not set -- skipping mcp.apps.sandboxOrigin;"
-    echo "    widgets (show_widget/MCP Apps) will fail with 'Widget sandbox host is"
-    echo "    unavailable' until it's configured. See README 'Widget sandbox host'."
+if [ -z "$OPENCLAW_WIDGETS_HOST" ]; then
+    echo "    NOTE: OPENCLAW_WIDGETS_HOST not set -- widgets (show_widget/MCP Apps)"
+    echo "    will fail with 'Widget sandbox host is unavailable' until it's"
+    echo "    configured. See README 'Widget sandbox host'."
 fi
 $RUN_CLI config set --batch-json '[
     {"path":"secrets.providers.team-store","value":{"source":"store"}},
@@ -602,7 +602,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"gateway.controlUi.allowedOrigins","value":["https://'"${OPENCLAW_HOST:?required}"'"]},
     {"path":"gateway.auth.rateLimit","value":{"maxAttempts":10,"windowMs":60000,"lockoutMs":300000}},
     {"path":"gateway.trustedProxies","value":["172.21.0.1"]},
-    {"path":"tools.exec","value":{"mode":"full"}}'"${WIDGET_CONFIG_JSON}"',
+    {"path":"tools.exec","value":{"mode":"full"}},
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"channels.telegram.execApprovals.enabled","value":true},
