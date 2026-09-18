@@ -22,7 +22,14 @@ Devices can reach each other by Tailscale hostname or `100.x.y.z` IP. See
 
 ```bash
 just tailscale           # all tailnet devices + status (wraps `tailscale status`)
+just tailscale-audit     # key-expiry hygiene check across the whole tailnet (read-only, Tailscale API)
 ```
+
+`tailscale-audit` flags tagged/infra nodes without key expiry disabled, personal
+devices expiring within 14 days (or already expired), and any device that's
+neither tagged nor a recognized personal OS -- the "forgot to handle this one"
+case. Uses `TAILSCALE_OAUTH_CLIENT_ID`/`_SECRET` from `.env` (read-only Policy
+File scope; see `.env.template`), so it can't fix anything it finds, only report.
 
 For CLI mechanics (debugging `serve`/Services, `ping`, sudo prompts) use the
 `tailscale-cli` skill. For deciding how to expose a local service — loopback

@@ -291,6 +291,10 @@ tailscale *ARGS:
 tailscale-dns:
     tailscale status --self --json | jq -r '.Self.DNSName | rtrimstr(".")'
 
+# Audit tailnet devices for key-expiry hygiene (read-only, uses Tailscale API)
+tailscale-audit *ARGS:
+    uv run --with requests --with python-dotenv network/tailscale_audit.py {{ARGS}}
+
 # Aladdin garage door: just garage auth | status | open | close
 garage *ARGS:
     uv run python garage/garage_cli.py {{ARGS}}

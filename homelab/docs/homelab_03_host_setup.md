@@ -151,6 +151,7 @@ Scripted install: `homelab/scripts/setup-tailscale.sh`
 - Installed on host (not in Docker) for reliable remote access even if container networking fails
 - Tailscale IP: `100.123.122.68`
 - SSH over Tailscale verified working
+- **Disable key expiry for this node** in the [admin console](https://login.tailscale.com/admin/machines) once it's approved: picklelab is headless, so nothing ever reauths it, and an expired key just goes dark with no warning. Same reasoning as `seapickle` (see `homelab/seapickle/README.md`); every per-service Tailscale sidecar (`ts-woodpecker`, `brineworks-agent`, etc.) needs the same treatment individually, since each is its own tailnet node even though they all run on this one box. `just tailscale-audit` checks this across the whole tailnet.
 
 **Client setup (Mac):**
 
