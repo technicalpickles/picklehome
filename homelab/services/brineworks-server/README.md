@@ -13,10 +13,13 @@ Create a `Brineworks Server` item in the `picklehome` 1Password vault:
 | `db_password` | `openssl rand -base64 32` |
 | `api_key` | `openssl rand -hex 32` |
 
+Also create a `Brineworks Server Keyring` item (a password item, field `password`) in the same vault: `openssl rand -base64 32`. It is the master password for the Gmail token keyring (see "Gmail keyring" below).
+
 ## First-time Setup
 
 ```bash
-just dotenv          # pull secrets from 1Password
+just dotenv                  # pull secrets from 1Password
+just seed-brineworks-gmail   # mint the Gmail keyring (one browser consent); deploy.sh refuses to run without it
 just deploy-brineworks-server
 ```
 
@@ -79,6 +82,9 @@ Injected from the root `.env` via `compose.picklelab.yaml`:
 |----------|-------------|
 | `BRINEWORKS_DB_PASSWORD` | Postgres password (shared between db and server containers) |
 | `BRINEWORKS_API_KEY` | Bearer token for API authentication (all endpoints except /health) |
+| `BRINEWORKS_SERVER_KEYRING_PASSWORD` | Master password for the Gmail token keyring. Set in the container as `KEYRING_CRYPTFILE_PASSWORD`; the `.env` name differs because that one is the agent's. |
+
+`BRINEWORKS_KEYRING_FILE` (`/keyring/cryptfile.cfg`) is set directly in `compose.picklelab.yaml` (not a secret).
 
 The database URL is derived in `compose.yaml`: `postgresql+asyncpg://brineworks:<password>@db:5432/brineworks`.
 
@@ -101,6 +107,20 @@ Verify a rollout by watching `brineworks.auth` lines in the container log (`just
 
 Full design: brineworks `docs/decisions/0007-tailscale-identity-auth.md`.
 
+## Gmail keyring (required in production)
+
+The MCP email tools read Gmail through a cryptfile keyring at `/keyring/cryptfile.cfg`. The server refuses to start in production without a usable token, so `deploy.sh` refuses to deploy without the file. Seed it from the Mac:
+
+```bash
+just seed-brineworks-gmail
+```
+
+This reads the keyring password from the `Brineworks Server Keyring` 1Password item, runs `bw email auth` (one browser consent, MODIFY scopes) into a temporary cryptfile keyring under key prefix `agent` (what the server image pins), verifies it with `bw email auth --check`, copies it to the host, and keeps the previous file as `cryptfile.cfg.bak`. Re-run it whenever the refresh token dies. The script needs `bw` (set `BW=` if it isn't on PATH; the default falls back to the brineworks venv) and 1Password unlocked.
+
+The keyring directory is root-owned mode 700 and the container runs as root, so no chown is involved; the mount is the directory (not the file) because token refresh writes back.
+
+Rollback note: migrations `0009` and `0010` (triage rules, triage apply results) are additive, but code from before them cannot start on a database stamped `0010`, because alembic cannot locate the revision. Back out by running `alembic downgrade 0008` from the new image first. That drops `triage_rules` and apply history, so export rules first (`bw email rules export`).
+
 ## API
 
 - `GET /health`: returns `{"status": "ok"}` if DB is reachable, 503 otherwise
@@ -122,5 +142,6 @@ BRINEWORKS_API_KEY=<same key as server>
 ```
 /opt/brineworks/                    # brineworks repo clone
 /srv/data/brineworks-server/db/     # Postgres data directory
+/srv/data/brineworks-server/keyring/  # cryptfile Gmail token keyring (root, 0700 dir / 0600 file)
 /srv/data/brineworks-server/dumps/  # pg_dumpall for backups (future)
 ```
