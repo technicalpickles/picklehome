@@ -19,6 +19,13 @@ services:
     environment:
       BRINEWORKS_TRUST_TAILSCALE_HEADERS: "true"
       BRINEWORKS_ALLOWED_LOGINS: joshua.nichols@gmail.com
+      # Gmail token keyring for the MCP email tools. The server refuses to start in
+      # production without a usable token, so deploy.sh checks the file exists first.
+      BRINEWORKS_KEYRING_FILE: /keyring/cryptfile.cfg
+      KEYRING_CRYPTFILE_PASSWORD: ${BRINEWORKS_SERVER_KEYRING_PASSWORD:?set via .env.vars / 1Password}
+    volumes:
+      # Directory, not file: token refresh writes back. Seeded by `just seed-brineworks-gmail`.
+      - /srv/data/brineworks-server/keyring:/keyring
     ports:
       # Bound to loopback only -- tailscale serve proxies from brineworks.<tailnet>.ts.net.
       # BRINEWORKS_SERVER_PORT is set by deploy.sh (which defaults it to 8765).
