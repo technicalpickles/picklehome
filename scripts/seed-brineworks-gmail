@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Seed (or re-seed) brineworks-server's Gmail token keyring on picklelab.
+#
+# Runs the normal `bw email auth` browser consent on the Mac, but pointed at a
+# cryptfile keyring (headless-container format) instead of the macOS Keychain,
+# under the key prefix the server image pins (PF_KEYCHAIN_PREFIX=agent). Then
+# verifies it round-trips and copies it to the host.
+#
+# Usage: scripts/seed-brineworks-gmail [host]        (default host: picklelab)
+# Env:   BW   path to the bw CLI (default: bw on PATH, else the brineworks venv)
+#
+# The keyring master password comes from 1Password and lives only in the
+# environment of the child `bw` processes. Never on a command line.
+set -euo pipefail
+
+HOST="${1:-picklelab}"
+OP_REF="op://picklehome/Brineworks Server Keyring/password"
+REMOTE_DIR=/srv/data/brineworks-server/keyring
+REMOTE_FILE="$REMOTE_DIR/cryptfile.cfg"
+
+BW="${BW:-}"
+if [ -z "$BW" ]; then
+    if command -v bw >/dev/null 2>&1; then
+        BW=bw
+    else
+        BW="$HOME/github.com/technicalpickles/brineworks/.venv/bin/bw"
+    fi
+fi
+if ! command -v "$BW" >/dev/null 2>&1 && [ ! -x "$BW" ]; then
+    echo "ERROR: bw CLI not found ($BW)." >&2
+    echo "    Set BW=/path/to/bw, e.g. BW=~/github.com/technicalpickles/brineworks/.venv/bin/bw" >&2
+    exit 1
+fi
+command -v op >/dev/null 2>&1 || { echo "ERROR: 1Password CLI (op) not found." >&2; exit 1; }
+
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brineworks-seed.XXXXXX")
+trap 'rm -rf "$WORK_DIR"' EXIT
+LOCAL_FILE="$WORK_DIR/cryptfile.cfg"
+
+echo "==> Reading keyring password from 1Password"
+KEYRING_CRYPTFILE_PASSWORD=$(op read "$OP_REF")
+if [ -z "$KEYRING_CRYPTFILE_PASSWORD" ]; then
+    echo "ERROR: empty password from $OP_REF (is the item created, is 1Password unlocked?)" >&2
+    exit 1
+fi
+export KEYRING_CRYPTFILE_PASSWORD
+export BRINEWORKS_KEYRING_FILE="$LOCAL_FILE"
+export PF_KEYCHAIN_PREFIX=agent
+
+echo "==> Minting a Gmail token (browser consent, MODIFY scopes)"
+"$BW" email auth
+
+echo "==> Verifying the keyring round-trips"
+"$BW" email auth --check
+if [ ! -s "$LOCAL_FILE" ]; then
+    echo "ERROR: verification passed but $LOCAL_FILE is empty." >&2
+    exit 1
+fi
+
+echo "==> Copying to $HOST:$REMOTE_FILE"
+REMOTE_TMP=$(ssh "$HOST" mktemp)
+scp -q "$LOCAL_FILE" "$HOST:$REMOTE_TMP"
+# shellcheck disable=SC2029  # REMOTE_* are meant to expand here, on the client
+ssh "$HOST" "sudo mkdir -p $REMOTE_DIR && sudo chmod 700 $REMOTE_DIR \
+  && if sudo test -f $REMOTE_FILE; then sudo cp -p $REMOTE_FILE $REMOTE_FILE.bak; fi \
+  && sudo mv $REMOTE_TMP $REMOTE_FILE && sudo chown root:root $REMOTE_FILE && sudo chmod 600 $REMOTE_FILE"
+
+echo "==> Done. Next: just deploy-brineworks-server"
