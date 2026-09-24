@@ -33,8 +33,14 @@ def stubs(tmp_path):
         'if [ "$*" = "email auth" ]; then echo fake-keyring > "$BRINEWORKS_KEYRING_FILE"; fi\n'
         'if [ "$*" = "email auth --check" ] && [ -n "$BW_CHECK_FAIL" ]; then exit 1; fi\n',
     )
-    _stub(bindir / "ssh", f'echo "ssh $*" >> {log}\nif [[ "$*" == *mktemp* ]]; then echo /tmp/tmp.remote123; fi\n')
-    _stub(bindir / "scp", f'echo "scp $*" >> {log}\n')
+    # python: the script runs it (next to bw) to assert the token has a refresh token.
+    _stub(
+        bindir / "python",
+        f'echo "python" >> {log}\ncat > /dev/null\n'
+        'if [ -n "$PY_REFRESH_MISSING" ]; then exit 1; fi\n',
+    )
+    _stub(bindir / "ssh", f'echo "ssh $*" >> {log}\necho "pw=[$KEYRING_CRYPTFILE_PASSWORD]" >> {tmp_path}/transport-env.log\nif [[ "$*" == *mktemp* ]]; then echo /tmp/tmp.remote123; fi\n')
+    _stub(bindir / "scp", f'echo "scp $*" >> {log}\necho "pw=[$KEYRING_CRYPTFILE_PASSWORD]" >> {tmp_path}/transport-env.log\nif [ -n "$SCP_FAIL" ]; then exit 1; fi\n')
     return {"bin": bindir, "log": log, "tmp": tmp_path}
 
 
@@ -53,12 +59,13 @@ def test_happy_path_order_and_target(stubs):
     assert result.returncode == 0, result.stderr
     calls = stubs["log"].read_text().splitlines()
     kinds = [c.split()[0] + (" --check" if c.endswith("--check") else "") for c in calls]
-    assert kinds == ["op", "bw", "bw --check", "ssh", "scp", "ssh"]
-    assert "picklelab:/tmp/tmp.remote123" in calls[4]
-    final_ssh = calls[5]
+    assert kinds == ["op", "bw", "bw --check", "python", "ssh", "scp", "ssh"]
+    assert "picklelab:/tmp/tmp.remote123" in calls[5]
+    final_ssh = calls[6]
     assert "/srv/data/brineworks-server/keyring/cryptfile.cfg" in final_ssh
     assert "chmod 600" in final_ssh and "chown root:root" in final_ssh
     assert ".bak" in final_ssh  # re-seed keeps the previous keyring
+    assert ".cryptfile.new" in final_ssh  # staged inside the keyring dir, swapped by mv
 
 
 def test_password_reaches_bw_env_but_never_argv_or_output(stubs):
@@ -88,3 +95,27 @@ def test_missing_bw_is_a_clear_error(stubs, tmp_path):
     result = _run(stubs, BW="/nonexistent/bw")
     assert result.returncode != 0
     assert "bw" in result.stderr and "BW=" in result.stderr
+
+
+def test_token_without_refresh_token_copies_nothing(stubs):
+    result = _run(stubs, PY_REFRESH_MISSING="1")
+    assert result.returncode != 0
+    assert "refresh token" in result.stderr
+    calls = stubs["log"].read_text()
+    assert "scp" not in calls and "ssh" not in calls
+
+
+def test_failed_copy_cleans_up_the_remote_temp_file(stubs):
+    result = _run(stubs, SCP_FAIL="1")
+    assert result.returncode != 0
+    calls = stubs["log"].read_text().splitlines()
+    assert any(c.startswith("ssh") and "rm -f /tmp/tmp.remote123" in c for c in calls)
+    # the real keyring was never touched
+    assert not any("cryptfile.cfg" in c and "sudo mv" in c for c in calls)
+
+
+def test_password_is_not_visible_to_ssh_or_scp(stubs):
+    result = _run(stubs)
+    assert result.returncode == 0, result.stderr
+    seen = (stubs["tmp"] / "transport-env.log").read_text()
+    assert "pw=[]" in seen and PASSWORD not in seen

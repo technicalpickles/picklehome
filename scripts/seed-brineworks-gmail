@@ -4,13 +4,13 @@
 # Runs the normal `bw email auth` browser consent on the Mac, but pointed at a
 # cryptfile keyring (headless-container format) instead of the macOS Keychain,
 # under the key prefix the server image pins (PF_KEYCHAIN_PREFIX=agent). Then
-# verifies it round-trips and copies it to the host.
+# verifies it round-trips and holds a refresh token, and copies it to the host.
 #
 # Usage: scripts/seed-brineworks-gmail [host]        (default host: picklelab)
 # Env:   BW   path to the bw CLI (default: bw on PATH, else the brineworks venv)
 #
-# The keyring master password comes from 1Password and lives only in the
-# environment of the child `bw` processes. Never on a command line.
+# The keyring master password comes from 1Password. It is scoped to the child
+# `bw` and python processes only (never exported, never on a command line).
 set -euo pipefail
 
 HOST="${1:-picklelab}"
@@ -33,36 +33,78 @@ if ! command -v "$BW" >/dev/null 2>&1 && [ ! -x "$BW" ]; then
 fi
 command -v op >/dev/null 2>&1 || { echo "ERROR: 1Password CLI (op) not found." >&2; exit 1; }
 
+# The python that can import brineworks_cli: next to bw in its venv, else bw's shebang.
+BW_PATH=$(command -v "$BW" 2>/dev/null || echo "$BW")
+BW_PY="$(dirname "$BW_PATH")/python"
+[ -x "$BW_PY" ] || BW_PY=$(sed -n '1s/^#! *//p' "$BW_PATH")
+
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brineworks-seed.XXXXXX")
-trap 'rm -rf "$WORK_DIR"' EXIT
 LOCAL_FILE="$WORK_DIR/cryptfile.cfg"
+REMOTE_TMP=""
+DONE=0
+cleanup() {
+    rm -rf "$WORK_DIR"
+    if [ "$DONE" = 0 ] && [ -n "$REMOTE_TMP" ]; then
+        # shellcheck disable=SC2029  # REMOTE_TMP is meant to expand here, on the client
+        ssh "$HOST" "rm -f $REMOTE_TMP" >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT
 
 echo "==> Reading keyring password from 1Password"
-KEYRING_CRYPTFILE_PASSWORD=$(op read "$OP_REF")
-if [ -z "$KEYRING_CRYPTFILE_PASSWORD" ]; then
+KEYRING_PW=$(op read "$OP_REF")
+if [ -z "$KEYRING_PW" ]; then
     echo "ERROR: empty password from $OP_REF (is the item created, is 1Password unlocked?)" >&2
     exit 1
 fi
-export KEYRING_CRYPTFILE_PASSWORD
-export BRINEWORKS_KEYRING_FILE="$LOCAL_FILE"
-export PF_KEYCHAIN_PREFIX=agent
+
+# Run a command with the keyring env, for that command only.
+with_keyring() {
+    KEYRING_CRYPTFILE_PASSWORD="$KEYRING_PW" \
+        BRINEWORKS_KEYRING_FILE="$LOCAL_FILE" \
+        PF_KEYCHAIN_PREFIX=agent \
+        "$@"
+}
 
 echo "==> Minting a Gmail token (browser consent, MODIFY scopes)"
-"$BW" email auth
+with_keyring "$BW" email auth
 
 echo "==> Verifying the keyring round-trips"
-"$BW" email auth --check
+with_keyring "$BW" email auth --check
 if [ ! -s "$LOCAL_FILE" ]; then
     echo "ERROR: verification passed but $LOCAL_FILE is empty." >&2
+    exit 1
+fi
+
+# --check passes on a fresh access token even with no refresh token, and the server
+# would then die within the hour. Google omits the refresh token when this OAuth
+# client was already granted, unless consent is forced.
+echo "==> Checking the token carries a refresh token"
+if ! with_keyring "$BW_PY" - <<'PY'
+import sys
+from brineworks_cli.gmail.token_store import TokenStore
+
+token = TokenStore(service="pf-email", account="gmail-oauth").load()
+sys.exit(0 if token and token.get("refresh_token") else 1)
+PY
+then
+    echo "ERROR: the minted token has no refresh token, so it would expire within the hour." >&2
+    echo "    Google skips it when this client was already granted. Revoke the app at" >&2
+    echo "    https://myaccount.google.com/permissions (this also revokes the Mac's token," >&2
+    echo "    so re-run 'bw email auth' there afterwards), then run this again." >&2
     exit 1
 fi
 
 echo "==> Copying to $HOST:$REMOTE_FILE"
 REMOTE_TMP=$(ssh "$HOST" mktemp)
 scp -q "$LOCAL_FILE" "$HOST:$REMOTE_TMP"
+# Stage inside the keyring dir, then mv within it, so the swap is atomic.
 # shellcheck disable=SC2029  # REMOTE_* are meant to expand here, on the client
 ssh "$HOST" "sudo mkdir -p $REMOTE_DIR && sudo chmod 700 $REMOTE_DIR \
   && if sudo test -f $REMOTE_FILE; then sudo cp -p $REMOTE_FILE $REMOTE_FILE.bak; fi \
-  && sudo mv $REMOTE_TMP $REMOTE_FILE && sudo chown root:root $REMOTE_FILE && sudo chmod 600 $REMOTE_FILE"
+  && sudo cp $REMOTE_TMP $REMOTE_DIR/.cryptfile.new \
+  && sudo chown root:root $REMOTE_DIR/.cryptfile.new && sudo chmod 600 $REMOTE_DIR/.cryptfile.new \
+  && sudo mv $REMOTE_DIR/.cryptfile.new $REMOTE_FILE && rm -f $REMOTE_TMP"
+DONE=1
 
 echo "==> Done. Next: just deploy-brineworks-server"

@@ -115,7 +115,9 @@ The MCP email tools read Gmail through a cryptfile keyring at `/keyring/cryptfil
 just seed-brineworks-gmail
 ```
 
-This reads the keyring password from the `Brineworks Server Keyring` 1Password item, runs `bw email auth` (one browser consent, MODIFY scopes) into a temporary cryptfile keyring under key prefix `agent` (what the server image pins), verifies it with `bw email auth --check`, copies it to the host, and keeps the previous file as `cryptfile.cfg.bak`. Re-run it whenever the refresh token dies. The script needs `bw` (set `BW=` if it isn't on PATH; the default falls back to the brineworks venv) and 1Password unlocked.
+This reads the keyring password from the `Brineworks Server Keyring` 1Password item, runs `bw email auth` (one browser consent, MODIFY scopes) into a temporary cryptfile keyring under key prefix `agent` (what the server image pins), verifies it with `bw email auth --check` and that it carries a refresh token, copies it to the host, and keeps the previous file as `cryptfile.cfg.bak`. Re-run it whenever the refresh token dies. The script needs `bw` (set `BW=` if it isn't on PATH; the default falls back to the brineworks venv) and 1Password unlocked.
+
+`--check` alone can't tell: a freshly minted access token passes it even with no refresh token, and the server would then die within the hour. Google skips the refresh token when this OAuth client was already granted, so if the script stops on that check, revoke the app at myaccount.google.com/permissions (that also revokes the Mac's token; re-run `bw email auth` there afterwards) and seed again.
 
 The keyring directory is root-owned mode 700 and the container runs as root, so no chown is involved; the mount is the directory (not the file) because token refresh writes back.
 
