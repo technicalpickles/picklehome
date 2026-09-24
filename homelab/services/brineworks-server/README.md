@@ -79,6 +79,7 @@ Injected from the root `.env` via `compose.picklelab.yaml`:
 |----------|-------------|
 | `BRINEWORKS_DB_PASSWORD` | Postgres password (shared between db and server containers) |
 | `BRINEWORKS_API_KEY` | Bearer token for API authentication (all endpoints except /health) |
+| `BRINEWORKS_OPENCLAW_MCP_KEY` | Secret for the `openclaw` label in `BRINEWORKS_API_KEYS` (the overlay builds the JSON). OpenClaw's MCP client authenticates with it, so `brineworks.auth` logs show `openclaw` instead of `default`. 1Password: `Brineworks Server` field `openclaw_mcp_key`. |
 
 The database URL is derived in `compose.yaml`: `postgresql+asyncpg://brineworks:<password>@db:5432/brineworks`.
 
