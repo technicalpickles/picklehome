@@ -5,8 +5,12 @@ services:
 
   server:
     build:
-      context: /opt/brineworks/server
-      dockerfile: Dockerfile
+      # Repo root, not server/: server/Dockerfile's COPY paths (pyproject.toml,
+      # brineworks_cli/, server/web/...) assume a repo-root context since #27
+      # pulled brineworks_cli into the server image. Never caught before now
+      # because prod hasn't successfully rebuilt since #27 landed.
+      context: /opt/brineworks
+      dockerfile: server/Dockerfile
       args:
         GIT_SHA: ${BRINEWORKS_GIT_SHA:-unknown}
     env_file:
