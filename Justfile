@@ -230,6 +230,10 @@ taskchampion-logs-follow host="picklelab":
 deploy-brineworks-server host="picklelab":
     just _deploy-remote brineworks-server {{host}}
 
+# Seed (or re-seed) brineworks-server's Gmail token keyring on picklelab (one browser consent click)
+seed-brineworks-gmail host="picklelab":
+    scripts/seed-brineworks-gmail {{host}}
+
 # Tail Brineworks server container logs from picklelab
 brineworks-server-logs host="picklelab" lines="50":
     ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"

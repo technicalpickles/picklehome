@@ -18,6 +18,18 @@ cd "$REPO_DIR"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Checking Gmail keyring"
+# sudo: the keyring dir is root-owned mode 700, so a plain [ -f ] from this user
+# would report a file that exists as missing.
+KEYRING_FILE="$DATA_DIR/keyring/cryptfile.cfg"
+if ! sudo test -f "$KEYRING_FILE"; then
+    echo "ERROR: $KEYRING_FILE is missing." >&2
+    echo "    brineworks-server refuses to start in production without Gmail credentials," >&2
+    echo "    and a restart without them takes PRM, tasks and /health down with it." >&2
+    echo "    From the Mac, run: just seed-brineworks-gmail" >&2
+    exit 1
+fi
+
 echo "==> Updating brineworks source"
 if [ -d "$BRINEWORKS_REPO/.git" ]; then
     git -C "$BRINEWORKS_REPO" pull --ff-only
