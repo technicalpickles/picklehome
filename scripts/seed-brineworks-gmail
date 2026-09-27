@@ -99,8 +99,11 @@ echo "==> Copying to $HOST:$REMOTE_FILE"
 REMOTE_TMP=$(ssh "$HOST" mktemp)
 scp -q "$LOCAL_FILE" "$HOST:$REMOTE_TMP"
 # Stage inside the keyring dir, then mv within it, so the swap is atomic.
+# -t: allocate a pty so sudo can prompt for a password. Without it ssh runs the
+# remote command with no terminal, and sudo fails with "a terminal is required
+# to read the password" instead of prompting.
 # shellcheck disable=SC2029  # REMOTE_* are meant to expand here, on the client
-ssh "$HOST" "sudo mkdir -p $REMOTE_DIR && sudo chmod 700 $REMOTE_DIR \
+ssh -t "$HOST" "sudo mkdir -p $REMOTE_DIR && sudo chmod 700 $REMOTE_DIR \
   && if sudo test -f $REMOTE_FILE; then sudo cp -p $REMOTE_FILE $REMOTE_FILE.bak; fi \
   && sudo cp $REMOTE_TMP $REMOTE_DIR/.cryptfile.new \
   && sudo chown root:root $REMOTE_DIR/.cryptfile.new && sudo chmod 600 $REMOTE_DIR/.cryptfile.new \
