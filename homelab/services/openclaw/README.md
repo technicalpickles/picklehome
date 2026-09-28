@@ -165,6 +165,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `GOOGLE_PLACES_API_KEY` | `.env` (1Password) | Real key for the isolated `goplaces-node` service only — the `openclaw` service itself gets a hardcoded placeholder, never this value |
 | `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the one-time workspace clone |
 | `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 read-only deploy key; `deploy.sh` decodes it to `ssh/pickleclaw_deploy_key` to clone/pull `pickleclaw@main` (gog-mcp's build context) |
+| `BRINEWORKS_MCP_TOKEN` | `.env` (1Password) | Labelled `openclaw` API key for the brineworks MCP server (1Password item `Brineworks Server`, field `openclaw_mcp_key`); interpolated into `mcp.json5`'s Authorization header for the `brineworks` server |
 | `GOG_MCP_TOKEN` | `.env` (1Password) | Bearer token gog-mcp's HTTP endpoint requires; set on both the `openclaw` service (interpolated into `mcp.json5`'s Authorization header) and the `gog-mcp` service (to check incoming requests) |
 | `GOG_KEYRING_PASSWORD` | `.env` (1Password) | Decryption password for gog-mcp's file keyring (OAuth refresh tokens); set only on the `gog-mcp` service |
 | `OPENCLAW_IMAGE` | `openclaw.image.env` (pickleclaw, symlinked) | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.8.1` -- shared source of truth with the dev VM, not this repo's `.env` |

@@ -81,6 +81,7 @@ Injected from the root `.env` via `compose.picklelab.yaml`:
 | Variable | Description |
 |----------|-------------|
 | `BRINEWORKS_DB_PASSWORD` | Postgres password (shared between db and server containers) |
+| `BRINEWORKS_OPENCLAW_MCP_KEY` | Secret for the `openclaw` label in `BRINEWORKS_API_KEYS` (the overlay builds the JSON). OpenClaw's MCP client authenticates with it, so `brineworks.auth` logs show `openclaw` instead of `default`. 1Password: `Brineworks Server` field `openclaw_mcp_key`. Must be hex (`openssl rand -hex 32`): the overlay embeds it in JSON unescaped. |
 | `BRINEWORKS_API_KEY` | Bearer token for API authentication (all endpoints except /health) |
 | `BRINEWORKS_SERVER_KEYRING_PASSWORD` | Master password for the Gmail token keyring. Set in the container as `KEYRING_CRYPTFILE_PASSWORD`; the `.env` name differs because that one is the agent's. |
 
