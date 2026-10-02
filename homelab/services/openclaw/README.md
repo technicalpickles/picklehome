@@ -215,6 +215,16 @@ All of `/srv/data/openclaw` is picked up by the nightly restic job. `bin/` is re
 
 **Ongoing workspace sync** is automated via an in-container `openclaw cron` job (`workspace-git-sync`, hourly): commits local changes, `git pull --rebase`, pushes; a real rebase conflict now aborts cleanly and surfaces as a failed cron run instead of guessing (the earlier LLM conflict-escalation was removed 2026-09-12 — see `pickleclaw`'s `docs/superpowers/specs/2026-07-15-workspace-branch-model-design.md` for why: it could wedge the tree and destroy an hour of agent memory on the next run when its model was unavailable). One writer per branch: picklelab pushes `main`, the dev VM pushes `dev`. Registered idempotently by `deploy.sh`. Git auth is HTTPS + a fine-grained PAT (`OPENCLAW_WORKSPACE_GITHUB_TOKEN`) via a `GIT_ASKPASS` helper, not the SSH deploy key above — the container image has no ssh client. See `docs/plans/2026-07-04-workspace-git-sync-picklelab-rollout.md` (historical rollout, describes the now-removed escalation) and `pickleclaw`'s `scripts/workspace-git-sync.sh` / `docs/setup-notes.md` "Workspace git backup".
 
+## Skills
+
+Three sources matter on picklelab, highest priority last:
+
+- **Workspace** (`/srv/data/openclaw/workspace/skills/`, git-tracked in `openclaw-workspace`): behavior-steering skills live here.
+- **Managed** (`/srv/data/openclaw/config/skills/`): installed with `npx skills`, e.g. brineworks' own `brineworks-triage`. Not in any repo.
+- **Workshop** (`/srv/data/openclaw/config/agents/main/agent/workshop-skills/`): agent-authored. `deploy.sh` sets `skills.workshop.autonomous.mode: "propose"` so Workshop stages proposals for a human instead of rewriting skills unattended (the default, `auto`, did that and left triage steering at gog's Gmail tools rather than brineworks). `email-triage-widget` and `gmail-triage` are disabled via `skills.entries.<name>.enabled`.
+
+Workspace beats workshop on a name collision. `openclaw skills list` shows each skill's source.
+
 ## Security
 
 Tool profile is `coding`, full local tool surface, no `deny` list (browser/canvas/automation deny removed 2026-07-02, "for now", explicit request — matches pickleclaw's local config 1:1, which never had one) — see `openclaw.tools.json5` in the private `pickleclaw` repo. No `docker.sock` grant; the gateway is containerized and relies on tool policy rather than the in-container Docker sandbox. Full rationale in the design doc's "Security decisions".
