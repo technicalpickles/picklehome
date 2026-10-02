@@ -145,7 +145,7 @@ Telegram allows only **one** active long-poller per bot token — running `pickl
 just deploy-openclaw
 ```
 
-Bumps run through the pinned `OPENCLAW_IMAGE` var: change it in `pickleclaw`'s `openclaw-config/openclaw.env` (single source of truth, shared with the dev VM — not this repo's `.env`), redeploy. `deploy.sh` runs `docker compose pull` then `up -d` (no `build:` key, so `pull` is unambiguous), and a `doctor` pass catches config-schema migrations.
+Bumps run through the pinned `OPENCLAW_IMAGE` var: change it in `pickleclaw`'s `openclaw-config/openclaw.env` (single source of truth, shared with the dev VM — not this repo's `.env`), redeploy. `deploy.sh` runs `docker compose pull` then `up -d` (no `build:` key, so `pull` is unambiguous), and a `doctor` pass catches config-schema migrations. After the health check passes, it also calls `models.list` once to warm the model catalog, so the Control UI's model picker doesn't show "No models available" on the first load after a deploy (the cold call took 11.9s on picklelab). Restarts that bypass `deploy.sh` (host reboot, `docker restart`) stay cold; a reload fixes the picker once the catalog has loaded.
 
 ## Environment Variables
 
