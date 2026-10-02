@@ -638,12 +638,6 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.bootstrapMaxChars","value":25000},
     {"path":"agents.defaults.userTimezone","value":"America/New_York"},
     {"path":"agents.defaults.modelPolicy.allow","value":["ollama-cloud/*"]},
-    {"path":"agents.defaults.models","value":{
-        "ollama-cloud/glm-5.3":{},
-        "ollama-cloud/glm-5.1":{},
-        "ollama-cloud/gpt-oss:20b":{},
-        "ollama-cloud/kimi-k2.7-code":{}
-    }},
     {"path":"memory.search","value":{
         "provider":"openai-compatible",
         "model":"qwen/qwen3-embedding-8b",
@@ -651,6 +645,18 @@ $RUN_CLI config set --batch-json '[
             "baseUrl":"https://openrouter.ai/api/v1/",
             "apiKey":{"source":"env","provider":"default","id":"OPENROUTER_API_KEY"}
         }
+    }}
+]'
+# The models map is declared in full here, so replace it instead of merging. config set
+# refuses to drop existing entries without --replace ("would remove existing entries:
+# ollama-cloud/glm-5.2" when the primary moved to glm-5.3, 2026-10-01). Kept out of the
+# batch above so --replace doesn't loosen the guard for any other path.
+$RUN_CLI config set --replace --batch-json '[
+    {"path":"agents.defaults.models","value":{
+        "ollama-cloud/glm-5.3":{},
+        "ollama-cloud/glm-5.1":{},
+        "ollama-cloud/gpt-oss:20b":{},
+        "ollama-cloud/kimi-k2.7-code":{}
     }}
 ]'
 
