@@ -497,7 +497,15 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # (openclaw doctor, 2026-09-02 upgrade run); see docs/setup-notes.md's
 # "openclaw doctor review" section in pickleclaw.
 #
-# agents.defaults.imageModel.primary: the whole chat chain (glm-5.2, glm-5.1,
+# agents.defaults.model.primary: glm-5.3 as of 2026-09-29 (was glm-5.2; 1049k ctx).
+#
+# agents.defaults.modelPolicy.allow: ["ollama-cloud/*"] makes every model in Ollama
+# Cloud's live-discovered catalog selectable via /model and the pickers, not just the
+# few in the models map below. The map only holds aliases/per-model settings and
+# never restricts overrides; modelPolicy.allow is the actual allowlist, and a stale
+# migrated one (still listing retired glm-4.7) was silently blocking newer models.
+#
+# agents.defaults.imageModel.primary: the whole chat chain (glm-5.3, glm-5.1,
 # gpt-oss:20b) is text-only -- `openclaw models list --provider ollama-cloud`
 # prints an input column, and among our configured models only kimi-k2.7-code
 # takes text+image. imageModel is what a text-only primary delegates image input
@@ -608,7 +616,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"channels.telegram.execApprovals.enabled","value":true},
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"skills.entries.goplaces.enabled","value":true},
-    {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.2"},
+    {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.3"},
     {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-5.1"]},
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
     {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
@@ -616,8 +624,9 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.imageModel.primary","value":"ollama-cloud/kimi-k2.7-code"},
     {"path":"agents.defaults.bootstrapMaxChars","value":25000},
     {"path":"agents.defaults.userTimezone","value":"America/New_York"},
+    {"path":"agents.defaults.modelPolicy.allow","value":["ollama-cloud/*"]},
     {"path":"agents.defaults.models","value":{
-        "ollama-cloud/glm-5.2":{},
+        "ollama-cloud/glm-5.3":{},
         "ollama-cloud/glm-5.1":{},
         "ollama-cloud/gpt-oss:20b":{},
         "ollama-cloud/kimi-k2.7-code":{}
