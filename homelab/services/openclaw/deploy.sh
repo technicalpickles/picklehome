@@ -713,6 +713,19 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 3
 done
 
+echo "==> Warming the model catalog"
+# The first models.list after a gateway start loads the catalog cold (2-12s;
+# 11.9s seen on picklelab, 1.7s on the dev VM) and the Control UI's model picker
+# shows "No models available" until it lands. Same call and params the UI makes,
+# so the first real page load hits a warm catalog. Non-fatal: a failed warm-up
+# only costs that one slow first load.
+if docker exec openclaw-openclaw-1 openclaw gateway call models.list \
+    --params '{"view":"configured","agentId":"main"}' --json > /dev/null 2>&1; then
+    echo "    Model catalog warm"
+else
+    echo "    WARNING: models.list warm-up failed (non-fatal)"
+fi
+
 echo "==> Registering workspace-git-sync cron job (idempotent)"
 # Needs the live gateway (docker exec into the running container), not the
 # pre-start $RUN_CLI one-off used for config/doctor above -- cron registration
