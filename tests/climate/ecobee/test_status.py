@@ -5,6 +5,7 @@ from climate.ecobee.status import (
     extract_thermostat_status,
     format_status,
     hvac_mode_warning,
+    temp_correction_warning,
 )
 
 
@@ -235,3 +236,36 @@ def test_format_status_no_warning_when_mode_matches():
     ]
     output = format_status(statuses)
     assert "WARNING:" not in output
+
+
+_BASE_STATUS = {
+    "name": "Downstairs",
+    "temp": 71.8,
+    "humidity": 68,
+    "equipment": "idle",
+    "hvac_mode": "auto",
+    "climate_ref": "smart1",
+    "cool_setpoint": 76.0,
+    "heat_setpoint": 71.0,
+    "hold": None,
+    "aq_score": None,
+    "voc": None,
+    "co2": None,
+    "weather": None,
+}
+
+
+def test_temp_correction_decoded_from_tenths():
+    status = extract_thermostat_status({"settings": {"tempCorrection": 95}})
+    assert status["temp_correction"] == 9.5
+
+
+def test_temp_correction_warning_on_drift():
+    s = {"temp_correction": 0.0, "expected_temp_correction": 9.5}
+    assert "expects +9.5°F" in temp_correction_warning(s)
+    assert "WARNING: tempCorrection is +0.0°F" in format_status([{**_BASE_STATUS, **s}])
+
+
+def test_temp_correction_no_warning_when_matching_or_unrecorded():
+    assert temp_correction_warning({"temp_correction": 5.5, "expected_temp_correction": 5.5}) is None
+    assert temp_correction_warning({"temp_correction": 5.5}) is None

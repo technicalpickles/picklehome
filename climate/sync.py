@@ -200,11 +200,17 @@ def cmd_status(args) -> None:
         print("Failed to fetch thermostat data from Ecobee.")
         sys.exit(1)
 
-    statuses = [
-        status.extract_thermostat_status(t)
-        for t in ecobee.thermostats
-        if t["identifier"] in managed_ids
-    ]
+    expected_corrections = {
+        entry["thermostat_id"]: (entry.get("settings") or {}).get("temp_correction_f")
+        for entry in registry["thermostats"].values()
+    }
+    statuses = []
+    for t in ecobee.thermostats:
+        if t["identifier"] not in managed_ids:
+            continue
+        s = status.extract_thermostat_status(t)
+        s["expected_temp_correction"] = expected_corrections.get(t["identifier"])
+        statuses.append(s)
 
     if args.json:
         import json

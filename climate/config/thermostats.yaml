@@ -2,6 +2,13 @@
 # Canonical thermostat registry for this home.
 # managed: true  : included in all home automation (status, sync, etc.)
 # managed: false : registered but excluded (e.g. separate property)
+#
+# settings.temp_correction_f: the thermostat's installer-menu temperature
+# correction (°F, Ecobee API settings.tempCorrection / 10). Calibrated by hand
+# against an IR thermometer on 2026-10-03; the comfort setpoints in
+# hvac-spec.md assume these readings are true. It lives only on the device, so
+# this is the record: 'just climate-status' warns if the live value drifts
+# (a factory reset zeroes it and silently re-skews every setpoint).
 
 thermostats:
   downstairs:
@@ -9,11 +16,13 @@ thermostats:
     managed: true
     settings:
       hold_action: useEndTime4hour
+      temp_correction_f: 9.5
   upstairs:
     thermostat_id: "532537308613"
     managed: true
     settings:
       hold_action: useEndTime4hour
+      temp_correction_f: 5.5
   cottage:
     thermostat_id: "272457106318"
     managed: false  # separate property (excluded from home automation)

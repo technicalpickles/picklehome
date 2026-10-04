@@ -109,7 +109,7 @@ All in `config/`:
 
 | File | Purpose |
 |------|---------|
-| `thermostats.yaml` | Ecobee thermostat registry (name → ID, managed flag, per-thermostat `settings` like `hold_action`) |
+| `thermostats.yaml` | Ecobee thermostat registry (name → ID, managed flag, per-thermostat `settings` like `hold_action`; `temp_correction_f` records the device's calibration, and `climate-status` warns on drift) |
 | `schedule.yaml` | Weekly schedule (time slots → climate refs). Occupied slots use the virtual `comfort` ref, not a real climateRef — see Architecture below |
 | `comforts.yaml` | Temperature setpoints per comfort mode per thermostat |
 | `weather.yaml` | Outdoor temp thresholds for seasonal comfort switching |
