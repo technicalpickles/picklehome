@@ -52,8 +52,11 @@ def extract_thermostat_status(thermostat: dict) -> dict:
     climate_ref = program.get("currentClimateRef")
     cool_setpoint, heat_setpoint = get_climate_setpoints(program.get("climates", []), climate_ref)
 
+    raw_correction = thermostat.get("settings", {}).get("tempCorrection")
+
     return {
         "name": thermostat.get("name"),
+        "temp_correction": None if raw_correction is None else raw_correction / 10,
         "temp": decode_temp(runtime.get("actualTemperature", 0)),
         "humidity": runtime.get("actualHumidity"),
         "equipment": get_equipment_description(thermostat.get("equipmentStatus", "")),
@@ -96,6 +99,26 @@ def hvac_mode_warning(status: dict) -> str | None:
     return None
 
 
+def temp_correction_warning(status: dict) -> str | None:
+    """Warn when the live tempCorrection differs from thermostats.yaml.
+
+    The correction exists only on the device, and the comfort setpoints are
+    tuned against the corrected reading. A reset (or a stray tweak in the
+    installer menu) makes every setpoint wrong without any error, so drift is
+    surfaced here. Needs 'expected_temp_correction' to be attached by the
+    caller; thermostats with no recorded expectation are not checked.
+    """
+    expected = status.get("expected_temp_correction")
+    actual = status.get("temp_correction")
+    if expected is None or actual is None or actual == expected:
+        return None
+    return (
+        f"tempCorrection is {actual:+.1f}°F but thermostats.yaml expects {expected:+.1f}°F; "
+        "readings and comfort setpoints are off by the difference. Fix it in the thermostat's "
+        "installer menu (or update thermostats.yaml if the change was intended)."
+    )
+
+
 def format_status(statuses: list[dict]) -> str:
     """Format a list of thermostat status dicts as a human-readable string."""
     lines = []
@@ -124,9 +147,9 @@ def format_status(statuses: list[dict]) -> str:
         lines.append(line.rstrip())
 
         # Append warning line if HVAC mode cannot deliver the active comfort mode
-        warning = hvac_mode_warning(s)
-        if warning:
-            lines.append(f"  WARNING: {warning}")
+        for warning in (hvac_mode_warning(s), temp_correction_warning(s)):
+            if warning:
+                lines.append(f"  WARNING: {warning}")
 
     # Weather: use first thermostat's weather (they share the same feed by location)
     weather_added = False
