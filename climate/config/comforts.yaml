@@ -5,20 +5,6 @@
 # Run 'just climate-comforts-sync' to push changes to thermostats.
 
 thermostats:
-  cottage:
-    climates:
-      away:
-        cool_temp: 75
-        heat_temp: 55
-      home:
-        cool_temp: 75
-        heat_temp: 55
-      wakeup:
-        cool_temp: 70
-        heat_temp: 65
-      sleep:
-        cool_temp: 80
-        heat_temp: 62
   upstairs:
     climates:
       away:

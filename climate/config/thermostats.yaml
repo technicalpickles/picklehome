@@ -23,6 +23,3 @@ thermostats:
     settings:
       hold_action: useEndTime4hour
       temp_correction_f: 5.5
-  cottage:
-    thermostat_id: "272457106318"
-    managed: false  # separate property (excluded from home automation)
