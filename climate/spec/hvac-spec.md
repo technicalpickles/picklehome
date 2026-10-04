@@ -12,7 +12,6 @@ then run `just climate-validate` to confirm the remote matches.
 - **Downstairs**: main living space. Adults work from a home office downstairs during the day.
 - **Upstairs**: bedrooms. Not the primary living area during the day, but should stay comfortable enough if someone needs to go up there. Treated as a living area after school ends (2:30pm weekdays).
 - Son comes home from school at ~2:30pm on weekdays.
-- Cottage thermostat is a separate property and is **not managed by this spec**.
 
 ---
 
