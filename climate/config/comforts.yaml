@@ -17,8 +17,8 @@ thermostats:
         cool_temp: 71
         heat_temp: 66
       smart1:
-        cool_temp: 76
-        heat_temp: 71
+        cool_temp: 74
+        heat_temp: 69
         name: Comfort Cool
       smart2:
         cool_temp: 75
@@ -40,8 +40,8 @@ thermostats:
         cool_temp: 78
         heat_temp: 70
       smart1:
-        cool_temp: 75
-        heat_temp: 70
+        cool_temp: 73
+        heat_temp: 68
         name: Comfort Cool
       smart2:
         cool_temp: 77

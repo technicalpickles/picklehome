@@ -70,6 +70,10 @@ climate-hvac-mode MODE *ARGS:
 climate-settings-sync *ARGS:
     uv run python -m climate.sync settings-sync {{ARGS}}
 
+# Enroll the sensors from thermostats.yaml in every climate (replaces the thermostat's own sensor)
+climate-sensors-sync *ARGS:
+    uv run python -m climate.sync sensors-sync {{ARGS}}
+
 # Switch schedule comfort mode: heat | cool | auto
 climate-comfort-switch MODE *ARGS:
     uv run python -m climate.sync comfort-switch {{MODE}} {{ARGS}}
