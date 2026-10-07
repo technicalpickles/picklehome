@@ -9,6 +9,11 @@
 # hvac-spec.md assume these readings are true. It lives only on the device, so
 # this is the record: 'just climate-status' warns if the live value drifts
 # (a factory reset zeroes it and silently re-skews every setpoint).
+#
+# settings.sensors: names of the remote sensors every climate averages for
+# control, replacing the thermostat's own built-in sensor (which does not track
+# the room: 2026-10-06 downstairs read ~79F raw against 70F by IR). Applied by
+# 'just climate-sensors-sync' (manual only, never the timer).
 
 thermostats:
   downstairs:
@@ -17,9 +22,11 @@ thermostats:
     settings:
       hold_action: useEndTime4hour
       temp_correction_f: 9.5
+      sensors: [Josh Office, Tracy Office]
   upstairs:
     thermostat_id: "532537308613"
     managed: true
     settings:
       hold_action: useEndTime4hour
       temp_correction_f: 5.5
+      sensors: [Alex Bedroom, Bedroom]

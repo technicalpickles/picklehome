@@ -8,7 +8,7 @@ import yaml
 # can fix. The only recovery is re-running the PIN auth flow (just climate-auth).
 from pyecobee.errors import InvalidTokenError
 
-from climate.ecobee import auth, comforts, history, schedule, status
+from climate.ecobee import auth, comforts, history, schedule, sensors, status
 from climate.ecobee.thermostats import load_thermostats, get_managed_thermostats
 from climate.ambient.client import DEFAULT_WEATHER_PATH
 
@@ -972,6 +972,66 @@ def cmd_settings_sync(args) -> None:
         sys.exit(1)
 
 
+def cmd_sensors_sync(args) -> None:
+    """Enroll the sensors listed in thermostats.yaml in every climate. Manual only, never the timer."""
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+
+    try:
+        entries = [(name, thermostat_id)
+                   for name, thermostat_id in get_managed_thermostats(registry)
+                   if not args.thermostat or name == args.thermostat]
+    except ValueError as e:
+        print(f"Error in thermostats.yaml: {e}")
+        sys.exit(1)
+
+    if not entries:
+        if args.thermostat:
+            print(f"No managed thermostat named '{args.thermostat}' found in thermostats.yaml.")
+        else:
+            print("No managed thermostats configured in thermostats.yaml.")
+        sys.exit(1)
+
+    any_error = False
+
+    for name, thermostat_id in entries:
+        names = (registry["thermostats"][name].get("settings") or {}).get("sensors")
+        if not names:
+            continue
+
+        try:
+            thermostat = sensors.get_thermostat_with_sensors(ecobee, thermostat_id)
+            desired = sensors.resolve_sensor_entries(thermostat.get("remoteSensors", []), names)
+            program = thermostat["program"]
+            changes = sensors.plan_enrollment(program["climates"], desired)
+
+            if not changes:
+                print(f"  [{name}] All climates already use: {', '.join(names)}")
+                continue
+
+            for ref, current, wanted in changes:
+                print(f"  [{name}] {ref}: {', '.join(current) or '(none)'} -> {', '.join(wanted)}")
+            if args.dry_run:
+                continue
+
+            sensors.push_enrollment(
+                ecobee, thermostat_id, program["schedule"],
+                sensors.apply_enrollment(program["climates"], desired),
+            )
+        except InvalidTokenError:
+            print("Tokens invalid. Re-run 'just climate-auth'.")
+            sys.exit(1)
+        except (RuntimeError, LookupError, ValueError) as e:
+            print(f"  [{name}] Error: {e}")
+            any_error = True
+            continue
+
+        print(f"  [{name}] Pushed sensors: {', '.join(names)}")
+
+    if any_error:
+        sys.exit(1)
+
+
 def cmd_air_quality(args) -> None:
     import asyncio
     from climate.outdoor_air.client import AirQualityError, format_air_quality
@@ -1333,6 +1393,28 @@ def main() -> None:
         help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
     )
 
+    sensors_sync_parser = subparsers.add_parser(
+        "sensors-sync", help="Enroll the sensors from thermostats.yaml in every climate"
+    )
+    sensors_sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview what would be set without making changes",
+    )
+    sensors_sync_parser.add_argument(
+        "--thermostat",
+        metavar="NAME",
+        default=None,
+        help="Only set the named thermostat (default: all)",
+    )
+    sensors_sync_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+
     air_quality_parser = subparsers.add_parser(
         "air-quality", help="Show current outdoor air quality, UV index, and pollen"
     )
@@ -1357,6 +1439,7 @@ def main() -> None:
     subparsers.choices["comfort-switch"].set_defaults(func=cmd_comfort_switch)
     subparsers.choices["hvac-mode"].set_defaults(func=cmd_hvac_mode)
     subparsers.choices["settings-sync"].set_defaults(func=cmd_settings_sync)
+    subparsers.choices["sensors-sync"].set_defaults(func=cmd_sensors_sync)
     subparsers.choices["air-quality"].set_defaults(func=cmd_air_quality)
 
     args = parser.parse_args()

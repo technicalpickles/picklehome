@@ -70,6 +70,7 @@ just climate-comforts-sync [--dry-run]   # push comforts.yaml to Ecobee
 just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # seasonal mode switch
 just climate-hvac-mode MODE [--thermostat NAME] [--dry-run]  # set hvacMode (auto|heat|cool|off|auxHeatOnly); only manual writer, never the timer
 just climate-settings-sync [--thermostat NAME] [--dry-run]  # push per-thermostat settings (hold_action, etc.) from thermostats.yaml
+just climate-sensors-sync [--thermostat NAME] [--dry-run]  # enroll thermostats.yaml `settings.sensors` in every climate (replaces the built-in sensor); manual only, never the timer
 ```
 
 ### Weather
@@ -124,7 +125,7 @@ All in `config/`:
 - **Token refresh:** The `FileTokenEcobee` subclass overrides `_write_config()` to persist refreshed tokens back to the JSON file automatically
 - **Schedule model:** Ecobee thermostats store a weekly program with time slots referencing "climates" (named comfort modes). We define ours in YAML and push them via the API.
 - **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2 for Comfort Heat/Comfort Cool). The virtual `comfort` ref, its resolution to a real climateRef, and the diff-then-push logic all live in `climate.ecobee.comfort_mode` (`resolve_schedule_array`, `detect_live_mode`). See `spec/hvac-spec.md` ("Seasonal switching") for the behavior contract.
-- **Room sensors:** A SmartSensor pairs to one thermostat and reports temperature and occupancy, but a paired sensor does nothing until it's enrolled in specific comfort settings. Enrollment is per-climate. The app's pairing wizard only offers Home/Away/Sleep, so it can't enroll custom climates like Comfort Cool (smart1) and Comfort Heat (smart2), which is what the schedule actually runs, leaving the sensor idle during those modes. But the wizard is not the only path: each climate in `thermostat.program.climates` carries a writable `sensors: [{id, name}]` array, so participation (including the custom climates) can be set through the API, not just the app. When a sensor participates, the thermostat targets the **average** of all participating sensors, so adding a sensor that reads warmer than the thermostat makes the system cool more (and heat more), not less. Historical sensor data (temperature + occupancy, 5-minute intervals) is available via `just climate-history` (`--days N`, `--raw`, `--json`), which reads the Ecobee `runtimeReport` endpoint. `climate-status` still shows only the current snapshot.
+- **Room sensors:** A SmartSensor pairs to one thermostat and reports temperature and occupancy, but a paired sensor does nothing until it's enrolled in specific comfort settings. Enrollment is per-climate. The app's pairing wizard only offers Home/Away/Sleep, so it can't enroll custom climates like Comfort Cool (smart1) and Comfort Heat (smart2), which is what the schedule actually runs, leaving the sensor idle during those modes. But the wizard is not the only path: each climate in `thermostat.program.climates` carries a writable `sensors: [{id, name}]` array, so participation (including the custom climates) can be set through the API, not just the app (`just climate-sensors-sync`, driven by `settings.sensors` in `thermostats.yaml`). When a sensor participates, the thermostat targets the **average** of all participating sensors, so adding a sensor that reads warmer than the thermostat makes the system cool more (and heat more), not less. Historical sensor data (temperature + occupancy, 5-minute intervals) is available via `just climate-history` (`--days N`, `--raw`, `--json`), which reads the Ecobee `runtimeReport` endpoint. `climate-status` still shows only the current snapshot.
 - **runtimeReport sensor columns:** Sensor capability columns use ids like `rs2:100:1` (a remote sensor's temperature) and `rs2:100:2` (its occupancy). The id is `<code>:<instance>:<capabilityIndex>`; group by the prefix (everything before the last `:`) to join a physical sensor's temperature and occupancy, since the thermostat's built-in reports them under different names ("Thermostat Temperature" vs "Thermostat Motion").
 - **runtimeReport temperatures are in display units:** A cell reads `75.6` and means 75.6°F, unlike `get_thermostats()` which returns tenths-of-a-degree ints. Do not apply `decode_temp` to runtimeReport values.
 
@@ -173,6 +174,7 @@ climate/
     schedule.py            # Schedule YAML loading, validation, sync
     comforts.py            # Comfort mode setpoint management
     status.py              # Live thermostat status extraction + formatting
+    sensors.py             # Per-climate sensor enrollment (climate-sensors-sync)
     history.py             # Room-sensor temp + occupancy history (climate-history)
     thermostats.py         # Thermostat registry loader
   ambient/
