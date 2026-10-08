@@ -1,6 +1,6 @@
 # Network Topology
 
-Last updated: 2026-03-21
+Last updated: 2026-10-07
 
 ## Physical Layout
 
@@ -64,6 +64,18 @@ tailscale ip             # show this device's Tailscale IP
 | US 24 | US 24 | 192.168.1.99 | 7.0.50 | |
 | US 8 | US 8 | 192.168.1.17 | 7.0.50 | |
 | US 8 | US 8 | 192.168.1.25 | 5.76.7 | **Offline** |
+
+### Power
+
+Cabinet and desk power gear. Research and sizing: `docs/research/ups-replacement/findings.md`.
+
+| Device | Model | Role | Notes |
+|---|---|---|---|
+| Cabinet UPS | APC BE650G1 (650VA/390W, bought 2016-12) | Battery backup for the cabinet | Battery dead, EOL. Stepped-wave output. 4 of 8 outlets on battery. Being replaced by a CyberPower CP1500PFCRM2U |
+| Desk UPS | APC BR1000G (1000VA/600W, bought 2017-04) | Battery backup for workstation, monitor, dock | Throws F02 on power loss, so it drops the load. Stepped-wave output. Being replaced by a CyberPower CP1500PFCLCD |
+| Cabinet power strip | Monoprice 12-outlet 1U rackmount "PDU" | Wall-powered outlets for the cabinet | **Surge-protected** (1050 joules) despite the PDU name, so it must not be plugged into a UPS |
+
+Devices in the cabinet that need their own outlet (PoE-fed ones like the US 8 and the APs don't): US 8 PoE 150W, US 24, USG 3P, BGW320, picklelab NUC, and the Synology once it's powered on. Measured PoE draw from the US 8 PoE 150W was 31.2 W on 2026-10-04.
 
 ### Access Points
 
