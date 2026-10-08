@@ -157,10 +157,65 @@ that need to survive into that work:
   for intermittent CyberPower `usbhid-ups` disconnects. If that's a
   dealbreaker, the CP1500PFCLCD tower is the confirmed option.
 
+### What the CP1500PFCRM2U reports
+
+The datasheet lists an HID-compliant USB port, the same interface the
+CP1500PFCLCD uses with NUT, so `usbhid-ups` should work even though the
+model isn't listed by name (unconfirmed on hardware). Standard HID variables:
+`ups.status` (`OL` / `OB` / `LB`), `battery.charge`, `battery.runtime`,
+`ups.load`, plus the shutdown commands. It also has a dry-contact port and a
+slot for an optional RMCARD205 (SNMP/HTTP) if USB proves flaky.
+
+### Shutdown and restart design
+
+The tension: the NUC's BIOS "power on after AC loss" only fires if its power
+actually drops and returns, so the UPS has to cut its own output
+(`shutdown.return`). But the modem, router and switches share that UPS, and
+the unit can't switch outlets individually. A long `offdelay` resolves it: the
+NUC tells the UPS "cut output in N minutes" and halts, and the network gear
+keeps running until the timer ends.
+
+1. Power drops, UPS goes on battery. Short blips are ignored.
+2. `upssched` timer (about 5 min on battery, cancelled on `ONLINE`) fires, the
+   NUC shuts down cleanly and sends `shutdown.return` with a long `offdelay`.
+3. The network stays up until the delay ends or the battery dies.
+4. Mains returns, the UPS restores output, everything boots, the NUC powers on
+   from the BIOS setting.
+
+CyberPower firmware quirks
+([usbhid-ups(8)](https://dyn.manpages.debian.org/testing/nut-server/usbhid-ups.8),
+[nut-upsuser thread](https://lists.alioth.debian.org/pipermail/nut-upsuser/2015-January/009500.html),
+[Netgate forum](https://forum.netgate.com/post/1186028)):
+
+- The restart timer (`ondelay`) counts from the shutdown command, not from
+  mains returning, so with defaults the output comes back on its own after
+  about 30 s even while on battery. Set `ondelay = 0`, which means "restore
+  only when mains returns".
+- `offdelay` is divided by 60 and rounded down on many CyberPower models, so
+  anything under 60 acts as an immediate cut. Use multiples of 60.
+- With `ondelay = 0` there's no "wait for stable power" window. If power
+  flickers back and drops again, the NUC can boot on a drained battery. Guard
+  with `ignorelb` plus `override.battery.charge.low` (around 50%) so a boot on
+  low battery shuts straight back down.
+
+To test, not trust: that this unit accepts a 20-30 min `offdelay`; that a
+power return mid-countdown still produces the off-then-on cycle; and as a
+backup either way, a Wake-on-LAN to the NUC from the USG or CloudKey on power
+restore. The Synology has a built-in NUT client in DSM, so point it at
+picklelab.
+
 ## Open questions
 
-- **Are the rack's existing power strips plain PDUs or surge-protected?**
-  Don't feed a surge strip from a UPS: it voids the UPS's connected-equipment
+- ~~**Are the rack's existing power strips plain PDUs or surge-protected?**~~
+  **Answered 2026-10-07: surge-protected.** The cabinet strip is a Monoprice
+  12-outlet 1U rackmount "PDU" rated 1050 joules. So it doesn't go behind the
+  new UPS: plug the cabinet gear straight into the CP1500PFCRM2U's 8 battery
+  outlets and leave the strip on wall power for anything that doesn't need
+  battery. If more than 8 outlets are ever needed, swap in a plain PDU (no
+  joules rating). The 8-outlet math: 6 cabinet devices, 7 if the Hue bridge
+  goes on battery too, so one spare.
+
+  Why a surge strip behind a UPS is a bad idea: it voids the UPS's connected-equipment
   warranty, UL 1363 prohibits plugging a power tap into another one (a UPS
   counts), it makes overloading the UPS easy, and on a simulated-sine output
   the strip's MOVs and filter caps run hot. It adds nothing, since the UPS
