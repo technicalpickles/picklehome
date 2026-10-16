@@ -59,7 +59,9 @@ change.
   See [Rollback](#rollback).
 - **Automatic upgrades stay paused from `preflight` until `soak` ends.** A
   kernel or grub update landing mid-migration writes to whichever `/boot` and
-  ESP happen to be mounted, and can leave the two disks disagreeing.
+  ESP happen to be mounted, and can leave the two disks disagreeing. Pause
+  with `systemctl disable --now`, not `stop`: the timers are all `enabled`,
+  so a plain `stop` is undone by the first reboot in `test-boot`.
 - **`systemctl daemon-reload` after every fstab edit**, or systemd keeps
   stale mount units.
 - Sudo is interactive (`ssh -t`). Don't widen `homelab/config/sudoers-deploy-ops`
@@ -110,6 +112,18 @@ its owning stage. A cold review (2026-10-16) added items 5-9.
    mountpoint.
 9. **The swap fails and there's no written way back.** See
    [Rollback](#rollback).
+10. **The first reboot tests two things at once.** The box is running
+    `6.8.0-146` but `6.8.0-147` was installed on 2026-10-14 and
+    `/boot/initrd.img` already points at it. If `test-boot` is the first
+    reboot, a failure could be the new kernel or the new disk.
+    `rehearsal-reboot` boots 147 on the SanDisk first.
+11. **A boot failure has no way in from the console.** GRUB is
+    `GRUB_TIMEOUT_STYLE=hidden` / `GRUB_TIMEOUT=0` (no menu, no older kernel,
+    no recovery entry), the firmware boot timeout is 1 second, and there's
+    no drop-in on `emergency.service`. Ubuntu locks root by default, so a
+    failed fstab mount ends at "root account is locked", not a shell.
+    `rehearsal-reboot` opens all of these up for the migration window, and
+    `soak` closes them again. See [When it won't boot](#when-it-wont-boot).
 
 Already checked and fine (2026-10-16):
 - Both drives report 512-byte logical sectors over USB, so the GPT survives
@@ -120,10 +134,73 @@ Already checked and fine (2026-10-16):
 - The LVM devices file is off (`use_devicesfile=0`, no
   `/etc/lvm/devices/`), so a PV's by-id changing from `usb-*` to `ata-*`
   won't hide it from LVM.
+- The initramfs also has `ahci`, `xhci-pci`, and `lvm`, so root is findable
+  over SATA after the swap too.
+- The kernel cmdline is `root=/dev/mapper/vg0-root ro`, with no `quiet`, so
+  boot messages already reach the console.
+- picklelab isn't DNS, DHCP, a subnet router, or an exit node. Downtime only
+  takes out its own services.
+
+Worth knowing (2026-10-16), not a problem:
+- The firmware keeps its own entry at the front of BootOrder
+  (`SATA : PORT 0 : SanDisk SDSSDA120G : PART 0 : Boot Drive`, a `BBS()`
+  path, keyed on port and model). Boot still lands on the `Ubuntu` entry
+  today. After the swap, expect the firmware to make a PNY version and maybe
+  reorder things. That's one more reason the `EFI/BOOT/BOOTX64.EFI` fallback
+  on the new ESP matters.
+- BIOS is `0038` (2017). Don't update it as part of this: one variable at a
+  time.
 
 ---
 
 ## Stages
+
+### `rehearsal-reboot`
+
+Two reboots on the SanDisk, before anything touches the PNY. It can be its
+own day. It shakes out the new kernel (**review focus #10**), opens up the
+console (**review focus #11**), and answers the BIOS questions while
+nothing has changed. Needs a monitor and USB keyboard on the NUC. Downtime
+is ~15 minutes.
+
+- [ ] **Live USB.** The original install used `ubuntu-24.04.4-live-server-amd64.iso`
+      on a Memorex 15GB stick (see `homelab/docs/homelab_03_host_setup.md`
+      for writing one from the Mac). If the stick turns up, reuse it.
+      Otherwise re-flash. 24.04.4 matches the running release. The server
+      ISO has no desktop: get a shell from the installer's Help menu
+      ("Enter shell") or Alt-F2. It ships `lvm`.
+- [ ] **Open up the emergency shell.** `sudo systemctl edit emergency.service`
+      and `rescue.service`, each with `[Service]` `Environment=SYSTEMD_SULOGIN_FORCE=1`.
+      A failed mount now drops to a root shell on the console instead of
+      "root account is locked". Anyone at the keyboard already has root via
+      a live USB, so this gives nothing away. Also run `sudo passwd -S root`
+      and note whether root is locked (`L`).
+- [ ] **Make GRUB visible.** Write `/etc/default/grub.d/99-disk-swap.cfg`
+      with `GRUB_TIMEOUT_STYLE=menu` and `GRUB_TIMEOUT=5`, then
+      `sudo update-grub`. That gets you a menu with the older kernel and
+      recovery mode (GRUB recovery mode is how the lost install password got
+      reset, so that path has worked here before).
+- [ ] **Longer firmware timeout:** `sudo efibootmgr -t 5`. The Intel firmware
+      may ignore it; F10 at power-on works either way.
+- [ ] Reboot 1, plain: `sudo reboot`. The GRUB menu shows for 5s, then
+      `uname -r` is `6.8.0-147-generic` and `docker ps` comes back. A
+      problem here is the kernel, not the disk: pick 146 from the menu, and
+      fix it before going on.
+- [ ] Optional, cheap: from the GRUB menu, `e`, add
+      `systemd.unit=emergency.target` to the `linux` line, Ctrl-X. You
+      should land in a root shell without a password prompt. `reboot`.
+- [ ] Reboot 2, into the firmware: `sudo systemctl reboot --firmware-setup`.
+      Photograph the boot settings (boot order, Fast Boot, UEFI/Legacy, USB
+      boot) and change nothing. Exit, then with the live USB plugged in, hit
+      **F10**. Note whether the menu offers the USB stick (this answers the
+      `test-boot` fallback question). Boot it.
+- [ ] In the live shell: `lvm vgchange -ay vg0`,
+      `mount -o ro /dev/vg0/root /mnt`, `ls /mnt/etc`, then `umount /mnt`
+      and `lvm vgchange -an vg0`. That proves the rescue path works on this
+      hardware before you need it.
+- [ ] Pull the stick and reboot. It comes back normally on the SanDisk.
+- [ ] Record the BIOS findings in `findings.md` (USB in F10: yes/no,
+      Fast Boot, Legacy/CSM).
 
 ### `preflight`
 
@@ -131,9 +208,11 @@ No real changes to the box: a backup run, a write test on the blank PNY, and
 pausing the timers.
 
 - [ ] Pause anything that writes on a schedule:
-      `sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer unattended-upgrades docker-prune.timer backup.timer`.
-      These stay stopped until `soak` (backups run by hand with
-      `just backup-now` in between).
+      `sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades docker-prune.timer backup.timer`.
+      `disable`, not `stop`, so they stay off through the reboots in
+      `test-boot` and `swap`. They stay off until `soak` (backups run by
+      hand with `just backup-now` in between). Check with
+      `systemctl list-unit-files <same list>`: all `disabled`.
 - [ ] Run a fresh backup: `just backup-now`, then `just backup-snapshots`
       shows one from today.
 - [ ] Copy off-box (Mac or NAS) everything the box can't rebuild from the
@@ -150,6 +229,12 @@ pausing the timers.
       (~16G is reclaimable right now).
 - [ ] Resolve `$NEW`/`$OLD` (`ls -l /dev/disk/by-id/`), and confirm `$NEW`
       is 931.5G and has no partitions (`lsblk $NEW`).
+- [ ] **SMART health on the PNY.** `smartctl` isn't installed:
+      `sudo apt-get install smartmontools` (on the passwordless list). Then
+      `sudo smartctl -d sat -H -A $NEW` (passed, zero reallocated/pending
+      sectors) and `sudo smartctl -d sat -t short $NEW`, with the result in
+      `-l selftest` a few minutes later. If the bridge won't pass SMART
+      through, note it and rely on the load test.
 - [ ] **Load-test the USB bridge (review focus #7)** while the PNY is still
       blank: `sudo dd if=/dev/zero of=$NEW bs=1M count=30000 oflag=direct status=progress`,
       then `sudo dmesg | grep -iE 'uas|reset|abort'`. Pass is no resets and a
@@ -163,6 +248,10 @@ pausing the timers.
       then `sudo udevadm settle` so the `-partN` links exist.
 - [ ] `sudo mkfs.vfat -F32 ${NEW}-part1`, `sudo mkfs.ext4 -L boot ${NEW}-part2`
 - [ ] Verify: `lsblk -f $NEW` shows vfat / ext4 / no fs on part3.
+- [ ] Fill in the [When it won't boot](#when-it-wont-boot) cheat sheet with
+      the new `/boot` UUID (`blkid -s UUID -o value ${NEW}-part2`) and keep
+      it somewhere you can read it while the box is down (your phone, not
+      picklelab).
 
 ### `migrate-lvm`
 
@@ -222,7 +311,7 @@ in between (upgrades are paused anyway).
 
 ### `test-boot`
 
-First downtime: two reboots, a few minutes each. Proves the PNY boots on its
+Two reboots, a few minutes each. Proves the PNY boots on its
 own while the SanDisk is still internal and is the default.
 
 - [ ] NVRAM path: `sudo efibootmgr -n <pny entry>` (BootNext, one-shot) and
@@ -260,8 +349,12 @@ to keep root off USB for as little time as possible.
 
 - [ ] Leave it a few days, with `just backup-now` run by hand nightly-ish
       while the timers are paused.
-- [ ] Then re-enable everything stopped in `preflight`
-      (`sudo systemctl start ...` for the same list), and watch one
+- [ ] Undo the console changes from `rehearsal-reboot`:
+      `sudo systemctl revert emergency.service rescue.service`,
+      `sudo rm /etc/default/grub.d/99-disk-swap.cfg && sudo update-grub`.
+      Keep the 5s firmware timeout if you like it.
+- [ ] Then re-enable everything paused in `preflight`
+      (`sudo systemctl enable --now ...` for the same list), and watch one
       unattended-upgrades run, one nightly backup, and one weekly prune
       succeed. A grub or shim upgrade in this window is the real test of the
       debconf fix.
@@ -371,12 +464,44 @@ mean working it out from scratch.
 
 | Failed during | State | Way back |
 |---|---|---|
-| `preflight`, `partition-new` | Nothing changed | Restart timers, done |
+| `rehearsal-reboot` | Console changes only | Pick 146 from the GRUB menu if 147 is the problem. Otherwise nothing to undo |
+| `preflight`, `partition-new` | Nothing changed | Re-enable timers (`enable --now`), done |
 | `migrate-lvm`, before `vgreduce` | VG spans both disks | `pvmove ${NEW}-part3 ${OLD}-part4` for whatever moved, `vgreduce vg0 ${NEW}-part3` |
 | `migrate-lvm`, after `pvremove` | VG only on PNY (USB), SanDisk empty | `pvcreate ${OLD}-part4`, `vgextend`, reverse `pvmove`, `vgreduce` the PNY |
 | `boot-fixup`, `test-boot` | Boots from SanDisk entry by default | Restore `/etc/fstab.pre-swap`, `daemon-reload`, remount `/boot` + `/boot/efi` from the SanDisk, `grub-install` to it, `dpkg-reconfigure` back. Data rollback as the row above |
 | `swap` (PNY won't boot internally) | PNY in bay, SanDisk in case | Put drives back as they were (PNY in case, SanDisk in bay). The `ubuntu-sandisk` entry boots the SanDisk's ESP and `/boot`, and root comes up from the PNY over USB. Debug from there |
 | After `soak` | Rollback given up on purpose | Restore from the `preflight` tarball + restic |
+
+## When it won't boot
+
+Where it stops tells you which layer broke. All of this assumes the
+`rehearsal-reboot` prep is in place (GRUB menu visible, emergency shell
+open, live USB proven on this box). Keep this section and the new `/boot`
+UUID on your phone during `test-boot` and `swap`.
+
+| Stops at | You see | Do |
+|---|---|---|
+| Firmware | "No bootable device", or straight into BIOS setup | F2: is the drive listed at all? If not, reseat it. If it is, F10 and pick the PNY. The `EFI/BOOT/BOOTX64.EFI` fallback runs `fbx64`, which rebuilds the NVRAM entry |
+| GRUB | `grub>` or `grub rescue>` | The ESP stub can't find `/boot` (**review focus #1**). Run the GRUB commands below, then fix the stub with `grub-install` once booted |
+| initramfs | `(initramfs)` busybox prompt | `cat /proc/partitions` (is the disk seen at all? if not, it's a driver or cable problem), then `lvm vgchange -ay vg0` and `exit` |
+| systemd | Emergency shell | `journalctl -xb`, usually a bad fstab line. Fix it, `systemctl daemon-reload`, `reboot` |
+| Boots, but no ssh or missing containers | Login prompt on the console | Log in on the console, `systemctl --failed`, compare `docker ps` to the `preflight` list |
+| None of that gets anywhere | | Live USB (the `rehearsal-reboot` steps), mount the LVs, fix from there. Or [Rollback](#rollback) |
+
+GRUB by hand (fill in the UUID at `partition-new`):
+
+```
+grub> search --no-floppy --fs-uuid --set=root <new /boot uuid>
+grub> configfile /grub/grub.cfg
+```
+
+If `configfile` fails too, boot the kernel directly:
+
+```
+grub> linux /vmlinuz root=/dev/mapper/vg0-root ro
+grub> initrd /initrd.img
+grub> boot
+```
 
 ## Close-out
 

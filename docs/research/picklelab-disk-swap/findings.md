@@ -95,7 +95,8 @@ copy. The cost is more manual boot fixup, which is where the risk sits.
 - [ ] BIOS: can the NUC6CAYB boot from the USB-attached `sdb` for a pre-swap
       test? And does it boot reliably after the swap with the EFI entry
       rewritten? (Fallback path `\EFI\BOOT\BOOTX64.EFI` on the new ESP is the
-      safety net.)
+      safety net.) The runbook's `rehearsal-reboot` stage answers the first
+      half with a live USB from the F10 menu before anything changes.
 - [x] Full `/etc/fstab` and LVM state: captured above. No sudo needed,
       `sudo -n /usr/local/sbin/disk-report` is on the passwordless list and
       prints `vgs`/`lvs`/`pvs`.
