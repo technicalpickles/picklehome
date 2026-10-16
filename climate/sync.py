@@ -948,25 +948,34 @@ def cmd_settings_sync(args) -> None:
     any_error = False
 
     for name, thermostat_id in entries:
-        entry = registry["thermostats"][name]
-        desired = (entry.get("settings") or {}).get("hold_action")
-        if not desired:
-            continue
-        if args.dry_run:
-            print(f"  [{name}] Would set holdAction={desired}")
-            continue
+        settings = registry["thermostats"][name].get("settings") or {}
+        # (yaml key, API field, setter, display value). follow_me_comfort is
+        # usually false, so presence is checked with `in`, not truthiness.
+        pushes = []
+        if settings.get("hold_action"):
+            value = settings["hold_action"]
+            pushes.append(("holdAction", value, schedule.set_hold_action, value))
+        if "follow_me_comfort" in settings:
+            value = bool(settings["follow_me_comfort"])
+            pushes.append(("followMeComfort", value, schedule.set_follow_me_comfort,
+                           str(value).lower()))
 
-        try:
-            schedule.set_hold_action(ecobee, thermostat_id, desired)
-        except InvalidTokenError:
-            print("Tokens invalid. Re-run 'just climate-auth'.")
-            sys.exit(1)
-        except RuntimeError as e:
-            print(f"  [{name}] Error: {e}")
-            any_error = True
-            continue
+        for field, value, setter, shown in pushes:
+            if args.dry_run:
+                print(f"  [{name}] Would set {field}={shown}")
+                continue
 
-        print(f"  [{name}] Pushed holdAction={desired}")
+            try:
+                setter(ecobee, thermostat_id, value)
+            except InvalidTokenError:
+                print("Tokens invalid. Re-run 'just climate-auth'.")
+                sys.exit(1)
+            except RuntimeError as e:
+                print(f"  [{name}] Error: {e}")
+                any_error = True
+                continue
+
+            print(f"  [{name}] Pushed {field}={shown}")
 
     if any_error:
         sys.exit(1)

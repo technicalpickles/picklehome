@@ -87,6 +87,28 @@ def set_hold_action(ecobee, thermostat_id: str, hold_action: str) -> None:
         raise RuntimeError(f"Failed to set holdAction to {hold_action}.")
 
 
+def set_follow_me_comfort(ecobee, thermostat_id: str, enabled: bool) -> None:
+    """Set followMeComfort (Ecobee's Follow Me).
+
+    When on, the thermostat averages only the enrolled sensors that have seen
+    motion recently, falling back to all of them when none have. When off, it
+    always averages every enrolled sensor. As with holdAction, a 200 proves
+    nothing; read the live settings back to confirm it stuck.
+    """
+    body = {
+        "selection": {
+            "selectionType": "thermostats",
+            "selectionMatch": thermostat_id,
+        },
+        "thermostat": {"settings": {"followMeComfort": enabled}},
+    }
+    response = ecobee._request_with_refresh(
+        "POST", ECOBEE_ENDPOINT_THERMOSTAT, f"set followMeComfort to {enabled}", body=body
+    )
+    if response is None:
+        raise RuntimeError(f"Failed to set followMeComfort to {enabled}.")
+
+
 def resume_program(ecobee, thermostat_id: str) -> None:
     """Clear all holds on a thermostat, resuming the scheduled program."""
     body = {
