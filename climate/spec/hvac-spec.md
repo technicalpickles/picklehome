@@ -21,10 +21,14 @@ then run `just climate-validate` to confirm the remote matches.
 
 **Why:** the built-in sensors don't track the room. On 2026-10-06 the downstairs thermostat's raw reading sat at 78.6-79.3°F all day while the room sensors moved between 69 and 73°F, and an IR thermometer at the thermostat wall read 70°F against a displayed 76°F. On 2026-10-03 the same unit matched IR after a `tempCorrection` of +9.5°F, but a fixed offset cannot fix a sensor that doesn't follow the room. The thermostat was also running the compressor chasing a reading about 6°F too high.
 
+**Follow Me is off on both thermostats, so every enrolled sensor always counts.** Ecobee's Follow Me (`settings.followMeComfort`) only averages the sensors that have seen motion recently, falling back to all of them when none have. Each thermostat runs a whole floor and can't condition one room on its own, so weighting by occupancy only moves the zone's target toward whichever room happens to have someone moving in it. Set in `thermostats.yaml` (`settings.follow_me_comfort: false`), applied with `just climate-settings-sync`.
+
+**Why (2026-10-16):** with Follow Me on, Tracy's sensor recorded no motion all day, so from noon on downstairs control tracked Josh Office alone (zone reading within 0.6°F of Josh Office on average vs 1.5°F of the two-sensor mean). Her office sat at 69-71°F while the AC cycled to hold Josh Office at the ceiling, and a hold from 73 to 75 warmed Josh Office but left hers unchanged.
+
 **Consequences:**
 
 - The 2026-10-03/04 setpoint re-bases in the table below were tuned against the corrected thermostat reading. With remote sensors driving, treat those numbers as provisional until observed, and expect to retune.
-- Tracy's office was previously excluded from control on purpose (its summer 9am-1pm spike would overcool the zone). It is now averaged with Josh Office, which damps but doesn't remove that spike; revisit if downstairs runs cold in the mornings.
+- Tracy's office was previously excluded from control on purpose (its summer 9am-1pm spike would overcool the zone). It is now averaged with Josh Office, which damps but doesn't remove that spike; revisit if downstairs runs cold in the mornings. With Follow Me off it counts all the time: when her office runs cold (as in October) it pulls the zone reading down, so the AC runs less and the rest of downstairs runs warmer than the ceiling.
 - `tempCorrection` no longer affects control, but it still shapes the thermostat's own displayed temp and `climate-status`, so the drift warning stays.
 
 ---
@@ -37,7 +41,7 @@ Tracy's office is a converted carport on the downstairs zone: a concrete slab on
 
 **Winter (heating season): the room feels cold and drafty.** This is radiant loss, not air temperature: skin radiates heat toward the cold glass, and the uninsulated slab is a cold radiative floor.
 
-**Strategy: fix the room, not the whole zone.** The historical compensation (bumping the entire downstairs setpoint) is the wrong lever, it over-conditions the main living space to chase one room and, in summer, the cooling-ceiling bump actually makes her overheating *worse*. The intended direction is room-level fixes (block the east sun before the glass, a personal/circulation fan, redirect the register off her back, rug + foot-level heat in winter). Her SmartSensor is used **purely as a data point** (visibility into the room and confirming whether the fixes worked), **not as a temperature-control lever**: neither thermostat control (adding a hot room to the cooling average just overcools the rest of the house) nor driving automations off its reading. Full findings, evidence, and prioritized actions: `docs/plans/2026-06-13-tracy-office-thermal-comfort.md`.
+**Strategy: fix the room, not the whole zone.** The historical compensation (bumping the entire downstairs setpoint) is the wrong lever, it over-conditions the main living space to chase one room and, in summer, the cooling-ceiling bump actually makes her overheating *worse*. The intended direction is room-level fixes (block the east sun before the glass, a personal/circulation fan, redirect the register off her back, rug + foot-level heat in winter). Her SmartSensor is one of the two sensors averaged for downstairs control (see "Which sensors drive control"), which is a deliberate trade: her room gets a say in the zone target, at the cost of over-conditioning the rest of downstairs when her room is the outlier (overcooling in a summer-morning spike). Beyond that average it is not a control lever: no automations or setpoint bumps are driven off its reading. Full findings, evidence, and prioritized actions: `docs/plans/2026-06-13-tracy-office-thermal-comfort.md`.
 
 ---
 
@@ -48,7 +52,7 @@ Tracy's office is a converted carport on the downstairs zone: a concrete slab on
 - **Home**: neutral mode for mild weather (24-hour mean outdoor temp 60–65°F). The house doesn't need much active heating or cooling in this range; Home is set wide enough (68–73°F) to guard against the house getting too hot or cold without running the system much. Also serves as the Ecobee system default if no scheduled mode is active.
 - **Eco** (`smart3` climateRef): moderate setback mode. Looser band than Comfort modes but not as aggressive as Away. Used when the space is partially or temporarily unoccupied and full setback isn't warranted.
 - **Away** (`away` climateRef): wide temperature range for extended absence (travel, multi-day trips) or genuinely unoccupied zones. Used in the upstairs schedule during school hours, and set manually for the whole house on longer trips.
-- **Sleep**: nighttime. Used for downstairs only; upstairs overnight uses Comfort Heat instead. Downstairs Sleep allows the main living space to run cooler at night since no one is actively using it, saving on heating/cooling while keeping the swing modest enough that it doesn't take long or cost much to come back up to temperature in the morning.
+- **Sleep**: nighttime, both zones, same name but opposite intent. Downstairs Sleep is a setback (nobody's there); upstairs Sleep is tuned for the bedrooms being slept in, tighter than Comfort on both sides of the band (see the upstairs setpoints table). Downstairs Sleep allows the main living space to run cooler at night since no one is actively using it, saving on heating/cooling while keeping the swing modest enough that it doesn't take long or cost much to come back up to temperature in the morning.
 
 The general goal is a comfortable temperature whenever anyone is in a space, regardless of season — not a fixed number. The [Comfort setpoints](#comfort-setpoints) table below is the source of truth for what that means in practice: after months of tuning it's settled in the mid-70s (Comfort Cool's ceiling is 76°F upstairs and 75°F downstairs, re-based 2026-10-03/04 once the thermostats' `tempCorrection` made them read true). Comfort Heat's floors (70°F downstairs, 70°F upstairs, on the remote-sensor scale) were re-derived 2026-10-10 against the sensors, which read ~1.5-2°F below IR; they have never actually run (no heat call has happened yet this season), so treat them as provisional until the first cold stretch. Not a symmetric ~70°F target. The schedule and comfort mode in use determines *how* we get there (heating vs. cooling).
 
@@ -140,15 +144,27 @@ is never sent to Ecobee.
 
 | Time     | Mode                      | Reason                              |
 |----------|---------------------------|-------------------------------------|
-| 12:00 am | Comfort (`comfort`) | Bedrooms; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
+| 12:00 am | Sleep                     | Bedrooms in use for sleeping |
+| 7:00 am  | Comfort (`comfort`) | People up; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
 | 10:00 am | Away                      | Upstairs unoccupied; adults working downstairs, son at school |
 | 2:30 pm  | Comfort (`comfort`) | Son home from school; upstairs becomes active living area; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
+| 10:00 pm | Sleep                     | Bedtime |
 
 ### Weekends (Saturday–Sunday)
 
 | Time     | Mode                      | Reason              |
 |----------|---------------------------|---------------------|
-| 12:00 am | Comfort (`comfort`) | Home all day; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
+| 12:00 am | Sleep                     | Bedrooms in use for sleeping |
+| 8:00 am  | Comfort (`comfort`) | Home all day; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
+| 10:00 pm | Sleep                     | Bedtime |
+
+**Overnight moved from Comfort to Sleep on 2026-10-16.** Comfort Cool's 74 ceiling
+was tuned on how the bedrooms felt by day, and it was too warm to sleep at: across
+Oct 11-15 the Bedroom sensor crept from ~70.6 to ~74.0 overnight without the AC ever
+calling (74 on the sensor is ~75.5-76 real), Tracy woke up sweating, and her
+middle-of-the-night holds expired after 4 hours. Running Comfort overnight existed so
+winter nights got Comfort Heat's floor; Sleep now carries its own floor instead. The
+7:00/8:00 and 10:00 pm times are a first guess at the household's sleep window.
 
 Occupied slots are written as `comfort` in `schedule.yaml`. It is a virtual ref
 resolved to Comfort Cool (`smart1`) or Comfort Heat (`smart2`) at push time; it
@@ -192,6 +208,6 @@ directly, rather than trusting the dry run.
 | Comfort Cool | 74   | 69   | Primary occupied mode: 24-hour mean outdoor temp above 65°F. **Re-based 73/68 → 76/71 on 2026-10-03** alongside downstairs, after thermostat `tempCorrection` calibration (upstairs +3.0°F; unverified whether that value is new). 73 felt cold once readings were honest. Notes below predate the calibration. Raised 71→73 on 2026-09-10 alongside downstairs. **Heat floor raised 65→68 on 2026-09-10**, after the 24-hour-mean switch made it load-bearing: the band can hold Comfort Cool for weeks, so on a 45°F autumn night the old 65 floor let the house fall to 65 before anything heated. Under the previous instantaneous switcher any cold night flipped to Comfort Heat and its 70–72 floor, so 65 was harmless; it stopped being harmless when the flip got slower. 73/68 is exactly Ecobee's 5°F minimum spread, and the floor is inert in summer. **Watch the Bedroom sensor:** it runs 4–6°F colder than the upstairs thermostat (thermostat 71–74°F while Bedroom reads 66–69°F over the same week), so a 73 ceiling still leaves the bedroom near 68–69 overnight. The fix for that gap is enrolling the Bedroom sensor into the upstairs climates (task `3f72e752`), not another ceiling bump — only the thermostat's own sensor participates in any climate today. **Lowered 76/71 → 74/69 on 2026-10-06** after sensor enrollment: bedrooms were comfortable at sensor means of 72-74 (9/28-10/2); 76 would drift to ~77 real. Provisional until IR re-check. |
 | Comfort Heat | 75   | 70   | Primary occupied mode: 24-hour mean outdoor temp below 60°F. **Reviewed 2026-10-10, left at 75/70**: on the sensor scale (~1.5-2°F below IR) the 70 floor is ~71.5 real, a sensible bedroom heating floor, and it sits above Comfort Cool's 69. Provisional until it actually runs. Was 73/70, a 3°F spread, which Ecobee ran as 74/69. |
 | Eco          | 79   | 68   | Moderate setback: allow drift without full Away range. Re-based 75/66 → 79/68 on 2026-10-03, same as downstairs. Was 71/68, which Ecobee ran as 72/67. |
-| Sleep        | 71   | 66   | Not used in schedule: upstairs uses Comfort Heat overnight |
+| Sleep        | 72   | 67   | Overnight (10 pm to 7 am weekdays, 8 am weekends). **Set 2026-10-16** when overnight moved off Comfort: the 72 ceiling is 2°F under Comfort Cool's 74, which let the bedroom drift to ~74 on the sensor (~76 real) and woke Tracy up sweating. The 67 floor (~68.5-69 real on the sensor scale) is cooler than Comfort Heat's 70 on purpose, a sleeping temperature, not a daytime one; provisional until the first cold night. Was 71/66 while unused. |
 | Away         | 82   | 64   | Wide setback for unoccupied zones / extended absence |
 | Home         | 73   | 68   | Mild weather neutral: minimal active conditioning needed. Was 71/68, a 3°F spread, which Ecobee ran as 72/67. |

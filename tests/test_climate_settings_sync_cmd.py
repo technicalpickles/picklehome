@@ -194,3 +194,52 @@ class TestCmdSettingsSync:
             assert exc_info.value.code == 1
             captured = capsys.readouterr()
             assert "No managed thermostat named 'NonExistent'" in captured.out
+
+    def test_settings_sync_pushes_follow_me_comfort(self, capsys):
+        """Should push followMeComfort, including an explicit false."""
+        with patch("climate.sync.auth.make_ecobee") as mock_ecobee, \
+             patch("climate.sync.load_thermostats") as mock_load, \
+             patch("climate.sync.get_managed_thermostats") as mock_managed, \
+             patch("climate.sync.schedule.set_hold_action") as mock_hold, \
+             patch("climate.sync.schedule.set_follow_me_comfort") as mock_follow:
+
+            mock_ecobee.return_value = MagicMock()
+            mock_load.return_value = {
+                "thermostats": {
+                    "downstairs": {"thermostat_id": "down_id", "settings": {
+                        "hold_action": "useEndTime4hour", "follow_me_comfort": False}},
+                    "upstairs": {"thermostat_id": "up_id", "settings": {"hold_action": "useEndTime4hour"}},
+                }
+            }
+            mock_managed.return_value = [("downstairs", "down_id"), ("upstairs", "up_id")]
+
+            args = Namespace(dry_run=False, thermostat=None, thermostats=Path("config/thermostats.yaml"))
+            cmd_settings_sync(args)
+
+            assert mock_hold.call_count == 2
+            mock_follow.assert_called_once()
+            assert mock_follow.call_args[0][1:] == ("down_id", False)
+            captured = capsys.readouterr()
+            assert "[downstairs] Pushed followMeComfort=false" in captured.out
+            assert "[upstairs] Pushed followMeComfort" not in captured.out
+
+    def test_settings_sync_dry_run_follow_me_comfort(self, capsys):
+        """Should preview followMeComfort without writing on --dry-run."""
+        with patch("climate.sync.auth.make_ecobee") as mock_ecobee, \
+             patch("climate.sync.load_thermostats") as mock_load, \
+             patch("climate.sync.get_managed_thermostats") as mock_managed, \
+             patch("climate.sync.schedule.set_follow_me_comfort") as mock_follow:
+
+            mock_ecobee.return_value = MagicMock()
+            mock_load.return_value = {
+                "thermostats": {
+                    "downstairs": {"thermostat_id": "down_id", "settings": {"follow_me_comfort": False}},
+                }
+            }
+            mock_managed.return_value = [("downstairs", "down_id")]
+
+            args = Namespace(dry_run=True, thermostat=None, thermostats=Path("config/thermostats.yaml"))
+            cmd_settings_sync(args)
+
+            mock_follow.assert_not_called()
+            assert "[downstairs] Would set followMeComfort=false" in capsys.readouterr().out

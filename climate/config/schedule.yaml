@@ -32,15 +32,23 @@ thermostats:
     schedule:
       _weekday: &upstairs_weekday
         - time: "00:00"
+          climate: sleep
+        - time: "07:00"
           climate: comfort
         - time: "10:00"
           climate: away
         - time: "14:30"
           climate: comfort
+        - time: "22:00"
+          climate: sleep
 
       _weekend: &upstairs_weekend
         - time: "00:00"
+          climate: sleep
+        - time: "08:00"
           climate: comfort
+        - time: "22:00"
+          climate: sleep
 
       sunday: *upstairs_weekend
       monday: *upstairs_weekday

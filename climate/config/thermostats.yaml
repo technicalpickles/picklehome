@@ -14,6 +14,11 @@
 # control, replacing the thermostat's own built-in sensor (which does not track
 # the room: 2026-10-06 downstairs read ~79F raw against 70F by IR). Applied by
 # 'just climate-sensors-sync' (manual only, never the timer).
+#
+# settings.follow_me_comfort: Ecobee Follow Me. false makes every climate
+# always average all of settings.sensors instead of only the ones that saw
+# motion recently (see hvac-spec.md "Which sensors drive control"). Applied by
+# 'just climate-settings-sync'.
 
 thermostats:
   downstairs:
@@ -23,6 +28,7 @@ thermostats:
       hold_action: useEndTime4hour
       temp_correction_f: 9.5
       sensors: [Josh Office, Tracy Office]
+      follow_me_comfort: false
   upstairs:
     thermostat_id: "532537308613"
     managed: true
@@ -30,3 +36,4 @@ thermostats:
       hold_action: useEndTime4hour
       temp_correction_f: 5.5
       sensors: [Alex Bedroom, Bedroom]
+      follow_me_comfort: false

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from climate.ecobee.schedule import set_hold_action
+from climate.ecobee.schedule import set_follow_me_comfort, set_hold_action
 
 
 class TestSetHoldAction:
@@ -43,3 +43,26 @@ class TestSetHoldAction:
             set_hold_action(mock_ecobee, "thermostat_123", value)
             body = mock_ecobee._request_with_refresh.call_args[1]["body"]
             assert body["thermostat"]["settings"]["holdAction"] == value
+
+
+class TestSetFollowMeComfort:
+    """Tests for set_follow_me_comfort endpoint."""
+
+    def test_sends_boolean_in_thermostat_settings(self):
+        mock_ecobee = MagicMock()
+        mock_ecobee._request_with_refresh.return_value = {"status": {"code": 0}}
+
+        set_follow_me_comfort(mock_ecobee, "thermostat_123", False)
+
+        call_args = mock_ecobee._request_with_refresh.call_args
+        assert call_args[0][0] == "POST"
+        body = call_args[1]["body"]
+        assert body["selection"]["selectionMatch"] == "thermostat_123"
+        assert body["thermostat"]["settings"]["followMeComfort"] is False
+
+    def test_raises_on_null_response(self):
+        mock_ecobee = MagicMock()
+        mock_ecobee._request_with_refresh.return_value = None
+
+        with pytest.raises(RuntimeError, match="Failed to set followMeComfort"):
+            set_follow_me_comfort(mock_ecobee, "thermostat_123", False)
