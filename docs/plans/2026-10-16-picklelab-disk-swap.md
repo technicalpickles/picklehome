@@ -2,8 +2,9 @@
 
 > Ops runbook, not a code plan. Almost every stage is a root shell on
 > picklelab in an interactive `ssh -t picklelab` session with Josh typing the
-> sudo password. The only code change is `disk-monitor-mounts`. Stages are
-> slugs, not numbers; cite the slug.
+> sudo password. The only code change is Disk monitor mounts. Stages have
+> names, not numbers. Each heading's anchor (`#soak`, `#docker-split`) is the
+> stable thing to cite in commits and tasks.
 
 **Goal:** picklelab runs from the 1TB PNY in the internal bay, with Docker
 churn on its own LVs and the old SanDisk repurposed as a second backup target.
@@ -15,7 +16,26 @@ swap. Grow and split LVs only after the swap has soaked.
 **Research:** [`docs/research/picklelab-disk-swap/findings.md`](../research/picklelab-disk-swap/findings.md)
 (layout, fstab, open questions). Backlog: taskwarrior `639457b8` (swap),
 `b584df49` (Docker LV split), `6885ef30` (build off-box, unaffected),
-`b1c53be5` (disk_monitor latent bugs, same file as `disk-monitor-mounts`).
+`b1c53be5` (disk_monitor latent bugs, same file as Disk monitor mounts).
+
+## Stages at a glance
+
+In order. Each one is a checklist [below](#stages), done by hand.
+
+| Stage | What it does | Downtime |
+|---|---|---|
+| [Rehearsal reboot](#rehearsal-reboot) | Boot the pending kernel, prep console access, prove the live USB works | ~15 min |
+| [Preflight](#preflight) | Pause timers, back up off-box, health- and load-test the PNY | none |
+| [Partition new](#partition-new) | Partition and format the PNY | none |
+| [Migrate LVM](#migrate-lvm) | `pvmove` root and srv onto the PNY while running | none (runs for a while) |
+| [Boot fixup](#boot-fixup) | Copy `/boot` and the ESP, point GRUB and fstab at the PNY | none |
+| [Test boot](#test-boot) | Prove the PNY boots on its own, SanDisk still the fallback | two short reboots |
+| [Swap](#swap) | Physically put the PNY in the bay | ~15-20 min |
+| [Soak](#soak) | Run a few days on the PNY, then turn timers back on. Ends the easy rollback | none |
+| [Disk monitor mounts](#disk-monitor-mounts) | Code PR so disk alerts cover the new LVs. Any time before Docker split | none |
+| [Docker split](#docker-split) | Move containerd and CI Docker onto their own LVs | a few minutes |
+| [Grow](#grow) | Grow root and srv | none |
+| [Second backup target](#second-backup-target) | Reuse the SanDisk as a second restic repo | none |
 
 ## Target layout
 
@@ -54,14 +74,14 @@ change.
   paste the full by-id names (they contain serials) into anything committed.
 - **Never have two filesystems with the same UUID attached.** So no `dd` of
   partitions: make new filesystems and update fstab and grub to match.
-- **No LV grows or new LVs until `soak` passes.** Until then `vg0` fits on
+- **No LV grows or new LVs until Soak passes.** Until then `vg0` fits on
   the SanDisk (100G allocated, 109G PV), so a reverse `pvmove` is possible.
   See [Rollback](#rollback).
-- **Automatic upgrades stay paused from `preflight` until `soak` ends.** A
+- **Automatic upgrades stay paused from Preflight until Soak ends.** A
   kernel or grub update landing mid-migration writes to whichever `/boot` and
   ESP happen to be mounted, and can leave the two disks disagreeing. Pause
   with `systemctl disable --now`, not `stop`: the timers are all `enabled`,
-  so a plain `stop` is undone by the first reboot in `test-boot`.
+  so a plain `stop` is undone by the first reboot in Test boot.
 - **`systemctl daemon-reload` after every fstab edit**, or systemd keeps
   stale mount units.
 - Sudo is interactive (`ssh -t`). Don't widen `homelab/config/sudoers-deploy-ops`
@@ -76,16 +96,16 @@ its owning stage. A cold review (2026-10-16) added items 5-9.
    finds `/boot` by filesystem UUID. Copy the ESP without re-running
    `grub-install`, and the new ESP keeps pointing at the *old* `/boot`, which
    is gone after the swap: you get a grub rescue prompt. Check is in
-   `boot-fixup`.
+   Boot fixup.
 2. **Backups cover less than the box.** restic backs up `/srv/data` only. Its
    repo lives on the disk being migrated, and once `pvmove` finishes the
    SanDisk is no longer a copy of anything (its extents are freed). `/etc`,
    `/var/lib/tailscale`, `/srv/docker/volumes`, and the `ci` user's config
-   aren't backed up at all. `preflight` takes an off-box copy of all of it.
+   aren't backed up at all. Preflight takes an off-box copy of all of it.
 3. **disk_monitor goes blind after the split.** It hardcodes
    `FILESYSTEMS = ["/", "/srv"]` and uses `du -x /srv`, so the new LVs (the
-   ones most likely to fill) would never alert. Ship `disk-monitor-mounts`
-   before `docker-split`.
+   ones most likely to fill) would never alert. Ship Disk monitor mounts
+   before Docker split.
 4. **Something writes during the Docker copy.** The rootless CI daemon runs
    under `user@2000.service`, separate from system Docker. And
    `docker-prune.sh` and `disk-report.sh` run `sudo -iu ci docker ...`,
@@ -94,43 +114,43 @@ its owning stage. A cold review (2026-10-16) added items 5-9.
 5. **`grub-install` deletes the SanDisk's boot entry.** It removes every
    NVRAM entry with the same label (`ubuntu`) and puts the new one first. So
    without extra work there's no "SanDisk still bootable" fallback during
-   `test-boot`. `boot-fixup` recreates it under another label.
+   Test boot. Boot fixup recreates it under another label.
 6. **debconf still points grub at the SanDisk's ESP.** Confirmed:
    `grub-efi/install_devices` is the SanDisk's `scsi-0ATA_SanDisk_*-part1`.
    The next grub or shim upgrade would then fail its postinst (leaving dpkg
-   half-configured) or install to the wrong disk. Re-pointed in `boot-fixup`
-   and again in `swap`, since the PNY's by-id changes from `usb-*` to `ata-*`.
+   half-configured) or install to the wrong disk. Re-pointed in Boot fixup
+   and again in Swap, since the PNY's by-id changes from `usb-*` to `ata-*`.
 7. **The USB bridge resets under sustained I/O.** The PNY is on the `uas`
-   driver (Realtek `0bda:9201`). From `migrate-lvm` to `swap`, root and
+   driver (Realtek `0bda:9201`). From Migrate LVM to Swap, root and
    `/srv` live on USB. A UAS reset there means I/O errors and ext4 going
-   read-only, possibly mid-`pvmove`. `preflight` load-tests it, and the
-   gap between `migrate-lvm` and `swap` should be the same day.
+   read-only, possibly mid-`pvmove`. Preflight load-tests it, and the
+   gap between Migrate LVM and Swap should be the same day.
 8. **A new LV doesn't mount at boot.** A plain fstab line that fails drops a
    headless box into emergency mode (no ssh). `nofail` is worse: Docker
    starts on the empty mountpoint dir and quietly refills `/srv`.
-   `docker-split` uses `RequiresMountsFor=` plus an immutable empty
+   Docker split uses `RequiresMountsFor=` plus an immutable empty
    mountpoint.
 9. **The swap fails and there's no written way back.** See
    [Rollback](#rollback).
 10. **The first reboot tests two things at once.** The box is running
     `6.8.0-146` but `6.8.0-147` was installed on 2026-10-14 and
-    `/boot/initrd.img` already points at it. If `test-boot` is the first
+    `/boot/initrd.img` already points at it. If Test boot is the first
     reboot, a failure could be the new kernel or the new disk.
-    `rehearsal-reboot` boots 147 on the SanDisk first.
+    Rehearsal reboot boots 147 on the SanDisk first.
 11. **A boot failure has no way in from the console.** GRUB is
     `GRUB_TIMEOUT_STYLE=hidden` / `GRUB_TIMEOUT=0` (no menu, no older kernel,
     no recovery entry), the firmware boot timeout is 1 second, and there's
     no drop-in on `emergency.service`. Ubuntu locks root by default, so a
     failed fstab mount ends at "root account is locked", not a shell.
-    `rehearsal-reboot` opens all of these up for the migration window, and
-    `soak` closes them again. See [When it won't boot](#when-it-wont-boot).
+    Rehearsal reboot opens all of these up for the migration window, and
+    Soak closes them again. See [When it won't boot](#when-it-wont-boot).
 
 Already checked and fine (2026-10-16):
 - Both drives report 512-byte logical sectors over USB, so the GPT survives
   the move to native SATA.
 - Secure Boot is disabled.
 - The initramfs includes `uas` and `usb-storage`, so root-on-USB-LVM boots
-  for `test-boot`.
+  for Test boot.
 - The LVM devices file is off (`use_devicesfile=0`, no
   `/etc/lvm/devices/`), so a PV's by-id changing from `usb-*` to `ata-*`
   won't hide it from LVM.
@@ -155,7 +175,7 @@ Worth knowing (2026-10-16), not a problem:
 
 ## Stages
 
-### `rehearsal-reboot`
+### Rehearsal reboot
 
 Two reboots on the SanDisk, before anything touches the PNY. It can be its
 own day. It shakes out the new kernel (**review focus #10**), opens up the
@@ -193,7 +213,7 @@ is ~15 minutes.
       Photograph the boot settings (boot order, Fast Boot, UEFI/Legacy, USB
       boot) and change nothing. Exit, then with the live USB plugged in, hit
       **F10**. Note whether the menu offers the USB stick (this answers the
-      `test-boot` fallback question). Boot it.
+      Test boot fallback question). Boot it.
 - [ ] In the live shell: `lvm vgchange -ay vg0`,
       `mount -o ro /dev/vg0/root /mnt`, `ls /mnt/etc`, then `umount /mnt`
       and `lvm vgchange -an vg0`. That proves the rescue path works on this
@@ -202,7 +222,7 @@ is ~15 minutes.
 - [ ] Record the BIOS findings in `findings.md` (USB in F10: yes/no,
       Fast Boot, Legacy/CSM).
 
-### `preflight`
+### Preflight
 
 No real changes to the box: a backup run, a write test on the blank PNY, and
 pausing the timers.
@@ -210,7 +230,7 @@ pausing the timers.
 - [ ] Pause anything that writes on a schedule:
       `sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades docker-prune.timer backup.timer`.
       `disable`, not `stop`, so they stay off through the reboots in
-      `test-boot` and `swap`. They stay off until `soak` (backups run by
+      Test boot and Swap. They stay off until Soak (backups run by
       hand with `just backup-now` in between). Check with
       `systemctl list-unit-files <same list>`: all `disabled`.
 - [ ] Run a fresh backup: `just backup-now`, then `just backup-snapshots`
@@ -242,7 +262,7 @@ pausing the timers.
       `usb-storage.quirks=0bda:9201:u` kernel arg (forces plain usb-storage,
       needs a reboot) and re-test, or switch to an offline clone.
 
-### `partition-new`
+### Partition new
 
 - [ ] `sudo sgdisk -n1:0:+1G -t1:ef00 -n2:0:+1G -t2:8300 -n3:0:0 -t3:8e00 $NEW`,
       then `sudo udevadm settle` so the `-partN` links exist.
@@ -253,7 +273,7 @@ pausing the timers.
       it somewhere you can read it while the box is down (your phone, not
       picklelab).
 
-### `migrate-lvm`
+### Migrate LVM
 
 Online, no downtime. Runs for a while (~100G over USB 3). Run it under
 `tmux` or `screen` so a dropped ssh doesn't matter.
@@ -274,7 +294,7 @@ Online, no downtime. Runs for a while (~100G over USB 3). Run it under
 - [ ] No fstab change needed: `/` and `/srv` mount by `dm-uuid-LVM-*`, which
       `pvmove` doesn't change. Confirm with `findmnt / /srv`.
 
-### `boot-fixup`
+### Boot fixup
 
 Do the `/boot` copy and the mount switch back to back, so nothing can land
 in between (upgrades are paused anyway).
@@ -309,27 +329,27 @@ in between (upgrades are paused anyway).
       has `BOOTX64.EFI` and `fbx64.efi`, and `/boot/efi/EFI/ubuntu/BOOTX64.CSV`
       exists (`fbx64` uses it to rebuild a missing NVRAM entry).
 
-### `test-boot`
+### Test boot
 
 Two reboots, a few minutes each. Proves the PNY boots on its
 own while the SanDisk is still internal and is the default.
 
 - [ ] NVRAM path: `sudo efibootmgr -n <pny entry>` (BootNext, one-shot) and
       reboot. After: `findmnt /boot/efi` is the PNY's part1, and containers
-      come back (compare to the `preflight` list).
+      come back (compare to the Preflight list).
 - [ ] Removable fallback path: reboot and pick the PNY's generic or USB
       entry from the F10 boot menu, which uses `EFI/BOOT/BOOTX64.EFI`.
       Same checks. If the BIOS won't offer USB here, note it. In that case the
-      fallback only gets tested for real during `swap`.
+      fallback only gets tested for real during Swap.
 - [ ] If either path *tries* and fails, reboot with nothing chosen: BootOrder
       lands on the SanDisk entry, and you debug from there.
 - [ ] Once both pass: `sudo efibootmgr -o <pny>,<sandisk>,...` so the PNY is
       the default going into the swap.
 
-### `swap`
+### Swap
 
 The real downtime: shut down, move drives, boot. Expect ~15-20 minutes
-including ~20 containers coming back. Same day as `migrate-lvm` if possible,
+including ~20 containers coming back. Same day as Migrate LVM if possible,
 to keep root off USB for as little time as possible.
 
 - [ ] Final `docker ps` list, then `sudo shutdown -h now`.
@@ -339,31 +359,31 @@ to keep root off USB for as little time as possible.
 - [ ] Power on. If it doesn't find a boot entry, pick the PNY from the F10
       boot menu.
 - [ ] Verify: `lsblk` shows the PNY as `sda` with all mounts, `docker ps`
-      matches the `preflight` list, `just disk-monitor-check` is quiet,
+      matches the Preflight list, `just disk-monitor-check` is quiet,
       Tailscale Services resolve.
 - [ ] Re-point debconf at the PNY's new `ata-*` ESP path
-      (`dpkg-reconfigure` as in `boot-fixup`), and remove the dead
+      (`dpkg-reconfigure` as in Boot fixup), and remove the dead
       `ubuntu-sandisk` NVRAM entry (`efibootmgr -b <num> -B`).
 
-### `soak`
+### Soak
 
 - [ ] Leave it a few days, with `just backup-now` run by hand nightly-ish
       while the timers are paused.
-- [ ] Undo the console changes from `rehearsal-reboot`:
+- [ ] Undo the console changes from Rehearsal reboot:
       `sudo systemctl revert emergency.service rescue.service`,
       `sudo rm /etc/default/grub.d/99-disk-swap.cfg && sudo update-grub`.
       Keep the 5s firmware timeout if you like it.
-- [ ] Then re-enable everything paused in `preflight`
+- [ ] Then re-enable everything paused in Preflight
       (`sudo systemctl enable --now ...` for the same list), and watch one
       unattended-upgrades run, one nightly backup, and one weekly prune
       succeed. A grub or shim upgrade in this window is the real test of the
       debconf fix.
 - [ ] After this, the reverse-`pvmove` rollback is deliberately given up.
 
-### `disk-monitor-mounts`
+### Disk monitor mounts
 
 Code change, its own PR (taskwarrior `9fd7f741`). Can land any time before
-`docker-split`.
+Docker split.
 
 **Files:** `homelab/services/disk_monitor/disk_monitor.py`,
 `homelab/services/disk-hygiene/disk-report.sh`,
@@ -386,7 +406,7 @@ Code change, its own PR (taskwarrior `9fd7f741`). Can land any time before
       `disk-hygiene` (for `disk-report.sh`), README says which mounts are
       watched.
 
-### `docker-split`
+### Docker split
 
 Second, short downtime for Docker only (the host stays up). Taskwarrior
 `b584df49`.
@@ -405,7 +425,7 @@ the riskiest part.
       onto the new filesystem's root.
 - [ ] Stop everything that writes there (**review focus #4**):
       `sudo systemctl stop docker-prune.timer backup.timer` (if re-enabled
-      after `soak`), the systemd units for the compose stacks,
+      after Soak), the systemd units for the compose stacks,
       `sudo systemctl stop docker docker.socket containerd`, and
       `sudo systemctl stop user@2000.service`.
 - [ ] Immediately before the final pass, check that `pgrep -a containerd`,
@@ -430,11 +450,11 @@ the riskiest part.
       must match pairwise (`/srv/ci-docker` owned by `ci`). Fix before
       starting anything.
 - [ ] Start things back up (`user@2000.service`, docker, the service units,
-      the timers), compare `docker ps` to the `preflight` list, and run a CI
+      the timers), compare `docker ps` to the Preflight list, and run a CI
       build to prove the rootless daemon works.
 - [ ] After a day of normal running: `sudo rm -rf /srv/containerd.old /srv/ci-docker.old`.
 
-### `grow`
+### Grow
 
 Online, no downtime.
 
@@ -442,14 +462,14 @@ Online, no downtime.
       (`-r` resizes the ext4 too).
 - [ ] `sudo vgs` shows ~600G free; `disk-report` looks like the target layout table.
 
-### `second-backup-target`
+### Second backup target
 
 The old SanDisk becomes a second local restic repo (`639457b8`'s last part).
 Small enough to fold in here, but its details belong to the backup service,
 so it gets its own PR touching `homelab/services/backup/`.
 
 - [ ] Plug the Ugreen case in. `lsblk` shows the SanDisk with its old
-      partitions and no LVM label (the `pvremove` in `migrate-lvm`).
+      partitions and no LVM label (the `pvremove` in Migrate LVM).
 - [ ] `sudo wipefs -a $OLD`, single GPT partition, ext4, `nofail` fstab
       mount by UUID (mountpoint up to the backup PR). `nofail` is right here,
       unlike the Docker LVs: it's an external disk, and a missing backup
@@ -464,20 +484,20 @@ mean working it out from scratch.
 
 | Failed during | State | Way back |
 |---|---|---|
-| `rehearsal-reboot` | Console changes only | Pick 146 from the GRUB menu if 147 is the problem. Otherwise nothing to undo |
-| `preflight`, `partition-new` | Nothing changed | Re-enable timers (`enable --now`), done |
-| `migrate-lvm`, before `vgreduce` | VG spans both disks | `pvmove ${NEW}-part3 ${OLD}-part4` for whatever moved, `vgreduce vg0 ${NEW}-part3` |
-| `migrate-lvm`, after `pvremove` | VG only on PNY (USB), SanDisk empty | `pvcreate ${OLD}-part4`, `vgextend`, reverse `pvmove`, `vgreduce` the PNY |
-| `boot-fixup`, `test-boot` | Boots from SanDisk entry by default | Restore `/etc/fstab.pre-swap`, `daemon-reload`, remount `/boot` + `/boot/efi` from the SanDisk, `grub-install` to it, `dpkg-reconfigure` back. Data rollback as the row above |
-| `swap` (PNY won't boot internally) | PNY in bay, SanDisk in case | Put drives back as they were (PNY in case, SanDisk in bay). The `ubuntu-sandisk` entry boots the SanDisk's ESP and `/boot`, and root comes up from the PNY over USB. Debug from there |
-| After `soak` | Rollback given up on purpose | Restore from the `preflight` tarball + restic |
+| Rehearsal reboot | Console changes only | Pick 146 from the GRUB menu if 147 is the problem. Otherwise nothing to undo |
+| Preflight, Partition new | Nothing changed | Re-enable timers (`enable --now`), done |
+| Migrate LVM, before `vgreduce` | VG spans both disks | `pvmove ${NEW}-part3 ${OLD}-part4` for whatever moved, `vgreduce vg0 ${NEW}-part3` |
+| Migrate LVM, after `pvremove` | VG only on PNY (USB), SanDisk empty | `pvcreate ${OLD}-part4`, `vgextend`, reverse `pvmove`, `vgreduce` the PNY |
+| Boot fixup, Test boot | Boots from SanDisk entry by default | Restore `/etc/fstab.pre-swap`, `daemon-reload`, remount `/boot` + `/boot/efi` from the SanDisk, `grub-install` to it, `dpkg-reconfigure` back. Data rollback as the row above |
+| Swap (PNY won't boot internally) | PNY in bay, SanDisk in case | Put drives back as they were (PNY in case, SanDisk in bay). The `ubuntu-sandisk` entry boots the SanDisk's ESP and `/boot`, and root comes up from the PNY over USB. Debug from there |
+| After Soak | Rollback given up on purpose | Restore from the Preflight tarball + restic |
 
 ## When it won't boot
 
 Where it stops tells you which layer broke. All of this assumes the
-`rehearsal-reboot` prep is in place (GRUB menu visible, emergency shell
+Rehearsal reboot prep is in place (GRUB menu visible, emergency shell
 open, live USB proven on this box). Keep this section and the new `/boot`
-UUID on your phone during `test-boot` and `swap`.
+UUID on your phone during Test boot and Swap.
 
 | Stops at | You see | Do |
 |---|---|---|
@@ -485,10 +505,10 @@ UUID on your phone during `test-boot` and `swap`.
 | GRUB | `grub>` or `grub rescue>` | The ESP stub can't find `/boot` (**review focus #1**). Run the GRUB commands below, then fix the stub with `grub-install` once booted |
 | initramfs | `(initramfs)` busybox prompt | `cat /proc/partitions` (is the disk seen at all? if not, it's a driver or cable problem), then `lvm vgchange -ay vg0` and `exit` |
 | systemd | Emergency shell | `journalctl -xb`, usually a bad fstab line. Fix it, `systemctl daemon-reload`, `reboot` |
-| Boots, but no ssh or missing containers | Login prompt on the console | Log in on the console, `systemctl --failed`, compare `docker ps` to the `preflight` list |
-| None of that gets anywhere | | Live USB (the `rehearsal-reboot` steps), mount the LVs, fix from there. Or [Rollback](#rollback) |
+| Boots, but no ssh or missing containers | Login prompt on the console | Log in on the console, `systemctl --failed`, compare `docker ps` to the Preflight list |
+| None of that gets anywhere | | Live USB (the Rehearsal reboot steps), mount the LVs, fix from there. Or [Rollback](#rollback) |
 
-GRUB by hand (fill in the UUID at `partition-new`):
+GRUB by hand (fill in the UUID at Partition new):
 
 ```
 grub> search --no-floppy --fs-uuid --set=root <new /boot uuid>
