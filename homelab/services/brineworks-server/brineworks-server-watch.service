@@ -1,0 +1,10 @@
+[Unit]
+Description=Brineworks server liveness check (alerts via OpenClaw Telegram)
+After=docker.service
+
+# Runs as root (no User=): needs docker exec on the OpenClaw gateway to deliver the alert.
+# StateDirectory= creates /var/lib/brineworks-server-watch for the failure counter.
+[Service]
+Type=oneshot
+StateDirectory=brineworks-server-watch
+ExecStart=/opt/homelab/homelab/services/brineworks-server/brineworks-server-watch.sh

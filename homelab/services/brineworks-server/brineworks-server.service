@@ -3,10 +3,18 @@ Description=Brineworks PRM server (FastAPI + Postgres)
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
+# Retry forever (never trip the start-rate limit): the failure we're covering is
+# `op` not resolving DNS right after boot, which clears on its own within minutes.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Type=oneshot + Restart= needs systemd >= 244. Without this, a failed ExecStart
+# (op can't resolve DNS at boot) left the unit dead until someone noticed: down
+# Oct 10-16 2026 after a reboot. RestartSec doubles as the DNS-race backoff.
+Restart=on-failure
+RestartSec=30
 WorkingDirectory=/opt/homelab/homelab/services/brineworks-server
 EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # .env.build is written by deploy.sh and carries deploy-time vars

@@ -19,16 +19,31 @@ cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
 echo "==> Checking Gmail keyring"
-# sudo: the keyring dir is root-owned mode 700, so a plain [ -f ] from this user
-# would report a file that exists as missing.
-KEYRING_FILE="$DATA_DIR/keyring/cryptfile.cfg"
-if ! sudo test -f "$KEYRING_FILE"; then
-    echo "ERROR: $KEYRING_FILE is missing." >&2
-    echo "    brineworks-server refuses to start in production without Gmail credentials," >&2
-    echo "    and a restart without them takes PRM, tasks and /health down with it." >&2
-    echo "    From the Mac, run: just seed-brineworks-gmail" >&2
-    exit 1
-fi
+# check-keyring.sh runs as root via a pinned NOPASSWD grant (sudoers-deploy-ops): the
+# keyring dir is root-owned mode 700, so a plain [ -f ] from this user would report an
+# existing file as missing. -n so a missing grant fails fast instead of hanging on a
+# password prompt over plain ssh. The wrapper exits 3 for "missing"; any other nonzero
+# means sudo never ran it, which is NOT the same as the file being absent.
+set +e
+sudo -n "$SERVICE_DIR/check-keyring.sh"
+keyring_rc=$?
+set -e
+case "$keyring_rc" in
+    0) ;;
+    3)
+        echo "ERROR: $DATA_DIR/keyring/cryptfile.cfg is missing." >&2
+        echo "    brineworks-server refuses to start in production without Gmail credentials," >&2
+        echo "    and a restart without them takes PRM, tasks and /health down with it." >&2
+        echo "    From the Mac, run: just seed-brineworks-gmail" >&2
+        exit 1
+        ;;
+    *)
+        echo "ERROR: could not check the keyring (sudo exited $keyring_rc), which is not the same as it being missing." >&2
+        echo "    Most likely the sudoers grant for check-keyring.sh isn't installed yet." >&2
+        echo "    On picklelab, run once (needs your password): $REPO_DIR/homelab/scripts/setup-deploy-access.sh" >&2
+        exit 1
+        ;;
+esac
 
 echo "==> Updating brineworks source"
 if [ -d "$BRINEWORKS_REPO/.git" ]; then
@@ -67,10 +82,16 @@ sudo tailscale serve --service=svc:brineworks --https=443 "http://127.0.0.1:$BRI
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/brineworks-server.service" /etc/systemd/system/
 
+echo "==> Linking liveness watchdog (timer + service)"
+sudo ln -sf "$SERVICE_DIR/brineworks-server-watch.service" /etc/systemd/system/
+sudo ln -sf "$SERVICE_DIR/brineworks-server-watch.timer" /etc/systemd/system/
+
 echo "==> Reloading systemd and restarting service"
 sudo systemctl daemon-reload
 sudo systemctl enable brineworks-server.service
 sudo systemctl restart brineworks-server.service
+sudo systemctl enable brineworks-server-watch.timer
+sudo systemctl start brineworks-server-watch.timer
 
 echo "==> Status"
 systemctl status brineworks-server.service --no-pager
