@@ -377,8 +377,10 @@ install, a Docker prune, and tests that write only to the blank PNY.
 
 ### Migrate LVM
 
-Online, no downtime. Runs for a while (~100G over USB 3). Run it under
-`tmux` or `screen` so a dropped ssh doesn't matter.
+Online, no downtime. Runs for a while (~100G over USB 3). A dropped ssh
+doesn't stop the move (see the practice notes below), but run it under
+`tmux` or `screen` anyway so you keep the progress output and the shell
+with `$NEW`/`$OLD` set.
 
 - [ ] `sudo pvcreate ${NEW}-part3 && sudo vgextend vg0 ${NEW}-part3`.
       This labels the PNY's third partition as a PV and adds it to `vg0` as
@@ -389,10 +391,28 @@ Online, no downtime. Runs for a while (~100G over USB 3). Run it under
       Why this is safe on a live system: `pvmove` mirrors each chunk to the
       new PV, switches the LV over to the copy, and only then frees the old
       chunk, checkpointing in LVM metadata as it goes. A crash or dropped ssh
-      leaves every chunk on one disk or the other, never neither. A bare
-      `sudo pvmove` resumes. `sudo pvmove --abort` stops only the segment in
-      flight. Anything already moved stays on the PNY, which is fine because
-      it's all one VG either way.
+      leaves every chunk on one disk or the other, never neither. Watch it
+      from any shell with `sudo lvs -a -o lv_name,copy_percent,devices vg0`
+      (the in-flight copy shows as `[pvmove0]`).
+- [ ] What practice showed (2026-10-16, a lima VM with the same Ubuntu 24.04
+      kernel series and LVM 2.03.16, scratch files as disks, a writer
+      appending to the LVs throughout):
+      - **Dropped ssh or Ctrl-C:** the move keeps going. The copy runs in the
+        kernel; the `pvmove` command only reports progress. Nothing to do,
+        `sudo pvmove` with no arguments just reattaches to watch.
+      - **Power loss mid-move:** on the next boot, activating the VG
+        restarts the copy in the background by itself. It resumes from the
+        last checkpoint, not the exact spot (it went from 32.67% back to
+        10.67%), so expect some re-copying. After it finished: both
+        filesystems `fsck` clean, checksums matched, and the writer's log was
+        intact up to the second before the cut.
+      - **`sudo pvmove --abort`:** the chunk in flight goes back to where it
+        came from; chunks already finished stay moved.
+      - **`vgreduce` on a disk that still holds data** refuses with
+        `Physical volume ... still in use`, so it's a real safety check.
+      - **Both Rollback rows for this stage** (reverse `pvmove`, and
+        `pvcreate` + `vgextend` + reverse `pvmove` after a `pvremove`) worked
+        end to end with checksums intact.
 - [ ] Verify: `sudo pvs` shows `${OLD}-part4` with PFree == PSize (fully
       empty).
 - [ ] `sudo vgreduce vg0 ${OLD}-part4 && sudo pvremove ${OLD}-part4`.
