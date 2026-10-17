@@ -5,6 +5,14 @@
 > sudo password. The only code change is Disk monitor mounts. Stages have
 > names, not numbers. Each heading's anchor (`#soak`, `#docker-split`) is the
 > stable thing to cite in commits and tasks.
+>
+> **Where commands run:** a root-capable shell on picklelab (`ssh -t picklelab`,
+> or the console) unless the step says otherwise. `just ...` recipes run on
+> the Mac from this repo. They ssh to picklelab themselves.
+>
+> **Destructive commands** (ones that overwrite a disk or delete data) are
+> marked **Destructive** with a guard to run first and the reason they're
+> safe at that point. If the guard doesn't match, stop.
 
 **Goal:** picklelab runs from the 1TB PNY in the internal bay, with Docker
 churn on its own LVs and the old SanDisk repurposed as a second backup target.
@@ -37,6 +45,29 @@ In order. Each one is a checklist [below](#stages), done by hand.
 | [Grow](#grow) | Grow root and srv | none |
 | [Second backup target](#second-backup-target) | Reuse the SanDisk as a second restic repo | none |
 
+## Terms
+
+- **ESP** (EFI System Partition): the small vfat partition mounted at
+  `/boot/efi`. The firmware reads bootloaders (`shimx64.efi`, `grubx64.efi`)
+  from it. Each disk here has its own.
+- **PV / VG / LV** (LVM): a physical volume is a partition handed to LVM.
+  PVs pool into a volume group (`vg0`), and logical volumes (`root`, `srv`)
+  are carved out of the group. `pvmove` relocates an LV's data from one PV to
+  another while it's mounted and in use.
+- **NVRAM boot entry**: a `BootXXXX` record in the firmware (list them with
+  `efibootmgr`). Each one names a disk partition and a `.efi` file. `BootOrder`
+  is the order they're tried; `BootNext` is a one-shot override for the next
+  boot only.
+- **Fallback path**: `EFI/BOOT/BOOTX64.EFI` on an ESP. The firmware tries it
+  when no NVRAM entry matches, for example after the disk moves to a
+  different port.
+- **debconf**: Debian's stored answers to package install questions. grub's
+  answer says which ESP to reinstall to when grub itself is upgraded.
+- **by-id**: `/dev/disk/by-id/` names, built from the drive's model and serial.
+  Unlike `sda`/`sdb`, they don't change when other drives come and go, but
+  they *do* change when a drive moves between USB and SATA (the `usb-` or
+  `ata-` prefix).
+
 ## Target layout
 
 GPT on the PNY (no copy of `sda2`, it's an unused installer leftover):
@@ -68,10 +99,23 @@ change.
 ## Global constraints
 
 - **Refer to disks by `/dev/disk/by-id/`**, never `sdX`. The PNY is `sdb` now
-  and becomes `sda` after the swap. In this doc `$NEW` is the
-  `usb-PNY_1TB_SATA_SSD_*-0:0` link and `$OLD` is the `ata-SanDisk_SDSSDA120G_*`
-  link. After the swap the PNY's link changes to an `ata-PNY_*` one. Don't
-  paste the full by-id names (they contain serials) into anything committed.
+  and becomes `sda` after the swap. Commands below use `$NEW` (the PNY) and
+  `$OLD` (the SanDisk). They're plain shell variables, so **set them at the
+  start of every shell** (a new ssh session, tmux window, or `sudo -i` starts
+  without them):
+
+  ```bash
+  ls -l /dev/disk/by-id/ | grep -v part   # find the two whole-disk links
+  NEW=/dev/disk/by-id/usb-PNY_...-0:0     # the PNY, while it's in the enclosure
+  OLD=/dev/disk/by-id/ata-SanDisk_...     # the SanDisk, while it's internal
+  lsblk -dno SIZE,TRAN "$NEW" "$OLD"      # guard: 931.5G usb, then 111.8G sata
+  ```
+
+  If the guard shows anything else, the variables are wrong: stop. Both links
+  change when a drive changes connection. After Swap, the PNY becomes
+  `ata-...` and the SanDisk (once it's in the enclosure) becomes `usb-...`.
+  Don't paste the full by-id names (they contain serials) into anything
+  committed.
 - **Never have two filesystems with the same UUID attached.** So no `dd` of
   partitions: make new filesystems and update fstab and grub to match.
 - **No LV grows or new LVs until Soak passes.** Until then `vg0` fits on
@@ -90,7 +134,7 @@ change.
 ## Review focus
 
 Ways this goes wrong that no step "tests" by default. Each one has a check in
-its owning stage. A cold review (2026-10-16) added items 5-9.
+the stage that owns it.
 
 1. **Boot fixup is incomplete.** Ubuntu's ESP stub (`EFI/ubuntu/grub.cfg`)
    finds `/boot` by filesystem UUID. Copy the ESP without re-running
@@ -189,17 +233,33 @@ is ~15 minutes.
       Otherwise re-flash. 24.04.4 matches the running release. The server
       ISO has no desktop: get a shell from the installer's Help menu
       ("Enter shell") or Alt-F2. It ships `lvm`.
-- [ ] **Open up the emergency shell.** `sudo systemctl edit emergency.service`
-      and `rescue.service`, each with `[Service]` `Environment=SYSTEMD_SULOGIN_FORCE=1`.
-      A failed mount now drops to a root shell on the console instead of
-      "root account is locked". Anyone at the keyboard already has root via
-      a live USB, so this gives nothing away. Also run `sudo passwd -S root`
-      and note whether root is locked (`L`).
-- [ ] **Make GRUB visible.** Write `/etc/default/grub.d/99-disk-swap.cfg`
-      with `GRUB_TIMEOUT_STYLE=menu` and `GRUB_TIMEOUT=5`, then
-      `sudo update-grub`. That gets you a menu with the older kernel and
-      recovery mode (GRUB recovery mode is how the lost install password got
-      reset, so that path has worked here before).
+- [ ] **Open up the emergency shell.** Run `sudo systemctl edit emergency.service`,
+      and in the editor it opens, add:
+
+      ```ini
+      [Service]
+      Environment=SYSTEMD_SULOGIN_FORCE=1
+      ```
+
+      Do the same for `rescue.service`. A failed mount now drops to a root
+      shell on the console instead of "root account is locked". Safe because
+      it only affects the physical console, and anyone at the keyboard
+      already has root via a live USB. It's a drop-in file under
+      `/etc/systemd/system/<unit>.d/`, so Soak removes it cleanly. Also run
+      `sudo passwd -S root` and note whether root is locked (`L`).
+- [ ] **Make GRUB visible.** Create `/etc/default/grub.d/99-disk-swap.cfg`
+      containing:
+
+      ```sh
+      GRUB_TIMEOUT_STYLE=menu
+      GRUB_TIMEOUT=5
+      ```
+
+      then `sudo update-grub`. Files in `grub.d/` are read after
+      `/etc/default/grub`, so these two lines win without editing the main
+      file. That gets you a 5s menu with the older kernel and recovery mode.
+      GRUB recovery mode is how the lost install password got reset, so that
+      path has worked here before.
 - [ ] **Longer firmware timeout:** `sudo efibootmgr -t 5`. The Intel firmware
       may ignore it; F10 at power-on works either way.
 - [ ] Reboot 1, plain: `sudo reboot`. The GRUB menu shows for 5s, then
@@ -224,31 +284,52 @@ is ~15 minutes.
 
 ### Preflight
 
-No real changes to the box: a backup run, a write test on the blank PNY, and
-pausing the timers.
+Nothing here touches the SanDisk's data: pausing timers, backups, a package
+install, a Docker prune, and tests that write only to the blank PNY.
 
+- [ ] Set `$NEW` and `$OLD` and run the guard (see
+      [Global constraints](#global-constraints)). Also confirm the PNY has no
+      partitions: `lsblk $NEW` shows one line, no children.
 - [ ] Pause anything that writes on a schedule:
       `sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades docker-prune.timer backup.timer`.
       `disable`, not `stop`, so they stay off through the reboots in
       Test boot and Swap. They stay off until Soak (backups run by
       hand with `just backup-now` in between). Check with
       `systemctl list-unit-files <same list>`: all `disabled`.
-- [ ] Run a fresh backup: `just backup-now`, then `just backup-snapshots`
-      shows one from today.
-- [ ] Copy off-box (Mac or NAS) everything the box can't rebuild from the
-      repo: `/srv/backups/restic`, `/etc`, `/var/lib/tailscale`,
-      `/srv/docker/volumes`, `/home/ci/.config`. E.g.
-      `sudo tar -cf - <paths> | ssh <mac> 'cat > ~/picklelab-pre-swap-2026-10-XX.tar'`.
-      Done when the tarball exists off-box and `tar -tf` lists all five.
-- [ ] Save metadata off-box too: `sudo vgcfgbackup -f /tmp/vg0.vgcfg vg0`,
-      `sudo sgdisk --backup=/tmp/sandisk.gpt $OLD`, `sudo efibootmgr -v`,
+- [ ] Run a fresh backup (on the Mac): `just backup-now`, then
+      `just backup-snapshots` shows one from today.
+- [ ] Prune so less gets copied and there's room for the tarball:
+      `sudo /opt/homelab/homelab/services/disk-hygiene/docker-prune.sh`
+      (up to ~16G). It's the same script the weekly timer runs: dangling
+      images and build cache only, never `-a` or `--volumes`, so nothing a
+      running or stopped container needs.
+- [ ] Copy off-box everything the box can't rebuild from the repo:
+      `/srv/backups/restic`, `/etc`, `/var/lib/tailscale`,
+      `/srv/docker/volumes`, `/home/ci/.config`. Check the size first
+      (`sudo du -sch <paths>`) against `df -h /srv`, then write it on
+      picklelab and pull it from the Mac, so picklelab never needs ssh access
+      back to the Mac.
+
+      ```bash
+      # on picklelab
+      sudo tar -cf /srv/pre-swap.tar <paths> && sudo chown "$USER" /srv/pre-swap.tar
+      # on the Mac
+      scp picklelab:/srv/pre-swap.tar ~/picklelab-pre-swap-2026-10-XX.tar
+      tar -tf ~/picklelab-pre-swap-2026-10-XX.tar | cut -d/ -f1-3 | sort -u
+      # back on picklelab, once the Mac copy lists all five
+      rm /srv/pre-swap.tar
+      ```
+
+      Done when the Mac copy lists all five paths. It holds secrets
+      (Tailscale node key, `/etc/shadow`), so keep it out of synced folders
+      and delete it after Soak.
+- [ ] Save metadata off-box too: `sudo vgcfgbackup -f /tmp/vg0.vgcfg vg0`
+      (LVM's description of `vg0`, for rebuilding it by hand),
+      `sudo sgdisk --backup=/tmp/sandisk.gpt $OLD` (a copy of the SanDisk's
+      partition table; both are read-only on the disk), `sudo efibootmgr -v`,
       `sudo disk-report`, `cat /etc/fstab`, and the container list
       (`docker ps --format '{{.Names}}' | sort`, which is what later stages
-      compare against).
-- [ ] Prune so less gets copied: `sudo /opt/homelab/homelab/services/disk-hygiene/docker-prune.sh`
-      (~16G is reclaimable right now).
-- [ ] Resolve `$NEW`/`$OLD` (`ls -l /dev/disk/by-id/`), and confirm `$NEW`
-      is 931.5G and has no partitions (`lsblk $NEW`).
+      compare against). `scp` them to the Mac the same way.
 - [ ] **SMART health on the PNY.** `smartctl` isn't installed:
       `sudo apt-get install smartmontools` (on the passwordless list). Then
       `sudo smartctl -d sat -H -A $NEW` (passed, zero reallocated/pending
@@ -256,17 +337,38 @@ pausing the timers.
       `-l selftest` a few minutes later. If the bridge won't pass SMART
       through, note it and rely on the load test.
 - [ ] **Load-test the USB bridge (review focus #7)** while the PNY is still
-      blank: `sudo dd if=/dev/zero of=$NEW bs=1M count=30000 oflag=direct status=progress`,
-      then `sudo dmesg | grep -iE 'uas|reset|abort'`. Pass is no resets and a
-      steady rate. If it resets, stop: either add the
-      `usb-storage.quirks=0bda:9201:u` kernel arg (forces plain usb-storage,
-      needs a reboot) and re-test, or switch to an offline clone.
+      blank. **Destructive** to whatever `$NEW` points at: it writes 30GB of
+      zeros over the start of the disk. Guard: rerun
+      `lsblk -dno SIZE,TRAN "$NEW"` right before and see `931.5G usb`. Safe
+      because the PNY is blank, and it has to happen before Partition new
+      for the same reason. If `$NEW` were the SanDisk, this would wipe the
+      running system, hence the guard.
+
+      ```bash
+      sudo dd if=/dev/zero of="$NEW" bs=1M count=30000 oflag=direct status=progress
+      sudo dmesg | grep -iE 'uas|reset|abort'
+      ```
+
+      Pass is no resets and a steady rate. If it resets, stop. Either add the
+      `usb-storage.quirks=0bda:9201:u` kernel arg (makes this enclosure use
+      the older `usb-storage` driver instead of `uas`; needs a reboot) and
+      re-test, or switch to an offline copy: boot the live USB and copy with
+      the box down, the Clonezilla-style approach `findings.md` considered
+      first.
 
 ### Partition new
 
-- [ ] `sudo sgdisk -n1:0:+1G -t1:ef00 -n2:0:+1G -t2:8300 -n3:0:0 -t3:8e00 $NEW`,
-      then `sudo udevadm settle` so the `-partN` links exist.
-- [ ] `sudo mkfs.vfat -F32 ${NEW}-part1`, `sudo mkfs.ext4 -L boot ${NEW}-part2`
+**Destructive** to `$NEW` only. Guard: `lsblk -dno SIZE,TRAN "$NEW"` shows
+`931.5G usb`. Safe because the PNY holds nothing but the load test's zeros.
+
+- [ ] `sudo sgdisk -n1:0:+1G -t1:ef00 -n2:0:+1G -t2:8300 -n3:0:0 -t3:8e00 "$NEW"`
+      writes a fresh GPT with the three partitions from
+      [Target layout](#target-layout) (`ef00` ESP, `8300` Linux, `8e00` LVM).
+      Then `sudo udevadm settle`, so the `${NEW}-partN` links exist before
+      the next step uses them.
+- [ ] `sudo mkfs.vfat -F32 ${NEW}-part1`, `sudo mkfs.ext4 -L boot ${NEW}-part2`.
+      New filesystems get new UUIDs, which is the point (see the
+      no-duplicate-UUIDs rule in [Global constraints](#global-constraints)).
 - [ ] Verify: `lsblk -f $NEW` shows vfat / ext4 / no fs on part3.
 - [ ] Fill in the [When it won't boot](#when-it-wont-boot) cheat sheet with
       the new `/boot` UUID (`blkid -s UUID -o value ${NEW}-part2`) and keep
@@ -278,19 +380,28 @@ pausing the timers.
 Online, no downtime. Runs for a while (~100G over USB 3). Run it under
 `tmux` or `screen` so a dropped ssh doesn't matter.
 
-- [ ] `sudo pvcreate ${NEW}-part3 && sudo vgextend vg0 ${NEW}-part3`
+- [ ] `sudo pvcreate ${NEW}-part3 && sudo vgextend vg0 ${NEW}-part3`.
+      This labels the PNY's third partition as a PV and adds it to `vg0` as
+      empty space. Nothing moves yet, and `vgreduce` undoes it.
 - [ ] Move one LV at a time so an abort only strands one of them:
       `sudo pvmove -i 60 -n root ${OLD}-part4 ${NEW}-part3`, then the same
-      with `-n srv`. If it's interrupted, a bare `sudo pvmove` resumes.
-      `sudo pvmove --abort` stops only the segment in flight. Anything already
-      moved stays on the PNY, which is fine because it's all one VG either
-      way.
+      with `-n srv` (`-i 60` prints progress every 60s).
+      Why this is safe on a live system: `pvmove` mirrors each chunk to the
+      new PV, switches the LV over to the copy, and only then frees the old
+      chunk, checkpointing in LVM metadata as it goes. A crash or dropped ssh
+      leaves every chunk on one disk or the other, never neither. A bare
+      `sudo pvmove` resumes. `sudo pvmove --abort` stops only the segment in
+      flight. Anything already moved stays on the PNY, which is fine because
+      it's all one VG either way.
 - [ ] Verify: `sudo pvs` shows `${OLD}-part4` with PFree == PSize (fully
       empty).
-- [ ] `sudo vgreduce vg0 ${OLD}-part4 && sudo pvremove ${OLD}-part4`. The
-      `pvremove` matters: without it, the SanDisk carries a stale `vg0` label
-      that collides with the real one when it goes back into the enclosure.
-      This is the point where the SanDisk stops being a copy of anything.
+- [ ] `sudo vgreduce vg0 ${OLD}-part4 && sudo pvremove ${OLD}-part4`.
+      `vgreduce` takes the SanDisk out of `vg0`, and refuses if anything is
+      still allocated on it, so it doubles as a check. `pvremove` wipes the
+      LVM label. That matters: without it, the SanDisk carries a stale `vg0`
+      label that collides with the real one when it goes back into the
+      enclosure. This is the point where the SanDisk stops being a copy of
+      anything.
 - [ ] No fstab change needed: `/` and `/srv` mount by `dm-uuid-LVM-*`, which
       `pvmove` doesn't change. Confirm with `findmnt / /srv`.
 
@@ -306,24 +417,46 @@ in between (upgrades are paused anyway).
 - [ ] Copy the ESP: mount `${NEW}-part1` at `/mnt/newefi`,
       `sudo rsync -rt /boot/efi/ /mnt/newefi/`.
 - [ ] Switch the live mounts: unmount `/mnt/*`, `umount /boot/efi /boot`,
-      save `/etc/fstab.pre-swap`, edit `/etc/fstab` to the new UUIDs
-      (`blkid ${NEW}-part1 ${NEW}-part2`), `sudo systemctl daemon-reload`,
-      `sudo mount -a`, then `findmnt /boot /boot/efi` shows the PNY's
-      partitions.
+      `sudo cp /etc/fstab /etc/fstab.pre-swap`, then edit the `/boot` and
+      `/boot/efi` lines in `/etc/fstab` to the new UUIDs
+      (`blkid ${NEW}-part1 ${NEW}-part2`). Leave the other lines alone.
+      `sudo systemctl daemon-reload`, `sudo mount -a`, then
+      `findmnt /boot /boot/efi` shows the PNY's partitions.
+      Why unmounting `/boot` on a running box is safe: the running kernel is
+      already in memory, and `/boot` is only read at boot or written by
+      kernel and grub upgrades, which are paused. If `mount -a` fails, the
+      old lines are in `fstab.pre-swap`, and the SanDisk's partitions are
+      untouched.
 - [ ] `sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu`
-      and `sudo update-grub`.
+      and `sudo update-grub`. `grub-install` writes into whatever ESP is
+      mounted at `/boot/efi` (the PNY's now, after the step above) and
+      creates an NVRAM entry for it. `update-grub` rewrites
+      `/boot/grub/grub.cfg` on the PNY's `/boot`. Neither touches the
+      SanDisk's partitions, since they're no longer mounted.
 - [ ] **Review focus #1 check:** `grep -i uuid /boot/efi/EFI/ubuntu/grub.cfg`
-      shows the *new* `/boot` UUID, not `238a1829-...`.
+      shows the *new* `/boot` UUID, not the SanDisk's (the old `/boot` line in
+      `/etc/fstab.pre-swap`, `238a1829-...`).
 - [ ] **Review focus #5:** `grub-install` just deleted the SanDisk's `ubuntu`
       entry. Recreate it:
-      `sudo efibootmgr -c -d $OLD -p 1 -L ubuntu-sandisk -l '\EFI\ubuntu\shimx64.efi'`.
-      Then `sudo efibootmgr -o <sandisk>,<pny>,...` so the SanDisk is the
-      default and the PNY is only tried when asked. The SanDisk's `/boot`
-      (`sda3`) is frozen at copy time, which is fine as long as upgrades stay
-      paused.
+      `sudo efibootmgr -c -d "$OLD" -p 1 -L ubuntu-sandisk -l '\EFI\ubuntu\shimx64.efi'`
+      (`-d`/`-p` name the SanDisk's partition 1, its ESP; `-l` is the shim
+      file on it, the same file the original entry pointed at). This only
+      adds an NVRAM record, nothing on disk changes.
+      Then set the order. Run `sudo efibootmgr`, find the `BootXXXX` numbers
+      for `ubuntu-sandisk` and the new `ubuntu` (the PNY), and run
+      `sudo efibootmgr -o <sandisk>,<pny>,<every other existing number>`.
+      Keep the others, including the firmware's own `SATA : PORT 0` entry,
+      at the end, so nothing disappears from the F10 menu. Now the SanDisk is
+      the default, and the PNY is only tried when asked. The SanDisk's
+      `/boot` (`sda3`) is frozen at copy time, which is fine as long as
+      upgrades stay paused.
 - [ ] **Review focus #6:** `sudo dpkg-reconfigure grub-efi-amd64-signed`
-      (or `grub-efi-amd64`, whichever owns the question on this box), select
-      only the PNY's ESP. Verify with
+      (or `grub-efi-amd64`, whichever owns the question on this box). On this
+      minimized install there's no `dialog` package, so it asks as a plain
+      text prompt with numbered choices (see `homelab_03_host_setup.md`).
+      Pick only the PNY's ESP: the `usb-PNY_...-part1` path. It may also
+      reinstall grub to the ESP you pick, which is the same thing the
+      `grub-install` above did. Verify with
       `sudo debconf-show grub-efi-amd64 | grep install_devices`.
 - [ ] Confirm the fallback path is on the new ESP: `/boot/efi/EFI/BOOT/`
       has `BOOTX64.EFI` and `fbx64.efi`, and `/boot/efi/EFI/ubuntu/BOOTX64.CSV`
@@ -334,9 +467,12 @@ in between (upgrades are paused anyway).
 Two reboots, a few minutes each. Proves the PNY boots on its
 own while the SanDisk is still internal and is the default.
 
-- [ ] NVRAM path: `sudo efibootmgr -n <pny entry>` (BootNext, one-shot) and
-      reboot. After: `findmnt /boot/efi` is the PNY's part1, and containers
-      come back (compare to the Preflight list).
+- [ ] NVRAM path: `sudo efibootmgr -n <pny entry>` (the `ubuntu` entry's
+      number from `sudo efibootmgr`), then reboot. Why this is safe:
+      `BootNext` applies to one boot only. The firmware clears it as soon as
+      it uses it, so if the PNY fails, the next power cycle follows
+      `BootOrder` back to the SanDisk. After: `findmnt /boot/efi` is the PNY's
+      part1, and containers come back (compare to the Preflight list).
 - [ ] Removable fallback path: reboot and pick the PNY's generic or USB
       entry from the F10 boot menu, which uses `EFI/BOOT/BOOTX64.EFI`.
       Same checks. If the BIOS won't offer USB here, note it. In that case the
@@ -363,14 +499,21 @@ to keep root off USB for as little time as possible.
       Tailscale Services resolve.
 - [ ] Re-point debconf at the PNY's new `ata-*` ESP path
       (`dpkg-reconfigure` as in Boot fixup), and remove the dead
-      `ubuntu-sandisk` NVRAM entry (`efibootmgr -b <num> -B`).
+      `ubuntu-sandisk` NVRAM entry (`efibootmgr -b <num> -B`). Deleting it
+      only removes the NVRAM record, not anything on a disk. Do it only after
+      the verify step above passes: until then it's the Rollback path.
+- [ ] `$NEW` and `$OLD` are stale from here on (see
+      [Global constraints](#global-constraints)). Re-set `NEW` to the PNY's
+      `ata-...` link before anything else uses it.
 
 ### Soak
 
 - [ ] Leave it a few days, with `just backup-now` run by hand nightly-ish
       while the timers are paused.
 - [ ] Undo the console changes from Rehearsal reboot:
-      `sudo systemctl revert emergency.service rescue.service`,
+      `sudo systemctl revert emergency.service rescue.service` (removes all
+      local overrides on those units; ours are the only ones, there were none
+      on 2026-10-16),
       `sudo rm /etc/default/grub.d/99-disk-swap.cfg && sudo update-grub`.
       Keep the 5s firmware timeout if you like it.
 - [ ] Then re-enable everything paused in Preflight
@@ -435,7 +578,10 @@ the riskiest part.
       filesystems' `lost+found`, which is harmless).
 - [ ] Unmount `/mnt/*`, `mv /srv/containerd /srv/containerd.old` (same for
       ci-docker), `mkdir` the empty mountpoints and `sudo chattr +i` them,
-      so nothing can write into them while they're unmounted.
+      so nothing can write into them while they're unmounted. The immutable
+      flag is on the empty directory underneath. Mounting the LV over it
+      still works, and writes go to the LV. `sudo chattr -i` undoes it if the
+      directory ever needs changing.
 - [ ] fstab lines by `/dev/disk/by-id/dm-uuid-LVM-*` (match the existing
       style), **no `nofail`**. Then `sudo systemctl daemon-reload` and
       `sudo mount -a`.
@@ -453,6 +599,9 @@ the riskiest part.
       the timers), compare `docker ps` to the Preflight list, and run a CI
       build to prove the rootless daemon works.
 - [ ] After a day of normal running: `sudo rm -rf /srv/containerd.old /srv/ci-docker.old`.
+      **Destructive.** Guard: `findmnt /srv/containerd /srv/ci-docker` shows
+      both LVs mounted, and Docker and CI have run fine for that day. Safe
+      because these are the pre-split copies. The live data is on the LVs.
 
 ### Grow
 
@@ -470,7 +619,15 @@ so it gets its own PR touching `homelab/services/backup/`.
 
 - [ ] Plug the Ugreen case in. `lsblk` shows the SanDisk with its old
       partitions and no LVM label (the `pvremove` in Migrate LVM).
-- [ ] `sudo wipefs -a $OLD`, single GPT partition, ext4, `nofail` fstab
+- [ ] Re-set `OLD`: in the enclosure, the SanDisk is a `usb-...` link now,
+      not the `ata-SanDisk_...` one from before. Guard:
+      `lsblk -dno SIZE,TRAN "$OLD"` shows `111.8G usb`,
+      `lsblk -o NAME,MOUNTPOINTS "$OLD"` shows nothing mounted, and
+      `sudo pvs` doesn't list it. Safe because
+      the SanDisk has held nothing since Migrate LVM, and the guard rules out
+      pointing at the PNY (931.5G, sata).
+- [ ] **Destructive:** `sudo wipefs -a "$OLD"` (erases the old partition
+      table and filesystem signatures), then a single GPT partition, ext4, `nofail` fstab
       mount by UUID (mountpoint up to the backup PR). `nofail` is right here,
       unlike the Docker LVs: it's an external disk, and a missing backup
       target shouldn't block boot.
