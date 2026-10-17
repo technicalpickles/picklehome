@@ -214,3 +214,19 @@ Initial connection may take a few seconds while Tailscale establishes a direct p
 ### neovim
 
 Installed on host: `sudo apt install neovim`
+
+### node and gitleaks (for `openclaw-ro`)
+
+`openclaw-ro` is a read-only, redacted query wrapper for agent probes of OpenClaw. It lives in the private `pickleclaw` repo (`scripts/openclaw-ro/`) and runs from the `/opt/pickleclaw` clone that `services/openclaw/deploy.sh` keeps current, so there is nothing to install for the wrapper itself. It does need two things on the host, both one-time:
+
+**node:** installed on host: `sudo apt install nodejs` (18.19.1 on Ubuntu 24.04). The wrapper runs its redactor with the host's node and refuses to run without it, since the alternative is printing unredacted output. apt puts it at `/usr/bin/node`, which a non-interactive `ssh picklelab ...` finds; a node installed through mise or nvm would not be on that PATH. The redactor's tests pass on 18.19.1.
+
+**gitleaks:** pulled once as an image, pinned by digest:
+
+```bash
+ssh picklelab 'docker pull zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f'
+```
+
+`docker run` would pull it on first use anyway; doing it up front keeps the first call fast. The wrapper scans its own output with this image (`--network none`) as a backstop for secrets the redactor missed. Bumping gitleaks means changing the tag and digest in `scripts/openclaw-ro/openclaw-ro` in `pickleclaw`.
+
+gitleaks runs only as this image, by decision, so the version is identical on picklelab, the dev VM and in tests. The apt `gitleaks` package is **not** used: Ubuntu 24.04 ships 8.16.0, which has no `stdin` command (it spells that `detect --pipe`) and predates a lot of detection rules. It was installed on this host on 2026-10-02 and should be removed (`sudo apt remove gitleaks`) so nobody reaches for the wrong one.
