@@ -79,3 +79,9 @@ technicalpickles ALL=(backup) NOPASSWD: SETENV: /usr/bin/restic *
 # above -- deploy.sh runs as the unprivileged deploy user and can't read the
 # 0600 root:root token file itself.
 technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/backup/read-picklehome-var.sh *
+
+# brineworks-server's deploy-time Gmail keyring check. The keyring dir is root-owned
+# 0700, so the deploy user can't stat the file. check-keyring.sh takes no arguments and
+# only tests one hardcoded path (exit 0 present, 3 missing) -- so deploy.sh can tell
+# "file missing" apart from "sudo wanted a password".
+technicalpickles ALL=(ALL) NOPASSWD: /opt/homelab/homelab/services/brineworks-server/check-keyring.sh

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check brineworks-server liveness every 5 minutes
+
+[Timer]
+# First run after boot waits long enough for the server's own restart loop to win the DNS race.
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

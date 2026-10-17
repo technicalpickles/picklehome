@@ -124,6 +124,18 @@ The keyring directory is root-owned mode 700 and the container runs as root, so 
 
 Rollback note: migrations `0009` and `0010` (triage rules, triage apply results) are additive, but code from before them cannot start on a database stamped `0010`, because alembic cannot locate the revision. Back out by running `alembic downgrade 0008` from the new image first. That drops `triage_rules` and apply history, so export rules first (`bw email rules export`).
 
+## Surviving reboots, and noticing when it doesn't
+
+The unit is `Type=oneshot`, so it only runs `docker compose up -d` once per boot. If that fails (it did on 2026-10-10: `op` couldn't resolve DNS right after boot), nothing retried and the server stayed down six days.
+
+- **Restart:** `brineworks-server.service` has `Restart=on-failure`, `RestartSec=30`, and no start-rate limit, so it keeps retrying until DNS (or whatever) comes up. Needs systemd 244+ for `Restart=` on oneshot units.
+- **Liveness alert:** `brineworks-server-watch.timer` runs `brineworks-server-watch.sh` every 5 minutes (first run 5 min after boot). It curls `http://127.0.0.1:8765/health`; after 2 failures in a row it alerts once, and once more on recovery. Silent otherwise. Alerts go to the journal and to Telegram via the OpenClaw gateway (same path as `openclaw-approvals-watch`). If the gateway is down too, only the journal gets it: `journalctl -u brineworks-server-watch`.
+- `deploy.sh` installs and enables both.
+
+## Deploy keyring check and sudo
+
+`deploy.sh` checks the keyring through `check-keyring.sh`, a no-argument root wrapper pinned in `homelab/config/sudoers-deploy-ops` (exit 0 present, 3 missing). It calls it with `sudo -n`, so a missing sudoers grant fails with a message saying so instead of being misread as "keyring missing". After pulling this change, re-run `homelab/scripts/setup-deploy-access.sh` on picklelab once (it needs your password) to install the new grant.
+
 ## API
 
 - `GET /health`: returns `{"status": "ok"}` if DB is reachable, 503 otherwise
