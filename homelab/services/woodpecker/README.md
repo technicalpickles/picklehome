@@ -25,7 +25,7 @@ GitHub (webhooks + OAuth)
 Three containers share one network namespace (`network_mode: service:ts-woodpecker`):
 
 - **ts-woodpecker** — Tailscale sidecar in **userspace mode** (`TS_USERSPACE=true`: HTTP-only, no `NET_ADMIN`, no `/dev/net/tun`). Owns the `woodpecker` MagicDNS name and the Funnel. Funnel config is the checked-in [`funnel.json`](funnel.json) (`TS_SERVE_CONFIG`), proxying `:443 → 127.0.0.1:8000`.
-- **woodpecker-server** — UI/API on loopback `:8000` (only Funnel exposes it), gRPC `:9000` stays inside the netns. SQLite DB. Pinned to `:v3` (Woodpecker dropped `:latest` to prevent accidental major upgrades; `--pull always` gets patches/minors, never a major).
+- **woodpecker-server** — UI/API on loopback `:8000` (only Funnel exposes it). gRPC `:9000` is reachable by the local agent over loopback and, via a `TCPForward` in `funnel.json`, by tailnet members only (see [Remote agents](#remote-agents-optional)). It is deliberately absent from `AllowFunnel`, so it is not public. SQLite DB. Pinned to `:v3` (Woodpecker dropped `:latest` to prevent accidental major upgrades; `--pull always` gets patches/minors, never a major).
 - **woodpecker-agent** — runs as the `ci` uid, points at the rootless docker socket via `DOCKER_HOST`. `WOODPECKER_MAX_WORKFLOWS=2` so CI can't starve the home-automation containers on the Celeron J3455.
 
 ### Agent isolation: rootless Docker as a dedicated `ci` user
@@ -58,6 +58,33 @@ The Woodpecker stack itself runs on the normal root daemon; only the agent is *p
    | `WOODPECKER_TS_AUTHKEY` | Tailscale reusable `tag:ci` auth key |
 
    Because Funnel makes the endpoint public, three server settings are security-bearing and baked into `compose.yaml`: `WOODPECKER_OPEN=false`, `WOODPECKER_REPO_OWNERS=technicalpickles`, `WOODPECKER_ADMIN=technicalpickles`.
+
+## Remote agents (optional)
+
+Additional agents on other machines (for example an OrbStack VM on the laptop, running its own tailnet node) connect to the server's gRPC port over the tailnet.
+
+`funnel.json` is a Tailscale **Serve** config that happens to carry the public Funnel entry. Only ports listed under `AllowFunnel` are public (just `:443`). The `9000` `TCPForward` entry is not listed there, so it is tailnet-only. Keep it out of `AllowFunnel`, and omit the key rather than setting it to `false`: a present-but-false key still shows a Funnel badge on the Machines page.
+
+Policy additions (admin console, not checked in):
+
+```json
+{
+  "tagOwners": { "tag:ci-agent": ["<same owners as tag:ci>"] },
+  "grants": [
+    { "src": ["tag:ci-agent"], "dst": ["tag:ci"], "ip": ["tcp:9000"] }
+  ]
+}
+```
+
+Check the live policy for an existing wildcard grant (`*` to `*`) first. If one is still active it already allows this, and the grant is decorative until the wildcard goes.
+
+The remote agent needs `WOODPECKER_SERVER=woodpecker.tail2023b7.ts.net:9000`, the same `WOODPECKER_AGENT_SECRET` as the server, and its own `WOODPECKER_AGENT_LABELS`. Pair it with a server-side agent filter in the UI so it only gets the workflows you assign. The agent's `WOODPECKER_AGENT_SECRET` is the credential gating gRPC, so inject it from 1Password at provisioning time.
+
+After deploying a `funnel.json` change, verify:
+
+1. `docker compose exec ts-woodpecker tailscale serve status --json` shows `9000` under `TCP` and `AllowFunnel` unchanged.
+2. From a tailnet node, `nc -vz woodpecker.tail2023b7.ts.net 9000` succeeds.
+3. From off the tailnet (phone on cellular), the same check fails.
 
 ## First-time Setup
 
