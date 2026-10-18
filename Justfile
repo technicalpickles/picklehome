@@ -161,8 +161,10 @@ _deploy-remote service host="picklelab":
         echo "Pushing to origin/main..."
         git push
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-{{service}}"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/{{service}}/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/{{service}}/deploy.sh"
 
 # Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
@@ -388,8 +390,10 @@ deploy-disk-hygiene host="picklelab":
         echo "Pushing to origin/main..."
         git push
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-disk-hygiene"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/disk-hygiene/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/disk-hygiene/deploy.sh"
 
 # Run docker prune now (triggers the systemd service, then shows its log)
 docker-prune-now host="picklelab":
@@ -426,8 +430,10 @@ deploy-obsidian-sync host="picklelab":
         echo "Pushing to origin/main..."
         git push
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-obsidian-sync"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/obsidian-sync/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/obsidian-sync/deploy.sh"
 
 # Run ob CLI against a specific vault's container (e.g. "rpg sync-status")
 obsidian-sync-exec vault *ARGS:
@@ -470,6 +476,8 @@ deploy-openclaw host="picklelab":
         echo "       homelab/services/openclaw/README.md."
         exit 1
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-openclaw"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     echo "==> Pulling on {{host}}"
     ssh {{host}} "cd /opt/homelab && git pull"
@@ -497,7 +505,7 @@ deploy-openclaw host="picklelab":
     ssh {{host}} "chmod -R go-w $PLUGIN_DIR/brineworks-approval"
     echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
-    ssh {{host}} "cd /opt/homelab && homelab/services/openclaw/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/openclaw/deploy.sh"
 
 # Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit
 openclaw-status host="picklelab":

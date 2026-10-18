@@ -13,6 +13,16 @@ entry for `picklelab` (no local picklehome checkout needed):
 just deploy-<service>          # push if needed, ssh in, git pull, run deploy.sh
 ```
 
+Only one deploy runs on picklelab at a time. The recipes take a host-wide `flock`
+(`/run/lock/homelab-deploy.lock`) for their whole run, and every `deploy.sh` and
+`homelab/scripts/setup-*.sh` takes it too when run by hand. A second deploy fails
+immediately (exit 75) saying who holds it; re-run when that one finishes. The kernel
+drops the lock when the holder dies, so there's nothing to clean up. See
+[ADR 0002](../../docs/adr/0002-host-side-deploy-lock.md). New `deploy.sh`: source
+`homelab/scripts/deploy-lock.sh` right after `set -euo pipefail`; new multi-step recipe:
+`source scripts/deploy-lock.sh; deploy_lock_acquire {{host}} "<label>"`, and pass
+`HOMELAB_DEPLOY_LOCK_HELD=1` on the ssh that runs `deploy.sh`.
+
 Secrets never touch the Mac or scp anywhere. Each service directory in
 `homelab/services/<name>/` contains:
 
