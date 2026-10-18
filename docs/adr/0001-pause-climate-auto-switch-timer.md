@@ -12,13 +12,13 @@ The house still isn't comfortable. Comfort is being tuned by hand on the thermos
 
 Two things made a plain "stop the timer" insufficient:
 
-- `climate-auto-switch.timer` is `enabled` on picklelab, so a reboot restarts it.
+- `climate-auto-switch.timer` was `enabled` on picklelab, so a reboot would restart it.
 - `deploy.sh` ran `systemctl enable` and `systemctl restart` on every deploy, so any `just deploy-climate` (for an unrelated climate change) would silently resume automation.
 - Disabling the unit needs a sudo password on picklelab (the passwordless allowlist covers `enable`/`start`/`stop`/`restart` but not `disable`), so it can't be done from an agent session.
 
 ## Decision
 
-1. Stop the timer on picklelab (`systemctl stop`, allowlisted). It stays `enabled`.
+1. Stop and disable the timer on picklelab. `stop` is passwordless; `disable` needed an interactive sudo password. Because the unit was installed as a symlink into `/etc/systemd/system` (by `deploy.sh`'s `ln -sf`), `disable` also removed that symlink, so `systemctl` now reports the unit as `not-found`.
 2. Add a `TIMER_PAUSED=1` guard in `homelab/services/climate-auto-switch/deploy.sh` so deploys still build the image, link units, and `daemon-reload`, but skip `enable` and `restart` of the timer.
 3. Leave the thermostats as they are. No holds are cleared and no schedule is pushed.
 
@@ -31,11 +31,11 @@ Two things made a plain "stop the timer" insufficient:
 
 ### Negative
 
-- A picklelab reboot still restarts the timer, since it remains enabled. Closing that needs `sudo systemctl disable` run interactively (`ssh -t`).
+- Resuming is not just `enable --now`: the unit symlink is gone, so it takes a deploy (which re-links it) first.
 - The pause lives in a script constant, so it is easy to forget. Mitigation: the taskwarrior reminder due 2026-10-25.
 
 ### Resuming
 
-1. Set `TIMER_PAUSED=0` (or delete the guard) in `deploy.sh`.
-2. `ssh -t picklelab sudo systemctl enable --now climate-auto-switch.timer`.
+1. Set `TIMER_PAUSED=0` (or delete the guard) in `deploy.sh`, commit, push to `main`.
+2. `just deploy-climate`. It re-links the unit, enables, and restarts the timer.
 3. Consider `--clear-holds` for the first run if leftover holds should be dropped.
