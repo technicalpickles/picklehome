@@ -4,6 +4,9 @@
 # Run on the target host (picklelab), not from Mac.
 set -euo pipefail
 
+# One mutation of picklelab at a time (shared with the deploy scripts).
+source "$(dirname "${BASH_SOURCE[0]}")/deploy-lock.sh"
+
 REPO_DIR="${REPO_DIR:-/opt/homelab}"
 SUDOERS_SRC="$REPO_DIR/homelab/config/sudoers-deploy-ops"
 SUDOERS_DST="/etc/sudoers.d/deploy-ops"

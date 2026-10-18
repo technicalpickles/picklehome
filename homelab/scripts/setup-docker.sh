@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# One mutation of picklelab at a time (shared with the deploy scripts).
+source "$(dirname "${BASH_SOURCE[0]}")/deploy-lock.sh"
+
 echo "==> Installing prerequisites (docker repo deps + rsync for the containerd-migration runbook)"
 sudo apt install -y ca-certificates curl rsync
 
