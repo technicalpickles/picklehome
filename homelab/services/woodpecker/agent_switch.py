@@ -71,6 +71,7 @@ def decide(agents: list[dict], now: int, cfg: Config) -> list[Patch]:
 
     laptop_up = (
         laptop is not None
+        and not laptop["no_schedule"]  # drained by hand: it heartbeats but takes no work
         and laptop["last_contact"] > 0
         and now - laptop["last_contact"] <= cfg.stale_after
     )

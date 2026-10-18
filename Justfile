@@ -297,7 +297,7 @@ woodpecker-switch-logs host="picklelab" lines="50":
 
 # Rollback: stop the switch timer, then restore picklelab schedulable + laptop filter default
 woodpecker-switch-reset host="picklelab":
-    ssh {{host}} "sudo systemctl stop woodpecker-agent-switch.timer && sudo systemctl start woodpecker-agent-switch-reset.service; sudo journalctl -u woodpecker-agent-switch-reset.service -n 20 --no-pager"
+    ssh {{host}} "sudo systemctl stop woodpecker-agent-switch.timer && sudo systemctl stop woodpecker-agent-switch.service && sudo systemctl start woodpecker-agent-switch-reset.service; sudo journalctl -u woodpecker-agent-switch-reset.service -n 20 --no-pager"
 
 # Tailscale VPN overlay: just tailscale [status]
 tailscale *ARGS:

@@ -232,3 +232,17 @@ def test_main_requires_token(monkeypatch, capsys):
     monkeypatch.delenv("WOODPECKER_API_TOKEN")
     assert sw.main([]) == 1
     assert "WOODPECKER_API_TOKEN" in capsys.readouterr().err
+
+
+def test_laptop_paused_by_hand_is_not_preferred():
+    """A laptop agent with no_schedule=True (drained in the UI) still heartbeats,
+    but must not cause picklelab to be disabled: nobody would take work."""
+    agents = defaults()
+    agents[0]["no_schedule"] = True
+    assert sw.decide(agents, NOW, cfg()) == []
+    # and if we were already in laptop-preferred state, picklelab comes back first
+    agents = laptop_preferred()
+    agents[0]["no_schedule"] = True
+    patches = sw.decide(agents, NOW, cfg())
+    assert [p.agent_id for p in patches] == [2, 1]
+    assert patches[0].body["no_schedule"] is False

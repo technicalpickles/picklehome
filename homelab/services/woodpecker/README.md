@@ -99,10 +99,12 @@ It is stateless (each run reads the agent list and converges), so a missed tick 
 
 It runs as the profile-gated compose service `woodpecker-agent-switch` (`docker compose --profile switch run --rm --no-deps`), sharing `ts-woodpecker`'s network namespace to reach the API on `localhost:8000`. The stock Woodpecker images are `FROM scratch`, which is why it is a separate image rather than part of them.
 
+- **Before enabling the timer:** (1) check the Agents list for duplicate picklelab records after a redeploy (the agent has no persisted config, so a recreate can register a new one; the switch raises on duplicate names), and (2) check `op service-account ratelimit`, since a minutely `op run` costs about 5 reads a tick.
 - **Needs** `WOODPECKER_API_TOKEN` (an admin user's personal access token) in 1Password and in `.env.vars` / `.env.template`, and the two agent names in `compose.yaml` matching Settings, Agents.
 - **Ships off:** `SWITCH_TIMER_ENABLED=0` in `deploy.sh`. Flip it to `1` and redeploy to start the timer. `/etc/opt/homelab/woodpecker-agent-switch.env` containing `SWITCH_ARGS=--dry-run` makes it log without changing anything.
 - **Logs:** `just woodpecker-switch-logs`.
 - **Rollback:** `just woodpecker-switch-reset` stops the timer and restores defaults. A reboot restarts an enabled timer, and `systemctl disable` is not in the passwordless sudo allowlist, so to keep it off across reboots disable it interactively (`ssh -t picklelab sudo systemctl disable woodpecker-agent-switch.timer`).
+- **Rollback when the token is dead** (revoked or expired, so `just woodpecker-switch-reset` fails with the same 401): stop the timer (`ssh picklelab sudo systemctl stop woodpecker-agent-switch.timer`), then in the UI (Settings, Agents) untick "no schedule" on picklelab's agent and set the laptop agent's filter back to key `!host`, value `laptop`.
 - **Manual override:** setting `no_schedule` on picklelab's agent by hand gets overridden on the next tick. Stop the timer first.
 - **Arch drift:** the VM is arm64 and picklelab is amd64. While the filter is lifted, unlabeled pipelines can land on either, so pin amd64-only pipelines with a platform label (check the exact label in the UI before relying on it).
 - **Tests:** `uv run pytest tests/homelab/` (unit tests plus an in-process fake Woodpecker server, no docker or token needed).
