@@ -44,6 +44,10 @@ CLAUDE.md should `@import` the README for shared context rather than duplicating
 
 Design documents and implementation plans. Named `YYYY-MM-DD-<topic>.md`. These are point-in-time artifacts: they capture the thinking behind a design, not ongoing reference material.
 
+### docs/adr/
+
+Architecture decision records, `NNNN-<slug>.md` (Context / Decision / Consequences). For a decision that changes how something is run and that someone will wonder about later, including temporary ones like pausing a service. Point-in-time like `docs/plans/`, but short and numbered.
+
 ### Taskwarrior (the backlog)
 
 Concrete, actionable items: things to do, optionally with dates. Not prose about how something works. Entry point: `task list project:picklehome`, organized by the dotted project hierarchy. A "remaining mystery", a "TODO later", or a "followup" is a task, not a doc and not a memory entry.

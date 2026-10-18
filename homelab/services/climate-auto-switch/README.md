@@ -33,6 +33,9 @@ just deploy-climate       # build image, install systemd units, enable timer
 so it needs an already-authorized token file seeded from a machine where you've run
 `just climate-auth`.
 
+> **Paused (2026-10-18):** `deploy.sh` has `TIMER_PAUSED=1`, so deploys skip `enable`/`restart`
+> of the timer. See [ADR 0001](../../../docs/adr/0001-pause-climate-auto-switch-timer.md) for how to resume.
+
 ## Deploy updates
 
 ```bash

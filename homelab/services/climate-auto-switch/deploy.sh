@@ -41,10 +41,19 @@ echo "==> Linking systemd units"
 sudo ln -sf "$SERVICE_DIR/climate-auto-switch.service" /etc/systemd/system/
 sudo ln -sf "$SERVICE_DIR/climate-auto-switch.timer" /etc/systemd/system/
 
-echo "==> Reloading systemd and restarting timer"
+echo "==> Reloading systemd"
 sudo systemctl daemon-reload
-sudo systemctl enable climate-auto-switch.timer
-sudo systemctl restart climate-auto-switch.timer
+# PAUSED 2026-10-18 (see docs/adr/0001-pause-climate-auto-switch-timer.md): the timer is
+# stopped by hand while comfort is tuned manually, so a deploy must not enable or restart
+# it. Flip back to 0 (or delete the guard) to resume normal deploys.
+TIMER_PAUSED=1
+if [[ "$TIMER_PAUSED" == "1" ]]; then
+  echo "==> Timer paused: skipping enable/restart of climate-auto-switch.timer"
+else
+  echo "==> Enabling and restarting timer"
+  sudo systemctl enable climate-auto-switch.timer
+  sudo systemctl restart climate-auto-switch.timer
+fi
 
 echo "==> Status"
 systemctl status climate-auto-switch.timer --no-pager
