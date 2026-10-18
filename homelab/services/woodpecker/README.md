@@ -78,7 +78,9 @@ Policy additions (admin console, not checked in):
 
 Check the live policy for an existing wildcard grant (`*` to `*`) first. If one is still active it already allows this, and the grant is decorative until the wildcard goes.
 
-The remote agent needs `WOODPECKER_SERVER=woodpecker.tail2023b7.ts.net:9000`, the same `WOODPECKER_AGENT_SECRET` as the server, and its own `WOODPECKER_AGENT_LABELS`. Pair it with a server-side agent filter in the UI so it only gets the workflows you assign. The agent's `WOODPECKER_AGENT_SECRET` is the credential gating gRPC, so inject it from 1Password at provisioning time.
+Create the agent in the UI **before** starting it (Settings, Agents, Add agent). Filters are set there, and the agent gets its own token, so it can't pick up anything it shouldn't from its first connection. The filter form has separate key and value boxes. Enter key `!host`, value `laptop` (not `!host=laptop` as one string, which the form stores as a label literally named that). The `!` on the key makes the workflow *require* the label, so only pipelines with `labels: host: laptop` land on the VM. A plain `host` = `laptop` filter does not exclude workflows that have no `host` label at all, so unlabeled pipelines would still run there. Verify placement after any change (a no-label workflow must not reach the VM). Labels alone don't restrict an agent, since an agent reports whatever labels it likes; the server-side filter is what enforces it. Save the token to 1Password as `agent_token` on the "Woodpecker Agent VM" item, then run [`agent-vm/start-agent.sh`](agent-vm/start-agent.sh). That token, not the system `WOODPECKER_AGENT_SECRET`, is what the VM agent uses.
+
+The VM agent mounts the VM's root docker socket. That is deliberate (a VM that only does CI), unlike picklelab's rootless `ci` setup.
 
 After deploying a `funnel.json` change, verify:
 
