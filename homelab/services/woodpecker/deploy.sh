@@ -4,6 +4,11 @@
 # Run from the repo root on the target host.
 set -euo pipefail
 
+# The agent-switch timer ships disabled: a first deploy of this code changes nothing.
+# Flip to 1 for rollout phase 1 (see README "Agent switch"), after the API token
+# exists in 1Password and .env.vars/.env.template carry it.
+SWITCH_TIMER_ENABLED=0
+
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/woodpecker"
 DATA_DIR=/srv/data/woodpecker
@@ -56,13 +61,27 @@ done < "$SERVICE_DIR/.env.vars"
 
 env "${env_overrides[@]}" docker compose -f compose.yaml -f compose.picklelab.yaml pull
 
-echo "==> Linking systemd unit"
+echo "==> Building agent-switch image"
+env "${env_overrides[@]}" docker compose -f compose.yaml -f compose.picklelab.yaml --profile switch build woodpecker-agent-switch
+
+echo "==> Linking systemd units"
 sudo ln -sf "$SERVICE_DIR/woodpecker.service" /etc/systemd/system/
+sudo ln -sf "$SERVICE_DIR/woodpecker-agent-switch.service" /etc/systemd/system/
+sudo ln -sf "$SERVICE_DIR/woodpecker-agent-switch.timer" /etc/systemd/system/
+sudo ln -sf "$SERVICE_DIR/woodpecker-agent-switch-reset.service" /etc/systemd/system/
 
 echo "==> Reloading systemd and (re)starting service"
 sudo systemctl daemon-reload
 sudo systemctl enable woodpecker.service
 sudo systemctl restart woodpecker.service
+
+if [[ "$SWITCH_TIMER_ENABLED" == "1" ]]; then
+    echo "==> Enabling and restarting woodpecker-agent-switch.timer"
+    sudo systemctl enable woodpecker-agent-switch.timer
+    sudo systemctl restart woodpecker-agent-switch.timer
+else
+    echo "==> Agent-switch timer not enabled (SWITCH_TIMER_ENABLED=0): skipping"
+fi
 
 echo "==> Status"
 systemctl status woodpecker.service --no-pager
