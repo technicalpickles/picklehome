@@ -23,6 +23,21 @@ If nothing gets detected, force the sensor into pairing mode: pull the battery, 
 
 Pairing alone doesn't change any temperatures. See the Ecobee API notes below for how sensor participation actually drives behavior.
 
+#### Placement log
+
+Sensor names are static labels, not physical locations. The API has no sensor rename (app-only), so a sensor that moves keeps its name and its history keeps landing under the old one. When reading `climate-history`, check this table first. Add a row whenever a sensor moves.
+
+| Sensor | Where | From | Notes |
+|--------|-------|------|-------|
+| Tracy Office | Tracy's office, on her desk | 2026-06-11 (first reading) | Desk, in front of the low floor register but not in its stream. East sun shows as daily peaks of 80-82°F until 2026-09-10. |
+| Tracy Office | Living room, on the mantle | 2026-09-10 evening | Diagnostics: fireplace wall shared with the kitchen. Peaks vanish from the data. |
+| Tracy Office | Media room | 2026-09-11 evening | Diagnostics: same wall and height as the thermostat, on the other side of the TV. The 2026-10-03 notes call this the TV room (wood shelf), probably the same room. |
+| Tracy Office | Tracy's office, on her desk | 2026-10-03 afternoon | Back in the office by about 5:30pm EDT. Confirmed again 2026-10-16. |
+
+So the `Tracy Office` series is the office for 2026-06-11 to 2026-09-10 and from 2026-10-03 on, and other rooms in between. Josh Office has its first reading on 2026-10-04.
+
+Sources for the dates: sessions `cd836def` and `73c04558` (2026-09-10 and 09-11), taskwarrior `d58603c0` (2026-10-03 TV room), session `a4514908` (2026-10-03 back in the office), taskwarrior `8364d4dc` (2026-10-16 confirmation).
+
 ### Ambient Weather
 
 Station MACs are sensitive (geolocatable), stored in 1Password, injected via `.env`. See `.env.template` for the `AMBIENT_STATION_MACS` variable.
