@@ -1,0 +1,8 @@
+FROM python:3.12-slim
+
+COPY agent_switch.py /app/agent_switch.py
+
+# nobody: the script only makes HTTP calls to the Woodpecker API.
+USER 65534
+
+ENTRYPOINT ["python", "/app/agent_switch.py"]

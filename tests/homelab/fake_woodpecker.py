@@ -31,7 +31,7 @@ class FakeWoodpecker:
     def fail_next(self, method: str, status: int) -> None:
         self._fail[method] = status
 
-    def start(self) -> str:
+    def start(self, host: str = "127.0.0.1") -> str:
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -73,7 +73,7 @@ class FakeWoodpecker:
                     outer.invariant_violations.append((agent_id, body))
                 self._reply(200, a)
 
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._server = ThreadingHTTPServer((host, 0), Handler)
         threading.Thread(target=self._server.serve_forever, daemon=True).start()
         return f"http://127.0.0.1:{self._server.server_address[1]}"
 
