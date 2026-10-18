@@ -22,6 +22,9 @@ homelab/services/openclaw/openclaw.image.env
 # Same pattern: kept in the private pickleclaw repo, symlinked in here so
 # `just deploy-openclaw` can scp it to picklelab.
 homelab/services/openclaw/workspace-git-sync.sh
+# Same pattern: gateway policy plugins live in the private pickleclaw repo
+# (openclaw-config/plugins/*), symlinked here so `just deploy-openclaw` can scp them.
+homelab/services/openclaw/plugins/
 
 # Sonos roster: uids embed device MACs (geolocatable via SonosNet); keep local
 sonos/config/speakers.yaml

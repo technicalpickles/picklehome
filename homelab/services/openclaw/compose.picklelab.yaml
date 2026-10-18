@@ -11,3 +11,8 @@ services:
       # comment on the onboarding step for why (tools.exec is meant to deliberately
       # diverge from the dev VM's value, and $include can't do a partial override).
       - ./openclaw.mcp.json5:/home/node/.openclaw/includes/mcp.json5:ro
+      # brineworks-approval policy plugin (pickleclaw openclaw-config/plugins), scp'd by
+      # `just deploy-openclaw`, loaded via plugins.load.paths (deploy.sh). Outside the config
+      # volume on purpose: OpenClaw blocks plugin paths not owned by the gateway uid or root,
+      # and a bind mount under the volume would create root-owned parents in /srv/data.
+      - ./plugins/brineworks-approval:/opt/openclaw-plugins/brineworks-approval:ro

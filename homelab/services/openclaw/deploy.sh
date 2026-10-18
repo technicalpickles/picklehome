@@ -614,6 +614,12 @@ if [ -z "$OPENCLAW_WIDGETS_HOST" ]; then
     echo "    will fail with 'Widget sandbox host is unavailable' until it's"
     echo "    configured. See README 'Widget sandbox host'."
 fi
+# plugins.load.paths: brineworks-approval (pickleclaw ADR 0001) gates the model's
+# email_rules_add / triage_apply with an approval prompt. The dir is scp'd by
+# `just deploy-openclaw` and bind-mounted ro by compose.picklelab.yaml, so it exists
+# for this one-off container too. The prompt reaches Telegram through the same
+# execApprovals.enabled + commands.ownerAllowFrom pair as exec approvals (Telegram's
+# native approval runtime handles plugin events too). plugins.* needs the restart below.
 $RUN_CLI config set --batch-json '[
     {"path":"secrets.providers.team-store","value":{"source":"store"}},
     {"path":"gateway.bind","value":"lan"},
@@ -624,6 +630,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"channels.telegram.dmPolicy","value":"allowlist"},
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"channels.telegram.execApprovals.enabled","value":true},
+    {"path":"plugins.load.paths","value":["/opt/openclaw-plugins/brineworks-approval"]},
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"skills.entries.goplaces.enabled","value":true},
     {"path":"skills.entries.email-triage-widget.enabled","value":false},

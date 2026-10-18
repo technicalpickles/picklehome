@@ -482,6 +482,19 @@ deploy-openclaw host="picklelab":
     # bind-mounts them into the container (bind mounts carry host perms through).
     # openclaw.image.env isn't a secret but gets the same treatment for consistency.
     ssh {{host}} "chmod 600 /opt/homelab/homelab/services/openclaw/openclaw.tools.json5 /opt/homelab/homelab/services/openclaw/openclaw.mcp.json5 /opt/homelab/homelab/services/openclaw/openclaw.image.env"
+    echo "==> Copying brineworks-approval plugin (private pickleclaw repo, gitignored here) to {{host}}"
+    if [ ! -e homelab/services/openclaw/plugins/brineworks-approval ]; then
+        echo "ERROR: plugins/brineworks-approval missing. Symlink it from pickleclaw -- see"
+        echo "       homelab/services/openclaw/README.md."
+        exit 1
+    fi
+    PLUGIN_DIR=/opt/homelab/homelab/services/openclaw/plugins
+    ssh {{host}} "mkdir -p $PLUGIN_DIR && rm -rf $PLUGIN_DIR/brineworks-approval"
+    # scp -r follows the symlink and copies its contents. OpenClaw refuses a plugin path
+    # that is group/world-writable or not owned by the gateway uid (1000, same as the
+    # deploy user), so strip write bits from group/other after the copy.
+    scp -r homelab/services/openclaw/plugins/brineworks-approval {{host}}:$PLUGIN_DIR/brineworks-approval
+    ssh {{host}} "chmod -R go-w $PLUGIN_DIR/brineworks-approval"
     echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
     ssh {{host}} "cd /opt/homelab && homelab/services/openclaw/deploy.sh"

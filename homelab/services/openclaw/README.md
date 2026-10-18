@@ -104,7 +104,13 @@ ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/mcp.json5 \
   homelab/services/openclaw/openclaw.mcp.json5
 ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/openclaw.env \
   homelab/services/openclaw/openclaw.image.env
+# gateway policy plugin (approval prompt on the model's brineworks writes), scp'd + mounted ro
+mkdir -p homelab/services/openclaw/plugins
+ln -sfn ~/github.com/technicalpickles/pickleclaw/openclaw-config/plugins/brineworks-approval \
+  homelab/services/openclaw/plugins/brineworks-approval
 ```
+
+The plugin is loaded via `plugins.load.paths` (set in `deploy.sh`) from `/opt/openclaw-plugins/brineworks-approval` inside the container. Its approval prompts reach Telegram through `channels.telegram.execApprovals.enabled` + `commands.ownerAllowFrom` (same as exec approvals); with no route the gated call fails closed.
 
 `deploy.sh` runs from the Mac, where `pickleclaw` is already cloned with your own GitHub access — `git pull` it before deploying, same as any other dependency.
 
