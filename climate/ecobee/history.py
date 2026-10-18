@@ -8,9 +8,26 @@ so we must NOT apply decode_temp here.
 
 import json
 import requests
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 INTERVAL_MINUTES = 5
+
+# runtimeReport rejects ranges over 33 days ("Report is limited to 33 days per
+# request"), so longer windows are fetched in chunks of this size.
+MAX_REPORT_DAYS = 31
+
+# Equipment/outdoor columns, in the order they are requested. Runtime columns
+# are seconds the equipment ran within each 5-minute interval (0-300).
+EQUIPMENT_COLUMNS = (
+    "compCool1",
+    "compCool2",
+    "compHeat1",
+    "compHeat2",
+    "auxHeat1",
+    "auxHeat2",
+    "fan",
+    "outdoorTemp",
+)
 
 
 def _sensor_group_prefix(sensor_id: str) -> str:
@@ -165,22 +182,26 @@ def format_raw(thermostat_name: str, series_list: list[dict]) -> str:
 RUNTIME_REPORT_URL = "https://api.ecobee.com/1/runtimeReport"
 
 
-def fetch_runtime_report(
-    access_token: str, thermostat_id: str, start_date: str, end_date: str
+def fetch_runtime_payload(
+    access_token: str,
+    thermostat_id: str,
+    start_date: str,
+    end_date: str,
+    columns: str = "zoneAveTemp",
 ) -> dict:
-    """Fetch a runtimeReport sensorList entry for one thermostat.
+    """Fetch a whole runtimeReport payload (sensorList and reportList) for one thermostat.
 
-    Dates are "YYYY-MM-DD", inclusive. Raises RuntimeError with diagnostic
-    context on transport or API errors rather than returning None, so callers
-    can distinguish a real failure from empty data (per the repo's
-    don't-swallow-errors convention).
+    Dates are "YYYY-MM-DD", inclusive, and limited to 33 days per request.
+    Raises RuntimeError with diagnostic context on transport or API errors
+    rather than returning None, so callers can distinguish a real failure from
+    empty data (per the repo's don't-swallow-errors convention).
     """
     body = {
         "startDate": start_date,
         "endDate": end_date,
-        # columns is required by the API even though we read sensor data, not
-        # thermostat columns; zoneAveTemp is the cheapest valid choice.
-        "columns": "zoneAveTemp",
+        # columns is required by the API even when we only read sensor data;
+        # zoneAveTemp is the cheapest valid choice.
+        "columns": columns,
         "selection": {"selectionType": "thermostats", "selectionMatch": thermostat_id},
         "includeSensors": True,
     }
@@ -201,9 +222,195 @@ def fetch_runtime_report(
             f"runtimeReport API error for thermostat {thermostat_id}: "
             f"{status.get('message', 'unknown')}"
         )
+    return payload
+
+
+def fetch_runtime_report(
+    access_token: str, thermostat_id: str, start_date: str, end_date: str
+) -> dict:
+    """Fetch a runtimeReport sensorList entry for one thermostat."""
+    payload = fetch_runtime_payload(access_token, thermostat_id, start_date, end_date)
     sensor_list = payload.get("sensorList") or []
     if not sensor_list:
         raise RuntimeError(
             f"runtimeReport returned no sensor data for thermostat {thermostat_id}"
         )
     return sensor_list[0]
+
+
+def resolve_window(
+    days: int | None, start: date | None, end: date | None, today: date
+) -> tuple[date, date]:
+    """Turn the CLI's --days / --start / --end into an inclusive (start, end)."""
+    if days is not None and (start is not None or end is not None):
+        raise ValueError("--days can't be combined with --start/--end")
+    if start is None and end is not None:
+        raise ValueError("--end needs --start")
+    if start is None:
+        n = 1 if days is None else days
+        if n < 1:
+            raise ValueError("--days must be at least 1")
+        return today - timedelta(days=n - 1), today
+    end = end or today
+    if end < start:
+        raise ValueError(f"--end {end} is before --start {start}")
+    return start, end
+
+
+def chunk_date_range(
+    start: date, end: date, max_days: int = MAX_REPORT_DAYS
+) -> list[tuple[date, date]]:
+    """Split an inclusive [start, end] range into consecutive inclusive chunks."""
+    chunks = []
+    cur = start
+    while cur <= end:
+        chunk_end = min(cur + timedelta(days=max_days - 1), end)
+        chunks.append((cur, chunk_end))
+        cur = chunk_end + timedelta(days=1)
+    return chunks
+
+
+def merge_series(per_chunk: list[list[dict]]) -> list[dict]:
+    """Merge per-chunk parse_sensor_series() output into one series per sensor.
+
+    Sensors are matched by name. Readings are de-duplicated by timestamp and
+    sorted, so adjacent chunks can overlap safely. The API also answers a
+    request that predates the thermostat's first data with one stub row for
+    its earliest reading, which de-duplicates the same way.
+    """
+    merged: dict[str, dict] = {}
+    for series_list in per_chunk:
+        for s in series_list:
+            m = merged.setdefault(s["name"], {"name": s["name"], "temps": {}, "occupancy": {}})
+            m["temps"].update(dict(s["temps"]))
+            m["occupancy"].update(dict(s["occupancy"]))
+    return [
+        {
+            "name": m["name"],
+            "temps": sorted(m["temps"].items()),
+            "occupancy": sorted(m["occupancy"].items()),
+        }
+        for m in merged.values()
+    ]
+
+
+def parse_equipment_rows(payload: dict) -> list[dict]:
+    """Turn a runtimeReport reportList entry into one dict per 5-minute interval.
+
+    Each dict has ts (datetime), cool/heat/aux/fan (seconds run, 0-300), and
+    outdoor (F, or None when blank). cool/heat/aux take the larger of the two
+    stages, since stage 2 runs alongside stage 1.
+    """
+    report_list = payload.get("reportList") or []
+    if not report_list:
+        return []
+    names = payload["columns"].split(",")
+    idx = {name: i for i, name in enumerate(names)}
+
+    def secs(parts, *cols):
+        vals = [int(parts[idx[c]]) for c in cols if parts[idx[c]] != ""]
+        return max(vals) if vals else 0
+
+    rows = []
+    for line in report_list[0]["rowList"]:
+        f = line.split(",")
+        parts = f[2:]  # after date and time
+        outdoor = parts[idx["outdoorTemp"]]
+        rows.append(
+            {
+                "ts": datetime.strptime(f"{f[0]} {f[1]}", "%Y-%m-%d %H:%M:%S"),
+                "cool": secs(parts, "compCool1", "compCool2"),
+                "heat": secs(parts, "compHeat1", "compHeat2"),
+                "aux": secs(parts, "auxHeat1", "auxHeat2"),
+                "fan": secs(parts, "fan"),
+                "outdoor": float(outdoor) if outdoor != "" else None,
+            }
+        )
+    return rows
+
+
+def merge_equipment(per_chunk: list[list[dict]]) -> list[dict]:
+    """Merge per-chunk equipment rows, de-duplicated by timestamp and sorted."""
+    by_ts = {r["ts"]: r for rows in per_chunk for r in rows}
+    return [by_ts[ts] for ts in sorted(by_ts)]
+
+
+def fetch_range(
+    access_token: str,
+    thermostat_id: str,
+    start: date,
+    end: date,
+    with_equipment: bool = False,
+) -> tuple[list[dict], list[dict]]:
+    """Fetch sensor series (and optionally equipment rows) over any date range."""
+    columns = ",".join(EQUIPMENT_COLUMNS) if with_equipment else "zoneAveTemp"
+    sensor_chunks, equipment_chunks = [], []
+    for chunk_start, chunk_end in chunk_date_range(start, end):
+        payload = fetch_runtime_payload(
+            access_token, thermostat_id, chunk_start.isoformat(), chunk_end.isoformat(), columns
+        )
+        sensor_list = payload.get("sensorList") or []
+        if not sensor_list:
+            raise RuntimeError(
+                f"runtimeReport returned no sensor data for thermostat {thermostat_id} "
+                f"({chunk_start} to {chunk_end})"
+            )
+        sensor_chunks.append(parse_sensor_series(sensor_list[0]))
+        if with_equipment:
+            equipment_chunks.append(parse_equipment_rows(payload))
+    return merge_series(sensor_chunks), merge_equipment(equipment_chunks)
+
+
+def _summarize_equipment(rows: list[dict], key_fn, label_fn) -> list[dict]:
+    groups: dict = {}
+    for r in rows:
+        groups.setdefault(key_fn(r["ts"]), []).append(r)
+    full = INTERVAL_MINUTES * 60
+    buckets = []
+    for k in sorted(groups):
+        g = groups[k]
+        outdoor = [r["outdoor"] for r in g if r["outdoor"] is not None]
+        pct = lambda field: round(100 * sum(r[field] for r in g) / (full * len(g)))
+        buckets.append(
+            {
+                "label": label_fn(k),
+                "outdoor_avg": round(sum(outdoor) / len(outdoor), 1) if outdoor else None,
+                "outdoor_min": min(outdoor) if outdoor else None,
+                "outdoor_max": max(outdoor) if outdoor else None,
+                "cool_pct": pct("cool"),
+                "heat_pct": pct("heat"),
+                "aux_pct": pct("aux"),
+                "fan_pct": pct("fan"),
+            }
+        )
+    return buckets
+
+
+def summarize_equipment_hourly(rows: list[dict]) -> list[dict]:
+    return _summarize_equipment(
+        rows, lambda ts: (ts.date(), ts.hour), lambda k: f"{k[1]:02d}:00"
+    )
+
+
+def summarize_equipment_daily(rows: list[dict]) -> list[dict]:
+    return _summarize_equipment(rows, lambda ts: ts.date(), lambda k: k.isoformat())
+
+
+def format_equipment(thermostat_name: str, buckets: list[dict], granularity: str) -> str:
+    label_header = "hour" if granularity == "hourly" else "date"
+    col_width = 5 if granularity == "hourly" else 10
+    lines = [
+        f"=== {thermostat_name}: equipment ===",
+        "Runtime is the share of each period the equipment ran. Outdoor is in F.",
+        f"  {label_header:<{col_width}}  outdoor avg (min-max)   cool%  heat%  aux%  fan%",
+    ]
+    for b in buckets:
+        if b["outdoor_avg"] is None:
+            outdoor = "-"
+        else:
+            outdoor = f"{b['outdoor_avg']:.1f} ({b['outdoor_min']:.0f}-{b['outdoor_max']:.0f})"
+        lines.append(
+            f"  {b['label']:<{col_width}}  {outdoor:<22}  "
+            f"{b['cool_pct']:<5}  {b['heat_pct']:<5}  {b['aux_pct']:<4}  {b['fan_pct']}"
+        )
+    return "\n".join(lines)

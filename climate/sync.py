@@ -1,6 +1,6 @@
 import argparse
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -237,12 +237,15 @@ def cmd_history(args) -> None:
         sys.exit(1)
     token = ecobee.access_token
 
-    end = date.today()
-    start = end - timedelta(days=args.days - 1)
+    try:
+        start, end = history.resolve_window(args.days, args.start, args.end, date.today())
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     if args.raw or args.json:
         granularity = "raw"
-    elif args.days > 1:
+    elif end > start:
         granularity = "daily"
     else:
         granularity = "hourly"
@@ -250,21 +253,35 @@ def cmd_history(args) -> None:
     json_out = []
     blocks = []
     for name, thermostat_id in managed:
-        report = history.fetch_runtime_report(
-            token, thermostat_id, start.isoformat(), end.isoformat()
+        series_list, equipment = history.fetch_range(
+            token, thermostat_id, start, end, with_equipment=args.equipment
         )
-        series_list = history.parse_sensor_series(report)
 
         if args.json:
-            json_out.append({"thermostat": name, "sensors": series_list})
+            entry = {"thermostat": name, "sensors": series_list}
+            if args.equipment:
+                entry["equipment"] = equipment
+            json_out.append(entry)
         elif args.raw:
             blocks.append(history.format_raw(name, series_list))
         elif granularity == "daily":
             summaries = [history.summarize_daily(s) for s in series_list]
             blocks.append(history.format_history(name, summaries, "daily"))
+            if args.equipment:
+                blocks.append(
+                    history.format_equipment(
+                        name, history.summarize_equipment_daily(equipment), "daily"
+                    )
+                )
         else:
             summaries = [history.summarize_hourly(s) for s in series_list]
             blocks.append(history.format_history(name, summaries, "hourly"))
+            if args.equipment:
+                blocks.append(
+                    history.format_equipment(
+                        name, history.summarize_equipment_hourly(equipment), "hourly"
+                    )
+                )
 
     if args.json:
         import json as _json
@@ -1248,9 +1265,28 @@ def main() -> None:
     history_parser.add_argument(
         "--days",
         type=int,
-        default=1,
+        default=None,
         metavar="N",
         help="Number of calendar days back to include, ending today (default: 1)",
+    )
+    history_parser.add_argument(
+        "--start",
+        type=date.fromisoformat,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="First day to include; ranges over 31 days are fetched in chunks",
+    )
+    history_parser.add_argument(
+        "--end",
+        type=date.fromisoformat,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Last day to include (default: today). Needs --start",
+    )
+    history_parser.add_argument(
+        "--equipment",
+        action="store_true",
+        help="Also show outdoor temperature and cool/heat/aux/fan runtime",
     )
     history_parser.add_argument(
         "--raw",
