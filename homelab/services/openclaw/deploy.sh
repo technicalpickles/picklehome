@@ -620,6 +620,9 @@ fi
 # for this one-off container too. The prompt reaches Telegram through the same
 # execApprovals.enabled + commands.ownerAllowFrom pair as exec approvals (Telegram's
 # native approval runtime handles plugin events too). plugins.* needs the restart below.
+# entries.<id>.enabled is required, not optional: without it the plugin shows `loaded` but
+# activates by default only, the gateway never imports it at startup, and the hook never
+# runs (found on first picklelab deploy 2026-10-18; startup line lacked the plugin name).
 $RUN_CLI config set --batch-json '[
     {"path":"secrets.providers.team-store","value":{"source":"store"}},
     {"path":"gateway.bind","value":"lan"},
@@ -631,6 +634,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"channels.telegram.allowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"channels.telegram.execApprovals.enabled","value":true},
     {"path":"plugins.load.paths","value":["/opt/openclaw-plugins/brineworks-approval"]},
+    {"path":"plugins.entries.brineworks-approval.enabled","value":true},
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"skills.entries.goplaces.enabled","value":true},
     {"path":"skills.entries.email-triage-widget.enabled","value":false},
