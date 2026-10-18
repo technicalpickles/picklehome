@@ -61,9 +61,11 @@ services:
   # every service (profile or not) when woodpecker.service runs `up`, so a
   # required var that is not yet in .env.op.template would break the whole stack.
   # The script itself exits 1 with a clear message when the token is unset.
-  # The two agent names are placeholders until checked against the live agent
-  # list (Settings, Agents); a wrong picklelab name fails loudly, a wrong laptop
-  # name fails open to picklelab.
+  # Agent names are as listed by the live server (Settings, Agents): picklelab's
+  # agent is named `woodpecker` (the ts-woodpecker sidecar's hostname, since it
+  # shares that netns), the VM agent `woodpecker-agent-vm`. The server keeps one
+  # record per container recreate, so many stale `woodpecker` rows exist; the
+  # script acts on the one with the latest last_contact.
   woodpecker-agent-switch:
     build:
       context: .
@@ -74,5 +76,5 @@ services:
       - WOODPECKER_URL=http://127.0.0.1:8000
       - WOODPECKER_API_TOKEN=${WOODPECKER_API_TOKEN:-}
       - LAPTOP_AGENT_NAME=woodpecker-agent-vm
-      - PICKLELAB_AGENT_NAME=picklelab
+      - PICKLELAB_AGENT_NAME=woodpecker
       - STALE_AFTER_SECONDS=300

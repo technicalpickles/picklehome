@@ -40,12 +40,20 @@ class Patch:
     body: dict
 
 
-def _find(agents: list[dict], name: str) -> list[dict]:
-    return [a for a in agents if a["name"] == name]
+def _live(agents: list[dict], name: str) -> dict | None:
+    """The agent record to act on for `name`, or None.
+
+    Every container recreate registers a fresh agent record and the old ones stay
+    in the list forever (a live server had ~17 named `woodpecker`), so several
+    records per name is normal. The live one has the latest last_contact.
+    """
+    same = [a for a in agents if a["name"] == name]
+    return max(same, key=lambda a: (a["last_contact"], a["id"]), default=None)
 
 
 def _patch(a: dict, *, no_schedule: bool, filters: dict) -> Patch | None:
-    if a["no_schedule"] == no_schedule and a["filters"] == filters:
+    # The server reports "no filters" as null; treat it the same as {}.
+    if a["no_schedule"] == no_schedule and (a["filters"] or {}) == filters:
         return None
     return Patch(
         a["id"], {"name": a["name"], "no_schedule": no_schedule, "filters": filters}
@@ -54,20 +62,13 @@ def _patch(a: dict, *, no_schedule: bool, filters: dict) -> Patch | None:
 
 def decide(agents: list[dict], now: int, cfg: Config) -> list[Patch]:
     """Patches to apply, in order, to reach the desired state. [] if converged."""
-    pl = _find(agents, cfg.picklelab_name)
-    if len(pl) != 1:
+    picklelab = _live(agents, cfg.picklelab_name)
+    if picklelab is None:
         raise ValueError(
-            f"expected exactly one agent named {cfg.picklelab_name!r}, found {len(pl)}"
-            f" (agents: {sorted(a['name'] for a in agents)})"
+            f"no agent named {cfg.picklelab_name!r}"
+            f" (agents: {sorted({a['name'] for a in agents})})"
         )
-    picklelab = pl[0]
-
-    laptops = _find(agents, cfg.laptop_name)
-    if len(laptops) > 1:
-        raise ValueError(
-            f"expected at most one agent named {cfg.laptop_name!r}, found {len(laptops)}"
-        )
-    laptop = laptops[0] if laptops else None
+    laptop = _live(agents, cfg.laptop_name)
 
     laptop_up = (
         laptop is not None
@@ -84,7 +85,7 @@ def decide(agents: list[dict], now: int, cfg: Config) -> list[Patch]:
             filters={} if laptop_up else dict(cfg.laptop_filters),
         )
     picklelab_patch = _patch(
-        picklelab, no_schedule=laptop_up, filters=picklelab["filters"]
+        picklelab, no_schedule=laptop_up, filters=picklelab["filters"] or {}
     )
 
     # Enable the target agent before disabling the other.

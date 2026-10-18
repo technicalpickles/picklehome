@@ -140,9 +140,19 @@ def test_dry_run_leaves_server_untouched(server, capsys):
     assert "would PATCH" in capsys.readouterr().out
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="real-API fixture captured in verify-api-fields")
-def test_fixture_roundtrip():
+def test_fixture_roundtrip_real_shape():
+    """Real GET /api/agents shape (captured 2026-10-18, tokens removed): null
+    filters, several stale `woodpecker` records, the VM agent with owner/org 1."""
     agents = json.loads(FIXTURE.read_text())
-    names = [a["name"] for a in agents]
-    cfg = sw.Config(laptop_name=names[0], picklelab_name=names[-1])
-    sw.decide(agents, T0, cfg)  # no KeyError on the real shape
+    assert all("token" not in a for a in agents)  # never commit agent tokens
+    cfg = sw.Config("woodpecker-agent-vm", "woodpecker", stale_after=300)
+    laptop = next(a for a in agents if a["name"] == "woodpecker-agent-vm")
+    now = laptop["last_contact"] + 10
+    patches = sw.decide(agents, now, cfg)
+    # laptop (id 24) is fresh: lift its filter, then disable the live picklelab
+    # record (id 23, the latest last_contact), leaving stale records alone
+    assert [p.agent_id for p in patches] == [24, 23]
+    assert patches[0].body["filters"] == {}
+    assert patches[1].body["no_schedule"] is True
+    # laptop gone: nothing to do except leave defaults
+    assert sw.decide(agents, now + 10_000, cfg) == []

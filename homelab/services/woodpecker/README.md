@@ -99,8 +99,8 @@ It is stateless (each run reads the agent list and converges), so a missed tick 
 
 It runs as the profile-gated compose service `woodpecker-agent-switch` (`docker compose --profile switch run --rm --no-deps`), sharing `ts-woodpecker`'s network namespace to reach the API on `localhost:8000`. The stock Woodpecker images are `FROM scratch`, which is why it is a separate image rather than part of them.
 
-- **Before enabling the timer:** (1) check the Agents list for duplicate picklelab records after a redeploy (the agent has no persisted config, so a recreate can register a new one; the switch raises on duplicate names), and (2) check `op service-account ratelimit`, since a minutely `op run` costs about 5 reads a tick.
-- **Needs** `WOODPECKER_API_TOKEN` (an admin user's personal access token) in 1Password and in `.env.vars` / `.env.template`, and the two agent names in `compose.yaml` matching Settings, Agents.
+- **Before enabling the timer:** check `op service-account ratelimit`, since a minutely `op run` costs about 5 reads a tick. (Stale duplicate `woodpecker` agent records are expected and handled: the script acts on the one with the latest `last_contact`.)
+- **Needs** `WOODPECKER_API_TOKEN` (an admin user's personal access token, kept in 1Password item `Woodpecker CLI`, field `credential`) in `.env.vars` / `.env.template`, and the two agent names in `compose.yaml` (`woodpecker-agent-vm` and `woodpecker`, as listed in Settings, Agents).
 - **Ships off:** `SWITCH_TIMER_ENABLED=0` in `deploy.sh`. Flip it to `1` and redeploy to start the timer. `/etc/opt/homelab/woodpecker-agent-switch.env` containing `SWITCH_ARGS=--dry-run` makes it log without changing anything.
 - **Logs:** `just woodpecker-switch-logs`.
 - **Rollback:** `just woodpecker-switch-reset` stops the timer and restores defaults. A reboot restarts an enabled timer, and `systemctl disable` is not in the passwordless sudo allowlist, so to keep it off across reboots disable it interactively (`ssh -t picklelab sudo systemctl disable woodpecker-agent-switch.timer`).

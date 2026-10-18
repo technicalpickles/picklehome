@@ -100,12 +100,6 @@ def test_picklelab_missing_raises():
         sw.decide([agent(1, "laptop-vm")], NOW, cfg())
 
 
-def test_picklelab_duplicate_raises():
-    agents = [agent(2, "picklelab"), agent(3, "picklelab")]
-    with pytest.raises(ValueError, match="picklelab"):
-        sw.decide(agents, NOW, cfg())
-
-
 def test_patch_body_carries_name():
     patches = sw.decide(defaults(), NOW, cfg())
     assert [p.body["name"] for p in patches] == ["laptop-vm", "picklelab"]
@@ -246,3 +240,34 @@ def test_laptop_paused_by_hand_is_not_preferred():
     patches = sw.decide(agents, NOW, cfg())
     assert [p.agent_id for p in patches] == [2, 1]
     assert patches[0].body["no_schedule"] is False
+
+
+# --- shapes seen on the live server ----------------------------------------
+
+
+def test_null_filters_equal_empty_filters():
+    """The server returns null for no filters; an {} patch must not repeat forever."""
+    agents = [
+        agent(1, "laptop-vm", filters={}),  # already lifted...
+        agent(2, "picklelab", no_schedule=True),
+    ]
+    agents[0]["filters"] = None  # ...but the server reports it as null
+    agents[1]["filters"] = None
+    assert sw.decide(agents, NOW, cfg()) == []
+
+
+def test_duplicate_picklelab_records_use_the_live_one():
+    """Every container recreate registers a new agent record; the stale ones never
+    reconnect. Act on the record with the latest last_contact."""
+    stale = agent(2, "picklelab", last_contact=NOW - 99999)
+    live = agent(7, "picklelab", last_contact=NOW - 5)
+    agents = [agent(1, "laptop-vm", filters=DEFAULT_FILTERS), stale, live]
+    patches = sw.decide(agents, NOW, cfg())
+    assert [p.agent_id for p in patches] == [1, 7]  # never touches the stale record
+
+
+def test_duplicate_laptop_records_use_the_live_one():
+    old = agent(1, "laptop-vm", last_contact=0, filters=DEFAULT_FILTERS)
+    live = agent(9, "laptop-vm", last_contact=NOW - 5, filters=DEFAULT_FILTERS)
+    patches = sw.decide([old, live, agent(2, "picklelab")], NOW, cfg())
+    assert [p.agent_id for p in patches] == [9, 2]
