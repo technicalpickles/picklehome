@@ -88,6 +88,25 @@ After deploying a `funnel.json` change, verify:
 2. From a tailnet node, `nc -vz woodpecker.tail2023b7.ts.net 9000` succeeds.
 3. From off the tailnet (phone on cellular), the same check fails.
 
+### Agent switch (prefer the laptop agent while it is online)
+
+Woodpecker has no agent priority or fallback: filters and labels are hard match rules and the first agent to ask gets the work. `agent_switch.py` fakes a preference by flipping two server-side settings through the API, from a systemd timer (`woodpecker-agent-switch.timer`, every minute):
+
+- laptop agent online (`last_contact` within `STALE_AFTER_SECONDS`, default 300): clear its `!host` filter so it takes unlabeled pipelines too, and set picklelab's agent to `no_schedule`.
+- laptop agent missing, never connected, or stale: picklelab schedulable again, laptop filter back to `!host=laptop`.
+
+It is stateless (each run reads the agent list and converges), so a missed tick or restart costs nothing. PATCH order keeps at least one agent able to take unlabeled work at every step, and anything unexpected fails open toward picklelab. A running job whose agent goes quiet is requeued by the server after its 1 minute lease expires, so it reruns elsewhere; side effects repeat.
+
+It runs as the profile-gated compose service `woodpecker-agent-switch` (`docker compose --profile switch run --rm --no-deps`), sharing `ts-woodpecker`'s network namespace to reach the API on `localhost:8000`. The stock Woodpecker images are `FROM scratch`, which is why it is a separate image rather than part of them.
+
+- **Needs** `WOODPECKER_API_TOKEN` (an admin user's personal access token) in 1Password and in `.env.vars` / `.env.template`, and the two agent names in `compose.yaml` matching Settings, Agents.
+- **Ships off:** `SWITCH_TIMER_ENABLED=0` in `deploy.sh`. Flip it to `1` and redeploy to start the timer. `/etc/opt/homelab/woodpecker-agent-switch.env` containing `SWITCH_ARGS=--dry-run` makes it log without changing anything.
+- **Logs:** `just woodpecker-switch-logs`.
+- **Rollback:** `just woodpecker-switch-reset` stops the timer and restores defaults. A reboot restarts an enabled timer, and `systemctl disable` is not in the passwordless sudo allowlist, so to keep it off across reboots disable it interactively (`ssh -t picklelab sudo systemctl disable woodpecker-agent-switch.timer`).
+- **Manual override:** setting `no_schedule` on picklelab's agent by hand gets overridden on the next tick. Stop the timer first.
+- **Arch drift:** the VM is arm64 and picklelab is amd64. While the filter is lifted, unlabeled pipelines can land on either, so pin amd64-only pipelines with a platform label (check the exact label in the UI before relying on it).
+- **Tests:** `uv run pytest tests/homelab/` (unit tests plus an in-process fake Woodpecker server, no docker or token needed).
+
 ## First-time Setup
 
 ```bash
