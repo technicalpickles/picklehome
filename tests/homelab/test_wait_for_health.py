@@ -6,6 +6,7 @@ once the wall-clock budget runs out. Budgets are tiny and the interval is 1s, so
 each test finishes in a few seconds.
 """
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -52,7 +53,8 @@ def _calls(stub):
 def test_passes_immediately_when_healthy(stub_curl):
     r = _run(stub_curl, 'wait_for_health svc http://127.0.0.1:1/health 5')
     assert r.returncode == 0
-    assert "passed after 0s" in r.stdout
+    # $SECONDS is whole seconds, so a call straddling a tick reads 1s.
+    assert re.search(r"passed after [01]s", r.stdout)
     assert _calls(stub_curl) == 1
 
 
@@ -62,7 +64,9 @@ def test_keeps_polling_until_service_answers(stub_curl):
     assert r.returncode == 0
     assert _calls(stub_curl) == 3
     assert r.stdout.count("Waiting for svc to start") == 2
-    assert "passed after 2s" in r.stdout
+    # Two 1s sleeps, but bash's $SECONDS is a whole-second counter that floors
+    # from wherever the start landed inside a second, so it reads 2s or 3s.
+    assert re.search(r"passed after [23]s", r.stdout)
 
 
 def test_gives_up_after_deadline_with_clear_message(stub_curl):
@@ -70,7 +74,7 @@ def test_gives_up_after_deadline_with_clear_message(stub_curl):
              CURL_SUCCEEDS_ON=999)
     assert r.returncode == 1
     assert "WARNING: local health check failed" in r.stdout
-    assert "svc not answering at http://127.0.0.1:1/health after 2s (budget 2s)" in r.stdout
+    assert re.search(r"svc not answering at http://127\.0\.0\.1:1/health after [23]s \(budget 2s\)", r.stdout)
 
 
 def test_env_var_overrides_the_budget(stub_curl):
