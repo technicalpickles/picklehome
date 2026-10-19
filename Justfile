@@ -232,9 +232,18 @@ taskchampion-logs host="picklelab" lines="50":
 taskchampion-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
 
-# Deploy Brineworks PRM server to picklelab (idempotent: first setup or update)
+# Deploy Brineworks PRM server to picklelab (idempotent), then warn on stale skill copies
 deploy-brineworks-server host="picklelab":
     just _deploy-remote brineworks-server {{host}}
+    scripts/brineworks-skills-check
+
+# Warn if openclaw-workspace skill copies are stale vs brineworks (read-only, never fails)
+brineworks-skills-check:
+    scripts/brineworks-skills-check
+
+# Verify brineworks-server on picklelab: health, alembic at head, no Gmail errors in logs (read-only)
+brineworks-server-verify host="picklelab" since="30m":
+    ssh {{host}} 'bash -s -- {{since}}' < homelab/services/brineworks-server/verify.sh
 
 # Seed (or re-seed) brineworks-server's Gmail token keyring on picklelab (one browser consent click)
 seed-brineworks-gmail host="picklelab":
