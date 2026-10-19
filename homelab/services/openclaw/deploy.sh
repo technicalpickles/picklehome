@@ -6,6 +6,7 @@ set -euo pipefail
 
 # One deploy at a time on picklelab (no-op when `just` already holds the lock).
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/openclaw"
@@ -708,24 +709,17 @@ systemctl status openclaw.service --no-pager || true
 
 echo ""
 echo "==> Checking local health endpoint"
-# 10 attempts, not 5: the port accepts-then-resets for a few seconds after Docker
-# reports the container Started (loading plugins, initializing Telegram polling,
-# etc. -- ~4s of startup log between "starting HTTP server" and "ready" alone) --
-# observed "Recv failure: Connection reset by peer" fail the tighter 5x3s loop
-# twice on real deploys even though the container came up healthy moments later.
-for i in 1 2 3 4 5 6 7 8 9 10; do
-    if curl -fsS http://127.0.0.1:18789/healthz -o /dev/null 2>&1; then
-        echo "    Local health check passed"
-        break
-    fi
-    if [ "$i" -eq 10 ]; then
-        echo "    WARNING: local health check failed after 10 attempts"
-        echo "    Logs: $COMPOSE logs"
-        exit 1
-    fi
-    echo "    Waiting for the gateway to start (attempt $i/10)..."
-    sleep 3
-done
+# 120s budget, polled until the gateway answers. The port accepts-then-resets for
+# a while after Docker reports the container Started (loading plugins, initializing
+# Telegram polling, etc.): that bit the old 5x3s loop twice on real deploys (curl
+# "Connection reset by peer"), a real deploy took ~24s on 2026-09-13, and a cold
+# start took ~47s on 2026-10-17, which blew through the old 10x3s (30s) loop and
+# aborted the deploy before the model-catalog warm and cron registration below.
+# The elapsed time is printed on success, so the real cold-start time is on record.
+if ! wait_for_health "the gateway" http://127.0.0.1:18789/healthz 120; then
+    echo "    Logs: $COMPOSE logs"
+    exit 1
+fi
 
 echo "==> Warming the model catalog"
 # The first models.list after a gateway start loads the catalog cold (2-12s;

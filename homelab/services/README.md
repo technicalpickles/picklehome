@@ -23,6 +23,13 @@ drops the lock when the holder dies, so there's nothing to clean up. See
 `source scripts/deploy-lock.sh; deploy_lock_acquire {{host}} "<label>"`, and pass
 `HOMELAB_DEPLOY_LOCK_HELD=1` on the ssh that runs `deploy.sh`.
 
+Waiting for a service to come up: source `homelab/scripts/wait-for-health.sh` and call
+`wait_for_health <label> <url> [budget_secs]` instead of hand-rolling an attempt-count
+loop. It polls against a wall-clock budget (default 120s, `HEALTH_WAIT_SECS` overrides it
+on a hand-run `deploy.sh`), prints elapsed time, and returns 1 on timeout so the caller
+picks the failure message. brineworks-server and openclaw use it; the older 5x3s loops in
+other `deploy.sh` files haven't been migrated yet.
+
 Secrets never touch the Mac or scp anywhere. Each service directory in
 `homelab/services/<name>/` contains:
 
