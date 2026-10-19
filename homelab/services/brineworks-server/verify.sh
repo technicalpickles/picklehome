@@ -6,8 +6,12 @@
 #   2. alembic is at head (the container runs `alembic upgrade head` on start)
 #   3. no Gmail/credential errors in the recent container logs
 #
-# Reads state only: curl, git rev-parse, `docker compose exec ... alembic current`,
-# `docker compose logs`. Nothing here restarts, rebuilds, or writes anything.
+# Reads state only: curl, git rev-parse, `docker exec ... alembic current`,
+# `docker logs`. Nothing here restarts, rebuilds, or writes anything.
+#
+# It talks to the container by name instead of through `docker compose`: compose
+# needs the 1Password service-account token (root-only) to interpolate its env,
+# which an ssh session can't read, and plain exec/logs need no env at all.
 #
 # Run it from the Mac with `just brineworks-server-verify`, which feeds this file to
 # ssh on stdin (so it works even when the host's checkout predates this script):
@@ -19,7 +23,7 @@ set -uo pipefail
 SINCE=${1:-30m}
 SERVICE_DIR=${SERVICE_DIR:-/opt/homelab/homelab/services/brineworks-server}
 BRINEWORKS_REPO=${BRINEWORKS_REPO:-/opt/brineworks}
-TOKEN_FILE=${TOKEN_FILE:-/etc/opt/homelab/op-token-picklehome}
+CONTAINER=${CONTAINER:-brineworks-server-server-1}
 # What a broken Gmail keyring looks like in the server log (see
 # server/brineworks_server/mcp/gmail_bootstrap.py in brineworks): the production
 # boot failure message, the exception types behind it, and Google's revoked-token errors.
@@ -31,23 +35,8 @@ fail() { echo "    FAIL: $1"; failures=$((failures + 1)); }
 
 cd "$SERVICE_DIR" || { echo "ERROR: $SERVICE_DIR not found (is this running on picklelab?)" >&2; exit 2; }
 
-# Same env the systemd unit and `just brineworks-server-logs` use: the op service-account
-# token, so `op run` can resolve the template compose's strict ${VAR:?} interpolation needs.
-set -a
-# shellcheck disable=SC1090
-. "$TOKEN_FILE"
-set +a
-
 PORT=$(sed -n 's/^BRINEWORKS_SERVER_PORT=//p' .env.build 2>/dev/null | tail -n 1)
 PORT=${PORT:-8765}
-
-# stdin from /dev/null: this script arrives on ssh's stdin, and nothing below
-# should be able to swallow the rest of it.
-dc() {
-    op run --env-file=.env.op.template -- docker compose \
-        --project-directory "$SERVICE_DIR" --env-file .env.build \
-        -f "$BRINEWORKS_REPO/server/compose.yaml" -f compose.picklelab.yaml "$@" </dev/null
-}
 
 echo "==> Health (http://127.0.0.1:$PORT/health)"
 if body=$(curl -fsS --connect-timeout 2 --max-time 10 "http://127.0.0.1:$PORT/health" </dev/null 2>&1); then
@@ -67,7 +56,7 @@ else
 fi
 
 echo "==> Migrations (alembic current)"
-if alembic_out=$(dc exec -T server alembic current 2>&1); then
+if alembic_out=$(docker exec "$CONTAINER" alembic current </dev/null 2>&1); then
     printf '%s\n' "$alembic_out" | sed 's/^/    /'
     if printf '%s' "$alembic_out" | grep -q '(head)'; then
         pass "alembic is at head"
@@ -80,7 +69,7 @@ else
 fi
 
 echo "==> Logs (last $SINCE, looking for: $LOG_PATTERN)"
-if log_out=$(dc logs --no-color --since "$SINCE" server 2>&1); then
+if log_out=$(docker logs --since "$SINCE" "$CONTAINER" </dev/null 2>&1); then
     if hits=$(printf '%s\n' "$log_out" | grep -E "$LOG_PATTERN"); then
         printf '%s\n' "$hits" | tail -n 10 | sed 's/^/    /'
         fail "Gmail/credential errors in the server log"
