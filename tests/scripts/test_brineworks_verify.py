@@ -25,29 +25,25 @@ def _stub(path: Path, body: str) -> None:
 
 @pytest.fixture
 def host(tmp_path):
-    """A fake picklelab: stub curl/op/docker/git/systemctl, a service dir and a token file."""
+    """A fake picklelab: stub curl/docker/git/systemctl and a service dir."""
     bindir = tmp_path / "bin"
     bindir.mkdir()
     log = tmp_path / "calls.log"
     service_dir = tmp_path / "svc"
     service_dir.mkdir()
     (service_dir / ".env.build").write_text("BRINEWORKS_SERVER_PORT=9999\n")
-    token = tmp_path / "op-token"
-    token.write_text("OP_SERVICE_ACCOUNT_TOKEN=fake\n")
 
     _stub(bindir / "curl", f'echo "curl $*" >> {log}\n'
           '[ -n "$CURL_FAIL" ] && { echo "curl: (22) 503" >&2; exit 22; }\n'
           "if [ -n \"$HEALTH_BODY\" ]; then echo \"$HEALTH_BODY\"; else echo '" + HEALTH_OK + "'; fi\n")
-    # op run --env-file=X -- <cmd...>: run the command, as the real one does.
-    _stub(bindir / "op", f'echo "op $*" >> {log}\nwhile [ "$1" != "--" ]; do shift; done; shift\nexec "$@"\n')
     _stub(bindir / "docker", f'echo "docker $*" >> {log}\n'
           'case "$*" in\n'
-          '  *" exec "*) [ -n "$ALEMBIC_FAIL" ] && exit 1; echo "${ALEMBIC_OUT:-0010 (head)}" ;;\n'
-          '  *" logs "*) [ -n "$LOGS_FAIL" ] && { echo "no such service" >&2; exit 1; }; printf "%s\\n" "${LOGS_OUT:-INFO started}" ;;\n'
+          '  "exec "*) [ -n "$ALEMBIC_FAIL" ] && exit 1; echo "${ALEMBIC_OUT:-0010 (head)}" ;;\n'
+          '  "logs "*) [ -n "$LOGS_FAIL" ] && { echo "no such service" >&2; exit 1; }; printf "%s\\n" "${LOGS_OUT:-INFO started}" ;;\n'
           'esac\n')
     _stub(bindir / "git", f'echo "git $*" >> {log}\necho "${{DEPLOYED_SHA:-abc1234}}"\n')
     _stub(bindir / "systemctl", f'echo "systemctl $*" >> {log}\n')
-    return {"bin": bindir, "log": log, "svc": service_dir, "token": token}
+    return {"bin": bindir, "log": log, "svc": service_dir}
 
 
 def _run_verify(host, *args, **env_extra):
@@ -55,7 +51,6 @@ def _run_verify(host, *args, **env_extra):
         "PATH": f"{host['bin']}:{os.environ['PATH']}",
         "HOME": os.environ.get("HOME", "/"),
         "SERVICE_DIR": str(host["svc"]),
-        "TOKEN_FILE": str(host["token"]),
         "BRINEWORKS_REPO": "/opt/brineworks",
         **env_extra,
     }
@@ -110,6 +105,16 @@ def test_since_argument_reaches_docker_logs(host):
     assert "--since 2h" in host["log"].read_text()
 
 
+def test_needs_neither_op_nor_compose(host):
+    # Regression: verify.sh once wrapped everything in `op run -- docker compose`, which
+    # needs the root-only service-account token and failed over a plain ssh session.
+    _run_verify(host)
+    calls = host["log"].read_text()
+    assert "op " not in calls and "compose" not in calls
+    assert "docker exec brineworks-server-server-1 alembic current" in calls
+    assert "docker logs --since 30m brineworks-server-server-1" in calls
+
+
 def test_only_reads_state(host):
     _run_verify(host)
     calls = host["log"].read_text()
@@ -117,7 +122,7 @@ def test_only_reads_state(host):
     docker_calls = [line for line in calls.splitlines() if line.startswith("docker ")]
     assert docker_calls, "expected docker to be called"
     for line in docker_calls:
-        assert " exec -T server alembic current" in line or " logs " in line, line
+        assert line.startswith("docker exec ") and "alembic current" in line or line.startswith("docker logs "), line
         for verb in (" up", " down", " restart", " build", " stop", " rm ", " run "):
             assert verb not in line, line
 
