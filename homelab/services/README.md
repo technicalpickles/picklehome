@@ -72,14 +72,13 @@ Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root 
 |-------|--------------|
 | `compose.yaml` `user: "uid:gid"` | Sets the process uid inside the container. Use explicit `"uid:gid"` string (e.g. `"1000:1000"`), not a named user — named users couple the compose file to the image's internal `/etc/passwd`. |
 | `deploy.sh` `chown -R uid:gid /srv/data/<service>` | Fixes existing host files before the container restarts with a new uid. Pattern: chown immediately after `mkdir -p`, before `docker compose up`. |
-| Dockerfile `ARG USER_UID` / `useradd` | Custom images (second-brain-agent, brineworks-agent) create the user inside the image at the same uid. Required when the container process needs a real login shell, home directory, or sshd. Off-the-shelf images (obsidian-sync, woodpecker) use `user:` in compose instead — no Dockerfile change needed. |
+| Dockerfile `ARG USER_UID` / `useradd` | Custom images (second-brain-agent) create the user inside the image at the same uid. Required when the container process needs a real login shell, home directory, or sshd. Off-the-shelf images (obsidian-sync, woodpecker) use `user:` in compose instead — no Dockerfile change needed. |
 
 **Current uid assignments:**
 
 | Service | uid:gid | Set via |
 |---------|---------|---------|
 | second-brain-agent | 1000:1000 | Dockerfile `ARG USER_UID` + `compose.yaml` (implicit, Dockerfile sets it) |
-| brineworks-agent | 1000:1000 | Dockerfile in brineworks repo |
 | obsidian-sync (all vaults) | 1000:1000 | `compose.yaml` `user: "1000:1000"` |
 | woodpecker-server | 1000:1000 | Image default (woodpecker v3 ships uid 1000); `deploy.sh` chowns `/srv/data/woodpecker/server` |
 | woodpecker-agent | 2000:2000 | `compose.yaml` `user: "2000:2000"`; matches the `ci` system user that owns the rootless docker socket |
@@ -134,7 +133,7 @@ Tradeoffs to weigh before reaching for this:
 - **MagicDNS names don't auto-reclaim.** Tailscale assigns the name at registration; if `<name>` is already taken then (a leftover `svc:<name>` Service, another device), it dedups to `<name>-1` and will **not** rename itself once the conflict clears. The tell: `ssh <name>.<tailnet>.ts.net` hangs (bare name resolves to nothing real) while `<name>-1` works. Fix by renaming the machine in [Tailscale Machines](https://login.tailscale.com/admin/machines) (or re-checking "auto-generate from OS hostname", since the container's `hostname:` already matches). Persisting `TS_STATE_DIR` keeps the corrected name across recreates.
 - It **replaces** the serve/Service/loopback wiring for that service rather than adding to it.
 
-First user: `brineworks-agent` (mosh from a phone). Full rationale and rejected alternatives live in the brineworks repo at `docs/decisions/0006-agent-tailnet-node-for-mosh.md` and `docs/runbooks/phone-ssh-agent-setup.md` (Part B). Reference: [Tailscale in Docker](https://tailscale.com/docs/features/containers/docker).
+First user was `brineworks-agent` (mosh from a phone; retired 2026-10-23). Full rationale and rejected alternatives live in the brineworks repo at `docs/decisions/0006-agent-tailnet-node-for-mosh.md` and `docs/runbooks/phone-ssh-agent-setup.md` (Part B). Reference: [Tailscale in Docker](https://tailscale.com/docs/features/containers/docker).
 
 ## Service registry
 
@@ -239,32 +238,9 @@ See [brineworks-server/README.md](brineworks-server/README.md) for full setup.
 
 ---
 
-### brineworks-agent
-
-Always-on, phone-reachable Claude Code session running the brineworks CLI against prod. SSH + tmux into a container over Tailscale.
-
-| | |
-|---|---|
-| **Purpose** | Mobile agent surface: reach a full Claude Code + `bw` session from a phone |
-| **Compose** | `/opt/homelab/homelab/services/brineworks-agent/` |
-| **Data** | `/srv/data/brineworks-agent/` (sshd host keys, cryptfile keyring, session workspace) |
-| **Access** | `ssh technicalpickles@brineworks-agent.<tailnet>.ts.net` (Tailscale Services, raw TCP to loopback `2223` internally) |
-| **Env vars** | `KEYRING_CRYPTFILE_PASSWORD`, `BRINEWORKS_API_KEY` (filtered `.env` only, never the master env) |
-| **Backup** | Not yet (needs adding to backup service) |
-| **Restart** | `restart: unless-stopped` |
-| **Source** | `technicalpickles/brineworks` (private repo), built from `/opt/brineworks` on host |
-
-The homelab's first **raw-TCP** Tailscale service (SSH, not HTTPS). Container internals copy `technicalpickles/homelab-dev`; deploy/orchestration shape copies `brineworks-server`.
-
-Commands: `just deploy-brineworks-agent`, `just brineworks-agent-logs`, `just brineworks-agent-logs-follow`
-
-See [brineworks-agent/README.md](brineworks-agent/README.md) for full setup.
-
----
-
 ### second-brain-agent
 
-Always-on Claude Code session with the `pickled-knowledge` Obsidian vault mounted read-write. SSH + tmux into a container over Tailscale; same Tailscale node-as-container pattern as brineworks-agent.
+Always-on Claude Code session with the `pickled-knowledge` Obsidian vault mounted read-write. SSH + tmux into a container over Tailscale; Tailscale node-as-container pattern (see "container-as-node" above).
 
 | | |
 |---|---|
@@ -356,7 +332,7 @@ Self-hosted OpenClaw gateway (chat -> agent that can act), reached via Telegram 
 
 | | |
 |---|---|
-| **Purpose** | Phone-reachable agent surface, sibling to `brineworks-agent` / `second-brain-agent` |
+| **Purpose** | Phone-reachable agent surface, sibling to `second-brain-agent` |
 | **Compose** | `/opt/homelab/homelab/services/openclaw/` |
 | **Data** | `/srv/data/openclaw/` (config, workspace/memory repo, auth-profile store, drop-in CLI dir) |
 | **Access** | `https://openclaw.<tailnet>.ts.net` (Tailscale Services, port 18789 internally) + gateway token; Telegram bot gated by a chat-ID allowlist |

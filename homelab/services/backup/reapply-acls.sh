@@ -22,7 +22,6 @@ BACKUP_USER="backup"
 # Whole-tree grants: everything under these paths should be backup-readable.
 TREES=(
     /srv/data/second-brain-agent
-    /srv/data/brineworks-agent
     /srv/data/nikke
     /srv/data/taskchampion-sync
     /srv/data/climate-auto-switch
