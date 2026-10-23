@@ -45,7 +45,8 @@ services:
   open-terminal:
     # Use slim image (~430MB vs 5.15GB full) -- same features, smaller footprint.
     # See https://github.com/open-webui/open-terminal#readme for tag options.
-    image: ghcr.io/open-webui/open-terminal:slim
+    # Built from Dockerfile.open-terminal in compose.picklelab.yaml (eMudhra CA fix).
+    image: open-terminal:local
     restart: unless-stopped
     environment:
       OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?required}
