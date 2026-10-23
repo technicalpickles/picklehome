@@ -13,8 +13,7 @@ long-lived container continuously syncing against Obsidian's cloud.
   - config: Obsidian config + sync credentials (per-vault, so logins don't collide)
   - `/vault`: the synced vault files
 - **User model:** all vault containers run as uid 1000 (`user: "1000:1000"`), with config
-  at `/home/node/.config`. This lets the second-brain-agent container (also uid 1000) write
-  to the pickled-knowledge vault.
+  at `/home/node/.config`.
 - **On-host data:** `compose.picklelab.yaml` maps those volumes to
   `/srv/data/obsidian-sync/config/<vault>` and `/srv/data/obsidian-sync/vaults/<vault>`.
 - **Service unit:** `obsidian-sync.service` is a `RemainAfterExit` oneshot that does
