@@ -12,6 +12,9 @@ services:
       - /srv/data/open-webui:/app/backend/data
 
   open-terminal:
+    build:
+      context: /opt/homelab
+      dockerfile: homelab/services/open-webui/Dockerfile.open-terminal
     volumes:
       - /srv/data/open-terminal:/home/user
 
