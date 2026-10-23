@@ -112,7 +112,7 @@ These live in the picklelab overlay rather than the portable `compose.yaml` on p
 
 **Turning the flag on with an empty `BRINEWORKS_ALLOWED_LOGINS` makes the server refuse to start**, deliberately. A config that reads as "identity auth enabled" but authenticates nobody is worse than a loud failure at boot (ops principle #1). Because the container CMD is `alembic upgrade head && uvicorn`, the migration step is what dies first.
 
-The API key stays required regardless. Tagged devices never receive identity headers, so `brineworks-agent` authenticates by key permanently, not transitionally.
+The API key stays required regardless. Tagged devices never receive identity headers, so tagged clients (the retired `brineworks-agent` was one) authenticate by key permanently, not transitionally.
 
 Verify a rollout by watching `brineworks.auth` lines in the container log (`just brineworks-server-logs`): browser traffic shows `identity_kind=user`, the agent shows `identity_kind=key`.
 
