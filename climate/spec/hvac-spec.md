@@ -136,6 +136,17 @@ Occupied slots are written as `comfort` in `schedule.yaml`. It is a virtual ref
 resolved to Comfort Cool (`smart1`) or Comfort Heat (`smart2`) at push time; it
 is never sent to Ecobee.
 
+**Upstairs overnight is seasonal too (2026-10-23).** A single Sleep could not hold both
+the winter floor and the summer ceiling: Ecobee's 5°F minimum spread meant raising the
+floor to 70 for the first cold evening forced the ceiling to 75, undoing the
+sweating fix from 10-16. Overnight slots are written as `night` in `schedule.yaml`,
+a second virtual ref resolved by the same seasonal decision as `comfort`: Sleep
+(`sleep`) in heat mode, Sleep Cool (`smart4`, a custom climate) in cool mode. Never
+sent to Ecobee. The live season is still read from the Comfort refs only, so
+`night` never changes what the switcher thinks the season is. Downstairs Sleep is a
+setback, not seasonal, and keeps using plain `sleep`. Sleep Cool was created once
+with `just climate-create-climate`; Ecobee assigned the ref.
+
 ---
 
 ## Upstairs schedule
@@ -144,19 +155,19 @@ is never sent to Ecobee.
 
 | Time     | Mode                      | Reason                              |
 |----------|---------------------------|-------------------------------------|
-| 12:00 am | Sleep                     | Bedrooms in use for sleeping |
+| 12:00 am | Night (`night`)           | Bedrooms in use for sleeping; resolves to Sleep or Sleep Cool |
 | 7:00 am  | Comfort (`comfort`) | People up; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
 | 10:00 am | Away                      | Upstairs unoccupied; adults working downstairs, son at school |
 | 2:30 pm  | Comfort (`comfort`) | Son home from school; upstairs becomes active living area; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
-| 10:00 pm | Sleep                     | Bedtime |
+| 10:00 pm | Night (`night`)           | Bedtime; resolves to Sleep or Sleep Cool |
 
 ### Weekends (Saturday–Sunday)
 
 | Time     | Mode                      | Reason              |
 |----------|---------------------------|---------------------|
-| 12:00 am | Sleep                     | Bedrooms in use for sleeping |
+| 12:00 am | Night (`night`)           | Bedrooms in use for sleeping; resolves to Sleep or Sleep Cool |
 | 8:00 am  | Comfort (`comfort`) | Home all day; the seasonal decision resolves it to Comfort Heat or Comfort Cool |
-| 10:00 pm | Sleep                     | Bedtime |
+| 10:00 pm | Night (`night`)           | Bedtime; resolves to Sleep or Sleep Cool |
 
 **Overnight moved from Comfort to Sleep on 2026-10-16.** Comfort Cool's 74 ceiling
 was tuned on how the bedrooms felt by day, and it was too warm to sleep at: across
@@ -208,6 +219,7 @@ directly, rather than trusting the dry run.
 | Comfort Cool | 74   | 69   | Primary occupied mode: 24-hour mean outdoor temp above 65°F. **Re-based 73/68 → 76/71 on 2026-10-03** alongside downstairs, after thermostat `tempCorrection` calibration (upstairs +3.0°F; unverified whether that value is new). 73 felt cold once readings were honest. Notes below predate the calibration. Raised 71→73 on 2026-09-10 alongside downstairs. **Heat floor raised 65→68 on 2026-09-10**, after the 24-hour-mean switch made it load-bearing: the band can hold Comfort Cool for weeks, so on a 45°F autumn night the old 65 floor let the house fall to 65 before anything heated. Under the previous instantaneous switcher any cold night flipped to Comfort Heat and its 70–72 floor, so 65 was harmless; it stopped being harmless when the flip got slower. 73/68 is exactly Ecobee's 5°F minimum spread, and the floor is inert in summer. **Watch the Bedroom sensor:** it runs 4–6°F colder than the upstairs thermostat (thermostat 71–74°F while Bedroom reads 66–69°F over the same week), so a 73 ceiling still leaves the bedroom near 68–69 overnight. The fix for that gap is enrolling the Bedroom sensor into the upstairs climates (task `3f72e752`), not another ceiling bump — only the thermostat's own sensor participates in any climate today. **Lowered 76/71 → 74/69 on 2026-10-06** after sensor enrollment: bedrooms were comfortable at sensor means of 72-74 (9/28-10/2); 76 would drift to ~77 real. Provisional until IR re-check. |
 | Comfort Heat | 75   | 70   | Primary occupied mode: 24-hour mean outdoor temp below 60°F. **Reviewed 2026-10-10, left at 75/70**: on the sensor scale (~1.5-2°F below IR) the 70 floor is ~71.5 real, a sensible bedroom heating floor, and it sits above Comfort Cool's 69. Provisional until it actually runs. Was 73/70, a 3°F spread, which Ecobee ran as 74/69. |
 | Eco          | 79   | 68   | Moderate setback: allow drift without full Away range. Re-based 75/66 → 79/68 on 2026-10-03, same as downstairs. Was 71/68, which Ecobee ran as 72/67. |
-| Sleep        | 75   | 70   | Overnight (10 pm to 7 am weekdays, 8 am weekends). **Raised 72/67 → 75/70 on 2026-10-22**: first cold evening, the house felt cold with the 67 floor idle at 69.4 on the thermostat. Ecobee's 5°F minimum spread means a 70 floor forces the ceiling to 75, which undoes the 2026-10-16 sweating fix below; acceptable in heating season where the ceiling is inert, but it will come back as a problem once cooling season returns. TODO: split Sleep into heat/cool variants like Comfort (virtual `sleep` ref resolved by the seasonal decision), so the winter floor and summer ceiling can be set independently. **Set 2026-10-16** when overnight moved off Comfort: the 72 ceiling is 2°F under Comfort Cool's 74, which let the bedroom drift to ~74 on the sensor (~76 real) and woke Tracy up sweating. The 67 floor (~68.5-69 real on the sensor scale) is cooler than Comfort Heat's 70 on purpose, a sleeping temperature, not a daytime one; provisional until the first cold night. Was 71/66 while unused. |
+| Sleep        | 75   | 70   | Overnight in heat mode (the `night` slot, 10 pm to 7 am weekdays, 8 am weekends). Same numbers as Comfort Heat on purpose: winter nights get the daytime floor. **Raised 72/67 → 75/70 on 2026-10-22**: first cold evening, the house felt cold with the 67 floor idle at 69.4 on the thermostat. Ecobee's 5°F minimum spread means a 70 floor forces the ceiling to 75, which undoes the 2026-10-16 sweating fix below; acceptable in heating season where the ceiling is inert, but it will come back as a problem once cooling season returns. TODO: split Sleep into heat/cool variants like Comfort (virtual `sleep` ref resolved by the seasonal decision), so the winter floor and summer ceiling can be set independently. **Set 2026-10-16** when overnight moved off Comfort: the 72 ceiling is 2°F under Comfort Cool's 74, which let the bedroom drift to ~74 on the sensor (~76 real) and woke Tracy up sweating. The 67 floor (~68.5-69 real on the sensor scale) is cooler than Comfort Heat's 70 on purpose, a sleeping temperature, not a daytime one; provisional until the first cold night. Was 71/66 while unused. |
+| Sleep Cool   | 72   | 67   | Overnight in cool mode (`smart4`, the `night` slot). The 72 ceiling is the 2026-10-16 fix: Comfort Cool's 74 let the bedroom drift to ~74 on the sensor (~76 real) and woke Tracy up sweating; the 67 floor is a sleeping temperature, inert in summer. Split out of Sleep on 2026-10-23 so the winter floor (Sleep, 70) and summer ceiling can be set independently. Provisional until the first cooling season it runs in. |
 | Away         | 82   | 64   | Wide setback for unoccupied zones / extended absence |
 | Home         | 73   | 68   | Mild weather neutral: minimal active conditioning needed. Was 71/68, a 3°F spread, which Ecobee ran as 72/67. |

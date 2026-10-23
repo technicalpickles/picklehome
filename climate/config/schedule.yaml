@@ -7,6 +7,9 @@
 # write smart1/smart2 here directly -- the season is not stored in this file.
 # See climate/spec/hvac-spec.md, "Seasonal switching".
 #
+# `night` is a second virtual ref, resolved the same way: Sleep (`sleep`) in
+# heat mode, Sleep Cool (`smart4`) in cool mode. Only upstairs uses it.
+#
 # Thermostat IDs are in climate/config/thermostats.yaml.
 # All times must be on 30-minute boundaries (:00 or :30).
 # Every day must start with time: "00:00". All 7 days are required.
@@ -32,7 +35,7 @@ thermostats:
     schedule:
       _weekday: &upstairs_weekday
         - time: "00:00"
-          climate: sleep
+          climate: night
         - time: "07:00"
           climate: comfort
         - time: "10:00"
@@ -40,15 +43,15 @@ thermostats:
         - time: "14:30"
           climate: comfort
         - time: "22:00"
-          climate: sleep
+          climate: night
 
       _weekend: &upstairs_weekend
         - time: "00:00"
-          climate: sleep
+          climate: night
         - time: "08:00"
           climate: comfort
         - time: "22:00"
-          climate: sleep
+          climate: night
 
       sunday: *upstairs_weekend
       monday: *upstairs_weekday

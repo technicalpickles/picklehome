@@ -42,6 +42,10 @@ climate-comforts-capture *ARGS:
 climate-comforts-sync *ARGS:
     uv run python -m climate.sync sync-comforts {{ARGS}}
 
+# Create a custom climate (one-time): just climate-create-climate upstairs --name "Sleep Cool" --heat 67 --cool 72
+climate-create-climate *ARGS:
+    uv run python -m climate.sync create-climate {{ARGS}}
+
 # Preview comfort changes without pushing
 climate-comforts-sync-dry *ARGS:
     uv run python -m climate.sync sync-comforts --dry-run {{ARGS}}

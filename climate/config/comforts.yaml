@@ -28,6 +28,10 @@ thermostats:
         cool_temp: 79
         heat_temp: 68
         name: Eco
+      smart4:
+        cool_temp: 72
+        heat_temp: 67
+        name: Sleep Cool
   downstairs:
     climates:
       away:

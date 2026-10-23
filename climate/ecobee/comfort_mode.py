@@ -14,6 +14,17 @@ COMFORT_REF = "comfort"
 MODE_TO_REF = {"cool": "smart1", "heat": "smart2"}
 REF_TO_MODE = {ref: mode for mode, ref in MODE_TO_REF.items()}
 
+# `night` is a second virtual ref, for thermostats whose overnight setpoints
+# differ by season (upstairs: a warm floor in winter, a cool ceiling in
+# summer). It resolves from the same mode as COMFORT_REF. Heat reuses the
+# native `sleep` climate; cool is the custom "Sleep Cool" climate, created
+# once with 'create-climate'. It is deliberately NOT in REF_TO_MODE: the
+# live season is read from the Comfort refs only, so a schedule that carries
+# night/Sleep Cool never changes what detect_live_mode reports.
+NIGHT_REF = "night"
+NIGHT_MODE_TO_REF = {"cool": "smart4", "heat": "sleep"}
+VIRTUAL_REFS = frozenset({COMFORT_REF, NIGHT_REF})
+
 # A full 24h window at 15-minute sampling is 96 entries. Below half that, the
 # window is too gappy to average meaningfully (timer outage, cold start,
 # restored volume), so the run declines to decide rather than guessing.
@@ -31,9 +42,9 @@ def resolve_ref(mode: str) -> str:
 
 
 def resolve_schedule_array(schedule_array: list[list[str]], mode: str) -> list[list[str]]:
-    """Replace every COMFORT_REF slot with the climateRef for `mode`."""
-    ref = resolve_ref(mode)
-    return [[ref if slot == COMFORT_REF else slot for slot in day] for day in schedule_array]
+    """Replace every virtual slot (COMFORT_REF, NIGHT_REF) with the climateRef for `mode`."""
+    refs = {COMFORT_REF: resolve_ref(mode), NIGHT_REF: NIGHT_MODE_TO_REF[mode]}
+    return [[refs.get(slot, slot) for slot in day] for day in schedule_array]
 
 
 def detect_live_mode(program: dict) -> str | None:
