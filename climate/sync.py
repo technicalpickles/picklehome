@@ -9,7 +9,7 @@ import yaml
 from pyecobee.errors import InvalidTokenError
 
 from climate.ecobee import auth, comforts, history, schedule, sensors, status
-from climate.ecobee.thermostats import load_thermostats, get_managed_thermostats
+from climate.ecobee.thermostats import load_thermostats, get_managed_thermostats, get_thermostat_id
 from climate.ambient.client import DEFAULT_WEATHER_PATH
 
 DEFAULT_SCHEDULE_PATH = Path(__file__).parent / "config" / "schedule.yaml"
@@ -331,6 +331,67 @@ def cmd_comforts_capture(args) -> None:
             heat = c["heatTemp"] // 10
             label = f"{ref} ({c['name']})" if c.get("owner") == "user" else ref
             print(f"  {label}: cool={cool}°F  heat={heat}°F")
+
+
+def cmd_create_climate(args) -> None:
+    """Create a custom climate on one thermostat, cloned from an existing one.
+
+    Climates can't be created by sync-comforts (it only edits existing refs),
+    and Ecobee assigns the new climateRef itself, so this is a one-time step
+    followed by 'capture-comforts' to bring the new ref into comforts.yaml.
+    """
+    ecobee = auth.make_ecobee()
+    registry = load_thermostats(args.thermostats)
+    try:
+        thermostat_id = get_thermostat_id(registry, args.thermostat)
+    except KeyError:
+        print(f"No thermostat named '{args.thermostat}' in thermostats.yaml.")
+        sys.exit(1)
+
+    try:
+        program = schedule.get_current_program(ecobee, thermostat_id)
+    except InvalidTokenError:
+        print("Tokens invalid. Re-run 'just climate-auth'.")
+        sys.exit(1)
+    except (LookupError, RuntimeError) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    by_ref = {c["climateRef"]: c for c in program["climates"]}
+    if any(c.get("name") == args.name for c in program["climates"]):
+        print(f"A climate named '{args.name}' already exists on {args.thermostat}; nothing to do.")
+        return
+    for flag, ref in (("--like", args.like), ("--sensors-from", args.sensors_from)):
+        if ref not in by_ref:
+            print(f"{flag} {ref!r} is not a climateRef on {args.thermostat}. Have: {sorted(by_ref)}")
+            sys.exit(1)
+
+    new = comforts.build_new_climate(
+        by_ref[args.like], by_ref[args.sensors_from], args.name, args.heat, args.cool
+    )
+    print(f"Will create '{args.name}' on {args.thermostat}: heat={args.heat}°F cool={args.cool}°F "
+          f"(cloned from {args.like}, sensors from {args.sensors_from})")
+    if args.dry_run:
+        print("Dry run complete. No changes pushed.")
+        return
+
+    before = set(by_ref)
+    try:
+        comforts.push_comforts(ecobee, thermostat_id, program["climates"] + [new], program["schedule"])
+        after = schedule.get_current_program(ecobee, thermostat_id)
+    except InvalidTokenError:
+        print("Tokens invalid. Re-run 'just climate-auth'.")
+        sys.exit(1)
+    except (LookupError, RuntimeError) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    created = [c for c in after["climates"] if c["climateRef"] not in before]
+    if len(created) != 1:
+        print(f"Pushed, but expected exactly 1 new climate and found {len(created)}. Inspect with 'just climate-list'.")
+        sys.exit(1)
+    print(f"Created '{created[0]['name']}' as climateRef {created[0]['climateRef']}. "
+          f"Run 'just climate-comforts-capture' to bring it into comforts.yaml.")
 
 
 def cmd_comforts_sync(args) -> None:
@@ -1239,6 +1300,19 @@ def main() -> None:
         help="Only sync the named thermostat (default: all)",
     )
 
+    create_climate_parser = subparsers.add_parser(
+        "create-climate",
+        help="Create a custom climate on a thermostat (one-time; Ecobee assigns the ref)",
+    )
+    create_climate_parser.add_argument("thermostat", metavar="NAME", help="Thermostat name from thermostats.yaml")
+    create_climate_parser.add_argument("--name", required=True, help="Display name for the new climate")
+    create_climate_parser.add_argument("--heat", type=int, required=True, metavar="F", help="Heat setpoint (°F)")
+    create_climate_parser.add_argument("--cool", type=int, required=True, metavar="F", help="Cool setpoint (°F)")
+    create_climate_parser.add_argument("--like", default="smart1", metavar="REF", help="Climate to clone settings from (default: smart1)")
+    create_climate_parser.add_argument("--sensors-from", default="sleep", metavar="REF", help="Climate to copy sensor enrollment from (default: sleep)")
+    create_climate_parser.add_argument("--dry-run", action="store_true", help="Show what would be created without pushing")
+    create_climate_parser.add_argument("--thermostats", type=Path, default=DEFAULT_THERMOSTATS_PATH, metavar="PATH", help="Path to thermostats YAML")
+
     status_parser = subparsers.add_parser("status", help="Show current thermostat state")
     status_parser.add_argument(
         "--json",
@@ -1478,6 +1552,7 @@ def main() -> None:
     subparsers.choices["history"].set_defaults(func=cmd_history)
     subparsers.choices["capture-comforts"].set_defaults(func=cmd_comforts_capture)
     subparsers.choices["sync-comforts"].set_defaults(func=cmd_comforts_sync)
+    subparsers.choices["create-climate"].set_defaults(func=cmd_create_climate)
     subparsers.choices["locations"].set_defaults(func=cmd_locations)
     subparsers.choices["discover-stations"].set_defaults(func=cmd_weather_discover)
     subparsers.choices["weather"].set_defaults(func=cmd_weather)
