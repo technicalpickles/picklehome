@@ -72,13 +72,12 @@ Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root 
 |-------|--------------|
 | `compose.yaml` `user: "uid:gid"` | Sets the process uid inside the container. Use explicit `"uid:gid"` string (e.g. `"1000:1000"`), not a named user — named users couple the compose file to the image's internal `/etc/passwd`. |
 | `deploy.sh` `chown -R uid:gid /srv/data/<service>` | Fixes existing host files before the container restarts with a new uid. Pattern: chown immediately after `mkdir -p`, before `docker compose up`. |
-| Dockerfile `ARG USER_UID` / `useradd` | Custom images (second-brain-agent) create the user inside the image at the same uid. Required when the container process needs a real login shell, home directory, or sshd. Off-the-shelf images (obsidian-sync, woodpecker) use `user:` in compose instead — no Dockerfile change needed. |
+| Dockerfile `ARG USER_UID` / `useradd` | Custom images (nikke) create the user inside the image at the same uid. Required when the container process needs a real login shell, home directory, or sshd. Off-the-shelf images (obsidian-sync, woodpecker) use `user:` in compose instead — no Dockerfile change needed. |
 
 **Current uid assignments:**
 
 | Service | uid:gid | Set via |
 |---------|---------|---------|
-| second-brain-agent | 1000:1000 | Dockerfile `ARG USER_UID` + `compose.yaml` (implicit, Dockerfile sets it) |
 | obsidian-sync (all vaults) | 1000:1000 | `compose.yaml` `user: "1000:1000"` |
 | woodpecker-server | 1000:1000 | Image default (woodpecker v3 ships uid 1000); `deploy.sh` chowns `/srv/data/woodpecker/server` |
 | woodpecker-agent | 2000:2000 | `compose.yaml` `user: "2000:2000"`; matches the `ci` system user that owns the rootless docker socket |
@@ -95,7 +94,7 @@ Containers that write to `/srv/data/<service>/` bind mounts run as a **non-root 
 - **deploy.sh**: chown the shared path to the common uid as part of both services' deploy scripts
 - **Transition recovery**: if an entrypoint needs to chown a bind mount (e.g. files existed as root before the uid fix), gate it on a fast check (`stat -c %u`) so it doesn't recurse on every start once ownership is already correct
 
-Current cross-service share: obsidian-sync → second-brain-agent (both uid 1000, `/srv/data/obsidian-sync/vaults/pickled-knowledge`).
+Current cross-service share: none.
 
 ### When the default doesn't fit: container-as-node (UDP, native node identity)
 
@@ -238,27 +237,6 @@ See [brineworks-server/README.md](brineworks-server/README.md) for full setup.
 
 ---
 
-### second-brain-agent
-
-Always-on Claude Code session with the `pickled-knowledge` Obsidian vault mounted read-write. SSH + tmux into a container over Tailscale; Tailscale node-as-container pattern (see "container-as-node" above).
-
-| | |
-|---|---|
-| **Purpose** | Phone-reachable Claude Code session for reading and writing the pickled-knowledge vault |
-| **Compose** | `/opt/second-brain-agent` |
-| **Data** | `/srv/data/second-brain-agent/` (sshd host keys, Claude state, tmux sessions) |
-| **Vault** | `/srv/data/obsidian-sync/vaults/pickled-knowledge/` (mounted read-write at `/vault`) |
-| **Access** | `ssh technicalpickles@second-brain-agent.<tailnet>.ts.net` (Tailscale node) |
-| **Env vars** | `SECOND_BRAIN_AGENT_TS_AUTHKEY` (filtered `.env` only, never the master env) |
-| **Backup** | Not yet |
-| **Restart** | `restart: unless-stopped` |
-| **Source** | `technicalpickles/second-brain-agent` (private repo), cloned to `/opt/second-brain-agent` on host |
-
-Depends on `obsidian-sync` being running to keep the vault current; systemd `After=obsidian-sync.service` ensures ordering on boot.
-
-Commands: `just deploy-second-brain-agent`, `just second-brain-agent-logs`, `just second-brain-agent-logs-follow`
-
-See [second-brain-agent/README.md](second-brain-agent/README.md) for full setup.
 
 ---
 
@@ -332,7 +310,7 @@ Self-hosted OpenClaw gateway (chat -> agent that can act), reached via Telegram 
 
 | | |
 |---|---|
-| **Purpose** | Phone-reachable agent surface, sibling to `second-brain-agent` |
+| **Purpose** | Phone-reachable agent surface |
 | **Compose** | `/opt/homelab/homelab/services/openclaw/` |
 | **Data** | `/srv/data/openclaw/` (config, workspace/memory repo, auth-profile store, drop-in CLI dir) |
 | **Access** | `https://openclaw.<tailnet>.ts.net` (Tailscale Services, port 18789 internally) + gateway token; Telegram bot gated by a chat-ID allowlist |
