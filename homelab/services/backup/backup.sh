@@ -56,9 +56,6 @@ dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES
 # large, owned by the postgres container's uid (unreadable by the backup
 # user), and not consistent unless postgres is stopped.
 #
-# Exclude /srv/data/dev-home: that's the dev container's home directory,
-# unrelated to homelab services. Has its own backup concerns.
-#
 # Exclude /srv/data/open-terminal: Open Terminal's scratch home directory for
 # the chat AI's sandboxed shell sessions. Disposable AI-experiment data, not
 # source of truth -- anything worth keeping gets moved to a real vault/repo/
@@ -73,7 +70,6 @@ dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES
 echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
     --exclude "$DATA_DIR/brineworks-server/db" \
-    --exclude "$DATA_DIR/dev-home" \
     --exclude "$DATA_DIR/open-terminal" \
     --exclude "$DATA_DIR/openclaw/ssh" \
     --exclude "$DATA_DIR/openclaw/gog-keyring"
