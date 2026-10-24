@@ -324,6 +324,8 @@ Commands: `just deploy-woodpecker`, `just woodpecker-logs`, `just woodpecker-sta
 
 See [woodpecker/README.md](woodpecker/README.md) for full setup and the OAuth/Funnel prerequisites.
 
+Also ships `woodpecker-agent-switch` (profile-gated compose service plus a 1 minute systemd timer, ships disabled) that sends CI to the laptop VM agent while it is online and back to picklelab when it is not. Commands: `just woodpecker-switch-logs`, `just woodpecker-switch-reset`. See the README's "Agent switch" section.
+
 ---
 
 ### openclaw
