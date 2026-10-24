@@ -1,6 +1,10 @@
 services:
   github-actions-runner:
-    image: myoung34/github-runner:latest
+    # ubuntu-noble, not :latest: :latest is still Ubuntu 20.04 (focal), whose
+    # ca-certificates (20240203) ships the distrusted emSign ECC Root CA - G3
+    # (eMudhra intermediate CA compromise, 2026-10-20). The noble tag has the
+    # patched bundle (20260816ubuntu0.24.04.1). Revisit when :latest moves.
+    image: myoung34/github-runner:ubuntu-noble
     restart: unless-stopped
     # Secrets reach the container via `environment:` interpolation, resolved by the
     # systemd unit's `op run` wrap from .env.op.template into the process env --
