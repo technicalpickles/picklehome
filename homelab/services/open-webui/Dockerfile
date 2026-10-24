@@ -18,4 +18,16 @@ ARG USE_SLIM=true
 FROM ghcr.io/open-webui/open-webui:v0.10.2
 USER root
 RUN chown -R 1000:1000 /app/backend/open_webui/static
+
+# eMudhra intermediate-CA compromise (2026-10-20, https://emudhra.we-have-a-problem.com).
+# The upstream image's system CA package and its pip certifi both still trust the
+# compromised chain, and requests/aiohttp/httpx read certifi while curl/urllib read
+# the system store, so both need fixing. Needs Debian ca-certificates >=
+# 20250419~deb12u2 and certifi >= 2026.10.19. Drop this layer once the pinned
+# upstream tag ships both.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && python -m pip install --no-cache-dir -U 'certifi>=2026.10.19'
+
 USER 1000:1000

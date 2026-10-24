@@ -227,7 +227,7 @@ Three sources matter on picklelab, highest priority last:
 
 - **Workspace** (`/srv/data/openclaw/workspace/skills/`, git-tracked in `openclaw-workspace`): behavior-steering skills live here.
 - **Managed** (`/srv/data/openclaw/config/skills/`): installed with `npx skills`, e.g. brineworks' own `brineworks-triage`. Not in any repo.
-- **Workshop** (`/srv/data/openclaw/config/agents/main/agent/workshop-skills/`): agent-authored. `deploy.sh` sets `skills.workshop.autonomous.mode: "propose"` so Workshop stages proposals for a human instead of rewriting skills unattended (the default, `auto`, did that and left triage steering at gog's Gmail tools rather than brineworks). `email-triage-widget` and `gmail-triage` are disabled via `skills.entries.<name>.enabled`.
+- **Workshop** (`/srv/data/openclaw/config/agents/main/agent/workshop-skills/`): agent-authored. `deploy.sh` sets `skills.workshop.autonomous.mode: "off"` so Workshop never rewrites skills unattended (it was `propose` until 2026.10.6 removed proposals; the default, `auto`, did that and left triage steering at gog's Gmail tools rather than brineworks). `email-triage-widget` and `gmail-triage` are disabled via `skills.entries.<name>.enabled`.
 
 Workspace beats workshop on a name collision. `openclaw skills list` shows each skill's source.
 

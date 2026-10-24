@@ -42,6 +42,10 @@ climate-comforts-capture *ARGS:
 climate-comforts-sync *ARGS:
     uv run python -m climate.sync sync-comforts {{ARGS}}
 
+# Create a custom climate (one-time): just climate-create-climate upstairs --name "Sleep Cool" --heat 67 --cool 72
+climate-create-climate *ARGS:
+    uv run python -m climate.sync create-climate {{ARGS}}
+
 # Preview comfort changes without pushing
 climate-comforts-sync-dry *ARGS:
     uv run python -m climate.sync sync-comforts --dry-run {{ARGS}}
@@ -161,8 +165,10 @@ _deploy-remote service host="picklelab":
         echo "Pushing to origin/main..."
         git push
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-{{service}}"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/{{service}}/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/{{service}}/deploy.sh"
 
 # Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
@@ -230,9 +236,18 @@ taskchampion-logs host="picklelab" lines="50":
 taskchampion-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/taskchampion-sync && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.build -f compose.yaml -f compose.picklelab.yaml logs -f"
 
-# Deploy Brineworks PRM server to picklelab (idempotent: first setup or update)
+# Deploy Brineworks PRM server to picklelab (idempotent), then warn on stale skill copies
 deploy-brineworks-server host="picklelab":
     just _deploy-remote brineworks-server {{host}}
+    scripts/brineworks-skills-check
+
+# Warn if openclaw-workspace skill copies are stale vs brineworks (read-only, never fails)
+brineworks-skills-check:
+    scripts/brineworks-skills-check
+
+# Verify brineworks-server on picklelab: health, alembic at head, no Gmail errors in logs (read-only)
+brineworks-server-verify host="picklelab" since="30m":
+    ssh {{host}} 'bash -s -- {{since}}' < homelab/services/brineworks-server/verify.sh
 
 # Seed (or re-seed) brineworks-server's Gmail token keyring on picklelab (one browser consent click)
 seed-brineworks-gmail host="picklelab":
@@ -245,22 +260,6 @@ brineworks-server-logs host="picklelab" lines="50":
 # Follow Brineworks server container logs live from picklelab
 brineworks-server-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs -f"
-
-# Deploy Brineworks mobile agent to picklelab (idempotent: first setup or update)
-deploy-brineworks-agent host="picklelab":
-    just _deploy-remote brineworks-agent {{host}}
-
-# Tail Brineworks agent container logs from picklelab
-# compose.yaml's environment: entries use ${VAR:?required} (TS_AUTHKEY,
-# KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY), evaluated at parse time for
-# every subcommand including `logs` -- placeholder values derived from
-# .env.vars satisfy that, same pattern as open-webui-logs.
-brineworks-agent-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --project-directory /opt/homelab/homelab/services/brineworks-agent -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
-
-# Follow Brineworks agent container logs live from picklelab
-brineworks-agent-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --project-directory /opt/homelab/homelab/services/brineworks-agent -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy second-brain-agent to picklelab (idempotent: first setup or update)
 deploy-second-brain-agent host="picklelab":
@@ -396,8 +395,10 @@ deploy-disk-hygiene host="picklelab":
         echo "Pushing to origin/main..."
         git push
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-disk-hygiene"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/disk-hygiene/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/disk-hygiene/deploy.sh"
 
 # Run docker prune now (triggers the systemd service, then shows its log)
 docker-prune-now host="picklelab":
@@ -434,8 +435,10 @@ deploy-obsidian-sync host="picklelab":
         echo "Pushing to origin/main..."
         git push
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-obsidian-sync"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && homelab/services/obsidian-sync/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/obsidian-sync/deploy.sh"
 
 # Run ob CLI against a specific vault's container (e.g. "rpg sync-status")
 obsidian-sync-exec vault *ARGS:
@@ -478,6 +481,8 @@ deploy-openclaw host="picklelab":
         echo "       homelab/services/openclaw/README.md."
         exit 1
     fi
+    source scripts/deploy-lock.sh
+    deploy_lock_acquire {{host}} "deploy-openclaw"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     echo "==> Pulling on {{host}}"
     ssh {{host}} "cd /opt/homelab && git pull"
@@ -505,7 +510,7 @@ deploy-openclaw host="picklelab":
     ssh {{host}} "chmod -R go-w $PLUGIN_DIR/brineworks-approval"
     echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
-    ssh {{host}} "cd /opt/homelab && homelab/services/openclaw/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/openclaw/deploy.sh"
 
 # Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit
 openclaw-status host="picklelab":

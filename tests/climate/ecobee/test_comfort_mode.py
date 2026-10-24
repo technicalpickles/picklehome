@@ -1,6 +1,7 @@
 import pytest
 
 from climate.ecobee.comfort_mode import (
+    NIGHT_REF,
     COMFORT_REF,
     MIN_SAMPLES,
     decide_mode,
@@ -115,3 +116,17 @@ def test_detect_live_mode_none_when_schedule_is_none():
     # program["schedule"] present but None: should return None, not crash.
     program = {"schedule": None}
     assert detect_live_mode(program) is None
+
+
+def test_night_resolves_to_sleep_in_heat_and_sleep_cool_in_cool():
+    array = [[NIGHT_REF, COMFORT_REF, "away"]]
+    assert resolve_schedule_array(array, "heat") == [["sleep", "smart2", "away"]]
+    assert resolve_schedule_array(array, "cool") == [["smart4", "smart1", "away"]]
+
+
+def test_night_alone_does_not_change_detected_season():
+    # Sleep Cool (smart4) / sleep in the live program must not read as a season.
+    program = {"schedule": [["smart4", "sleep", "away"]]}
+    assert detect_live_mode(program) is None
+    program = {"schedule": [["smart4", "smart2"]]}
+    assert detect_live_mode(program) == "heat"

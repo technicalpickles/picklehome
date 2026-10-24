@@ -4,6 +4,10 @@
 # Run from the repo root on the target host.
 set -euo pipefail
 
+# One deploy at a time on picklelab (no-op when `just` already holds the lock).
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
+
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/openclaw"
 DATA_DIR=/srv/data/openclaw
@@ -505,11 +509,13 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # never restricts overrides; modelPolicy.allow is the actual allowlist, and a stale
 # migrated one (still listing retired glm-4.7) was silently blocking newer models.
 #
-# skills.workshop.autonomous.mode: "propose" (default is "auto"). In auto, background
+# skills.workshop.autonomous.mode: "off" (default is "auto"). In auto, background
 # review and a weekly review rewrite workshop-skills/ directly with no proposals and no
 # rollback snapshots; that is how email-triage-widget and gmail-triage came to steer
-# triage at gog's Gmail tools instead of brineworks. propose stages pending proposals
-# for a human to apply and turns the weekly review off. No gateway restart needed.
+# triage at gog's Gmail tools instead of brineworks. This used to be "propose", but
+# 2026.10.6 removed Skill Workshop proposals (valid values are now off|auto only), and
+# an invalid value fails the whole config patch. "off" is the closest equivalent:
+# nothing is rewritten unattended. No gateway restart needed.
 # skills.entries.{email-triage-widget,gmail-triage}.enabled=false: those two workshop
 # skills are superseded by brineworks' own brineworks-triage skill. Disabling works for
 # workshop-sourced skills (verified on the dev VM 2026-10-01). Both are no-ops if the
@@ -639,7 +645,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"skills.entries.goplaces.enabled","value":true},
     {"path":"skills.entries.email-triage-widget.enabled","value":false},
     {"path":"skills.entries.gmail-triage.enabled","value":false},
-    {"path":"skills.workshop.autonomous.mode","value":"propose"},
+    {"path":"skills.workshop.autonomous.mode","value":"off"},
     {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.3"},
     {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-5.1"]},
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
@@ -705,24 +711,17 @@ systemctl status openclaw.service --no-pager || true
 
 echo ""
 echo "==> Checking local health endpoint"
-# 10 attempts, not 5: the port accepts-then-resets for a few seconds after Docker
-# reports the container Started (loading plugins, initializing Telegram polling,
-# etc. -- ~4s of startup log between "starting HTTP server" and "ready" alone) --
-# observed "Recv failure: Connection reset by peer" fail the tighter 5x3s loop
-# twice on real deploys even though the container came up healthy moments later.
-for i in 1 2 3 4 5 6 7 8 9 10; do
-    if curl -fsS http://127.0.0.1:18789/healthz -o /dev/null 2>&1; then
-        echo "    Local health check passed"
-        break
-    fi
-    if [ "$i" -eq 10 ]; then
-        echo "    WARNING: local health check failed after 10 attempts"
-        echo "    Logs: $COMPOSE logs"
-        exit 1
-    fi
-    echo "    Waiting for the gateway to start (attempt $i/10)..."
-    sleep 3
-done
+# 120s budget, polled until the gateway answers. The port accepts-then-resets for
+# a while after Docker reports the container Started (loading plugins, initializing
+# Telegram polling, etc.): that bit the old 5x3s loop twice on real deploys (curl
+# "Connection reset by peer"), a real deploy took ~24s on 2026-09-13, and a cold
+# start took ~47s on 2026-10-17, which blew through the old 10x3s (30s) loop and
+# aborted the deploy before the model-catalog warm and cron registration below.
+# The elapsed time is printed on success, so the real cold-start time is on record.
+if ! wait_for_health "the gateway" http://127.0.0.1:18789/healthz 120; then
+    echo "    Logs: $COMPOSE logs"
+    exit 1
+fi
 
 echo "==> Warming the model catalog"
 # The first models.list after a gateway start loads the catalog cold (2-12s;

@@ -4,6 +4,9 @@
 # Run from the repo root on the target host.
 set -euo pipefail
 
+# One deploy at a time on picklelab (no-op when `just` already holds the lock).
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+
 # The agent-switch timer ships disabled: a first deploy of this code changes nothing.
 # Flip to 1 for rollout phase 1 (see README "Agent switch"), after the API token
 # exists in 1Password and .env.vars/.env.template carry it.

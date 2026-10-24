@@ -1,0 +1,21 @@
+# Wraps the upstream open-terminal image to pick up the eMudhra intermediate-CA
+# fix (2026-10-20, https://emudhra.we-have-a-problem.com). The rolling :slim tag's
+# Debian ca-certificates (20250419) and its Python certifi (2026.07.22) both still
+# trust the compromised chain; curl/openssl read the first, requests/httpx/aiohttp
+# the second, so both need fixing. Needs Debian ca-certificates >= 20250419+deb13u1
+# and certifi >= 2026.10.19.
+#
+# No USER line on purpose: the image starts as root and its entrypoint drops to
+# uid 1000, so this layer must not change that.
+#
+# Drop this file and point compose.yaml back at ghcr.io/open-webui/open-terminal
+# once the upstream :slim tag ships both.
+FROM ghcr.io/open-webui/open-terminal:slim
+# pip isn't in the image: bootstrap it, upgrade certifi, then remove it again so
+# the final image only differs by the two packages.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && python3 -m ensurepip \
+ && python3 -m pip install --no-cache-dir -U 'certifi>=2026.10.19' \
+ && python3 -m pip uninstall -y pip setuptools

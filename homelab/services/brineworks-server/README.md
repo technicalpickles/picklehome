@@ -66,6 +66,16 @@ Expected response:
 - `env: production` confirms `BRINEWORKS_ENV` propagated correctly from `compose.yaml`.
 - `sha` is the brineworks commit SHA baked into the image at build time via `ARG GIT_SHA` → `ENV BRINEWORKS_GIT_SHA`. It should match what `deploy.sh` printed as "Brineworks at <sha>". A mismatch means Docker served stale build layers or the build-arg didn't thread through.
 
+One command for the usual checks:
+
+```bash
+just brineworks-server-verify          # optional: host and a log window, e.g. `just brineworks-server-verify picklelab 2h`
+```
+
+It runs `verify.sh` on picklelab over ssh and reports PASS/FAIL for: `/health` answering (and its `sha` matching `/opt/brineworks` HEAD), `alembic current` at head, and no Gmail/credential errors (`Gmail credentials unavailable`, `AuthError`, `KeyringError`, `RefreshError`, `invalid_grant`) in the container logs for the window (default 30m). Read-only: nothing is restarted or written. Exits 1 if any check fails.
+
+After a healthy deploy, `just deploy-brineworks-server` also runs `scripts/brineworks-skills-check`, which warns if the openclaw-workspace skill copies are stale vs brineworks `skills/` (it wraps brineworks' `scripts/sync-skills.sh --check` on the Mac, no network, never fails the deploy). Expect that warning right after a deploy that changed a skill: syncing the workspace is step 2 of the update order in the brineworks deploy runbook. Checkouts default to `~/github.com/technicalpickles/{brineworks,openclaw-workspace}`; override with `BRINEWORKS_DIR` / `OPENCLAW_WORKSPACE`. Run it alone with `just brineworks-skills-check`.
+
 ## Architecture
 
 - **Build from source:** The brineworks repo is cloned to `/opt/brineworks` on picklelab. The compose build context points at `server/` there. No published container image.
@@ -102,7 +112,7 @@ These live in the picklelab overlay rather than the portable `compose.yaml` on p
 
 **Turning the flag on with an empty `BRINEWORKS_ALLOWED_LOGINS` makes the server refuse to start**, deliberately. A config that reads as "identity auth enabled" but authenticates nobody is worse than a loud failure at boot (ops principle #1). Because the container CMD is `alembic upgrade head && uvicorn`, the migration step is what dies first.
 
-The API key stays required regardless. Tagged devices never receive identity headers, so `brineworks-agent` authenticates by key permanently, not transitionally.
+The API key stays required regardless. Tagged devices never receive identity headers, so tagged clients (the retired `brineworks-agent` was one) authenticate by key permanently, not transitionally.
 
 Verify a rollout by watching `brineworks.auth` lines in the container log (`just brineworks-server-logs`): browser traffic shows `identity_kind=user`, the agent shows `identity_kind=key`.
 

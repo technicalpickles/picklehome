@@ -23,6 +23,21 @@ If nothing gets detected, force the sensor into pairing mode: pull the battery, 
 
 Pairing alone doesn't change any temperatures. See the Ecobee API notes below for how sensor participation actually drives behavior.
 
+#### Placement log
+
+Sensor names are static labels, not physical locations. The API has no sensor rename (app-only), so a sensor that moves keeps its name and its history keeps landing under the old one. When reading `climate-history`, check this table first. Add a row whenever a sensor moves.
+
+| Sensor | Where | From | Notes |
+|--------|-------|------|-------|
+| Tracy Office | Tracy's office, on her desk | 2026-06-11 (first reading) | Desk, in front of the low floor register but not in its stream. East sun shows as daily peaks of 80-82°F until 2026-09-10. |
+| Tracy Office | Living room, on the mantle | 2026-09-10 evening | Diagnostics: fireplace wall shared with the kitchen. Peaks vanish from the data. |
+| Tracy Office | Media room | 2026-09-11 evening | Diagnostics: same wall and height as the thermostat, on the other side of the TV. The 2026-10-03 notes call this the TV room (wood shelf), probably the same room. |
+| Tracy Office | Tracy's office, on her desk | 2026-10-03 afternoon | Back in the office by about 5:30pm EDT. Confirmed again 2026-10-16. |
+
+So the `Tracy Office` series is the office for 2026-06-11 to 2026-09-10 and from 2026-10-03 on, and other rooms in between. Josh Office has its first reading on 2026-10-04.
+
+Sources for the dates: sessions `cd836def` and `73c04558` (2026-09-10 and 09-11), taskwarrior `d58603c0` (2026-10-03 TV room), session `a4514908` (2026-10-03 back in the office), taskwarrior `8364d4dc` (2026-10-16 confirmation).
+
 ### Ambient Weather
 
 Station MACs are sensitive (geolocatable), stored in 1Password, injected via `.env`. See `.env.template` for the `AMBIENT_STATION_MACS` variable.
@@ -67,6 +82,7 @@ just climate-sync [--dry-run]            # push schedule.yaml to Ecobee
 just climate-validate                    # confirm remote matches local
 just climate-comforts-capture            # snapshot current setpoints → comforts.yaml
 just climate-comforts-sync [--dry-run]   # push comforts.yaml to Ecobee
+just climate-create-climate THERMOSTAT --name N --heat F --cool F [--dry-run]  # one-time: create a custom climate (Ecobee assigns the ref), then run comforts-capture
 just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # seasonal mode switch
 just climate-hvac-mode MODE [--thermostat NAME] [--dry-run]  # set hvacMode (auto|heat|cool|off|auxHeatOnly); only manual writer, never the timer
 just climate-settings-sync [--thermostat NAME] [--dry-run]  # push per-thermostat settings (hold_action, follow_me_comfort) from thermostats.yaml
@@ -124,8 +140,8 @@ All in `config/`:
 - **Auth:** OAuth PIN flow → access + refresh tokens, stored in `~/.local/state/picklehome/ecobee-tokens.json`. API key from `ECOBEE_API_KEY` env var (1Password via `.env`)
 - **Token refresh:** The `FileTokenEcobee` subclass overrides `_write_config()` to persist refreshed tokens back to the JSON file automatically
 - **Schedule model:** Ecobee thermostats store a weekly program with time slots referencing "climates" (named comfort modes). We define ours in YAML and push them via the API.
-- **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2 for Comfort Heat/Comfort Cool). The virtual `comfort` ref, its resolution to a real climateRef, and the diff-then-push logic all live in `climate.ecobee.comfort_mode` (`resolve_schedule_array`, `detect_live_mode`). See `spec/hvac-spec.md` ("Seasonal switching") for the behavior contract.
-- **Room sensors:** A SmartSensor pairs to one thermostat and reports temperature and occupancy, but a paired sensor does nothing until it's enrolled in specific comfort settings. Enrollment is per-climate. The app's pairing wizard only offers Home/Away/Sleep, so it can't enroll custom climates like Comfort Cool (smart1) and Comfort Heat (smart2), which is what the schedule actually runs, leaving the sensor idle during those modes. But the wizard is not the only path: each climate in `thermostat.program.climates` carries a writable `sensors: [{id, name}]` array, so participation (including the custom climates) can be set through the API, not just the app (`just climate-sensors-sync`, driven by `settings.sensors` in `thermostats.yaml`). When a sensor participates, the thermostat targets the **average** of all participating sensors, so adding a sensor that reads warmer than the thermostat makes the system cool more (and heat more), not less. With Follow Me (`followMeComfort`) on, only sensors that have seen motion recently are averaged; both thermostats have it off (`settings.follow_me_comfort: false`), so every enrolled sensor always counts. Historical sensor data (temperature + occupancy, 5-minute intervals) is available via `just climate-history` (`--days N`, `--raw`, `--json`), which reads the Ecobee `runtimeReport` endpoint. `climate-status` still shows only the current snapshot.
+- **Comfort modes:** Each thermostat has named climates (Home, Away, Sleep, plus custom smart1/smart2 for Comfort Heat/Comfort Cool). The virtual `comfort` ref (and `night`, which resolves to `sleep` or the custom Sleep Cool `smart4` and is used only upstairs), their resolution to a real climateRef, and the diff-then-push logic all live in `climate.ecobee.comfort_mode` (`resolve_schedule_array`, `detect_live_mode`). See `spec/hvac-spec.md` ("Seasonal switching") for the behavior contract.
+- **Room sensors:** A SmartSensor pairs to one thermostat and reports temperature and occupancy, but a paired sensor does nothing until it's enrolled in specific comfort settings. Enrollment is per-climate. The app's pairing wizard only offers Home/Away/Sleep, so it can't enroll custom climates like Comfort Cool (smart1) and Comfort Heat (smart2), which is what the schedule actually runs, leaving the sensor idle during those modes. But the wizard is not the only path: each climate in `thermostat.program.climates` carries a writable `sensors: [{id, name}]` array, so participation (including the custom climates) can be set through the API, not just the app (`just climate-sensors-sync`, driven by `settings.sensors` in `thermostats.yaml`). When a sensor participates, the thermostat targets the **average** of all participating sensors, so adding a sensor that reads warmer than the thermostat makes the system cool more (and heat more), not less. With Follow Me (`followMeComfort`) on, only sensors that have seen motion recently are averaged; both thermostats have it off (`settings.follow_me_comfort: false`), so every enrolled sensor always counts. Historical sensor data (temperature + occupancy, 5-minute intervals) is available via `just climate-history` (`--days N` or `--start`/`--end YYYY-MM-DD`, `--equipment`, `--raw`, `--json`), which reads the Ecobee `runtimeReport` endpoint. The API keeps data from when the thermostat first reported (2026-03-11 here), but limits each request to 33 days, so longer ranges are fetched in 31-day chunks. `--equipment` adds outdoor temperature and the share of each day/hour the cooling, heating, aux heat and fan ran. Timestamps are thermostat-local, but each request's day window is cut at UTC midnight, so the first day starts at 8pm local. `climate-status` still shows only the current snapshot.
 - **runtimeReport sensor columns:** Sensor capability columns use ids like `rs2:100:1` (a remote sensor's temperature) and `rs2:100:2` (its occupancy). The id is `<code>:<instance>:<capabilityIndex>`; group by the prefix (everything before the last `:`) to join a physical sensor's temperature and occupancy, since the thermostat's built-in reports them under different names ("Thermostat Temperature" vs "Thermostat Motion").
 - **runtimeReport temperatures are in display units:** A cell reads `75.6` and means 75.6°F, unlike `get_thermostats()` which returns tenths-of-a-degree ints. Do not apply `decode_temp` to runtimeReport values.
 

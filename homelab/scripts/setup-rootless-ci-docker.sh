@@ -8,6 +8,9 @@
 # Idempotent: safe to run on first setup or re-run. Run interactively on the host.
 set -euo pipefail
 
+# One mutation of picklelab at a time (shared with the deploy scripts).
+source "$(dirname "${BASH_SOURCE[0]}")/deploy-lock.sh"
+
 CI_USER=ci
 CI_UID=2000
 CI_DATA_ROOT=/srv/ci-docker          # keep bulky CI image layers off the root volume

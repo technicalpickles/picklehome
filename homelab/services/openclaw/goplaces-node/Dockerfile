@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-FROM node:24-bookworm
+FROM node:24.22.1-bookworm
 
 ARG TARGETARCH
 ARG GOPLACES_VERSION=0.4.4
-ARG OPENCLAW_VERSION=2026.9.3
+ARG OPENCLAW_VERSION=2026.10.6
 
 # goplaces: Google Places CLI, baked in at build time (installing at container
 # runtime is a trap -- anything installed after build is lost on restart).

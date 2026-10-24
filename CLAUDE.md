@@ -71,9 +71,9 @@ The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTT
 
 **Don't assume picklelab (or a secret) is out of reach because 1Password is involved. Try it first.**
 
-- **`ssh picklelab` works unattended.** automic-vault is live: `ssh -G picklelab` resolves `IdentityAgent` to `~/.local/share/automic-vault/ssh-agent.sock`, no 1Password prompt. That covers `just deploy-*`, `ssh picklelab docker exec ...`, and `picklelab-ro`. Old notes saying "ssh picklelab needs a 1Password approval, an agent can't run it" are stale; fix them when you find one.
+- **`ssh picklelab` works unattended.** automic-vault is live: `ssh -G picklelab` resolves `IdentityAgent` to `~/.local/share/automic-vault/ssh-agent.sock`, no 1Password prompt. That covers `just deploy-*` and `ssh picklelab docker exec ...`. (`picklelab-ro`, a planned read-only wrapper, never landed; it isn't on PATH.) Old notes saying "ssh picklelab needs a 1Password approval, an agent can't run it" are stale; fix them when you find one.
 - **`op` is the one that still touches 1Password.** The sandbox blocks its desktop-app socket, so run `op`-backed commands with the sandbox disabled. That is fine **when Josh is at the laptop** (he approves the prompt). If he isn't (phone-driven session), say what's blocked and ask; don't treat it as "can't be done". automic-vault is replacing the `op` path, which will allow approving from anywhere.
-- **These are separate walls, unrelated to 1Password:** passwordless sudo is allowlist-only on picklelab (see Sandbox above), the auto-mode classifier denies free-form prod reads (taskwarrior `f54dd775`; `picklelab-ro` is the answer), and the relay host allowlist.
+- **These are separate walls, unrelated to 1Password:** passwordless sudo is allowlist-only on picklelab (see Sandbox above), the auto-mode classifier denies free-form prod reads (taskwarrior `f54dd775`), and the relay host allowlist. `just deploy-*` is pre-authorized by a `permissions.allow` rule in `.claude/settings.json`; without it the classifier's Production Deploy rule denies deploys unless the user's message names the deploy.
 
 ## Homelab
 

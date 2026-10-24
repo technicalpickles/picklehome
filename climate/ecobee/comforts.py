@@ -112,6 +112,24 @@ def apply_comforts_to_climates(comforts_dict: dict, current_climates: list) -> l
     return updated
 
 
+def build_new_climate(
+    template: dict, sensors_from: dict, name: str, heat_f: int, cool_f: int
+) -> dict:
+    """A new user climate cloned from `template`, ready to append to a program.
+
+    climateRef is dropped: Ecobee creates a climate when none is supplied and
+    assigns the ref itself (smartN). Sensor enrollment comes from `sensors_from`
+    so the new climate reads the same remote sensors as the one it replaces in
+    the schedule.
+    """
+    new = {k: v for k, v in template.items() if k != "climateRef"}
+    new["name"] = name
+    new["heatTemp"] = heat_f * 10
+    new["coolTemp"] = cool_f * 10
+    new["sensors"] = [dict(s) for s in sensors_from.get("sensors", [])]
+    return new
+
+
 def push_comforts(ecobee, thermostat_id: str, updated_climates: list, schedule: list) -> None:
     body = {
         "selection": {

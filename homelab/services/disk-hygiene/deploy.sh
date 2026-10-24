@@ -4,6 +4,9 @@
 # root on the target host (invoked by `just deploy-disk-hygiene`).
 set -euo pipefail
 
+# One deploy at a time on picklelab (no-op when `just` already holds the lock).
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/disk-hygiene"
 

@@ -4,6 +4,10 @@
 # Run from the repo root on the target host.
 set -euo pipefail
 
+# One deploy at a time on picklelab (no-op when `just` already holds the lock).
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
+
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/brineworks-server"
 DATA_DIR=/srv/data/brineworks-server
@@ -101,20 +105,13 @@ BRINEWORKS_URL="https://brineworks.${TAILNET}"
 
 echo ""
 echo "==> Checking local health endpoint"
-# Verify the app is responding locally before checking Tailscale
-for i in 1 2 3 4 5; do
-    if curl -sf "http://127.0.0.1:$BRINEWORKS_SERVER_PORT/health" > /dev/null 2>&1; then
-        echo "    Local health check passed"
-        break
-    fi
-    if [ "$i" -eq 5 ]; then
-        echo "    WARNING: local health check failed after 5 attempts"
-        echo "    Check container logs: op run --env-file=.env.op.template -- docker compose --project-directory $SERVICE_DIR --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs"
-        exit 1
-    fi
-    echo "    Waiting for server to start (attempt $i/5)..."
-    sleep 3
-done
+# Verify the app is responding locally before checking Tailscale.
+# 120s budget: the container took ~26-37s to report healthy after the 2026-09-27
+# deploy and gave up at the old 5x3s (~15s) even though it came up fine moments later.
+if ! wait_for_health "brineworks-server" "http://127.0.0.1:$BRINEWORKS_SERVER_PORT/health" 120; then
+    echo "    Check container logs: op run --env-file=.env.op.template -- docker compose --project-directory $SERVICE_DIR --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs"
+    exit 1
+fi
 
 echo ""
 echo "==> Checking Tailscale endpoint"
