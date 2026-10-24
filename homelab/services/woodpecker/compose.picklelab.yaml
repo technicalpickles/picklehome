@@ -6,8 +6,13 @@ services:
   woodpecker-server:
     volumes:
       - /srv/data/woodpecker/server:/var/lib/woodpecker     # SQLite DB
+      # Host bundle over the image's own: v3.19.0 still ships emSign ECC Root CA - G3
+      # (eMudhra compromise). Go reads this file first. Drop once a release without it ships.
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
 
   woodpecker-agent:
     volumes:
       # the rootless dockerd socket (owned by ci:ci) -> the path DOCKER_HOST expects
       - /run/user/2000/docker.sock:/rootless/docker.sock
+      # Same eMudhra G3 workaround as the server; see above.
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
