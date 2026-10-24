@@ -58,7 +58,6 @@ service also has its own README with first-time setup and operations.
 | obsidian-sync | Headless Obsidian Sync clients keeping vaults (`rpg`, `pickled-knowledge`) on-host at `/srv/data/obsidian-sync/vaults/<vault>/` for agent access | [README](services/obsidian-sync/README.md) |
 | brineworks-server | FastAPI PRM backend (contacts/interactions), Tailscale Services; app code and base compose in the `brineworks` repo | [README](services/brineworks-server/README.md) |
 | taskchampion-sync | Self-hosted Taskwarrior sync server (client-side encryption) | [README](services/taskchampion-sync/README.md) |
-| github-actions-runner | Self-hosted GitHub Actions runner for the pirpg repo | [README](services/github-actions-runner/README.md) |
 | woodpecker | Self-hosted Woodpecker CI for private GitHub repos (Funnel ingress) | [README](services/woodpecker/README.md) |
 | openclaw | Self-hosted OpenClaw agent gateway (Telegram + Tailscale UI); config partly comes from the `pickleclaw` repo | [README](services/openclaw/README.md) |
 | open-webui | Open WebUI chat interface backed by Ollama Cloud, with the open-terminal sidecar | [README](services/open-webui/README.md) |

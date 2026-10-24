@@ -188,18 +188,6 @@ climate-check host="picklelab":
 climate-log host="picklelab" lines="10":
     ssh {{host}} "tail -n {{lines}} /srv/data/climate-auto-switch/run-log.jsonl | python3 -m json.tool --json-lines"
 
-# Deploy github-actions-runner to picklelab
-deploy-github-runner host="picklelab":
-    just _deploy-remote github-actions-runner {{host}}
-
-# Tail github-actions-runner container logs from picklelab
-github-runner-logs host="picklelab":
-    ssh {{host}} "docker logs --tail 100 -f \$(docker ps -q --filter name=github-actions-runner)"
-
-# Show github-actions-runner systemd status and container info from picklelab
-github-runner-status host="picklelab":
-    ssh {{host}} "systemctl status github-actions-runner.service --no-pager && docker ps --filter name=github-actions-runner"
-
 # Deploy TaskChampion sync server to picklelab (idempotent: first setup or update)
 deploy-taskchampion host="picklelab":
     just _deploy-remote taskchampion-sync {{host}}
