@@ -136,7 +136,7 @@ sudo systemctl start docker
 #     STOP to each (Requires=docker.service), which ran its `compose down` and
 #     removed containers; starting docker does NOT restart them, so they stay
 #     dead until you do this (or reboot). See taskwarrior 407e9404 for a durable fix.
-sudo systemctl restart brineworks-agent.service brineworks-server.service \
+sudo systemctl restart brineworks-server.service \
   github-actions-runner.service obsidian-sync.service taskchampion-sync.service
 
 # 6. SMOKE TEST, then verify. The smoke test is the check that actually catches a

@@ -261,21 +261,6 @@ brineworks-server-logs host="picklelab" lines="50":
 brineworks-server-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs -f"
 
-# Deploy Brineworks mobile agent to picklelab (idempotent: first setup or update)
-deploy-brineworks-agent host="picklelab":
-    just _deploy-remote brineworks-agent {{host}}
-
-# Tail Brineworks agent container logs from picklelab
-# compose.yaml's environment: entries use ${VAR:?required} (TS_AUTHKEY,
-# KEYRING_CRYPTFILE_PASSWORD, BRINEWORKS_API_KEY), evaluated at parse time for
-# every subcommand including `logs` -- placeholder values derived from
-# .env.vars satisfy that, same pattern as open-webui-logs.
-brineworks-agent-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --project-directory /opt/homelab/homelab/services/brineworks-agent -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
-
-# Follow Brineworks agent container logs live from picklelab
-brineworks-agent-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-agent && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --project-directory /opt/homelab/homelab/services/brineworks-agent -f /opt/brineworks/agent/compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Deploy Woodpecker CI to picklelab (idempotent: first setup or update)
 deploy-woodpecker host="picklelab":
