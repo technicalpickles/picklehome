@@ -2,6 +2,9 @@ services:
   taskchampion-sync:
     volumes:
       - /srv/data/taskchampion-sync:/var/lib/taskchampion
+      # Host bundle over the image's own: upstream is pinned to Alpine 3.20, whose bundle
+      # still has emSign ECC Root CA - G3 (eMudhra compromise) and may never drop it.
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
 
 volumes:
   data:
