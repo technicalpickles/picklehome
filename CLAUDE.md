@@ -63,7 +63,7 @@ The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTT
 
 ## Homelab
 
-Before changing anything under `homelab/`, read `homelab/services/CLAUDE.md`. `just deploy-<service>` needs a clean `main` checkout that matches `origin/main`; it pushes and then runs one ssh command. There is no separate scp step. Deployed services get secrets from `op run` in their systemd unit, never from a `.env` file, so a doc or compose `env_file:` that assumes otherwise is stale.
+Before changing anything under `homelab/`, read `homelab/services/CLAUDE.md`. `just deploy-<service>` needs a clean `main` checkout that matches `origin/main`; it pushes and then runs one ssh command. There is no separate scp step. `just deploy-openclaw` and `just deploy-brineworks-server` refuse (exit 75) if Brent had a non-heartbeat session active in the last 5 minutes, since the restart kills an in-flight turn. Check first with `just openclaw-quiet`; override with `HOMELAB_DEPLOY_EVEN_IF_BUSY=1 just deploy-<service>` only when Josh says to (`docs/adr/0003-refuse-deploys-while-brent-is-active.md`). Deployed services get secrets from `op run` in their systemd unit, never from a `.env` file, so a doc or compose `env_file:` that assumes otherwise is stale.
 
 ## Backlog & Task Tracking
 

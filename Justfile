@@ -157,7 +157,7 @@ _deploy-remote service host="picklelab":
     source scripts/deploy-lock.sh
     deploy_lock_acquire {{host}} "deploy-{{service}}"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && $DEPLOY_UPDATE && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/{{service}}/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && $DEPLOY_UPDATE && HOMELAB_DEPLOY_LOCK_HELD=1 HOMELAB_DEPLOY_EVEN_IF_BUSY=${HOMELAB_DEPLOY_EVEN_IF_BUSY:-} homelab/services/{{service}}/deploy.sh"
 
 # Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
@@ -237,6 +237,10 @@ brineworks-skills-check:
 # Verify brineworks-server on picklelab: health, alembic at head, no Gmail errors in logs (read-only)
 brineworks-server-verify host="picklelab" since="30m":
     ssh {{host}} 'bash -s -- {{since}}' < homelab/services/brineworks-server/verify.sh
+
+# Check whether Brent was active recently; exits 75 if so (read-only, same check the openclaw and brineworks-server deploys run)
+openclaw-quiet host="picklelab" minutes="5":
+    ssh {{host}} 'bash -s -- {{minutes}}' < homelab/scripts/openclaw-quiet.sh
 
 # Seed (or re-seed) brineworks-server's Gmail token keyring on picklelab (one browser consent click)
 seed-brineworks-gmail host="picklelab":
@@ -469,7 +473,7 @@ deploy-openclaw host="picklelab":
     ssh {{host}} "chmod -R go-w $PLUGIN_DIR/brineworks-approval"
     echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
-    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/openclaw/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 HOMELAB_DEPLOY_EVEN_IF_BUSY=${HOMELAB_DEPLOY_EVEN_IF_BUSY:-} homelab/services/openclaw/deploy.sh"
 
 # Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit
 openclaw-status host="picklelab":
