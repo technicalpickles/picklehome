@@ -150,25 +150,14 @@ dotenv *ARGS:
 _deploy-remote service host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
+    # Guards and push live in scripts/deploy-preflight. Assign first, then eval:
+    # `eval "$(...)"` would swallow a refusal (eval of nothing exits 0).
+    PREFLIGHT=$(scripts/deploy-preflight {{host}})
+    eval "$PREFLIGHT"
     source scripts/deploy-lock.sh
     deploy_lock_acquire {{host}} "deploy-{{service}}"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/{{service}}/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && $DEPLOY_UPDATE && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/{{service}}/deploy.sh"
 
 # Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
@@ -441,21 +430,10 @@ obsidian-sync-status host="picklelab":
 deploy-openclaw host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
+    # Guards and push live in scripts/deploy-preflight. Assign first, then eval:
+    # `eval "$(...)"` would swallow a refusal (eval of nothing exits 0).
+    PREFLIGHT=$(scripts/deploy-preflight {{host}})
+    eval "$PREFLIGHT"
     if [ ! -e homelab/services/openclaw/openclaw.tools.json5 ] || [ ! -e homelab/services/openclaw/openclaw.mcp.json5 ] || [ ! -e homelab/services/openclaw/openclaw.image.env ]; then
         echo "ERROR: openclaw.tools.json5 / openclaw.mcp.json5 / openclaw.image.env missing."
         echo "       Symlink them from the private pickleclaw repo first -- see"
@@ -466,7 +444,7 @@ deploy-openclaw host="picklelab":
     deploy_lock_acquire {{host}} "deploy-openclaw"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
+    ssh {{host}} "cd /opt/homelab && $DEPLOY_UPDATE"
     echo "==> Copying include files (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/openclaw.tools.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.tools.json5
     scp homelab/services/openclaw/openclaw.mcp.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.mcp.json5
