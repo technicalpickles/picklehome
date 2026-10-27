@@ -628,3 +628,7 @@ disk-monitor-check:
 disk-monitor-status:
     @echo "=== Recent disk usage history ==="
     @tail -20 ~/.local/state/picklehome/disk-monitor.csv 2>/dev/null || echo "No history yet"
+
+# Build the stopped OrbStack machine picklelab-golden that dev hosts are cloned from (idempotent; needs orb and the pickleclaw image symlink)
+devhost-golden:
+    homelab/devhost/golden.sh
