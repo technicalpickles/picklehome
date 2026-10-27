@@ -11,6 +11,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/brineworks-server"
+# Dev hosts swap a few secrets via an overlay (see scripts/service-env); on
+# picklelab HOMELAB_ENV_OVERLAY is empty and this stays an empty array.
+OVERLAY_ARGS=()
+if [ -n "${HOMELAB_ENV_OVERLAY?}" ]; then
+    OVERLAY_ARGS=(--overlay "$REPO_DIR/homelab/hosts/overlays/${HOMELAB_ENV_OVERLAY}.env.template")
+fi
 DATA_DIR=/srv/data/brineworks-server
 BRINEWORKS_REPO=/opt/brineworks
 
@@ -73,7 +79,7 @@ echo "==> Writing build metadata"
 } > "$SERVICE_DIR/.env.build"
 
 echo "==> Writing filtered op-run template"
-"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" ${OVERLAY_ARGS[@]+"${OVERLAY_ARGS[@]}"} > "$SERVICE_DIR/.env.op.template"
 
 echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/db"
