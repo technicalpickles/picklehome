@@ -257,6 +257,46 @@ def test_new_rerun_replaces_its_own_block_and_keeps_the_rest(stub):
     assert "Host picklelab-dev\n" in ssh and "Host other\n" in ssh
 
 
+def _make_list_fail(stub):
+    """orb list prints a machine name, then fails (the fail-open case for a pipe)."""
+    orb = stub["bin"] / "orb"
+    orb.write_text(
+        "#!/usr/bin/env bash\n"
+        f'echo "$*" >> {stub["argv"]}\n'
+        'if [ "$1" = "list" ]; then echo dev1; exit 1; fi\n'
+        "exit 0\n"
+    )
+
+
+def test_new_aborts_when_orb_list_fails(stub):
+    _make_list_fail(stub)
+    r = _run(NEW, stub, "dev1")
+    assert r.returncode != 0
+    assert not any("clone" in line for line in _argv(stub))
+    assert not stub["local"].exists()
+
+
+def test_rm_aborts_when_orb_list_fails_and_touches_nothing(stub):
+    _make_list_fail(stub)
+    stub["local"].mkdir()
+    (stub["local"] / "dev1.env").write_text("x=1\n")
+    block = "# devhost dev1 begin\nHost dev1\n    HostName dev1.orb.local\n# devhost dev1 end\n"
+    _write_ssh(stub, FOREIGN_BLOCK + block)
+    r = _run(RM, stub, "dev1", secrets=False)
+    assert r.returncode != 0
+    assert not any("delete" in line for line in _argv(stub))
+    assert (stub["local"] / "dev1.env").exists()
+    assert stub["ssh"].read_text() == FOREIGN_BLOCK + block
+
+
+def test_ls_aborts_when_orb_list_fails(stub):
+    _make_list_fail(stub)
+    stub["local"].mkdir()
+    (stub["local"] / "dev1.env").write_text("x=1\n")
+    r = _run(LS, stub, secrets=False)
+    assert r.returncode != 0
+
+
 def test_new_leaves_a_cleanable_host_when_a_later_step_fails(stub):
     r = _run(NEW, stub, "dev1", env_extra={"STUB_FAIL_ON": "start dev1"})
     assert r.returncode != 0

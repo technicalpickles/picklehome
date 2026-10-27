@@ -48,7 +48,9 @@ if [ -n "$foreign" ]; then
 fi
 
 # `orb list -q` prints one machine name per line.
-if "$ORB" list -q </dev/null | grep -Fxq -- "$NAME"; then
+# Captured first: a failing `orb list` must abort under set -e, not read as "absent".
+machines="$("$ORB" list -q </dev/null)"
+if grep -Fxq -- "$NAME" <<<"$machines"; then
     echo "ERROR: a machine named '$NAME' already exists." >&2
     exit 1
 fi

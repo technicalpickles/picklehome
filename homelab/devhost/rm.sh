@@ -21,7 +21,9 @@ if [ ! -f "$LOCAL_ENV" ]; then
     exit 1
 fi
 
-if "$ORB" list -q </dev/null | grep -Fxq -- "$NAME"; then
+# Captured first: a failing `orb list` must abort under set -e, not read as "absent".
+machines="$("$ORB" list -q </dev/null)"
+if grep -Fxq -- "$NAME" <<<"$machines"; then
     echo "==> Deleting machine $NAME"
     "$ORB" delete -f "$NAME"
 else
