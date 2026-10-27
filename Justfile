@@ -632,3 +632,15 @@ disk-monitor-status:
 # Build the stopped OrbStack machine picklelab-golden that dev hosts are cloned from (idempotent; needs orb and the pickleclaw image symlink)
 devhost-golden:
     homelab/devhost/golden.sh
+
+# Clone picklelab-golden into a throwaway dev host <name>: isolated OrbStack machine, own Tailscale node, dev identity and tokens (av inject supplies DEVHOST_OP_TOKEN and DEVHOST_TS_AUTH_KEY)
+devhost-new name:
+    av inject +DEVHOST_OP_TOKEN +DEVHOST_TS_AUTH_KEY -- homelab/devhost/new.sh {{name}}
+
+# Delete dev host <name> made by devhost-new: the machine, its identity file and its ssh block
+devhost-rm name:
+    homelab/devhost/rm.sh {{name}}
+
+# List dev hosts made by devhost-new with their OrbStack state
+devhost-ls:
+    homelab/devhost/ls.sh
