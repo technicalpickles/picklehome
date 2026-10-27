@@ -165,6 +165,30 @@ def test_unknown_host_refused(repo):
     assert origin_ref(origin, "refs/heads/feat", env) is None, "must not push for an unknown host"
 
 
+def test_committed_alias_beats_local_file_of_same_name(repo):
+    work, _, env = repo
+    (work / "homelab" / "hosts" / "local" / "picklelab.tail2023b7.ts.net.env").write_text(DEV_ENV)
+    git(work, "checkout", "-q", "-b", "feat", env=env)
+    r = run(repo, "picklelab.tail2023b7.ts.net")
+    assert r.returncode == 1, "alias must stay prod, which refuses a non-main branch"
+    assert "not on main" in r.stderr
+    git(work, "checkout", "-q", "main", env=env)
+    r = run(repo, "picklelab.tail2023b7.ts.net")
+    assert r.returncode == 0, r.stderr
+    assert "DEPLOY_KIND=prod" in r.stdout
+
+
+def test_dev_identity_template_is_not_a_host(repo):
+    work, origin, env = repo
+    (work / "homelab" / "hosts" / "dev-identity.env").write_text(DEV_ENV)
+    git(work, "add", "-A", env=env)
+    git(work, "commit", "-q", "-m", "template", env=env)
+    r = run(repo, "dev-identity")
+    assert r.returncode == 1
+    assert "no identity for host dev-identity" in r.stderr
+    assert origin_ref(origin, "refs/heads/main", env) != git(work, "rev-parse", "HEAD", env=env).stdout.strip(), "must not push"
+
+
 def test_host_with_path_chars_refused(repo):
     r = run(repo, "../picklelab")
     assert r.returncode == 1

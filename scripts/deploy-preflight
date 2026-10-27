@@ -14,9 +14,9 @@
 #
 # Which kind of host is <host>? First hit wins:
 #   1. homelab/hosts/<host>.env        (committed; prod hosts)
-#   2. homelab/hosts/local/<host>.env  (gitignored; dev hosts)
-#   3. the committed homelab/hosts/*.env whose HOMELAB_HOST_ALIASES lists <host>
-# Nothing matches: refuse. An unknown host is never treated as dev.
+#   2. the committed homelab/hosts/*.env whose HOMELAB_HOST_ALIASES lists <host>
+#   3. homelab/hosts/local/<host>.env  (gitignored; dev hosts)
+# dev-identity.env is a template and never matches. Nothing matches: refuse. An unknown host is never treated as dev.
 #
 # prod: the tree must be clean and on main. Pushes main when HEAD != origin/main.
 #       The host fast-forwards main and refuses to move if it has diverged.
@@ -56,20 +56,26 @@ identity_field() {
 }
 
 identity_file=""
-if [ -f "$hosts_dir/$host.env" ]; then
-    identity_file="$hosts_dir/$host.env"
-elif [ -f "$hosts_dir/local/$host.env" ]; then
-    identity_file="$hosts_dir/local/$host.env"
-else
-    for f in "$hosts_dir"/*.env; do
-        [ -f "$f" ] || continue
-        for alias in $(identity_field "$f" HOMELAB_HOST_ALIASES); do
-            if [ "$alias" = "$host" ]; then
-                identity_file="$f"
-                break 2
-            fi
+# dev-identity.env is the template devhost-new copies, not a host.
+if [ "$host" != dev-identity ]; then
+    if [ -f "$hosts_dir/$host.env" ]; then
+        identity_file="$hosts_dir/$host.env"
+    else
+        for f in "$hosts_dir"/*.env; do
+            [ -f "$f" ] || continue
+            [ "$(basename "$f")" != dev-identity.env ] || continue
+            for alias in $(identity_field "$f" HOMELAB_HOST_ALIASES); do
+                if [ "$alias" = "$host" ]; then
+                    identity_file="$f"
+                    break 2
+                fi
+            done
         done
-    done
+    fi
+    # Last, so a generated local file can never shadow a committed name or alias.
+    if [ -z "$identity_file" ] && [ -f "$hosts_dir/local/$host.env" ]; then
+        identity_file="$hosts_dir/local/$host.env"
+    fi
 fi
 [ -n "$identity_file" ] || die "no identity for host $host (looked in homelab/hosts/ and homelab/hosts/local/, and at HOMELAB_HOST_ALIASES)"
 
