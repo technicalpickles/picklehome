@@ -7,6 +7,7 @@ set -euo pipefail
 # One deploy at a time on picklelab (no-op when `just` already holds the lock).
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/host-identity.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/checkout-ref.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
@@ -51,14 +52,7 @@ case "$keyring_rc" in
 esac
 
 echo "==> Updating brineworks source"
-if [ -d "$BRINEWORKS_REPO/.git" ]; then
-    git -C "$BRINEWORKS_REPO" pull --ff-only
-else
-    echo "    Cloning brineworks to $BRINEWORKS_REPO"
-    sudo mkdir -p "$BRINEWORKS_REPO"
-    sudo chown "$(id -u):$(id -g)" "$BRINEWORKS_REPO"
-    git clone git@github.com:technicalpickles/brineworks.git "$BRINEWORKS_REPO"
-fi
+checkout_ref "$BRINEWORKS_REPO" git@github.com:technicalpickles/brineworks.git "${BRINEWORKS_REF?}"
 BRINEWORKS_SHA=$(git -C "$BRINEWORKS_REPO" rev-parse --short HEAD)
 echo "    Brineworks at $BRINEWORKS_SHA"
 

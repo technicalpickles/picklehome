@@ -7,6 +7,7 @@ set -euo pipefail
 # One deploy at a time on picklelab (no-op when `just` already holds the lock).
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/host-identity.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/checkout-ref.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
@@ -220,27 +221,15 @@ else
 fi
 
 echo "==> Cloning/updating pickleclaw (gog-mcp's build context)"
-# Tracks main HEAD, not pinned to a commit -- every deploy rebuilds gog-mcp from
-# whatever's on pickleclaw@main at deploy time, same as the workspace repo's ongoing
-# sync above. See the design doc's "Deploy mechanics" section for why (no separate
+# Tracks $PICKLECLAW_REF (main on picklelab), not pinned to a commit -- every deploy
+# rebuilds gog-mcp from whatever's on that ref at deploy time, same as the workspace
+# repo's ongoing sync above. See the design doc's "Deploy mechanics" section for why (no separate
 # picklelab-specific pin/bump step to maintain).
 PICKLECLAW_DIR=/opt/pickleclaw
 if [ -f "$PICKLECLAW_DEPLOY_KEY_FILE" ]; then
     PICKLECLAW_GIT_SSH="ssh -i $PICKLECLAW_DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
-    if [ ! -d "$PICKLECLAW_DIR/.git" ]; then
-        sudo mkdir -p "$PICKLECLAW_DIR"
-        sudo chown "$(id -u):$(id -g)" "$PICKLECLAW_DIR"
-        GIT_SSH_COMMAND="$PICKLECLAW_GIT_SSH" \
-            git clone git@github.com:technicalpickles/pickleclaw.git "$PICKLECLAW_DIR"
-        echo "    Cloned pickleclaw to $PICKLECLAW_DIR"
-    else
-        if GIT_SSH_COMMAND="$PICKLECLAW_GIT_SSH" git -C "$PICKLECLAW_DIR" pull --ff-only; then
-            echo "    Updated pickleclaw at $PICKLECLAW_DIR to $(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD)"
-        else
-            echo "    WARNING: pickleclaw pull failed (non-fast-forward, network issue, or dirty tree)."
-            echo "    Continuing with the existing checkout at $(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD) -- gog-mcp's build context may be stale."
-        fi
-    fi
+    GIT_SSH_COMMAND="$PICKLECLAW_GIT_SSH" \
+        checkout_ref "$PICKLECLAW_DIR" git@github.com:technicalpickles/pickleclaw.git "${PICKLECLAW_REF?}"
 else
     echo "    Skipping (no deploy key)"
 fi
