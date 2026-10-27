@@ -11,6 +11,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/openclaw"
+# Dev hosts swap a few secrets via an overlay (see scripts/service-env); on
+# picklelab HOMELAB_ENV_OVERLAY is empty and this stays an empty array.
+OVERLAY_ARGS=()
+if [ -n "${HOMELAB_ENV_OVERLAY?}" ]; then
+    OVERLAY_ARGS=(--overlay "$REPO_DIR/homelab/hosts/overlays/${HOMELAB_ENV_OVERLAY}.env.template")
+fi
 DATA_DIR=/srv/data/openclaw
 WORKSPACE_REPO_URL="git@github.com:technicalpickles/openclaw-workspace.git"
 # Image default (node user) — see homelab/services/README.md "Container user model".
@@ -37,9 +43,9 @@ echo "==> Writing filtered op-run templates (dual vault)"
 # matching a shorter prefix. Caught locally by diffing `service-env`'s full
 # (unfiltered) line count against picklehome+pickleclaw's combined count for
 # both services (13 vs 7+4=11 for openclaw before this fix).
-"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" ${OVERLAY_ARGS[@]+"${OVERLAY_ARGS[@]}"} \
     | grep '^[A-Z0-9_]*=op://picklehome/' > "$SERVICE_DIR/.env.op.picklehome.template"
-"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" ${OVERLAY_ARGS[@]+"${OVERLAY_ARGS[@]}"} \
     | grep -F "=op://${HOMELAB_SECONDARY_VAULT?}/" | grep '^[A-Z0-9_]*=' > "$SERVICE_DIR/.env.op.pickleclaw.template"
 
 # $RUN_CLI actually executes openclaw logic in a throwaway container (onboard /
