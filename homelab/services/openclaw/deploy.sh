@@ -6,6 +6,7 @@ set -euo pipefail
 
 # One deploy at a time on picklelab (no-op when `just` already holds the lock).
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/host-identity.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
@@ -39,7 +40,7 @@ echo "==> Writing filtered op-run templates (dual vault)"
 "$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
     | grep '^[A-Z0-9_]*=op://picklehome/' > "$SERVICE_DIR/.env.op.picklehome.template"
 "$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
-    | grep '^[A-Z0-9_]*=op://Brent Pickleclaw/' > "$SERVICE_DIR/.env.op.pickleclaw.template"
+    | grep -F "=op://${HOMELAB_SECONDARY_VAULT?}/" | grep '^[A-Z0-9_]*=' > "$SERVICE_DIR/.env.op.pickleclaw.template"
 
 # $RUN_CLI actually executes openclaw logic in a throwaway container (onboard /
 # config set / doctor / config patch, below) -- those need the SAME real
@@ -113,8 +114,9 @@ STUB
 chmod +x "$DATA_DIR/bin/goplaces"
 
 echo "==> Writing gog-mcp's account_clients mapping (idempotent)"
-# Maps joshua.nichols@gmail.com's OAuth tokens to the "picklelab" gogcli client
-# (matching credentials-picklelab.json in the bind-mounted gog-keyring), so
+# Maps joshua.nichols@gmail.com's OAuth tokens to this host's gogcli client
+# (on picklelab: "picklelab", matching credentials-picklelab.json in the
+# bind-mounted gog-keyring), so
 # `gog --account joshua.nichols@gmail.com` resolves without an explicit --client
 # flag. `gog auth list` doesn't need this file (it derives client names straight
 # from credentials-*.json filenames), but any bare --account call does.
@@ -127,8 +129,8 @@ echo "==> Writing gog-mcp's account_clients mapping (idempotent)"
 # Re-written on every deploy so it self-heals from drift, same as the goplaces
 # stub above; also bind-mounted into the container (compose.yaml) as a second
 # line of defense.
-cat > "$DATA_DIR/gog-config/config.json" << 'EOF'
-{"account_clients": {"joshua.nichols@gmail.com": "picklelab"}, "no_send_accounts": {"joshua.nichols@gmail.com": true}}
+cat > "$DATA_DIR/gog-config/config.json" << EOF
+{"account_clients": {"joshua.nichols@gmail.com": "${HOMELAB_HOST_NAME?}"}, "no_send_accounts": {"joshua.nichols@gmail.com": true}}
 EOF
 echo "    Wrote $DATA_DIR/gog-config/config.json"
 
@@ -290,8 +292,8 @@ ASKPASS
     # a single successful sync. Mirrors the dev VM's convention (pickleclaw agent
     # <pickleclaw@localhost>), with the host name swapped so the two writers are
     # distinguishable in the log. Found 2026-07-15.
-    git -C "$DATA_DIR/workspace" config user.name "picklelab agent"
-    git -C "$DATA_DIR/workspace" config user.email "picklelab@localhost"
+    git -C "$DATA_DIR/workspace" config user.name "${HOMELAB_HOST_NAME?} agent"
+    git -C "$DATA_DIR/workspace" config user.email "${HOMELAB_HOST_NAME?}@localhost"
     echo "    Wrote workspace-git-askpass.sh, set core.askPass + commit identity"
 elif [ -d "$DATA_DIR/workspace/.git" ]; then
     echo "    WARNING: OPENCLAW_WORKSPACE_GITHUB_TOKEN didn't resolve via op run."
@@ -681,7 +683,7 @@ echo "==> Doctor (catches config-schema migrations after an image bump)"
 $RUN_CLI doctor || echo "    WARNING: doctor reported an issue — check output above"
 
 echo "==> Configuring Tailscale serve for openclaw"
-sudo tailscale serve --service=svc:openclaw --https=443 http://127.0.0.1:18789
+sudo tailscale serve --service=svc:openclaw${HOMELAB_SERVICE_SUFFIX?} --https=443 http://127.0.0.1:18789
 
 if [ -n "$OPENCLAW_WIDGETS_HOST" ]; then
     echo "==> Configuring Tailscale serve for the widget sandbox origin"
@@ -689,7 +691,7 @@ if [ -n "$OPENCLAW_WIDGETS_HOST" ]; then
     # docs/cli/mcp.md: "The sandbox origin must differ from the Control UI origin.
     # Do not host other authenticated or sensitive content on it." Each Tailscale
     # Service gets its own hostname, so both can independently serve 443.
-    sudo tailscale serve --service=svc:openclaw-widgets --https=443 http://127.0.0.1:18790
+    sudo tailscale serve --service=svc:openclaw-widgets${HOMELAB_SERVICE_SUFFIX?} --https=443 http://127.0.0.1:18790
 fi
 
 echo "==> Linking systemd unit"
@@ -756,7 +758,7 @@ else
 fi
 
 TAILNET=$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix')
-OPENCLAW_URL="https://openclaw.${TAILNET}"
+OPENCLAW_URL="https://openclaw${HOMELAB_SERVICE_SUFFIX?}.${TAILNET}"
 
 echo ""
 echo "==> Checking Tailscale endpoint"
@@ -773,9 +775,9 @@ else
     echo "    1. Open https://login.tailscale.com/admin/services"
     echo "    2. Click 'Define Service': Name 'openclaw', Ports '443'"
     echo "    3. Re-advertise (tailscaled doesn't auto-detect a newly-defined service):"
-    echo "       sudo tailscale serve --service=svc:openclaw --https=443 off"
+    echo "       sudo tailscale serve --service=svc:openclaw${HOMELAB_SERVICE_SUFFIX?} --https=443 off"
     echo "       sleep 2"
-    echo "       sudo tailscale serve --service=svc:openclaw --https=443 http://127.0.0.1:18789"
+    echo "       sudo tailscale serve --service=svc:openclaw${HOMELAB_SERVICE_SUFFIX?} --https=443 http://127.0.0.1:18789"
     echo "    4. Find 'openclaw' at https://login.tailscale.com/admin/services and approve the pending host"
     echo "    5. Verify: curl ${OPENCLAW_URL}/healthz"
 fi

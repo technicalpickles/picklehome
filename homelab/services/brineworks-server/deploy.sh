@@ -6,6 +6,7 @@ set -euo pipefail
 
 # One deploy at a time on picklelab (no-op when `just` already holds the lock).
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/host-identity.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
@@ -81,7 +82,7 @@ echo "==> Configuring Tailscale serve for brineworks"
 # Registers brineworks.<tailnet>.ts.net, proxied to localhost:$BRINEWORKS_SERVER_PORT.
 # Idempotent: re-running updates the config in tailscaled's state.
 # Requires HTTPS to be enabled in the Tailscale admin console.
-sudo tailscale serve --service=svc:brineworks --https=443 "http://127.0.0.1:$BRINEWORKS_SERVER_PORT"
+sudo tailscale serve --service=svc:brineworks${HOMELAB_SERVICE_SUFFIX?} --https=443 "http://127.0.0.1:$BRINEWORKS_SERVER_PORT"
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/brineworks-server.service" /etc/systemd/system/
@@ -101,7 +102,7 @@ echo "==> Status"
 systemctl status brineworks-server.service --no-pager
 
 TAILNET=$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix')
-BRINEWORKS_URL="https://brineworks.${TAILNET}"
+BRINEWORKS_URL="https://brineworks${HOMELAB_SERVICE_SUFFIX?}.${TAILNET}"
 
 echo ""
 echo "==> Checking local health endpoint"
@@ -126,8 +127,8 @@ else
     echo "    1. Open https://login.tailscale.com/admin/services"
     echo "    2. Find 'brineworks' and approve the pending host"
     echo "    3. Re-advertise (tailscaled doesn't auto-detect approval):"
-    echo "       sudo tailscale serve --service=svc:brineworks --https=443 off"
+    echo "       sudo tailscale serve --service=svc:brineworks${HOMELAB_SERVICE_SUFFIX?} --https=443 off"
     echo "       sleep 2"
-    echo "       sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:\$BRINEWORKS_SERVER_PORT"
+    echo "       sudo tailscale serve --service=svc:brineworks${HOMELAB_SERVICE_SUFFIX?} --https=443 http://127.0.0.1:\$BRINEWORKS_SERVER_PORT"
     echo "    4. Verify: curl ${BRINEWORKS_URL}/health"
 fi
