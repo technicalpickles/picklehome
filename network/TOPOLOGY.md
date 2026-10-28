@@ -488,8 +488,8 @@ Permanent outcome: USG DNS switched from `1.1.1.1` to `8.8.8.8` (also a Cloudfla
 
 ## Diagnostic Tools
 
-> **Note:** The authoritative CLI reference is in `network/CLAUDE.md`. This section is a
-> quick-reference subset. When in doubt, check `just --list` or `just unifi --help`.
+> **Note:** The authoritative CLI reference is each script's `--help` (`just unifi --help`,
+> `just bgw --help`). This section is a quick-reference subset. `just --list` lists the recipes.
 
 ```bash
 # Live topology: device tree with uplink ports and radio state
