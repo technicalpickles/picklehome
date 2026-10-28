@@ -57,44 +57,30 @@ The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTT
 
 **Don't assume picklelab (or a secret) is out of reach because 1Password is involved. Try it first.**
 
-- **`ssh picklelab` works unattended.** automic-vault is live: `ssh -G picklelab` resolves `IdentityAgent` to `~/.local/share/automic-vault/ssh-agent.sock`, no 1Password prompt. That covers `just deploy-*` and `ssh picklelab docker exec ...`. (`picklelab-ro`, a planned read-only wrapper, never landed; it isn't on PATH.) Old notes saying "ssh picklelab needs a 1Password approval, an agent can't run it" are stale; fix them when you find one.
+- **`ssh picklelab` works unattended.** automic-vault is live: `ssh -G picklelab` resolves `IdentityAgent` to `~/.local/share/automic-vault/ssh-agent.sock`, no 1Password prompt. That covers `just deploy-*` and `ssh picklelab docker exec ...`. For read-only probes use pickleclaw's `scripts/openclaw-ro/remote` (the planned `picklelab-ro` was never built). Old notes saying "ssh picklelab needs a 1Password approval, an agent can't run it" are stale; fix them when you find one.
 - **`op` is the one that still touches 1Password.** The sandbox blocks its desktop-app socket, so run `op`-backed commands with the sandbox disabled. That is fine **when Josh is at the laptop** (he approves the prompt). If he isn't (phone-driven session), say what's blocked and ask; don't treat it as "can't be done". automic-vault is replacing the `op` path, which will allow approving from anywhere.
 - **These are separate walls, unrelated to 1Password:** passwordless sudo is allowlist-only on picklelab (see Sandbox above), the auto-mode classifier denies free-form prod reads (taskwarrior `f54dd775`), and the relay host allowlist. `just deploy-*` is pre-authorized by a `permissions.allow` rule in `.claude/settings.json`; without it the classifier's Production Deploy rule denies deploys unless the user's message names the deploy.
 
 ## Homelab
 
-Before changing anything under `homelab/`, read `homelab/services/CLAUDE.md`. The three things that bite agents who skip it:
-
-- Deployed services get secrets from `op run` in their systemd unit, never from a `.env` file. Any doc, script, or compose `env_file:` that assumes otherwise is stale, not a pattern to copy.
-- `just deploy-<service>` needs a clean `main` checkout that matches `origin/main`; it pushes and then runs one ssh command. There is no separate scp step.
-- A `deploy.sh` can only `sudo` what the allowlist above permits.
+Before changing anything under `homelab/`, read `homelab/services/CLAUDE.md`. `just deploy-<service>` needs a clean `main` checkout that matches `origin/main`; it pushes and then runs one ssh command. There is no separate scp step. Deployed services get secrets from `op run` in their systemd unit, never from a `.env` file, so a doc or compose `env_file:` that assumes otherwise is stale.
 
 ## Backlog & Task Tracking
 
-Top-level entry point: `task list project:picklehome`
-
-Projects use a dotted hierarchy: `picklehome.climate.ecobee`, `picklehome.lighting.hue`, `picklehome.homelab.backup`. This lets `task list project:picklehome.climate` match all climate sub-projects.
-
-When touching a module, check the relevant sub-project (e.g. `task list project:picklehome.climate` when working in `climate/`).
+Entry point: `task list project:picklehome`. Projects use a dotted hierarchy (`picklehome.climate.ecobee`, `picklehome.lighting.hue`, `picklehome.homelab.backup`), so `project:picklehome.climate` matches all climate sub-projects.
 
 ## Coding Conventions
 
 - **Don't swallow errors in data-fetching code.** Raise with diagnostic context (what failed, why) and catch at the boundary where you can present it to the user. Returning `None` for every failure mode (network error, stale data, bad input) makes debugging impossible because the caller can't distinguish fixable problems from expected ones. Use `asyncio.gather(return_exceptions=True)` for concurrent fetches so one failure doesn't cancel the rest.
-- **Never commit geolocatable identifiers.** Street addresses, coordinates, full MAC addresses and BSSIDs, device serials. Private LAN IPs and OUI prefixes are fine. `tests/test_no_sensitive_identifiers.py` enforces the MAC part; the rest is on you. Real values go in agent memory or 1Password (see `docs/CONVENTIONS.md`).
+- **Never commit geolocatable identifiers.** Street addresses, coordinates, full MAC addresses and BSSIDs, device serials. Private LAN IPs and OUI prefixes are fine. `tests/test_no_sensitive_identifiers.py` enforces the MAC part; the rest is on you. Real values go in agent memory or 1Password.
 
-**When adding a new integration:**
-1. Store credentials in 1Password (`picklehome` vault)
-2. Add `op://` references to `.env.template`
-3. Use `python-dotenv` to load at import time
-4. If tokens need refresh, cache them in `~/.local/state/picklehome/<service>-tokens.json` (0600) and honor a `<SERVICE>_TOKEN_PATH` override
-5. Model the CLI on existing `*_cli.py` patterns (argparse + async dispatch), add a `just <module> *ARGS` passthrough recipe, and a row in the README's integration and auth tables
+**When adding a new integration:** credentials and `.env.template` references follow "Adding a new secret" above, loaded with `python-dotenv` at import time. Then:
+1. If tokens need refresh, cache them in `~/.local/state/picklehome/<service>-tokens.json` (0600) and honor a `<SERVICE>_TOKEN_PATH` override
+2. Model the CLI on existing `*_cli.py` patterns (argparse + async dispatch), add a `just <module> *ARGS` passthrough recipe, and a row in the README's integration and auth tables
 
 ## Documentation
 
-See @docs/CONVENTIONS.md for where information belongs (code comments vs README vs CLAUDE.md).
+Before writing docs, read `docs/CONVENTIONS.md` (where a fact belongs: code comments, README, CLAUDE.md, taskwarrior, or agent memory). A module's CLAUDE.md starts with `@README.md` rather than repeating it.
 
-- Code comments: *why* the code works this way
-- README.md: setup, commands, API reference, findings, for everyone
-- CLAUDE.md: workflow/process guidance for agent context; each one starts with `@README.md` rather than repeating it
 - docs/plans/ and docs/superpowers/plans/: point-in-time design documents. A "Status:" header or a checkbox list in one is a snapshot from when it was written, not a claim about today; check the code and `git log` before trusting either.
 - `.parkinglot/`: gitignored session handoffs (park/unpark); not documentation
