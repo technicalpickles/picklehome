@@ -8,27 +8,20 @@ The README is the reference: what's here, the integration and auth tables, repo 
 
 When a site or service is slow, timing out, or "broken" (especially Cloudflare-hosted ones: Canva, Claude.ai, Notion, Dropbox), the diagnostics live in `network/`. **Start with the browser profiler `just network-profile <url>`**, then drop to lower layers. See `network/CLAUDE.md` ("When a site or service is slow or broken") for the full top-down order. Past incidents are in `network/investigations/`.
 
-Note: the browser profiler and `just bgw *` use a headless browser that can't launch in the sandbox; see the Sandbox section.
-
 ## Tailscale
 
 - **Tailnet suffix:** `tail2023b7.ts.net` (verify with `tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix'`)
 - **Service hostnames:** `<service-name>.tail2023b7.ts.net`, fronted by Tailscale Services on picklelab. TLS terminated by `tailscaled`, proxied to a `127.0.0.1:<port>` container binding. No public DNS, no Caddy.
 - **Per-service hostname** is stored as `<SERVICE>_HOST` in 1Password (e.g. `op://picklehome/TaskChampion Sync/host`) and surfaced via `.env`.
 - **Beach house node:** `seapickle` (Raspberry Pi 3B+) is the Tailscale node and subnet router at the beach house; see `homelab/seapickle/README.md`.
-- **CLI mechanics** (status looks wrong, `ping` fails, sudo prompts hang, Services vs. node-serve, standing up a new Service): use the `tailscale-cli` skill (`tailscale` plugin) before re-deriving these from scratch.
-- **Exposure architecture** (loopback-bind + `serve` vs. binding directly to the tailnet interface, identity-header auth, what's actually reachable): use the `tailscale-serve-patterns` skill.
 
 ## Python Tooling
 
-[uv](https://github.com/astral-sh/uv) for deps (`pyproject.toml` / `uv.lock`, `uv sync` or `just install` once). Run things via `just` (preferred) or `uv run <script>`. One-off scripts with no project deps: `uv run --with <dep1>,<dep2> <script>`. `just --list` shows every recipe.
+Run things via `just` (preferred; `just --list`) or `uv run <script>`. One-off scripts with no project deps: `uv run --with <dep1>,<dep2> <script>`.
 
 ## Secrets
 
-Two paths, and they don't share anything but `.env.template`:
-
-- **Local Mac dev:** `just dotenv` runs `op inject` over `.env.template` to produce a gitignored `.env`. Scripts load it via `python-dotenv`, `just` loads it via `set dotenv-load`.
-- **Deploys to picklelab:** no `.env`, no `just dotenv`. `just deploy-<service>` is one ssh call; the service's systemd unit wraps `docker compose` in `op run` against a read-only 1Password service-account token on the host (`/etc/opt/homelab/op-token-picklehome`). Resolved secrets never touch disk on either machine. `homelab/services/README.md` and `homelab/services/CLAUDE.md` own the details; read them before touching a `deploy.sh`, unit, or compose file.
+The README's Secrets section explains the two paths (local `.env` via `just dotenv`, deploys via `op run` in the systemd unit); they share nothing but `.env.template`. On the host the unit reads a read-only 1Password service-account token at `/etc/opt/homelab/op-token-picklehome`. `homelab/services/README.md` and `homelab/services/CLAUDE.md` own the deploy side; read them before touching a `deploy.sh`, unit, or compose file.
 
 **Adding a new secret (local dev):**
 1. Add the value to 1Password (prefer the `picklehome` vault). Do this **before** step 3: `op inject` fails hard on a reference to a nonexistent item, and since the template is one shared file, that breaks `just dotenv` for every module.
@@ -36,12 +29,6 @@ Two paths, and they don't share anything but `.env.template`:
 3. Add the `{{ op://picklehome/Item/field }}` reference to `.env.template`
 4. Run `just dotenv` to regenerate `.env`
 5. If a deployed service needs it too, add the var name to that service's `.env.vars` (the deploy side filters `.env.template` by that list)
-
-**If `just dotenv` fails with missing keys:** keys present in the old `.env` are absent from the template. Add them to `.env.template` then re-run. To skip the check and reset from the template unconditionally, use `just dotenv --force`.
-
-**If `just dotenv` fails with a 1Password error:** ensure you're signed in (`op whoami`). Field names in `op://` references must match exactly. Use the `jq` command above to verify.
-
-The logic lives in `scripts/dotenv` (supports `--template`, `--output`, `--force`).
 
 **Gotcha:** `op inject` scans the *entire* `.env.template`, comments included. Writing a bare `op:` + `//` secret-reference scheme in explanatory prose makes it parse that prose as a real reference and fail the whole run (`invalid secret reference ... too few '/'`). Describe references in words, never by writing the literal scheme in a comment.
 
@@ -62,10 +49,9 @@ The sandbox enforces network access via a local HTTP proxy and `HTTP_PROXY`/`HTT
 - **Keychain access**: requires `~/Library/Keychains/` in `sandbox.filesystem.allowWrite`
 - **Headless browser (Playwright/Chromium)**: can't launch in the sandbox (fails with `bootstrap_check_in ... Permission denied`). Scripts that use it (`network/profile.py` / `just network-profile`, `network/bgw.py` / `just bgw *`) must run with the sandbox disabled.
 - **curl timing inside the sandbox is meaningless**: requests route through the local proxy, so `time_connect`/`time_appconnect` measure the proxy, not the real path. Run timing probes with the sandbox disabled.
-- **Debugging**: if `curl` works but Python doesn't, it's almost certainly a proxy issue, not a domain allowlist issue
 - **`git push` to github.com over SSH** sometimes fails once with `Operation not permitted` (port 22) and then succeeds on an immediate retry. Retry once before diagnosing anything.
-- **SSH to homelab hosts (e.g. `ssh picklelab`, `just disk-report`, `just deploy-*`)**: the sandbox blocks outbound port 22 directly; SSH from an agent session routes through a local SOCKS5 relay (`com.technicalpickles.agent-ssh-relay`, gost) that only allows destinations listed in `~/github.com/technicalpickles/dotfiles/config/gost/agent-ssh-relay.yml`. A host missing from that allowlist fails with `Ncat: Error: connection not allowed by ruleset.` (not a sandbox error, so `dangerouslyDisableSandbox` doesn't fix it). `picklelab` and `picklelab.tail2023b7.ts.net` are already allowlisted. To add another host: append `<host>:22` to the YAML's `matchers` list, then reload with `launchctl kickstart -k gui/$(id -u)/com.technicalpickles.agent-ssh-relay` (needs `dangerouslyDisableSandbox`, since `launchctl` itself is blocked). See `dotfiles/ssh/CLAUDE.md` for the full design.
-- **`sudo` over a non-interactive `ssh host "sudo ..."` almost always needs a password on picklelab.** Only a narrow, specific allowlist runs passwordless (`sudo -n -l` on the host shows the live list; check it before assuming a command will work headlessly, rather than guessing from memory since it changes as new deploy needs come up). Anything outside that list fails immediately with `sudo: a terminal is required to read the password; ... sudo: a password is required`. No hang, no prompt, just a hard fail, because a plain `ssh host "cmd"` allocates no pty for `sudo` to prompt on. Two ways out: (a) prefer a passwordless-allowlisted command over the one you reached for first, e.g. `apt-get install <file>.deb` works where `dpkg -i <file>.deb` doesn't, since only the former is allowlisted; or (b) if a real interactive password entry is actually wanted (a human is at the keyboard, not an agent), add `-t` to the `ssh` call to allocate a pty so the prompt can render at all. `-t` doesn't make an agent's own sudo non-interactive, it just turns the instant hard-fail into an actual prompt for whoever is watching. The allowlist itself is `homelab/config/sudoers-deploy-ops`, installed by `homelab/scripts/setup-deploy-access.sh`; widening it is a sudoers change on a production host, so confirm with the user first rather than doing it silently to unblock a command.
+- **SSH to homelab hosts (e.g. `ssh picklelab`, `just disk-report`, `just deploy-*`)**: the sandbox blocks outbound port 22 directly; SSH from an agent session routes through a local SOCKS5 relay (`com.technicalpickles.agent-ssh-relay`, gost) that only allows destinations in `~/github.com/technicalpickles/dotfiles/config/gost/agent-ssh-relay.yml`. A host missing from it fails with `Ncat: Error: connection not allowed by ruleset.` (not a sandbox error, so `dangerouslyDisableSandbox` doesn't fix it). `picklelab` and `picklelab.tail2023b7.ts.net` are already allowlisted. To add a host and reload the relay, see `dotfiles/ssh/CLAUDE.md`.
+- **`sudo` over a non-interactive `ssh host "sudo ..."` almost always needs a password on picklelab.** Only a narrow allowlist runs passwordless (`sudo -n -l` on the host shows the live list; it changes as deploy needs come up, so check it rather than guessing). Anything else hard-fails at once with `sudo: a terminal is required to read the password`, because a plain `ssh host "cmd"` allocates no pty. Prefer an allowlisted command over the one you reached for first (`apt-get install <file>.deb` is allowlisted, `dpkg -i <file>.deb` is not). `ssh -t` only helps when a human is at the keyboard to type the password. The allowlist is `homelab/config/sudoers-deploy-ops`, installed by `homelab/scripts/setup-deploy-access.sh`; widening it is a sudoers change on a production host, so confirm with the user first.
 
 ## Reaching picklelab and 1Password from an agent session
 
