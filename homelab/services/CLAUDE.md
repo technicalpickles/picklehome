@@ -2,7 +2,7 @@
 
 ## When exposing a new service over Tailscale
 
-Standing up a new `svc:<name>` Service (admin console → `serve --service=` → restart `tailscaled` → approve → validate from a different node) has a specific required order that's easy to get wrong on a first deploy. Use the `tailscale-cli` skill for that sequence and for debugging `serve status`/Services once it's up. Use the `tailscale-serve-patterns` skill when deciding whether to bind loopback + `serve` (the default here, see README.md) vs. binding directly to the tailnet interface, and for identity-header auth (`Tailscale-User-Login`) implications.
+Standing up a new `svc:<name>` Service has a required order that's easy to get wrong on a first deploy; the `tailscale-cli` skill has it. The default here is loopback bind + `serve` (see README.md); the `tailscale-serve-patterns` skill covers the alternatives and identity-header auth.
 
 ## When adding a new service with bind mounts
 
