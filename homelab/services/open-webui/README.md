@@ -141,8 +141,8 @@ untested. Confirmed on the pinned tag: running it as any non-root UID fails
 ~19 writes to `/app/backend/open_webui/static` on every boot (root:root,
 0755/0644, no group write) -- cosmetic, but noisy and blocks static/branding
 overrides. Tracked upstream: [open-webui/open-webui#26662](https://github.com/open-webui/open-webui/issues/26662),
-fix PR [#26664](https://github.com/open-webui/open-webui/pull/26664) still
-open. `Dockerfile` here wraps the pinned image and chowns that dir at build
+fix PR [#26664](https://github.com/open-webui/open-webui/pull/26664) has merged,
+but the errors still reproduce on v0.12.5 (checked 2026-10-30). `Dockerfile` here wraps the pinned image and chowns that dir at build
 time instead. `compose.yaml` points at `open-webui:local`; `compose.picklelab.yaml`
 adds the `build:` stanza that produces it (same layering as
 `second-brain-agent`/`brineworks-agent`), and `open-webui.service` runs
