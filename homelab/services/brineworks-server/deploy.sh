@@ -30,6 +30,9 @@ cd "$REPO_DIR"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Checking Brent is quiet"
+"$REPO_DIR/homelab/scripts/openclaw-quiet.sh" || exit $?
+
 echo "==> Checking Gmail keyring"
 # check-keyring.sh runs as root via a pinned NOPASSWD grant (sudoers-deploy-ops): the
 # keyring dir is root-owned mode 700, so a plain [ -f ] from this user would report an

@@ -29,6 +29,9 @@ COMPOSE="docker compose -f compose.yaml -f compose.picklelab.yaml"
 cd "$REPO_DIR"
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
 
+echo "==> Checking Brent is quiet"
+"$REPO_DIR/homelab/scripts/openclaw-quiet.sh" || exit $?
+
 echo "==> Writing filtered op-run templates (dual vault)"
 # openclaw draws secrets from both 1Password vaults (see .env.template): most
 # vars are picklehome-vault, but OLLAMA_API_KEY/OPENROUTER_API_KEY/
