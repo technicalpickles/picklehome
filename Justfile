@@ -300,7 +300,7 @@ nest *ARGS:
 sonos *ARGS:
     uv run python sonos/sonos_cli.py {{ARGS}}
 
-# VicoHome bird feeder/camera: just birdfeeder status | events [--days N] [--species TEXT] | species [--days N]
+# VicoHome bird feeder/camera: just birdfeeder status | events [--days N] [--species TEXT] | species [--days N] | sync [--days N]
 # Shebang + "$@" (not {{ARGS}}) preserves quoting for multi-word args like --species "Northern Cardinal"
 birdfeeder *ARGS:
     #!/usr/bin/env bash

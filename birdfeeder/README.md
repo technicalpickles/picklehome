@@ -28,6 +28,7 @@ just birdfeeder events [--days N] --urls                    # also print image/v
 just birdfeeder events [--days N] --json                    # structured output, always includes URLs
 just birdfeeder species [--days N]                          # species seen, with counts + a tip to filter events
 just birdfeeder species [--days N] --json                    # structured output
+just birdfeeder sync [--days N]                              # mirror events + images locally, default last 2 days
 ```
 
 `species` aggregates identified events (unidentified events are excluded) and defaults to a
@@ -35,6 +36,29 @@ just birdfeeder species [--days N] --json                    # structured output
 than raw detections. Each entry prints a ready-to-paste `events --species "..."` command using
 the same `--days` value, so going from "what showed up" to "show me every visit from that one"
 is a copy-paste away.
+
+## Local mirror
+
+`sync` copies the event log and event images into a local store, because the API's image URLs
+expire after ~48 hours and nothing else keeps them. It is idempotent (keyed by `trace_id`), so run
+it as often as you like: `--days 365` backfills everything the account still has, and the
+default `--days 2` is the incremental run.
+
+```
+~/.local/state/picklehome/birdfeeder/        # override with BIRDFEEDER_MIRROR_DIR
+  mirror.sqlite3                             # one row per event: time, species, confidence, image path
+  images/YYYY/MM/DD/<trace_id>.jpg           # UTC date of the event
+```
+
+It walks the range one day at a time and saves after each window, so an interrupted backfill picks
+up where it stopped. A failed image download keeps the event row, is reported on stderr (exit 1),
+and is retried by the next `sync` that covers that day. A species identified after the first fetch
+fills in on the existing row, and a later fetch without one never blanks it. `sync` only
+downloads images; videos aren't mirrored yet (see the HLS note below).
+
+The first backfill (2026-10-30) found 1,182 events back to 2026-09-10, 52% species-identified,
+about 120MB of images. Single wide-window queries behave oddly (a 30-day query returned events only
+back to Oct 18 while a 365-day one went back to Sep 10), which is why the sync uses one-day windows.
 
 Image/video URLs are omitted from the default `events` output because they're long and noisy.
 They're also **not access-controlled beyond the URL itself**: pre-signed cloud storage links
@@ -71,9 +95,12 @@ account.
   `subcategoryInfoList[0].objectName` / `.confidence`, which is an **empty list** when the AI
   detected "a bird" but couldn't identify the species (no confidence value at all in that case,
   not just a low one).
-- Species ID appears to be gated by a VicoHome subscription: on this account, the large majority
-  of events come back with an empty `subcategoryInfoList` (`species_name` is `None`) even though
-  the top-level `deviceAiEventList` tag correctly says `["bird"]` every time.
+- Species ID is spotty: on this account about half of events (52% in the 2026-10-30 backfill) come
+  back with an empty `subcategoryInfoList` (`species_name` is `None`) even though the top-level
+  `deviceAiEventList` tag correctly says `["bird"]` every time. It may be gated by a VicoHome
+  subscription, which is unconfirmed.
+- `videoUrl` points at an HLS playlist (`.m3u8`, a few KB), not an mp4. Saving a clip means
+  fetching the segments (ffmpeg or similar).
 - `imageUrl`/`videoUrl` are pre-signed URLs (S3/GCS/Oracle Cloud depending on which backend
   stored that particular clip) that expire after ~48 hours. Don't persist them long-term; refetch
   via `events` if needed later.
@@ -97,4 +124,5 @@ birdfeeder/
   vicohome/
     auth.py               # Env var credential loading, stateless login
     client.py              # HTTP client, Device/BirdEvent dataclasses
+  mirror.py               # local store + day-window sync (sqlite + images)
 ```
