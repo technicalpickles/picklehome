@@ -94,6 +94,14 @@ blueair *ARGS:
 blueair-set DEVICE PROPERTY VALUE:
     uv run python climate/blueair_cli.py set {{PROPERTY}} {{VALUE}} --device "{{DEVICE}}"
 
+# Skylight frame via pyskylight (pinned, run through uvx): just skylight frames | photo-upload | albums | --help
+skylight *ARGS:
+    scripts/skylight {{ARGS}}
+
+# Skylight login incl. the emailed-code step (run in a terminal, it prompts for the code): just skylight-login
+skylight-login:
+    av inject +SKYLIGHT_EMAIL +SKYLIGHT_PASSWORD -- "$PWD/scripts/skylight-login"
+
 # Hisense ductless HVAC (ConnectLife): just hisense status [name] [--json] | set <name> [--power/--mode/--temp/--fan]
 hisense *ARGS:
     uv run python climate/hisense_cli.py {{ARGS}}

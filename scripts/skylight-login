@@ -1,0 +1,152 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["httpx"]
+# ///
+"""scripts/skylight-login: log in to Skylight including the emailed-code (MFA) step.
+
+pyskylight's own `login` can't do this: Skylight now redirects the password POST to
+/auth/mfa_challenge, which pyskylight reports as "Invalid Skylight email or password".
+This does the same OAuth2 PKCE flow, pauses for the code Skylight emails you, then
+writes the session where pyskylight looks for it, so `scripts/skylight <cmd>` works
+afterwards (it refreshes the token itself, no further codes).
+
+Run it from a terminal (it prompts for the code), with credentials from Automic Vault.
+av needs an absolute path to the target:
+
+    av inject +SKYLIGHT_EMAIL +SKYLIGHT_PASSWORD -- "$PWD/scripts/skylight-login"
+
+Set SKYLIGHT_MFA_CODE to skip the prompt. Nothing secret is printed.
+"""
+
+import base64
+import hashlib
+import json
+import os
+import re
+import secrets
+import sys
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+import httpx
+
+BASE = "https://app.ourskylight.com"
+# Skylight serves the web login pages to browsers only; these mirror pyskylight's constants.
+UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+CLIENT_ID = "skylight-mobile"
+REDIRECT_URI = "skylight-family://welcome"
+SCOPE = "everything"
+REDIRECTS = (301, 302, 303, 307, 308)
+CSRF_RE = re.compile(r'name="authenticity_token"[^>]*value="([^"]+)"')
+
+
+def b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def cache_path() -> Path:
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    return Path(base) / "pyskylight" / "token.json"
+
+
+def get(client: httpx.Client, url: str) -> httpx.Response:
+    full = url if url.startswith("http") else BASE + url
+    return client.get(full, headers={"User-Agent": UA}, follow_redirects=False)
+
+
+def chase(client: httpx.Client, resp: httpx.Response) -> httpx.Response:
+    """Follow redirects until the app-scheme callback or a non-redirect page."""
+    for _ in range(10):
+        loc = resp.headers.get("location", "")
+        if resp.status_code not in REDIRECTS or not loc or loc.startswith("skylight-family:"):
+            break
+        resp = get(client, loc)
+    return resp
+
+
+def csrf_token(resp: httpx.Response) -> str:
+    match = CSRF_RE.search(resp.text)
+    if not match:
+        sys.exit(f"no CSRF token on {resp.url.path}")
+    return match.group(1)
+
+
+def main() -> None:
+    email, password = os.environ["SKYLIGHT_EMAIL"], os.environ["SKYLIGHT_PASSWORD"]
+    verifier = b64url(secrets.token_bytes(32))
+    state = b64url(secrets.token_bytes(18))
+    params = {
+        "response_type": "code",
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "scope": SCOPE,
+        "state": state,
+        "code_challenge": b64url(hashlib.sha256(verifier.encode()).digest()),
+        "code_challenge_method": "S256",
+        "prompt": "login",
+    }
+    with httpx.Client(timeout=30) as client:
+        resp = chase(client, get(client, "/oauth/authorize?" + str(httpx.QueryParams(params))))
+        resp = client.post(
+            BASE + "/auth/session",
+            data={"authenticity_token": csrf_token(resp), "email": email, "password": password},
+            headers={"User-Agent": UA},
+            follow_redirects=False,
+        )
+        resp = chase(client, resp)
+
+        if resp.url.path.startswith("/auth/mfa_challenge"):
+            code = os.environ.get("SKYLIGHT_MFA_CODE") or input("Code Skylight just emailed you: ").strip()
+            resp = client.post(
+                BASE + "/auth/mfa_challenge",
+                data={"authenticity_token": csrf_token(resp), "code": code},
+                headers={"User-Agent": UA},
+                follow_redirects=False,
+            )
+            resp = chase(client, resp)
+
+        location = resp.headers.get("location", "")
+        if not location.startswith("skylight-family:"):
+            page = re.sub(r"<(script|style).*?</\1>|<[^>]+>", " ", resp.text, flags=re.S)
+            sys.exit(
+                f"login did not finish: ended on {resp.url.path} (HTTP {resp.status_code})\n"
+                f"page said: {' '.join(page.split())[:300]}"
+            )
+        query = parse_qs(urlparse(location).query)
+        if query.get("state", [""])[0] != state or not query.get("code"):
+            sys.exit("OAuth callback was missing the code or had a bad state")
+
+        token = client.post(
+            BASE + "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": CLIENT_ID,
+                "code": query["code"][0],
+                "redirect_uri": REDIRECT_URI,
+                "code_verifier": verifier,
+            },
+            headers={"User-Agent": UA},
+        )
+        if token.status_code >= 400:
+            sys.exit(f"token exchange failed (HTTP {token.status_code})")
+
+    body = token.json()
+    expires_at = float(body["created_at"]) + float(body["expires_in"]) if "created_at" in body and "expires_in" in body else None
+    path = cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "base_url": BASE,
+        "access_token": body["access_token"],
+        "refresh_token": body.get("refresh_token"),
+        "expires_at": expires_at,
+    }))
+    path.chmod(0o600)
+    print(f"logged in; session cached at {path} (refresh token: {'yes' if body.get('refresh_token') else 'no'})")
+
+
+if __name__ == "__main__":
+    main()
