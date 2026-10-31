@@ -137,7 +137,7 @@ sudo systemctl start docker
 #     removed containers; starting docker does NOT restart them, so they stay
 #     dead until you do this (or reboot). See taskwarrior 407e9404 for a durable fix.
 sudo systemctl restart brineworks-server.service \
-  github-actions-runner.service obsidian-sync.service taskchampion-sync.service
+  obsidian-sync.service taskchampion-sync.service
 
 # 6. SMOKE TEST, then verify. The smoke test is the check that actually catches a
 #    wrong/unapplied root: it forces containerd to create a NEW snapshot in its
