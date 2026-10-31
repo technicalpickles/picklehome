@@ -550,6 +550,10 @@ open-webui-logs host="picklelab" lines="50":
     # evaluated at parse time for every subcommand, not just `up`.
     ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
+# Install or update the OpenClaw pipe in Open WebUI (runs on the Mac; needs `just dotenv`)
+install-openclaw-pipe host="picklelab":
+    homelab/services/open-webui/install-openclaw-pipe.sh {{host}}
+
 # Follow Open WebUI container logs
 open-webui-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
