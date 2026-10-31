@@ -13,8 +13,11 @@ so failure handling matters more than speed:
 - A failed upload may still have created the message. Before retrying, look for it by caption and
   adopt it instead of uploading a duplicate.
 - Skylight silently ignores an album add that lands before it finishes processing a new upload (the
-  call succeeds, nothing is added), so adds are verified against the album and retried. Verification
-  reads `album-message-ids`, which returns only the newest 100, so adds go in batches well under that.
+  call succeeds, nothing is added), so adds are verified against the album and retried with growing
+  waits. A clip that still hasn't landed is carried into the next batch rather than ending the run
+  (the upload is already in the ledger); one that stays missing across three batches, or is still
+  missing at the end, stops it. Verification reads `album-message-ids`, which returns only the newest
+  100, so adds go in batches well under that.
 
 The ledger (`skylight-uploads.jsonl` in the mirror directory) records each upload's message id the
 moment it succeeds, which makes runs resumable and undoable (`skylight messages-delete --id ...`).
@@ -42,6 +45,8 @@ CALL_TIMEOUT_SECONDS = 300
 MAX_ATTEMPTS = 8
 ALBUM_ADD_ATTEMPTS = 6
 ALBUM_SETTLE_SECONDS = 3
+MAX_ALBUM_SETTLE_SECONDS = 60
+MAX_ALBUM_BATCH_MISSES = 3
 MAX_PACE_SECONDS = 30.0
 CLEAN_STREAK_TO_RELAX = 100
 ORPHAN_CLOCK_SKEW = timedelta(seconds=30)
@@ -144,6 +149,8 @@ class SkylightSync:
         self._clean_streak = 0
         self._album_id: str | None = None
         self._tz: tzinfo | None = None
+        self._carried: list[str] = []
+        self._batch_misses: dict[str, int] = {}
         self.summary = SyncSummary()
 
     # -- calling the CLI with classified retries --------------------------------------------------
@@ -209,26 +216,52 @@ class SkylightSync:
         out = self._call(["album-message-ids", self._album_id, "--frame", self.frame_id])
         return {item["id"] for item in json.loads(out)["data"]}
 
-    def _add_to_album(self, message_ids: list[str]) -> None:
-        for start in range(0, len(message_ids), self.album_batch):
-            batch = message_ids[start : start + self.album_batch]
-            missing = [m for m in batch if m not in self._album_members()]
-            for attempt in range(1, ALBUM_ADD_ATTEMPTS + 1):
-                if not missing:
-                    break
-                args = ["album-add-photos", "--album-id", self._album_id, "--frame", self.frame_id]
-                for message_id in missing:
-                    args += ["--message-id", message_id]
-                self._call(args)
-                self._sleep(ALBUM_SETTLE_SECONDS)
-                present = self._album_members()
-                missing = [m for m in missing if m not in present]
-                if missing:
-                    self._log(f"  {len(missing)} not in album yet (attempt {attempt})")
+    def _confirm_in_album(self, message_ids: list[str]) -> list[str]:
+        """Add these to the album, retrying with growing waits. Returns the ids that never landed."""
+        missing = [m for m in message_ids if m not in self._album_members()]
+        for attempt in range(1, ALBUM_ADD_ATTEMPTS + 1):
+            if not missing:
+                break
+            args = ["album-add-photos", "--album-id", self._album_id, "--frame", self.frame_id]
+            for message_id in missing:
+                args += ["--message-id", message_id]
+            self._call(args)
+            self._sleep(min(ALBUM_SETTLE_SECONDS * 2 ** (attempt - 1), MAX_ALBUM_SETTLE_SECONDS))
+            present = self._album_members()
+            missing = [m for m in missing if m not in present]
             if missing:
-                raise SyncStopped(f"{len(missing)} message(s) never showed up in the album: {missing[:5]}")
-            self._append({"status": "in_album", "message_ids": batch})
-            self._log(f"  album +{len(batch)} (confirmed)")
+                self._log(f"  {len(missing)} not in album yet (attempt {attempt})")
+        return missing
+
+    def _add_to_album(self, message_ids: list[str], final: bool = False) -> None:
+        """Add (plus anything carried over) in batches, recording only what's confirmed in the album.
+
+        Unconfirmed ids are carried into the next call. They stop the run if they stay missing across
+        MAX_ALBUM_BATCH_MISSES batches, or if `final` and anything is still missing: the uploads are in
+        the ledger either way, and the next run finishes the add.
+        """
+        ids = list(dict.fromkeys(self._carried + message_ids))
+        self._carried = []
+        for start in range(0, len(ids), self.album_batch):
+            batch = ids[start : start + self.album_batch]
+            missing = self._confirm_in_album(batch)
+            confirmed = [m for m in batch if m not in missing]
+            if confirmed:
+                self._append({"status": "in_album", "message_ids": confirmed})
+                self._log(f"  album +{len(confirmed)} (confirmed)")
+            for message_id in confirmed:
+                self._batch_misses.pop(message_id, None)
+            for message_id in missing:
+                self._batch_misses[message_id] = self._batch_misses.get(message_id, 0) + 1
+            stuck = [m for m in missing if self._batch_misses[m] >= MAX_ALBUM_BATCH_MISSES]
+            if stuck or (final and missing):
+                raise SyncStopped(
+                    f"{len(missing)} message(s) never showed up in the album: {missing[:5]}"
+                    " (the uploads are recorded; the next run will retry the add)"
+                )
+            if missing:
+                self._log(f"  carrying {len(missing)} unconfirmed clip(s) into the next batch")
+                self._carried.extend(missing)
 
     # -- uploading --------------------------------------------------------------------------------------
 
@@ -303,6 +336,8 @@ class SkylightSync:
 
         # An interrupted run may have uploaded without finishing the album add.
         self._add_to_album([m for m in uploaded.values() if m not in in_album])
+        if self._carried:
+            self._add_to_album([])  # give the stragglers one more full retry window before new uploads
 
         rows = self._mirror_rows(include_unidentified)
         pending = [r for r in rows if r[0] not in uploaded]
@@ -325,5 +360,5 @@ class SkylightSync:
                 self._add_to_album(batch)
                 batch = []
             self._sleep(self.pace)
-        self._add_to_album(batch)
+        self._add_to_album(batch, final=True)
         return self.summary

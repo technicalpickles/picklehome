@@ -58,6 +58,7 @@ class FakeSkylight:
         self.failures: dict[str, list[RunResult]] = {}
         self.upload_creates_message_despite_failure = False
         self.ignore_album_adds = 0
+        self.slow_ids: dict[str, int] = {}  # message id -> add attempts Skylight will ignore for it
         self.upload_output = '{"data": {"url": "https://s3.invalid/x?x-amz-meta-recipient_message_ids={id}&sig=z"}}'
         self._next_id = 1000
 
@@ -88,7 +89,11 @@ class FakeSkylight:
                 self.ignore_album_adds -= 1
             else:
                 ids = [args[i + 1] for i, a in enumerate(args) if a == "--message-id"]
-                self.album.extend(i for i in ids if i not in self.album)
+                for message_id in ids:
+                    if self.slow_ids.get(message_id, 0) > 0:
+                        self.slow_ids[message_id] -= 1
+                    elif message_id not in self.album:
+                        self.album.append(message_id)
             return RunResult(0, "{}", "")
         if name == "album-message-ids":
             newest = list(reversed(self.album))[:100]
@@ -294,7 +299,7 @@ def test_album_adds_that_are_silently_ignored_are_retried_until_they_show_up(tmp
 
     assert fake.album == [fake.messages[0]["id"]]
     assert fake.names().count("album-add-photos") == 3
-    assert sleeps  # waited between attempts
+    assert [s for s in sleeps if s != 2.0] == [3, 6, 12]  # waits grow while Skylight catches up, including the add that lands
 
 
 def test_an_album_add_that_never_lands_stops_the_run(tmp_path):
@@ -306,6 +311,47 @@ def test_an_album_add_that_never_lands_stops_the_run(tmp_path):
         make_sync(tmp_path, fake)[0].sync()
 
     assert [r["status"] for r in ledger(tmp_path)] == ["uploaded"]  # upload is kept, no false in_album
+
+
+def test_a_slow_clip_does_not_stop_the_run_and_is_finished_with_the_next_batch(tmp_path):
+    make_mirror(tmp_path, [_event(f"e{i}", i) for i in range(4)])
+    fake = FakeSkylight()
+    fake.slow_ids = {"1001": 7}  # outlasts the 6 attempts the first batch gets
+    sync, _ = make_sync(tmp_path, fake, album_batch=2)
+
+    summary = sync.sync()
+
+    assert summary.uploaded == 4
+    assert sorted(fake.album) == ["1001", "1002", "1003", "1004"]
+    confirmed = [i for r in ledger(tmp_path) if r["status"] == "in_album" for i in r["message_ids"]]
+    assert sorted(confirmed) == ["1001", "1002", "1003", "1004"]
+
+
+def test_a_clip_that_stays_missing_across_batches_stops_the_run(tmp_path):
+    make_mirror(tmp_path, [_event(f"e{i}", i) for i in range(6)])
+    fake = FakeSkylight()
+    fake.slow_ids = {"1001": 999}
+    sync, _ = make_sync(tmp_path, fake, album_batch=1)
+
+    with pytest.raises(SyncStopped, match="never showed up in the album"):
+        sync.sync()
+
+    assert fake.names().count("photo-upload") < 6  # stopped early, not at the end
+    assert [r["trace_id"] for r in ledger(tmp_path) if r["status"] == "uploaded"][0] == "e0"
+
+
+def test_a_clip_still_missing_at_the_end_of_the_run_is_left_for_the_next_run(tmp_path):
+    make_mirror(tmp_path, [_event("a")])
+    fake = FakeSkylight()
+    fake.slow_ids = {"1001": 6}  # one attempt short of landing during this run
+
+    with pytest.raises(SyncStopped, match="never showed up in the album"):
+        make_sync(tmp_path, fake)[0].sync()
+
+    summary = make_sync(tmp_path, fake)[0].sync()  # the next run finishes the add; nothing re-uploads
+    assert summary.uploaded == 0
+    assert fake.album == ["1001"]
+    assert fake.names().count("photo-upload") == 1
 
 
 # --- rate limits and failures ---------------------------------------------------------------------
