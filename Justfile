@@ -94,14 +94,6 @@ blueair *ARGS:
 blueair-set DEVICE PROPERTY VALUE:
     uv run python climate/blueair_cli.py set {{PROPERTY}} {{VALUE}} --device "{{DEVICE}}"
 
-# Skylight frame via pyskylight (pinned, run through uvx): just skylight frames | photo-upload | albums | --help
-skylight *ARGS:
-    scripts/skylight {{ARGS}}
-
-# Skylight login incl. the emailed-code step (run in a terminal, it prompts for the code): just skylight-login
-skylight-login:
-    av inject +SKYLIGHT_EMAIL +SKYLIGHT_PASSWORD -- "$PWD/scripts/skylight-login"
-
 # Hisense ductless HVAC (ConnectLife): just hisense status [name] [--json] | set <name> [--power/--mode/--temp/--fan]
 hisense *ARGS:
     uv run python climate/hisense_cli.py {{ARGS}}
@@ -295,13 +287,6 @@ nest *ARGS:
 # Sonos speakers: just sonos status | roster | list
 sonos *ARGS:
     uv run python sonos/sonos_cli.py {{ARGS}}
-
-# VicoHome bird feeder/camera: just birdfeeder status | events [--days N] [--species TEXT] | species [--days N] | sync [--days N] [--no-videos] | skylight-sync [--limit N] [--include-unidentified]
-# Shebang + "$@" (not {{ARGS}}) preserves quoting for multi-word args like --species "Northern Cardinal"
-birdfeeder *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    uv run python birdfeeder/birdfeeder_cli.py "$@"
 
 # LG appliances: just lg status | laundry | fridge | devices [--raw]
 # Shebang + "$@" (not {{ARGS}}) preserves quoting for multi-word args

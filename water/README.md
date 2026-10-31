@@ -113,7 +113,7 @@ class; sharing the prefix invites an import collision that reads as a subtle bug
 `aioflo`'s fallback session doesn't honor `HTTP_PROXY`/`HTTPS_PROXY`, which breaks under the
 Claude Code sandbox's proxy-based network allowlisting. `water/flo/auth.py` builds the session
 itself with `trust_env=True` and passes it in, the same fix used by `lg/thinq/auth.py`,
-`birdfeeder/vicohome`, and `climate/hisense`. The Moen Flo API domains are already in
+`climate/hisense`, and the VicoHome client in feeder-journal. The Moen Flo API domains are already in
 `sandbox.network.allowedDomains` in `.claude/settings.json`.
 
 ### Read-only by design
