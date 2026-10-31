@@ -7,11 +7,13 @@ Usage:
     uv run python birdfeeder/birdfeeder_cli.py events [--days N] [--species TEXT] [--urls] [--json]
     uv run python birdfeeder/birdfeeder_cli.py species [--days N] [--json]                # species seen, with counts
     uv run python birdfeeder/birdfeeder_cli.py sync [--days N] [--no-videos]                 # mirror events, images, and videos locally
+    uv run python birdfeeder/birdfeeder_cli.py skylight-sync [--limit N] [--include-unidentified]  # upload mirrored clips to Skylight
 """
 
 import argparse
 import asyncio
 import json
+import os
 import shutil
 import sys
 from datetime import datetime, timedelta, timezone
@@ -19,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 import aiohttp
 
 from birdfeeder.mirror import Mirror, download_image, download_video, mirror_dir, sync
+from birdfeeder.skylight_sync import SkylightSync, SyncStopped, subprocess_runner
 from birdfeeder.vicohome.auth import get_credentials
 from birdfeeder.vicohome.client import (
     BirdEvent,
@@ -181,6 +184,24 @@ async def cmd_sync(days: int, with_videos: bool) -> int:
     return 1 if result.failures or result.video_failures else 0
 
 
+def cmd_skylight_sync(limit: int | None, include_unidentified: bool) -> int:
+    def log(message: str) -> None:
+        print(f"{datetime.now().strftime('%H:%M:%S')} {message}", flush=True)
+
+    skylight = SkylightSync(mirror_dir(), subprocess_runner(), frame_id=os.environ.get("SKYLIGHT_FRAME_ID"), log=log)
+    try:
+        summary = skylight.sync(limit=limit, include_unidentified=include_unidentified)
+    except SyncStopped as exc:
+        print(f"stopped: {exc}", file=sys.stderr)
+        print(f"progress is saved in {skylight.ledger_path}; rerun to resume", file=sys.stderr)
+        return 1
+    print(
+        f"\n{summary.uploaded} uploaded, {summary.already_uploaded} already uploaded, {summary.adopted} adopted;"
+        f" {summary.rate_limited} rate limits and {summary.transient} transient errors along the way"
+    )
+    return 0
+
+
 async def run(args):
     if args.command == "status":
         await cmd_status()
@@ -190,6 +211,8 @@ async def run(args):
         await cmd_species(args.days, args.json)
     elif args.command == "sync":
         return await cmd_sync(args.days, not args.no_videos)
+    elif args.command == "skylight-sync":
+        return cmd_skylight_sync(args.limit, args.include_unidentified)
 
 
 def main():
@@ -217,6 +240,15 @@ def main():
     )
     sync_parser.add_argument("--days", type=int, default=2, help="Look back this many days (default: 2)")
     sync_parser.add_argument("--no-videos", action="store_true", help="Skip video clips (they need ffmpeg and ~60MB/day)")
+
+    skylight_parser = sub.add_parser(
+        "skylight-sync",
+        help="Upload mirrored clips to the Skylight 'Birds' album (resumable; needs `just skylight-login` once)",
+    )
+    skylight_parser.add_argument("--limit", type=int, help="Upload at most this many clips this run")
+    skylight_parser.add_argument(
+        "--include-unidentified", action="store_true", help="Also upload events with no species ID (default: identified only)"
+    )
 
     args = parser.parse_args()
     sys.exit(asyncio.run(run(args)) or 0)
