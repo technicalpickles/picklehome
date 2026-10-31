@@ -29,7 +29,7 @@ Every integration is a module with its own README and a `just` wrapper. The tabl
 | Yale Access | [`locks/`](locks/README.md) | Smart locks + bridges | Cloud API (user/pass) | `just locks *` |
 | Nest | [`nest/`](nest/README.md) | Thermostats + cameras (SDM) | Cloud API (OAuth) | `just nest *` |
 | Sonos | [`sonos/`](sonos/README.md) | Speakers | Local UPnP (no auth) | `just sonos *` |
-| VicoHome (Harymor) | [`birdfeeder/`](birdfeeder/README.md) | Bird feeder/camera | Cloud API (user/pass, unofficial) | `just birdfeeder *` |
+| VicoHome (Harymor) | [feeder-journal](https://github.com/technicalpickles/feeder-journal) (separate repo) | Bird feeder/camera | Cloud API (user/pass, unofficial) | see that repo |
 | LG ThinQ | [`lg/`](lg/README.md) | Washer, dryer, refrigerator | Cloud API (static PAT), read-only | `just lg *` |
 | Moen Flo | [`water/`](water/README.md) | Smart water shutoff valve | Cloud API (user/pass), read-only | `just water *` |
 
@@ -112,15 +112,9 @@ just sonos list     # raw list of whatever's currently on the network
 just sonos roster   # print the online speakers as roster YAML
 ```
 
-### `birdfeeder/`: Bird feeder camera
+### Bird feeder camera
 
-The Harymor feeder reports through VicoHome's (unofficial) API. Camera state, plus a log of which birds showed up and when.
-
-```bash
-just birdfeeder status     # battery, signal, charging
-just birdfeeder events     # recent detections, with species
-just birdfeeder species    # species tally over the last N days
-```
+Moved to its own repo, [feeder-journal](https://github.com/technicalpickles/feeder-journal): the VicoHome client, the local mirror of every visit, the Skylight upload, and the field-journal web app.
 
 ### `lg/`: Laundry and fridge
 
@@ -185,7 +179,7 @@ Every integration follows the same shape: credentials in 1Password, into `.env`,
 | OAuth token (refreshable) | Ecobee | `~/.local/state/picklehome/ecobee-tokens.json` | PIN flow, auto-refresh on use |
 | OAuth token (refreshable) | Nest | `~/.local/state/picklehome/nest-tokens.json` | Loopback browser flow via Device Access "partner connections"; auto-refresh on use |
 | Username/password to session token | Yale, Aladdin, BlueAir | `~/.local/state/picklehome/<service>-tokens.json` | Token cached, re-auth on expiry |
-| Username/password (no persistence) | Hisense/ConnectLife, VicoHome, Moen Flo | none (in-memory only) | Re-auths per session; no token file |
+| Username/password (no persistence) | Hisense/ConnectLife, Moen Flo | none (in-memory only) | Re-auths per session; no token file |
 | TLS client cert | Lutron Caseta | `lighting/.certs/` (key, cert, CA) | One-time pairing, certs don't expire |
 
 Token files go in `~/.local/state/picklehome/<service>-tokens.json` with 0600 permissions. Most modules also honor a `<SERVICE>_TOKEN_PATH` env var override (used by tests).
@@ -226,7 +220,6 @@ How they're written:
 - `locks/`: Yale Access smart locks; see `locks/README.md`
 - `nest/`: Nest thermostats + cameras via Google SDM; see `nest/README.md`
 - `sonos/`: Sonos speaker health checks (local, no auth); see `sonos/README.md`
-- `birdfeeder/`: VicoHome (Harymor) bird feeder/camera state + bird detection log; see `birdfeeder/README.md`
 - `lg/`: LG ThinQ appliances (washer, dryer, refrigerator), read-only; see `lg/README.md`
 - `water/`: Moen Flo smart water shutoff (read-only); see `water/README.md`
 - `picklehome/`: Shared cross-module code. `locations.py` is the canonical location registry (main house, beach house, ...) consumed by climate, locks, and nest; locations come from 1Password items tagged `picklehome-location`

@@ -75,7 +75,7 @@ secret.
 `thinqconnect` builds its own `aiohttp.ClientSession` when one isn't supplied, defaulting to
 `trust_env=False` -- it ignores the Claude Code sandbox's proxy-based network allowlisting.
 `lg/thinq/auth.py` builds the session itself (`trust_env=True`) and passes it into `ThinQApi`, the
-same fix used by `birdfeeder/vicohome` and `climate/hisense`.
+same fix used by `climate/hisense` and the VicoHome client in feeder-journal.
 
 `api-aic.lgthinq.com` is in `sandbox.network.allowedDomains` in `.claude/settings.json` (tracked).
 Domain allowlist changes take effect on the *next* session, not the current one -- first live runs
