@@ -1,5 +1,19 @@
 [tools]
+# varlock must run inside node for the Automic Vault plugin: the standalone
+# varlock binary is rejected by Automic Vault ("application process unavailable").
+node = "24"
+"npm:varlock" = "1.24.0"
 go = "latest"
 just = "latest"
 python = "3.12"
 uv = { version = "0.13.4", minimum_release_age = "0s" }
+
+[tasks.setup]
+description = "Confirm and cache the pinned Automic Vault varlock plugin (interactive, once)"
+# Under npm varlock a load prompts for confirmation and caches the plugin; the
+# secrets not being saved yet is fine, the plugin is cached before they resolve.
+run = "varlock load || true"
+
+[tasks.load-secrets]
+description = "Copy Flo and Skylight logins from 1Password into Automic Vault (interactive; pass KEY... for a subset)"
+run = "scripts/load-secrets"
