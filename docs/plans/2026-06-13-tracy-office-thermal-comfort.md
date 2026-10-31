@@ -132,6 +132,21 @@ Recommendation: start with the **two-timer** version (it's a fan, simplicity win
 - Smart-plug auto-resume gotcha: [HowToGeek](https://www.howtogeek.com/258757/not-all-appliances-work-with-smart-outlets.-heres-how-to-know/)
 - Hue Smart Plug specs: [Best Buy Q&A](https://www.bestbuy.com/site/questions/philips-hue-smart-plug-white/6367452); Caséta PD-3PCL lamp dimmer: [Lutron](https://support.lutron.com/us/en/product/casetawireless/article/product-selection/Caseta-Plug-In-Lamp-Dimmer-PD-3PCL)
 
+## Measurements log
+
+Dated spot checks, newest last. Raw sensor series come from `just climate-history`.
+
+### 2026-10-19: cold floor vs. warm air (IR check)
+
+Tracy reported the office floor felt cold. IR readings she took: **floor about 68°F, air at the desk sensor's spot about 75°F**, a roughly 7°F gradient. The Tracy Office SmartSensor itself read 66.0-66.9°F overnight and through the morning (history hours 20:00-11:00), then rose to 69.1 avg (12:00) and 71.2 (13:00) after she raised the setpoint by hand. Josh Office held about 73.0 the whole time.
+
+What this adds:
+- The complaint is the floor (radiant), not air temperature: air at the desk was 75°F by IR.
+- The SmartSensor read about 3-4°F below IR in this check, wider than the ~1.5-2°F offset assumed for the remote sensors in `hvac-spec.md`. One reading, taken right after a manual setpoint change, so treat the size of the gap as unconfirmed.
+- Downstairs control averages this sensor with Josh Office, so an under-reading office sensor biases the zone reading low.
+
+Context: Comfort Heat had just been lowered to 67/72 (PR 139), and with a sensor average near 69.7 neither floor was calling for heat that morning.
+
 ## Open questions
 
 - How exterior vertical screens compare for *low-angle east* sun specifically (clean numbers are south/west).
