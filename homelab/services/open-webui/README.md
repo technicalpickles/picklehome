@@ -163,6 +163,9 @@ Things that bit or could bite:
 - **`STATE_DIR` is `/app/backend/data/openclaw-bridge`**, on the persisted volume.
   The default is not writable by uid 1000 and the `/tmp` fallback loses the device
   key when the container is recreated (which means re-pairing).
+  The valve alone is not enough: the slash-prompt ledger and lock ignore it and read
+  the `OPENCLAW_BRIDGE_STATE_DIR` env var, which `compose.picklelab.yaml` sets to the
+  same path. Without it they land in `/tmp` and the ledger is lost on recreate.
 - **Sessions are shared with Telegram**: session visibility is `agent`, so an Open
   WebUI chat can read and send into the Telegram session and the reverse.
 - `SYNC_SLASH_COMMANDS` is on: the gateway's slash commands and skills show up in
