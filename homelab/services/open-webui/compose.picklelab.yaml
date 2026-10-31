@@ -10,6 +10,12 @@ services:
         USE_SLIM: "true"
     volumes:
       - /srv/data/open-webui:/app/backend/data
+    environment:
+      # The pipe's STATE_DIR valve covers most of its state, but the slash-prompt
+      # ledger and lock call _state_dir() with no argument and read this env var
+      # instead. Unset, they fall back to /tmp and the ledger dies on recreate.
+      # Keep in step with STATE_DIR in install-openclaw-pipe.sh.
+      OPENCLAW_BRIDGE_STATE_DIR: /app/backend/data/openclaw-bridge
     # The OpenClaw pipe (install-openclaw-pipe.sh) reaches the gateway through
     # openclaw-proxy below, not by joining openclaw's network. `default` has to
     # stay listed or open-webui can no longer reach open-terminal.
