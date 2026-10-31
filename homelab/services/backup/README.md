@@ -4,7 +4,7 @@ Nightly restic backups of `/srv/data` with Postgres database dumps. Runs as a de
 
 ## What's backed up
 
-Everything under `/srv/data`, except the raw Postgres data directories (backed up via SQL dumps instead), the dev-container home, and a few paths deliberately excluded because the `backup` user has no read access to them by design (see [Security Model](#security-model)).
+Everything under `/srv/data`, except the raw Postgres data directories (backed up via SQL dumps instead), and a few paths deliberately excluded because the `backup` user has no read access to them by design (see [Security Model](#security-model)).
 
 | Service | Captured | How |
 |---------|----------|-----|
