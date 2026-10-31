@@ -301,6 +301,12 @@ water *ARGS:
     set -euo pipefail
     uv run python water/water_cli.py "$@"
 
+# Automic Vault only accepts a real shell as varlock's direct parent, so this goes through zsh;
+# `; exit $?` stops zsh exec-ing the last command, which would make the parent not-a-shell.
+# Moen Flo status with creds from Automic Vault via varlock (needs load-secrets first, see docs/varlock-av-secrets.md)
+water-av *ARGS:
+    zsh -fc 'varlock run -- uv run python water/water_cli.py "$@"; exit $?' water {{ARGS}}
+
 # Type secrets from a phone over the tailnet: just secret-entry [--sink av] FLO_USERNAME FLO_PASSWORD
 # Escape hatch for when 1Password/op is unreachable. Tailnet-only, never funnel.
 secret-entry *ARGS:
