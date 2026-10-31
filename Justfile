@@ -268,6 +268,14 @@ woodpecker-logs host="picklelab":
 woodpecker-status host="picklelab":
     ssh {{host}} "systemctl status woodpecker.service --no-pager; echo; cd /opt/homelab/homelab/services/woodpecker && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml ps"
 
+# Agent-switch timer + last run logs from picklelab (see woodpecker/README.md "Agent switch")
+woodpecker-switch-logs host="picklelab" lines="50":
+    ssh {{host}} "systemctl list-timers woodpecker-agent-switch.timer --no-pager; echo; sudo journalctl -u woodpecker-agent-switch.service -n {{lines}} --no-pager"
+
+# Rollback: stop the switch timer, then restore picklelab schedulable + laptop filter default
+woodpecker-switch-reset host="picklelab":
+    ssh {{host}} "sudo systemctl stop woodpecker-agent-switch.timer && sudo systemctl stop woodpecker-agent-switch.service && sudo systemctl start woodpecker-agent-switch-reset.service; sudo journalctl -u woodpecker-agent-switch-reset.service -n 20 --no-pager"
+
 # Tailscale VPN overlay: just tailscale [status]
 tailscale *ARGS:
     tailscale {{ if ARGS == "" { "status" } else { ARGS } }}

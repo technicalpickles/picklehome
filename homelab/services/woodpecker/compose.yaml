@@ -52,3 +52,29 @@ services:
       - WOODPECKER_MAX_WORKFLOWS=2
       - DOCKER_HOST=unix:///rootless/docker.sock
     restart: unless-stopped
+
+  # Steers CI to the laptop VM agent while it is online (see README "Agent
+  # switch"). Not part of the long-running stack: profile-gated, run once per
+  # tick by woodpecker-agent-switch.timer via `docker compose --profile switch
+  # run --rm --no-deps`. Shares ts-woodpecker's netns so the API is localhost:8000.
+  # WOODPECKER_API_TOKEN deliberately has no `:?required`: compose interpolates
+  # every service (profile or not) when woodpecker.service runs `up`, so a
+  # required var that is not yet in .env.op.template would break the whole stack.
+  # The script itself exits 1 with a clear message when the token is unset.
+  # Agent names are as listed by the live server (Settings, Agents): picklelab's
+  # agent is named `woodpecker` (the ts-woodpecker sidecar's hostname, since it
+  # shares that netns), the VM agent `woodpecker-agent-vm`. The server keeps one
+  # record per container recreate, so many stale `woodpecker` rows exist; the
+  # script acts on the one with the latest last_contact.
+  woodpecker-agent-switch:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent-switch
+    profiles: [switch]
+    network_mode: service:ts-woodpecker
+    environment:
+      - WOODPECKER_URL=http://127.0.0.1:8000
+      - WOODPECKER_API_TOKEN=${WOODPECKER_API_TOKEN:-}
+      - LAPTOP_AGENT_NAME=woodpecker-agent-vm
+      - PICKLELAB_AGENT_NAME=woodpecker
+      - STALE_AFTER_SECONDS=300
