@@ -6,13 +6,19 @@ Usage:
     uv run python birdfeeder/birdfeeder_cli.py status                                    # device state
     uv run python birdfeeder/birdfeeder_cli.py events [--days N] [--species TEXT] [--urls] [--json]
     uv run python birdfeeder/birdfeeder_cli.py species [--days N] [--json]                # species seen, with counts
+    uv run python birdfeeder/birdfeeder_cli.py sync [--days N] [--no-videos]                 # mirror events, images, and videos locally
 """
 
 import argparse
 import asyncio
 import json
+import shutil
+import sys
 from datetime import datetime, timedelta, timezone
 
+import aiohttp
+
+from birdfeeder.mirror import Mirror, download_image, download_video, mirror_dir, sync
 from birdfeeder.vicohome.auth import get_credentials
 from birdfeeder.vicohome.client import (
     BirdEvent,
@@ -132,6 +138,49 @@ async def cmd_species(days: int, json_output: bool):
         print(f'  Tip:  just birdfeeder events --days {days} --species "{summary.species_name}"')
 
 
+async def cmd_sync(days: int, with_videos: bool) -> int:
+    if with_videos and not shutil.which("ffmpeg"):
+        sys.exit("ffmpeg not found on PATH (needed to assemble video clips). Install it, or pass --no-videos.")
+    email, password, region = get_credentials()
+    country_no = "US" if region == "us" else region.upper()
+    mirror = Mirror(mirror_dir())
+    # Image URLs are pre-signed, so they must not get the VicoHome Authorization header.
+    # trust_env=True so the download session honors the sandbox proxy.
+    async with aiohttp.ClientSession(trust_env=True) as http:
+        session = await connect(email, password, region)
+        try:
+
+            async def fetch(start: datetime, end: datetime) -> list[BirdEvent]:
+                return await get_events(session, start=start, end=end, country_no=country_no)
+
+            def progress(window_start: datetime, fetched: int, new: int, images: int, videos: int) -> None:
+                print(
+                    f"{window_start.astimezone().date()}  {fetched} events, {new} new, {images} images, {videos} videos",
+                    flush=True,
+                )
+
+            end = datetime.now(tz=timezone.utc)
+            result = await sync(
+                mirror,
+                fetch,
+                lambda url, dest: download_image(http, url, dest),
+                start=end - timedelta(days=days),
+                end=end,
+                download_video=(lambda url, dest: download_video(http, url, dest)) if with_videos else None,
+                on_window=progress,
+            )
+        finally:
+            await session.close()
+
+    print(f"\n{result.new} new, {result.updated} species updated, {result.images} images and {result.videos} videos downloaded; {mirror.count()} events in the mirror ({mirror.root})")
+    for trace_id, error in result.failures:
+        print(f"image failed for {trace_id}: {error}", file=sys.stderr)
+    for trace_id, error in result.video_failures:
+        print(f"video failed for {trace_id}: {error}", file=sys.stderr)
+    mirror.close()
+    return 1 if result.failures or result.video_failures else 0
+
+
 async def run(args):
     if args.command == "status":
         await cmd_status()
@@ -139,6 +188,8 @@ async def run(args):
         await cmd_events(args.days, args.species, args.urls, args.json)
     elif args.command == "species":
         await cmd_species(args.days, args.json)
+    elif args.command == "sync":
+        return await cmd_sync(args.days, not args.no_videos)
 
 
 def main():
@@ -161,8 +212,14 @@ def main():
     species_parser.add_argument("--days", type=int, default=7, help="Look back this many days (default: 7)")
     species_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
+    sync_parser = sub.add_parser(
+        "sync", help="Mirror events, images, and videos into the local store (idempotent; use a big --days to backfill)"
+    )
+    sync_parser.add_argument("--days", type=int, default=2, help="Look back this many days (default: 2)")
+    sync_parser.add_argument("--no-videos", action="store_true", help="Skip video clips (they need ffmpeg and ~60MB/day)")
+
     args = parser.parse_args()
-    asyncio.run(run(args))
+    sys.exit(asyncio.run(run(args)) or 0)
 
 
 if __name__ == "__main__":
