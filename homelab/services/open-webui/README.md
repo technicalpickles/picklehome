@@ -126,6 +126,53 @@ host Docker daemon.
 
 Full rationale: `docs/plans/2026-07-21-open-terminal-design.md`.
 
+## OpenClaw pipe
+
+Chat with the OpenClaw agent from Open WebUI, one OpenClaw session per chat, with
+tool-call cards, question dialogs and a model picker. It is
+[Eliav2/openclaw-openwebui-integration](https://github.com/Eliav2/openclaw-openwebui-integration),
+a Pipe function that speaks the gateway's native WebSocket protocol. It needs
+Open WebUI 0.12.0 or newer.
+
+    just dotenv
+    just install-openclaw-pipe
+
+`install-openclaw-pipe.sh` runs on the Mac: it installs the pipe through Open WebUI's
+API, approves the pairing request on the gateway, and sets the valves. Safe to rerun.
+The pipe is pinned to a commit: `main` as of 2026-10-30, which is v1.0.0 plus 39
+commits, because slash command sync is not in the v1.0.0 tag. It runs inside the Open WebUI backend with
+the gateway token, so read the diff before bumping `PIPE_REF`.
+
+How it reaches the gateway: `openclaw-proxy`, a pinned `alpine/socat` container in
+`compose.picklelab.yaml`, forwards TCP to the gateway (`openclaw.local:18789` on
+`openclaw_default`). Open WebUI shares a private `gateway` network with the proxy and
+is not on openclaw's network, so it can reach the gateway and nothing else openclaw
+runs (gog-mcp, goplaces-node). `open-terminal` is on neither network. The pipe connects
+to `openclaw-proxy:18789`. `deploy.sh` refuses to restart if `openclaw_default` is
+missing, so deploy openclaw first on a fresh host.
+
+Things that bit or could bite:
+
+- **Anyone who can chat with the pipe drives the agent** with its full tool policy
+  (`exec: full, ask: off`). The script sets `OWNER_USERS` to the admin email so a
+  second account would not get owner rights, but that is not a sandbox. Signup is
+  off and there is one account today.
+- **`ENABLE_FILE_SERVER` is forced off.** The pipe's fallback media server listens
+  unauthenticated on `0.0.0.0:18791`. The installer turns it back on every run, so
+  the script turns it off again every run.
+- **`STATE_DIR` is `/app/backend/data/openclaw-bridge`**, on the persisted volume.
+  The default is not writable by uid 1000 and the `/tmp` fallback loses the device
+  key when the container is recreated (which means re-pairing).
+- **Sessions are shared with Telegram**: session visibility is `agent`, so an Open
+  WebUI chat can read and send into the Telegram session and the reverse.
+- `SYNC_SLASH_COMMANDS` is on: the gateway's slash commands and skills show up in
+  the `/` menu as Workspace Prompts, visible to every user.
+- To revoke the device: `ssh picklelab docker exec openclaw-openclaw-1 openclaw devices list`, then
+  `devices remove <id>`.
+- Not done yet: the pipe's two agent skills (ask-user dialog, media) are not installed on the
+  gateway, so the agent will not use question cards or `MEDIA:` files until they are
+  added to `openclaw-workspace/skills/`.
+
 ## Upgrades
 
 Bump the pinned tag in the `FROM` line of `Dockerfile` (not `compose.yaml` --
