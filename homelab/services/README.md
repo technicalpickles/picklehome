@@ -23,6 +23,8 @@ drops the lock when the holder dies, so there's nothing to clean up. See
 `source scripts/deploy-lock.sh; deploy_lock_acquire {{host}} "<label>"`, and pass
 `HOMELAB_DEPLOY_LOCK_HELD=1` on the ssh that runs `deploy.sh`.
 
+The `openclaw` and `brineworks-server` deploys also refuse (exit 75) while Brent was active in the last 5 minutes, because the restart kills an in-flight turn: `just openclaw-quiet` runs the check on its own, and `HOMELAB_DEPLOY_EVEN_IF_BUSY=1 just deploy-<service>` overrides it. See [ADR 0003](../../docs/adr/0003-refuse-deploys-while-brent-is-active.md).
+
 Waiting for a service to come up: source `homelab/scripts/wait-for-health.sh` and call
 `wait_for_health <label> <url> [budget_secs]` instead of hand-rolling an attempt-count
 loop. It polls against a wall-clock budget (default 120s, `HEALTH_WAIT_SECS` overrides it

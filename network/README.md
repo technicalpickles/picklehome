@@ -18,7 +18,7 @@ Each script's docstring documents its exact `uv run --with ...` invocation.
 |---|---|---|
 | `isp_status.py` | `just network-status [zip]` | ISP + CDN/BGP health check |
 | `wifi-diag.py` | `just wifi-diag [args]` | Client-side WiFi + connectivity diagnostic |
-| `unifi_cli.py` | `just unifi <subcommand>` | UniFi CloudKey diagnostics (see `CLAUDE.md`) |
+| `unifi_cli.py` | `just unifi <subcommand>` | UniFi CloudKey diagnostics (`just unifi --help` lists subcommands) |
 | `bgw.py` | `just bgw <subcommand>` | AT&T BGW gateway diagnostics (fiber, broadband, trace, ping, nslookup) |
 | `snapshot.py` | `just network-snapshot [args]` | Full network snapshot (BGW + USG + DNS + peering trace) |
 | `resolve.py` | `just network-resolve <host> ...` | DNS comparison across resolvers |

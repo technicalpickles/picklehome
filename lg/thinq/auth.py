@@ -69,7 +69,7 @@ async def connect() -> tuple[ThinQApi, aiohttp.ClientSession]:
     (trust_env=False), which breaks under the Claude Code sandbox's
     proxy-based network allowlisting (see root CLAUDE.md's Sandbox section).
     Passing a pre-built trust_env=True session here is the fix -- the same
-    pattern birdfeeder/vicohome and climate/hisense use.
+    pattern climate/hisense (and the VicoHome client in feeder-journal) use.
     """
     pat, client_id, country = get_credentials()
     session = aiohttp.ClientSession(trust_env=True)

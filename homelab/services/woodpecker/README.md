@@ -2,7 +2,7 @@
 
 Self-hosted [Woodpecker CI](https://woodpecker-ci.org) serving private GitHub repos (test-only pipelines today: run the suite on push/PR, report the check back to GitHub). Consolidates CI onto one system (the old polling GitHub Actions runner was retired in favor of it).
 
-Unlike a polling runner, Woodpecker is **webhook-driven**, so GitHub has to reach in. That's the one real cost: a single deliberate public ingress via **Tailscale Funnel**, attached to a dedicated CI tailnet node rather than picklelab's host identity.
+Woodpecker is **webhook-driven**, so GitHub has to reach in. That's the one real cost: a single deliberate public ingress via **Tailscale Funnel**, attached to a dedicated CI tailnet node rather than picklelab's host identity.
 
 Design: [`docs/plans/2026-06-18-woodpecker-ci-design.md`](../../../docs/plans/2026-06-18-woodpecker-ci-design.md). Implementation: [`docs/plans/2026-06-18-woodpecker-ci-plan.md`](../../../docs/plans/2026-06-18-woodpecker-ci-plan.md).
 

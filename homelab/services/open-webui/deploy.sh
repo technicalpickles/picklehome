@@ -38,6 +38,14 @@ echo "==> Writing filtered op-run templates (dual vault)"
 "$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
     | grep '^[A-Z0-9_]*=op://Brent Pickleclaw/' > "$SERVICE_DIR/.env.op.pickleclaw.template"
 
+echo "==> Checking the gateway network"
+# compose.picklelab.yaml joins open-webui to openclaw's network. If it is missing
+# compose would fail the restart below and take Open WebUI down, so stop first.
+if ! docker network inspect openclaw_default >/dev/null 2>&1; then
+    echo "ERROR: docker network openclaw_default not found; deploy openclaw first (just deploy-openclaw)" >&2
+    exit 1
+fi
+
 echo "==> Creating data directory"
 sudo mkdir -p "$DATA_DIR"
 sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$DATA_DIR"

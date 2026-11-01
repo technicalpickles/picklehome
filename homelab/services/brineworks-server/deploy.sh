@@ -6,10 +6,18 @@ set -euo pipefail
 
 # One deploy at a time on picklelab (no-op when `just` already holds the lock).
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/deploy-lock.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/host-identity.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/checkout-ref.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/wait-for-health.sh"
 
 REPO_DIR=/opt/homelab
 SERVICE_DIR="$REPO_DIR/homelab/services/brineworks-server"
+# Dev hosts swap a few secrets via an overlay (see scripts/service-env); on
+# picklelab HOMELAB_ENV_OVERLAY is empty and this stays an empty array.
+OVERLAY_ARGS=()
+if [ -n "${HOMELAB_ENV_OVERLAY?}" ]; then
+    OVERLAY_ARGS=(--overlay "$REPO_DIR/homelab/hosts/overlays/${HOMELAB_ENV_OVERLAY}.env.template")
+fi
 DATA_DIR=/srv/data/brineworks-server
 BRINEWORKS_REPO=/opt/brineworks
 
@@ -21,6 +29,9 @@ export BRINEWORKS_SERVER_PORT="${BRINEWORKS_SERVER_PORT:-8765}"
 cd "$REPO_DIR"
 
 echo "==> Deploying commit $(git rev-parse --short HEAD)"
+
+echo "==> Checking Brent is quiet"
+"$REPO_DIR/homelab/scripts/openclaw-quiet.sh" || exit $?
 
 echo "==> Checking Gmail keyring"
 # check-keyring.sh runs as root via a pinned NOPASSWD grant (sudoers-deploy-ops): the
@@ -50,14 +61,7 @@ case "$keyring_rc" in
 esac
 
 echo "==> Updating brineworks source"
-if [ -d "$BRINEWORKS_REPO/.git" ]; then
-    git -C "$BRINEWORKS_REPO" pull --ff-only
-else
-    echo "    Cloning brineworks to $BRINEWORKS_REPO"
-    sudo mkdir -p "$BRINEWORKS_REPO"
-    sudo chown "$(id -u):$(id -g)" "$BRINEWORKS_REPO"
-    git clone git@github.com:technicalpickles/brineworks.git "$BRINEWORKS_REPO"
-fi
+checkout_ref "$BRINEWORKS_REPO" git@github.com:technicalpickles/brineworks.git "${BRINEWORKS_REF?}"
 BRINEWORKS_SHA=$(git -C "$BRINEWORKS_REPO" rev-parse --short HEAD)
 echo "    Brineworks at $BRINEWORKS_SHA"
 
@@ -72,7 +76,7 @@ echo "==> Writing build metadata"
 } > "$SERVICE_DIR/.env.build"
 
 echo "==> Writing filtered op-run template"
-"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" > "$SERVICE_DIR/.env.op.template"
+"$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" ${OVERLAY_ARGS[@]+"${OVERLAY_ARGS[@]}"} > "$SERVICE_DIR/.env.op.template"
 
 echo "==> Creating data directories"
 sudo mkdir -p "$DATA_DIR/db"
@@ -81,7 +85,7 @@ echo "==> Configuring Tailscale serve for brineworks"
 # Registers brineworks.<tailnet>.ts.net, proxied to localhost:$BRINEWORKS_SERVER_PORT.
 # Idempotent: re-running updates the config in tailscaled's state.
 # Requires HTTPS to be enabled in the Tailscale admin console.
-sudo tailscale serve --service=svc:brineworks --https=443 "http://127.0.0.1:$BRINEWORKS_SERVER_PORT"
+sudo tailscale serve --service=svc:brineworks${HOMELAB_SERVICE_SUFFIX?} --https=443 "http://127.0.0.1:$BRINEWORKS_SERVER_PORT"
 
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/brineworks-server.service" /etc/systemd/system/
@@ -101,7 +105,7 @@ echo "==> Status"
 systemctl status brineworks-server.service --no-pager
 
 TAILNET=$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSSuffix')
-BRINEWORKS_URL="https://brineworks.${TAILNET}"
+BRINEWORKS_URL="https://brineworks${HOMELAB_SERVICE_SUFFIX?}.${TAILNET}"
 
 echo ""
 echo "==> Checking local health endpoint"
@@ -126,8 +130,8 @@ else
     echo "    1. Open https://login.tailscale.com/admin/services"
     echo "    2. Find 'brineworks' and approve the pending host"
     echo "    3. Re-advertise (tailscaled doesn't auto-detect approval):"
-    echo "       sudo tailscale serve --service=svc:brineworks --https=443 off"
+    echo "       sudo tailscale serve --service=svc:brineworks${HOMELAB_SERVICE_SUFFIX?} --https=443 off"
     echo "       sleep 2"
-    echo "       sudo tailscale serve --service=svc:brineworks --https=443 http://127.0.0.1:\$BRINEWORKS_SERVER_PORT"
+    echo "       sudo tailscale serve --service=svc:brineworks${HOMELAB_SERVICE_SUFFIX?} --https=443 http://127.0.0.1:\$BRINEWORKS_SERVER_PORT"
     echo "    4. Verify: curl ${BRINEWORKS_URL}/health"
 fi

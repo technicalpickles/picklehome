@@ -150,25 +150,14 @@ dotenv *ARGS:
 _deploy-remote service host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
+    # Guards and push live in scripts/deploy-preflight. Assign first, then eval:
+    # `eval "$(...)"` would swallow a refusal (eval of nothing exits 0).
+    PREFLIGHT=$(scripts/deploy-preflight {{host}})
+    eval "$PREFLIGHT"
     source scripts/deploy-lock.sh
     deploy_lock_acquire {{host}} "deploy-{{service}}"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/{{service}}/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && $DEPLOY_UPDATE && HOMELAB_DEPLOY_LOCK_HELD=1 HOMELAB_DEPLOY_EVEN_IF_BUSY=${HOMELAB_DEPLOY_EVEN_IF_BUSY:-} homelab/services/{{service}}/deploy.sh"
 
 # Deploy climate-auto-switch to picklelab (idempotent: first setup or update)
 deploy-climate host="picklelab":
@@ -237,6 +226,10 @@ brineworks-skills-check:
 brineworks-server-verify host="picklelab" since="30m":
     ssh {{host}} 'bash -s -- {{since}}' < homelab/services/brineworks-server/verify.sh
 
+# Check whether Brent was active recently; exits 75 if so (read-only, same check the openclaw and brineworks-server deploys run)
+openclaw-quiet host="picklelab" minutes="5":
+    ssh {{host}} 'bash -s -- {{minutes}}' < homelab/scripts/openclaw-quiet.sh
+
 # Seed (or re-seed) brineworks-server's Gmail token keyring on picklelab (one browser consent click)
 seed-brineworks-gmail host="picklelab":
     scripts/seed-brineworks-gmail {{host}}
@@ -294,13 +287,6 @@ nest *ARGS:
 # Sonos speakers: just sonos status | roster | list
 sonos *ARGS:
     uv run python sonos/sonos_cli.py {{ARGS}}
-
-# VicoHome bird feeder/camera: just birdfeeder status | events [--days N] [--species TEXT] | species [--days N]
-# Shebang + "$@" (not {{ARGS}}) preserves quoting for multi-word args like --species "Northern Cardinal"
-birdfeeder *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    uv run python birdfeeder/birdfeeder_cli.py "$@"
 
 # LG appliances: just lg status | laundry | fridge | devices [--raw]
 # Shebang + "$@" (not {{ARGS}}) preserves quoting for multi-word args
@@ -429,21 +415,10 @@ obsidian-sync-status host="picklelab":
 deploy-openclaw host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "ERROR: uncommitted changes. Commit or stash first."
-        exit 1
-    fi
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        echo "ERROR: not on main (on $BRANCH). Switch to main first."
-        exit 1
-    fi
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Pushing to origin/main..."
-        git push
-    fi
+    # Guards and push live in scripts/deploy-preflight. Assign first, then eval:
+    # `eval "$(...)"` would swallow a refusal (eval of nothing exits 0).
+    PREFLIGHT=$(scripts/deploy-preflight {{host}})
+    eval "$PREFLIGHT"
     if [ ! -e homelab/services/openclaw/openclaw.tools.json5 ] || [ ! -e homelab/services/openclaw/openclaw.mcp.json5 ] || [ ! -e homelab/services/openclaw/openclaw.image.env ]; then
         echo "ERROR: openclaw.tools.json5 / openclaw.mcp.json5 / openclaw.image.env missing."
         echo "       Symlink them from the private pickleclaw repo first -- see"
@@ -454,7 +429,7 @@ deploy-openclaw host="picklelab":
     deploy_lock_acquire {{host}} "deploy-openclaw"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
     echo "==> Pulling on {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull"
+    ssh {{host}} "cd /opt/homelab && $DEPLOY_UPDATE"
     echo "==> Copying include files (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/openclaw.tools.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.tools.json5
     scp homelab/services/openclaw/openclaw.mcp.json5 {{host}}:/opt/homelab/homelab/services/openclaw/openclaw.mcp.json5
@@ -479,7 +454,7 @@ deploy-openclaw host="picklelab":
     ssh {{host}} "chmod -R go-w $PLUGIN_DIR/brineworks-approval"
     echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
-    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/openclaw/deploy.sh"
+    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 HOMELAB_DEPLOY_EVEN_IF_BUSY=${HOMELAB_DEPLOY_EVEN_IF_BUSY:-} homelab/services/openclaw/deploy.sh"
 
 # Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit
 openclaw-status host="picklelab":
@@ -556,6 +531,10 @@ open-webui-logs host="picklelab" lines="50":
     # evaluated at parse time for every subcommand, not just `up`.
     ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
+# Install or update the OpenClaw pipe in Open WebUI (runs on the Mac; needs `just dotenv`)
+install-openclaw-pipe host="picklelab":
+    homelab/services/open-webui/install-openclaw-pipe.sh {{host}}
+
 # Follow Open WebUI container logs
 open-webui-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
@@ -616,3 +595,19 @@ disk-monitor-check:
 disk-monitor-status:
     @echo "=== Recent disk usage history ==="
     @tail -20 ~/.local/state/picklehome/disk-monitor.csv 2>/dev/null || echo "No history yet"
+
+# Build the stopped OrbStack machine picklelab-golden that dev hosts are cloned from (idempotent; needs orb and the pickleclaw image symlink)
+devhost-golden:
+    homelab/devhost/golden.sh
+
+# Clone picklelab-golden into a throwaway dev host <name>: isolated OrbStack machine, own Tailscale node, dev identity and tokens (av inject supplies DEVHOST_OP_TOKEN and DEVHOST_TS_AUTH_KEY)
+devhost-new name:
+    av inject +DEVHOST_OP_TOKEN +DEVHOST_TS_AUTH_KEY -- homelab/devhost/new.sh {{name}}
+
+# Delete dev host <name> made by devhost-new: the machine, its identity file and its ssh block
+devhost-rm name:
+    homelab/devhost/rm.sh {{name}}
+
+# List dev hosts made by devhost-new with their OrbStack state
+devhost-ls:
+    homelab/devhost/ls.sh

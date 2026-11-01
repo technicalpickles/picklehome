@@ -1,5 +1,6 @@
 # Wraps the pinned upstream image to fix a confirmed non-root permission bug:
-# open-webui/open-webui#26662 (fix PR #26664 open, not merged, as of v0.10.2).
+# open-webui/open-webui#26662 (fix PR #26664 has since merged, but the static/
+# permission errors still reproduce on v0.12.5, checked 2026-10-30).
 # The stock image ships /app/backend/open_webui/static owned root:root,
 # 0755/0644 (no group write), and rewrites its own bundled static assets
 # (favicons, site.webmanifest, loader.js, user.png) into that dir on every
@@ -15,7 +16,7 @@
 # pin is bumped past it.
 # USE_SLIM=true drops embedding/whisper models (~3-4GB savings)
 ARG USE_SLIM=true
-FROM ghcr.io/open-webui/open-webui:v0.10.2
+FROM ghcr.io/open-webui/open-webui:v0.12.5
 USER root
 RUN chown -R 1000:1000 /app/backend/open_webui/static
 

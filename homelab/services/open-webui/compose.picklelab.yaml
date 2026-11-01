@@ -10,6 +10,32 @@ services:
         USE_SLIM: "true"
     volumes:
       - /srv/data/open-webui:/app/backend/data
+    environment:
+      # The pipe's STATE_DIR valve covers most of its state, but the slash-prompt
+      # ledger and lock call _state_dir() with no argument and read this env var
+      # instead. Unset, they fall back to /tmp and the ledger dies on recreate.
+      # Keep in step with STATE_DIR in install-openclaw-pipe.sh.
+      OPENCLAW_BRIDGE_STATE_DIR: /app/backend/data/openclaw-bridge
+    # The OpenClaw pipe (install-openclaw-pipe.sh) reaches the gateway through
+    # openclaw-proxy below, not by joining openclaw's network. `default` has to
+    # stay listed or open-webui can no longer reach open-terminal.
+    networks:
+      - default
+      - gateway
+
+  # TCP pass-through to the OpenClaw gateway. It is the only thing here on
+  # openclaw's network, so open-webui can reach the gateway and nothing else
+  # openclaw runs (gog-mcp, goplaces-node). open-terminal is on neither
+  # network: it runs AI-driven commands with passwordless sudo and gets no path
+  # to the gateway. The proxy resolves openclaw.local per connection, so a
+  # gateway restart needs no proxy restart.
+  openclaw-proxy:
+    image: alpine/socat:1.8.0.3
+    restart: unless-stopped
+    command: TCP-LISTEN:18789,fork,reuseaddr TCP:openclaw.local:18789
+    networks:
+      - gateway
+      - openclaw
 
   open-terminal:
     build:
@@ -17,6 +43,15 @@ services:
       dockerfile: homelab/services/open-webui/Dockerfile.open-terminal
     volumes:
       - /srv/data/open-terminal:/home/user
+
+networks:
+  # Private to open-webui and openclaw-proxy.
+  gateway:
+  # Owned by the openclaw compose project, so the gateway has to be deployed
+  # first; deploy.sh checks for it before restarting.
+  openclaw:
+    name: openclaw_default
+    external: true
 
 volumes:
   data:

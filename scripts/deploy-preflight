@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Mac-side guards for `just _deploy-remote` and `just deploy-openclaw`.
+#
+#   scripts/deploy-preflight <host>
+#
+# Decides whether a deploy to <host> may go ahead, pushes what the host is about
+# to pull, and prints (to stdout, for the recipe to `eval`):
+#
+#   DEPLOY_KIND=prod|dev
+#   DEPLOY_REF=<branch the host should end up on>
+#   DEPLOY_UPDATE=<shell command for the host to run in /opt/homelab>
+#
+# On refusal: one reason on stderr, nothing on stdout, exit 1.
+#
+# Which kind of host is <host>? First hit wins:
+#   1. homelab/hosts/<host>.env        (committed; prod hosts)
+#   2. the committed homelab/hosts/*.env whose HOMELAB_HOST_ALIASES lists <host>
+#   3. homelab/hosts/local/<host>.env  (gitignored; dev hosts)
+# dev-identity.env is a template and never matches. Nothing matches: refuse. An unknown host is never treated as dev.
+#
+# prod: the tree must be clean and on main. Pushes main when HEAD != origin/main.
+#       The host fast-forwards main and refuses to move if it has diverged.
+# dev:  the tree must be clean. Pushes HEAD to origin as the current branch. The
+#       host is throwaway, so it checks the branch out with -B (force-pushed
+#       branches are fine there).
+#
+# HOMELAB_REPO_DIR points everything at a repo other than the cwd (for tests).
+# Stdout is eval'd, so every value is printf %q quoted. Nothing else may print
+# to stdout.
+set -euo pipefail
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+host="${1:-}"
+[ -n "$host" ] || die "usage: deploy-preflight <host>"
+
+repo="${HOMELAB_REPO_DIR:-.}"
+hosts_dir="$repo/homelab/hosts"
+
+# The host name becomes part of a path below.
+case "$host" in
+    *[!A-Za-z0-9._-]* | .* | "") die "no identity for host $host (not a plain host name)" ;;
+esac
+
+# Print a field from an identity file, without leaking its other variables.
+# $1 file, $2 variable name.
+identity_field() {
+    (
+        # shellcheck disable=SC1090
+        . "$1" >/dev/null 2>&1 || exit 0
+        printf '%s' "${!2:-}"
+    )
+}
+
+identity_file=""
+# dev-identity.env is the template devhost-new copies, not a host.
+if [ "$host" != dev-identity ]; then
+    if [ -f "$hosts_dir/$host.env" ]; then
+        identity_file="$hosts_dir/$host.env"
+    else
+        for f in "$hosts_dir"/*.env; do
+            [ -f "$f" ] || continue
+            [ "$(basename "$f")" != dev-identity.env ] || continue
+            for alias in $(identity_field "$f" HOMELAB_HOST_ALIASES); do
+                if [ "$alias" = "$host" ]; then
+                    identity_file="$f"
+                    break 2
+                fi
+            done
+        done
+    fi
+    # Last, so a generated local file can never shadow a committed name or alias.
+    if [ -z "$identity_file" ] && [ -f "$hosts_dir/local/$host.env" ]; then
+        identity_file="$hosts_dir/local/$host.env"
+    fi
+fi
+[ -n "$identity_file" ] || die "no identity for host $host (looked in homelab/hosts/ and homelab/hosts/local/, and at HOMELAB_HOST_ALIASES)"
+
+kind="$(identity_field "$identity_file" HOMELAB_HOST_KIND)"
+case "$kind" in
+    prod | dev) ;;
+    *) die "$identity_file has HOMELAB_HOST_KIND='$kind' (want prod or dev)" ;;
+esac
+
+g() { git -C "$repo" "$@"; }
+
+if [ -n "$(g status --porcelain)" ]; then
+    die "uncommitted changes. Commit or stash first."
+fi
+
+branch="$(g branch --show-current)"
+[ -n "$branch" ] || die "detached HEAD. Check out a branch first."
+
+q_branch="$(printf '%q' "$branch")"
+
+if [ "$kind" = prod ]; then
+    if [ "$branch" != main ]; then
+        die "not on main (on $branch). Switch to main first, or aim at a dev host."
+    fi
+    if [ "$(g rev-parse HEAD)" != "$(g rev-parse origin/main)" ]; then
+        echo "Pushing to origin/main..." >&2
+        g push origin main >&2
+    fi
+    update="git fetch -q origin main && git checkout -q main && git merge -q --ff-only origin/main"
+else
+    echo "Pushing $branch to origin..." >&2
+    g push origin "HEAD:refs/heads/$branch" >&2
+    update="git fetch -q origin $q_branch && git checkout -q -B $q_branch origin/$q_branch"
+fi
+
+printf 'DEPLOY_KIND=%q\n' "$kind"
+printf 'DEPLOY_REF=%q\n' "$branch"
+printf 'DEPLOY_UPDATE=%q\n' "$update"
