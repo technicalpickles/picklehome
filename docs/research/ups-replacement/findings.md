@@ -110,6 +110,51 @@ Ruled out:
 - **CP1500PFCLCD for the lab** works if rack form factor doesn't matter
   ($120 cheaper), but with 6 battery outlets for 6 devices it has zero spare.
 
+## Other brands (2026-11-01)
+
+Added after the CyberPower-only pass above. **Weaker sourcing than the
+CyberPower numbers**: these come from web search snippets and reseller
+listings, not datasheets, and the "Trust datasheets" warning below applies
+(several sources disagree with each other). Treat as a sanity check on the
+recommendation, not as verified specs. Rack/2U 1500VA class only.
+
+| Model | VA/W | Outlets | Waveform | Runtime (from listings) | Price seen |
+|---|---|---|---|---|---|
+| CyberPower CP1500PFCRM2U (current pick) | 1500/1000 | 8, all battery | Sine | 10.2 min @500W, 3.1 @1000W | $360 |
+| Tripp Lite (Eaton) SMART1500RM2U | 1500/1350 (one listing says 1000W) | 8 | Pure sine | ~13 min half load, ~4.5 full | $780-1,330 |
+| APC SMT1500RM2U (Smart-UPS) | 1500/1000 | 6 | Sine | ~25.8 min half, ~7.2 full (quoted for the SMT1500RM2UC successor) | ~$775 new, ~$510 refurb |
+| APC SMC1500-2U(C) | 1500/1000 | 6 | Sine | not found | ~$790 |
+| APC BR1500MS2 (Back-UPS Pro, tower) | 1500/900 | not found | Sine (sources conflict) | not found | ~$300 |
+| Eaton 5P 1500 RT (2U) | 1440/1440 | 8 | not confirmed for the 2U | table unclear, ~56 min at an assumed 50W | $1,170-1,440 |
+
+What it says:
+
+- **Price is the whole story.** Every rack-class alternative is roughly 2-4x
+  the CP1500PFCRM2U for the same VA, so none would unseat it on value.
+  The only comparably priced one is the APC BR1500MS2 tower (~$300), which is
+  the desk's slot (where the CP1500PFCLCD is $240 with 12 outlets), and I
+  couldn't confirm its outlet count or battery-backed split.
+- **APC Smart-UPS has the best runtime** at mid load (about 2.5x the
+  CyberPower at half load, if the successor's figure carries over), but it
+  has only 6 outlets, so the cabinet's 6 devices would use all of them with
+  nothing spare, and it costs $775+.
+- **Tripp Lite SMART1500RM2U** matches on outlets and waveform but costs
+  2-3x and runs about the same as the CyberPower. Its NUT support exists
+  (Tripp Lite has contributed HID test results) but older models needed
+  `productid` workarounds, and the company is known for changing hardware
+  under the same model name.
+- **Eaton 5P** is a datacenter product at datacenter prices. Overkill for a
+  home cabinet drawing 90-125W.
+- **NUT:** Eaton 5P and Tripp Lite have `usbhid-ups` entries in the HCL. APC
+  Smart-UPS is widely run with NUT, but I didn't confirm the SMT1500RM2U
+  specifically from these searches. None of the searches confirmed
+  `shutdown.return` / `offdelay` behavior for any of them, which is the
+  piece the restart design depends on.
+
+Net: recommendation unchanged. A refurbished APC SMT1500RM2U (~$510) is the
+only alternative worth a second look, if you want APC's runtime and
+well-trodden NUT support, at the cost of 6 outlets and ~$150 more.
+
 ## Runtime
 
 CyberPower publishes runtime only at half and full load on datasheets.
