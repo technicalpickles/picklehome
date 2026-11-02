@@ -227,13 +227,13 @@ console (**review focus #11**), and answers the BIOS questions while
 nothing has changed. Needs a monitor and USB keyboard on the NUC. Downtime
 is ~15 minutes.
 
-- [ ] **Live USB.** The original install used `ubuntu-24.04.4-live-server-amd64.iso`
+- [x] **Live USB.** The original install used `ubuntu-24.04.4-live-server-amd64.iso`
       on a Memorex 15GB stick (see `homelab/docs/homelab_03_host_setup.md`
       for writing one from the Mac). If the stick turns up, reuse it.
       Otherwise re-flash. 24.04.4 matches the running release. The server
       ISO has no desktop: get a shell from the installer's Help menu
       ("Enter shell") or Alt-F2. It ships `lvm`.
-- [ ] **Open up the emergency shell.** Run `sudo systemctl edit emergency.service`,
+- [x] **Open up the emergency shell.** Run `sudo systemctl edit emergency.service`,
       and in the editor it opens, add:
 
       ```ini
@@ -247,7 +247,7 @@ is ~15 minutes.
       already has root via a live USB. It's a drop-in file under
       `/etc/systemd/system/<unit>.d/`, so Soak removes it cleanly. Also run
       `sudo passwd -S root` and note whether root is locked (`L`).
-- [ ] **Make GRUB visible.** Create `/etc/default/grub.d/99-disk-swap.cfg`
+- [x] **Make GRUB visible.** Create `/etc/default/grub.d/99-disk-swap.cfg`
       containing:
 
       ```sh
@@ -260,7 +260,7 @@ is ~15 minutes.
       file. That gets you a 5s menu with the older kernel and recovery mode.
       GRUB recovery mode is how the lost install password got reset, so that
       path has worked here before.
-- [ ] **Longer firmware timeout:** `sudo efibootmgr -t 5`. The Intel firmware
+- [x] **Longer firmware timeout:** `sudo efibootmgr -t 5`. The Intel firmware
       may ignore it; F10 at power-on works either way.
 - [ ] Reboot 1, plain: `sudo reboot`. The GRUB menu shows for 5s, then
       `uname -r` is `6.8.0-147-generic` and `docker ps` comes back. A
