@@ -110,6 +110,93 @@ Ruled out:
 - **CP1500PFCLCD for the lab** works if rack form factor doesn't matter
   ($120 cheaper), but with 6 battery outlets for 6 devices it has zero spare.
 
+## Other brands (2026-11-01)
+
+Checked Tripp Lite, APC, Eaton, Ubiquiti, Vertiv and Minuteman against the
+same bar as the CyberPower pick: at least 1000W, sine wave on battery, 6 or
+more battery-backed outlets, rack or tower, 120V, USB. Specs come from
+manufacturer datasheets and runtime charts, outlets and waveform included.
+Retail prices are from CDW, Newegg, Staples, Markertek, Esaitech, Saitech and
+CompSource, seen 2026-11-01. Datasheets are in
+`.scratch/ups-research/brands/<brand>/` with a `results.md` per brand.
+
+**Result: nothing beats the CP1500PFCRM2U.** Every alternative that clears the
+bar costs 1.3x to 3.6x as much, and none has the CyberPower's 8-of-8 battery
+outlets at a rack price.
+
+### Models that clear the bar
+
+| Model | Watts | Battery outlets | Runtime (min) at 100 / 200 / 300 / 500W | Price |
+|---|---|---|---|---|
+| **CyberPower CP1500PFCRM2U** (pick) | 1000 | 8 of 8 | 66.2 / 33.5 / 21.4 / 10.2 | $360 |
+| Eaton 5SC1500 (tower) | 1080 | 8 | 41 @216W, 25 @324W, 13 @540W | $463-474 |
+| Eaton 5P1500 (tower) | 1100 | 8 | 40 @228W, 27 @304W, 14 @535W | $648-665 |
+| APC SMT1500C (tower) | 1000 | 8 | 173 / 85 / 51 / 23 | $732 |
+| Vertiv PSI5-1500RT120 | 1350 | 6 | 110 @135W, 50 @270W, 34 @405W, 24 @540W | $907-948 |
+| APC SMT1500RM2UC | 1000 | 6 | 190 / 93 / 56 / 26 | $923-1,100 |
+| Tripp Lite SMART1500RM2U | 1350 | 8 | 99 / 50 / 31 / 17 | $944-988 |
+| Minuteman EXR1500RT2U | 1350 | 8 | 9 at half load, 2.5 at full | $1,221-1,303 |
+
+Notes on the numbers:
+
+- Eaton publishes runtime at its own load points, not at 100/200/300/500W, so
+  the Eaton rows list the nearest points it gives. None has a 100W point.
+- APC publishes no runtime on its datasheets. The APC rows are computed from
+  the curve on APC's runtime-graph page, and the SMT1500RM2UC's 26 min at
+  500W matches the 25.8 min half-load figure on Newegg's listing.
+- Vertiv's tool steps in 10% of rated load (135W), so there are no
+  100/200/300/500W points.
+- Tripp Lite's 1000W figure on some retailer listings is wrong. The datasheet
+  says 1350W.
+- The Eaton 5P1500 tower is not the 2U "5P 1500" from the first pass. The old
+  2U 5P1500RT is now the 5PX1500RT.
+
+### Models that fail
+
+- **Under 1000W:** APC BR1500MS2 and BR1350MS (900W, 810W), APC SMC1500
+  (900W), Eaton 5S1500LCD (900W), Tripp Lite SMART1500LCD and OMNI1500LCD,
+  Panamax MB1500, Furman F1500-UPS.
+- **Fewer than 6 battery outlets:** Eaton 5P1500R in 1U (5 outlets),
+  Ubiquiti UPS Tower and UPS 2U (4-5 battery outlets, simulated sine).
+- **No USB:** all three Ubiquiti UniFi UPS models (Ethernet only), so no
+  `usbhid-ups` and no `shutdown.return` path from the NUC. The UPS 2U Pro
+  (8 of 8 battery outlets, pure sine, 1920W) costs $679 and is sold out.
+- **Sine wave not published:** Eaton 5PX1500RTG2 (Eaton gives only THD
+  limits).
+- **Not 120V:** Tripp Lite SMX1500 rack models, Eaton Ellipse PRO 1600 and
+  5P1550G.
+
+### NUT
+
+No model here has a `shutdown.return` result from real hardware, including the
+CyberPower. What the sources show:
+
+- **CyberPower CP1500PFCRM2U:** not individually listed, same `usbhid-ups`
+  family as the confirmed CP1500PFCLCD.
+- **APC SMT1500RM2UC:** not listed (nearest sibling SMT1500I is level 3). An
+  `upsc` dump from this model (nut#1868) shows `ups.delay.shutdown` but no
+  `ups.delay.start`. `usbhid-ups` offers `shutdown.return` only when both
+  exist, so this model may not offer it over USB.
+- **Tripp Lite SMART1500RM2U:** listed on `usbhid-ups` at level 3 for USB
+  product ID 3015. An older variant with ID 0001 is `tripplite_usb` and
+  `usbhid-ups` rejects it, and Tripp Lite does not publish which ships.
+  nut#776 (repeated disconnect and reconnect) is open since 2020.
+- **Eaton 5P / 5PX / 5SC:** family rows are `usbhid-ups` level 5, exact models
+  unlisted. nut#2101 reports a "Fatal EEPROM fault" alarm on a new 5SC1500.
+- **Vertiv GXT5:** the stable 2.8.5 driver maps 8 of 83 entries. A dedicated
+  subdriver is merged to master only.
+
+The restart design needs `shutdown.return`, so run `upscmd -l` on whichever
+unit arrives before relying on it.
+
+### Verdict
+
+Keep the CP1500PFCRM2U. Next best by price is the Eaton 5SC1500 tower at
+$463-474, which matches on outlets and runtime class, but it is a tower, not
+rack, and has the open fault-alarm issue. The Tripp Lite SMART1500RM2U runs
+longer at every point (99 vs 66.2 min at 100W) for 2.6x the price, plus
+46.5 lb and the PID 0001 risk.
+
 ## Runtime
 
 CyberPower publishes runtime only at half and full load on datasheets.
