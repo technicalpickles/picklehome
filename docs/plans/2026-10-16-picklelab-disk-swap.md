@@ -279,13 +279,39 @@ is ~15 minutes.
       boot) and change nothing. Exit, then with the live USB plugged in, hit
       **F10**. Note whether the menu offers the USB stick (this answers the
       Test boot fallback question). Boot it.
-- [ ] In the live shell: `lvm vgchange -ay vg0`,
+      Not done 2026-11-02: the Kinesis Freestyle (Mac) never got a key
+      through to the firmware at power-on, so neither the BIOS settings
+      nor F10 were reached. Booted the stick with `efibootmgr` instead
+      (next item). Still open: the BIOS photos and whether F10 lists USB,
+      worth retrying with a plain wired keyboard in a back-panel port
+      before Test boot, since F10 is the fallback there.
+- [x] Boot the live USB without F10 (done 2026-11-02). With the stick in,
+      its device is `sdc` and its ESP is partition 2:
+
+      ```sh
+      sudo efibootmgr -c -d /dev/sdc -p 2 -L "Live USB" -l '\EFI\boot\bootx64.efi'
+      sudo efibootmgr -o 0007,0001,0000,0004   # put BootOrder back first
+      sudo efibootmgr -n <new entry number>
+      sudo reboot
+      ```
+
+      `-c` puts the new entry at the front of `BootOrder`, so restore the
+      order before rebooting or every boot goes to the stick. `-n` is
+      one-shot. Afterward remove it: `sudo efibootmgr -B -b <number>`.
+      The firmware also auto-lists plugged-in USB drives (the Memorex
+      showed as `UEFI : USB : Memorex ...`), a good sign F10 would offer it.
+- [x] In the live shell: `lvm vgchange -ay vg0`,
       `mount -o ro /dev/vg0/root /mnt`, `ls /mnt/etc`, then `umount /mnt`
       and `lvm vgchange -an vg0`. That proves the rescue path works on this
-      hardware before you need it.
-- [ ] Pull the stick and reboot. It comes back normally on the SanDisk.
+      hardware before you need it. (Done 2026-11-02, from the installer's
+      shell. The boot menu said "Try or Install Ubuntu Server".)
+- [x] Pull the stick and reboot. It comes back normally on the SanDisk.
+      After the reboot the firmware had reshuffled `BootOrder` to
+      `0007,0001,000A,0004,0000` (it added the PNY's USB entry). The first
+      two are unchanged, so harmless.
 - [ ] Record the BIOS findings in `findings.md` (USB in F10: yes/no,
-      Fast Boot, Legacy/CSM).
+      Fast Boot, Legacy/CSM). Partly recorded 2026-11-02; the F10, Fast
+      Boot and Legacy/CSM answers are still open (see the previous note).
 
 ### Preflight
 

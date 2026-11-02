@@ -97,6 +97,13 @@ copy. The cost is more manual boot fixup, which is where the risk sits.
       rewritten? (Fallback path `\EFI\BOOT\BOOTX64.EFI` on the new ESP is the
       safety net.) The runbook's Rehearsal reboot stage answers the first
       half with a live USB from the F10 menu before anything changes.
+      Partly answered 2026-11-02: the NUC does boot a live USB, via an
+      `efibootmgr` entry plus `BootNext` (no F10 needed), and the firmware
+      lists plugged-in USB drives as boot options on its own. F10 itself
+      was not reached: the Kinesis Freestyle (Mac) keyboard never got a key
+      through at power-on. Retry with a plain wired keyboard in a
+      back-panel USB port. The PNY in the enclosure also shows as a USB
+      boot entry, so a post-swap boot-from-`sdb` test looks feasible.
 - [x] Full `/etc/fstab` and LVM state: captured above. No sudo needed,
       `sudo -n /usr/local/sbin/disk-report` is on the passwordless list and
       prints `vgs`/`lvs`/`pvs`.
