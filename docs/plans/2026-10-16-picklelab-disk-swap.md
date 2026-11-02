@@ -227,13 +227,13 @@ console (**review focus #11**), and answers the BIOS questions while
 nothing has changed. Needs a monitor and USB keyboard on the NUC. Downtime
 is ~15 minutes.
 
-- [ ] **Live USB.** The original install used `ubuntu-24.04.4-live-server-amd64.iso`
+- [x] **Live USB.** The original install used `ubuntu-24.04.4-live-server-amd64.iso`
       on a Memorex 15GB stick (see `homelab/docs/homelab_03_host_setup.md`
       for writing one from the Mac). If the stick turns up, reuse it.
       Otherwise re-flash. 24.04.4 matches the running release. The server
       ISO has no desktop: get a shell from the installer's Help menu
       ("Enter shell") or Alt-F2. It ships `lvm`.
-- [ ] **Open up the emergency shell.** Run `sudo systemctl edit emergency.service`,
+- [x] **Open up the emergency shell.** Run `sudo systemctl edit emergency.service`,
       and in the editor it opens, add:
 
       ```ini
@@ -247,7 +247,7 @@ is ~15 minutes.
       already has root via a live USB. It's a drop-in file under
       `/etc/systemd/system/<unit>.d/`, so Soak removes it cleanly. Also run
       `sudo passwd -S root` and note whether root is locked (`L`).
-- [ ] **Make GRUB visible.** Create `/etc/default/grub.d/99-disk-swap.cfg`
+- [x] **Make GRUB visible.** Create `/etc/default/grub.d/99-disk-swap.cfg`
       containing:
 
       ```sh
@@ -260,27 +260,58 @@ is ~15 minutes.
       file. That gets you a 5s menu with the older kernel and recovery mode.
       GRUB recovery mode is how the lost install password got reset, so that
       path has worked here before.
-- [ ] **Longer firmware timeout:** `sudo efibootmgr -t 5`. The Intel firmware
+- [x] **Longer firmware timeout:** `sudo efibootmgr -t 5`. The Intel firmware
       may ignore it; F10 at power-on works either way.
-- [ ] Reboot 1, plain: `sudo reboot`. The GRUB menu shows for 5s, then
+- [x] Reboot 1, plain: `sudo reboot`. The GRUB menu shows for 5s, then
       `uname -r` is `6.8.0-147-generic` and `docker ps` comes back. A
       problem here is the kernel, not the disk: pick 146 from the menu, and
       fix it before going on.
-- [ ] Optional, cheap: from the GRUB menu, `e`, add
+- [x] Optional, cheap: from the GRUB menu, `e`, add
       `systemd.unit=emergency.target` to the `linux` line, Ctrl-X. You
       should land in a root shell without a password prompt. `reboot`.
+      Done 2026-11-02: it works. But the NUC's GRUB edit prompt is
+      laggy (no shortcuts, delay between keypresses), so don't plan on
+      typing there. In a real failure, pick the recovery-mode entry under
+      Advanced options instead: no typing, and it runs `rescue.service`,
+      which has the same override. Untested until someone picks it.
 - [ ] Reboot 2, into the firmware: `sudo systemctl reboot --firmware-setup`.
       Photograph the boot settings (boot order, Fast Boot, UEFI/Legacy, USB
       boot) and change nothing. Exit, then with the live USB plugged in, hit
       **F10**. Note whether the menu offers the USB stick (this answers the
       Test boot fallback question). Boot it.
-- [ ] In the live shell: `lvm vgchange -ay vg0`,
+      Not done 2026-11-02: the Kinesis Freestyle (Mac) never got a key
+      through to the firmware at power-on, so neither the BIOS settings
+      nor F10 were reached. Booted the stick with `efibootmgr` instead
+      (next item). Still open: the BIOS photos and whether F10 lists USB,
+      worth retrying with a plain wired keyboard in a back-panel port
+      before Test boot, since F10 is the fallback there.
+- [x] Boot the live USB without F10 (done 2026-11-02). With the stick in,
+      its device is `sdc` and its ESP is partition 2:
+
+      ```sh
+      sudo efibootmgr -c -d /dev/sdc -p 2 -L "Live USB" -l '\EFI\boot\bootx64.efi'
+      sudo efibootmgr -o 0007,0001,0000,0004   # put BootOrder back first
+      sudo efibootmgr -n <new entry number>
+      sudo reboot
+      ```
+
+      `-c` puts the new entry at the front of `BootOrder`, so restore the
+      order before rebooting or every boot goes to the stick. `-n` is
+      one-shot. Afterward remove it: `sudo efibootmgr -B -b <number>`.
+      The firmware also auto-lists plugged-in USB drives (the Memorex
+      showed as `UEFI : USB : Memorex ...`), a good sign F10 would offer it.
+- [x] In the live shell: `lvm vgchange -ay vg0`,
       `mount -o ro /dev/vg0/root /mnt`, `ls /mnt/etc`, then `umount /mnt`
       and `lvm vgchange -an vg0`. That proves the rescue path works on this
-      hardware before you need it.
-- [ ] Pull the stick and reboot. It comes back normally on the SanDisk.
+      hardware before you need it. (Done 2026-11-02, from the installer's
+      shell. The boot menu said "Try or Install Ubuntu Server".)
+- [x] Pull the stick and reboot. It comes back normally on the SanDisk.
+      After the reboot the firmware had reshuffled `BootOrder` to
+      `0007,0001,000A,0004,0000` (it added the PNY's USB entry). The first
+      two are unchanged, so harmless.
 - [ ] Record the BIOS findings in `findings.md` (USB in F10: yes/no,
-      Fast Boot, Legacy/CSM).
+      Fast Boot, Legacy/CSM). Partly recorded 2026-11-02; the F10, Fast
+      Boot and Legacy/CSM answers are still open (see the previous note).
 
 ### Preflight
 
@@ -682,6 +713,7 @@ UUID on your phone during Test boot and Swap.
 | GRUB | `grub>` or `grub rescue>` | The ESP stub can't find `/boot` (**review focus #1**). Run the GRUB commands below, then fix the stub with `grub-install` once booted |
 | initramfs | `(initramfs)` busybox prompt | `cat /proc/partitions` (is the disk seen at all? if not, it's a driver or cable problem), then `lvm vgchange -ay vg0` and `exit` |
 | systemd | Emergency shell | `journalctl -xb`, usually a bad fstab line. Fix it, `systemctl daemon-reload`, `reboot` |
+| systemd, and the machine won't reach a shell on its own | Hang, or a boot that never finishes | At the GRUB menu pick Advanced options, then the recovery-mode entry (arrow keys and Enter). Don't edit the `linux` line with `e`: the console is too laggy to type on (found 2026-11-02) |
 | Boots, but no ssh or missing containers | Login prompt on the console | Log in on the console, `systemctl --failed`, compare `docker ps` to the Preflight list |
 | None of that gets anywhere | | Live USB (the Rehearsal reboot steps), mount the LVs, fix from there. Or [Rollback](#rollback) |
 
