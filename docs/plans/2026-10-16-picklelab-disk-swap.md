@@ -108,7 +108,7 @@ change.
   ls -l /dev/disk/by-id/ | grep -v part   # find the two whole-disk links
   NEW=/dev/disk/by-id/usb-PNY_...-0:0     # the PNY, while it's in the enclosure
   OLD=/dev/disk/by-id/ata-SanDisk_...     # the SanDisk, while it's internal
-  lsblk -dno SIZE,TRAN "$NEW" "$OLD"      # guard: 931.5G usb, then 111.8G sata
+  lsblk -dno SIZE,TRAN "$NEW" "$OLD"      # guard: 111.8G sata and 931.5G usb (device order, not argument order)
   ```
 
   If the guard shows anything else, the variables are wrong: stop. Both links
@@ -318,7 +318,7 @@ is ~15 minutes.
 Nothing here touches the SanDisk's data: pausing timers, backups, a package
 install, a Docker prune, and tests that write only to the blank PNY.
 
-- [ ] Set `$NEW` and `$OLD` and run the guard (see
+- [x] Set `$NEW` and `$OLD` and run the guard (see
       [Global constraints](#global-constraints)). Also confirm the PNY has no
       partitions: `lsblk $NEW` shows one line, no children.
 - [ ] Pause anything that writes on a schedule:
@@ -326,15 +326,22 @@ install, a Docker prune, and tests that write only to the blank PNY.
       `disable`, not `stop`, so they stay off through the reboots in
       Test boot and Swap. They stay off until Soak (backups run by
       hand with `just backup-now` in between). Check with
-      `systemctl list-unit-files <same list>`: all `disabled`.
-- [ ] Run a fresh backup (on the Mac): `just backup-now`, then
+      `systemctl list-unit-files <same list>`: all `disabled`. `disable`
+      also deletes the `backup.timer` and `docker-prune.timer` symlinks
+      (their units live under `/opt/homelab/...`), so Soak re-enables them
+      by path: `sudo systemctl enable --now
+      /opt/homelab/homelab/services/backup/backup.timer
+      /opt/homelab/homelab/services/disk-hygiene/docker-prune.timer`.
+- [x] Run a fresh backup (on the Mac): `just backup-now`, then
       `just backup-snapshots` shows one from today.
-- [ ] Prune so less gets copied and there's room for the tarball:
+- [x] Prune so less gets copied and there's room for the tarball:
       `sudo /opt/homelab/homelab/services/disk-hygiene/docker-prune.sh`
-      (up to ~16G). It's the same script the weekly timer runs: dangling
+      (it freed ~1G on 2026-11-02, not 16G; the real space was the
+      rootless `ci` daemon's leaked `brineworks-venv-*` volumes, which this
+      script never touches). It's the same script the weekly timer runs: dangling
       images and build cache only, never `-a` or `--volumes`, so nothing a
       running or stopped container needs.
-- [ ] Copy off-box everything the box can't rebuild from the repo:
+- [x] Copy off-box everything the box can't rebuild from the repo:
       `/srv/backups/restic`, `/etc`, `/var/lib/tailscale`,
       `/srv/docker/volumes`, `/home/ci/.config`. Check the size first
       (`sudo du -sch <paths>`) against `df -h /srv`, then write it on
@@ -343,31 +350,31 @@ install, a Docker prune, and tests that write only to the blank PNY.
 
       ```bash
       # on picklelab
-      sudo tar -cf /srv/pre-swap.tar <paths> && sudo chown "$USER" /srv/pre-swap.tar
+      sudo tar -cf /var/tmp/pre-swap.tar <paths> && sudo chown "$USER" /var/tmp/pre-swap.tar
       # on the Mac
-      scp picklelab:/srv/pre-swap.tar ~/picklelab-pre-swap-2026-10-XX.tar
+      scp picklelab:/var/tmp/pre-swap.tar ~/picklelab-pre-swap-2026-10-XX.tar
       tar -tf ~/picklelab-pre-swap-2026-10-XX.tar | cut -d/ -f1-3 | sort -u
       # back on picklelab, once the Mac copy lists all five
-      rm /srv/pre-swap.tar
+      rm /var/tmp/pre-swap.tar
       ```
 
       Done when the Mac copy lists all five paths. It holds secrets
       (Tailscale node key, `/etc/shadow`), so keep it out of synced folders
       and delete it after Soak.
-- [ ] Save metadata off-box too: `sudo vgcfgbackup -f /tmp/vg0.vgcfg vg0`
+- [x] Save metadata off-box too: `sudo vgcfgbackup -f /tmp/vg0.vgcfg vg0`
       (LVM's description of `vg0`, for rebuilding it by hand),
       `sudo sgdisk --backup=/tmp/sandisk.gpt $OLD` (a copy of the SanDisk's
       partition table; both are read-only on the disk), `sudo efibootmgr -v`,
       `sudo disk-report`, `cat /etc/fstab`, and the container list
       (`docker ps --format '{{.Names}}' | sort`, which is what later stages
       compare against). `scp` them to the Mac the same way.
-- [ ] **SMART health on the PNY.** `smartctl` isn't installed:
+- [x] **SMART health on the PNY.** `smartctl` isn't installed:
       `sudo apt-get install smartmontools` (on the passwordless list). Then
       `sudo smartctl -d sat -H -A $NEW` (passed, zero reallocated/pending
       sectors) and `sudo smartctl -d sat -t short $NEW`, with the result in
       `-l selftest` a few minutes later. If the bridge won't pass SMART
       through, note it and rely on the load test.
-- [ ] **Load-test the USB bridge (review focus #7)** while the PNY is still
+- [x] **Load-test the USB bridge (review focus #7)** while the PNY is still
       blank. **Destructive** to whatever `$NEW` points at: it writes 30GB of
       zeros over the start of the disk. Guard: rerun
       `lsblk -dno SIZE,TRAN "$NEW"` right before and see `931.5G usb`. Safe
@@ -389,18 +396,24 @@ install, a Docker prune, and tests that write only to the blank PNY.
 
 ### Partition new
 
+Scripts for the destructive Preflight and Partition steps live in
+`homelab/scripts/disk-swap/` (`load-test.sh`, `partition-new.sh`, shared
+guard in `lib.sh`). `scp` them to `/var/tmp` on picklelab and run them with
+`NEW` **exported** (`export NEW OLD`), since they run as child processes.
+They need `gdisk` and `dosfstools` (`sudo apt-get install gdisk dosfstools`).
+
 **Destructive** to `$NEW` only. Guard: `lsblk -dno SIZE,TRAN "$NEW"` shows
 `931.5G usb`. Safe because the PNY holds nothing but the load test's zeros.
 
-- [ ] `sudo sgdisk -n1:0:+1G -t1:ef00 -n2:0:+1G -t2:8300 -n3:0:0 -t3:8e00 "$NEW"`
+- [x] `sudo sgdisk -n1:0:+1G -t1:ef00 -n2:0:+1G -t2:8300 -n3:0:0 -t3:8e00 "$NEW"`
       writes a fresh GPT with the three partitions from
       [Target layout](#target-layout) (`ef00` ESP, `8300` Linux, `8e00` LVM).
       Then `sudo udevadm settle`, so the `${NEW}-partN` links exist before
       the next step uses them.
-- [ ] `sudo mkfs.vfat -F32 ${NEW}-part1`, `sudo mkfs.ext4 -L boot ${NEW}-part2`.
+- [x] `sudo mkfs.vfat -F32 ${NEW}-part1`, `sudo mkfs.ext4 -L boot ${NEW}-part2`.
       New filesystems get new UUIDs, which is the point (see the
       no-duplicate-UUIDs rule in [Global constraints](#global-constraints)).
-- [ ] Verify: `lsblk -f $NEW` shows vfat / ext4 / no fs on part3.
+- [x] Verify: `lsblk -f $NEW` shows vfat / ext4 / no fs on part3.
 - [ ] Fill in the [When it won't boot](#when-it-wont-boot) cheat sheet with
       the new `/boot` UUID (`blkid -s UUID -o value ${NEW}-part2`) and keep
       it somewhere you can read it while the box is down (your phone, not
