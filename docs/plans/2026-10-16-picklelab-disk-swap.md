@@ -540,17 +540,22 @@ in between (upgrades are paused anyway).
 Two reboots, a few minutes each. Proves the PNY boots on its
 own while the SanDisk is still internal and is the default.
 
-- [ ] NVRAM path: `sudo efibootmgr -n <pny entry>` (the `ubuntu` entry's
+- [x] NVRAM path (passed 2026-11-03): `sudo efibootmgr -n <pny entry>` (the `ubuntu` entry's
       number from `sudo efibootmgr`), then reboot. Why this is safe:
       `BootNext` applies to one boot only. The firmware clears it as soon as
       it uses it, so if the PNY fails, the next power cycle follows
       `BootOrder` back to the SanDisk. After: `findmnt /boot/efi` is the PNY's
       part1, and containers come back (compare to the Preflight list).
-- [ ] Removable fallback path: reboot and pick the PNY's generic or USB
+- [x] Removable fallback path: reboot and pick the PNY's generic or USB
       entry from the F10 boot menu, which uses `EFI/BOOT/BOOTX64.EFI`.
       Same checks. If the BIOS won't offer USB here, note it. In that case the
       fallback only gets tested for real during Swap.
-- [ ] If either path *tries* and fails, reboot with nothing chosen: BootOrder
+      Result 2026-11-03: no F10 needed, `efibootmgr -n` on the firmware's
+      `USB : PNY ...` BBS entry gives a blank screen, and a power cycle
+      lands on the SanDisk via `BootOrder`. So the firmware doesn't boot the
+      PNY by that route over USB. Only the NVRAM entry (by PARTUUID) is
+      proven; the removable path is untested until Swap.
+- [x] If either path *tries* and fails, reboot with nothing chosen: BootOrder
       lands on the SanDisk entry, and you debug from there.
 - [ ] Once both pass: `sudo efibootmgr -o <pny>,<sandisk>,...` so the PNY is
       the default going into the swap.
