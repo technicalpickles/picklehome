@@ -426,12 +426,18 @@ doesn't stop the move (see the practice notes below), but run it under
 `tmux` or `screen` anyway so you keep the progress output and the shell
 with `$NEW`/`$OLD` set.
 
-- [ ] `sudo pvcreate ${NEW}-part3 && sudo vgextend vg0 ${NEW}-part3`.
+- [x] `sudo pvcreate ${NEW}-part3 && sudo vgextend vg0 ${NEW}-part3`.
       This labels the PNY's third partition as a PV and adds it to `vg0` as
       empty space. Nothing moves yet, and `vgreduce` undoes it.
-- [ ] Move one LV at a time so an abort only strands one of them:
-      `sudo pvmove -i 60 -n root ${OLD}-part4 ${NEW}-part3`, then the same
+- [x] Move one LV at a time so an abort only strands one of them:
+      `sudo pvmove -i 60 -n root ${OLD}-part4 $P`, then the same
       with `-n srv` (`-i 60` prints progress every 60s).
+      **Gotcha:** `pvmove` parses `name:range`, so the colon in the PNY's
+      `usb-...-0:0-part3` name makes it fail with `Physical Volume ... not
+      found in Volume Group`. Use a colon-free link for the PNY in `pvmove`
+      (and in the reverse `pvmove` rollbacks):
+      `P=/dev/disk/by-id/wwn-<wwn of the PNY>-part3`, and check
+      `readlink -f $P; sudo pvs $P` shows the PNY's PV before using it.
       Why this is safe on a live system: `pvmove` mirrors each chunk to the
       new PV, switches the LV over to the copy, and only then frees the old
       chunk, checkpointing in LVM metadata as it goes. A crash or dropped ssh
@@ -457,9 +463,9 @@ with `$NEW`/`$OLD` set.
       - **Both Rollback rows for this stage** (reverse `pvmove`, and
         `pvcreate` + `vgextend` + reverse `pvmove` after a `pvremove`) worked
         end to end with checksums intact.
-- [ ] Verify: `sudo pvs` shows `${OLD}-part4` with PFree == PSize (fully
+- [x] Verify: `sudo pvs` shows `${OLD}-part4` with PFree == PSize (fully
       empty).
-- [ ] `sudo vgreduce vg0 ${OLD}-part4 && sudo pvremove ${OLD}-part4`.
+- [x] `sudo vgreduce vg0 ${OLD}-part4 && sudo pvremove ${OLD}-part4`.
       `vgreduce` takes the SanDisk out of `vg0`, and refuses if anything is
       still allocated on it, so it doubles as a check. `pvremove` wipes the
       LVM label. That matters: without it, the SanDisk carries a stale `vg0`
@@ -474,13 +480,13 @@ with `$NEW`/`$OLD` set.
 Do the `/boot` copy and the mount switch back to back, so nothing can land
 in between (upgrades are paused anyway).
 
-- [ ] Copy `/boot`: mount `${NEW}-part2` at `/mnt/newboot`,
+- [x] Copy `/boot`: mount `${NEW}-part2` at `/mnt/newboot`,
       `sudo rsync -aHAXx /boot/ /mnt/newboot/`. The `-x` keeps rsync from
       descending into the `/boot/efi` mount, so the copy gets an empty `efi`
       dir to mount the new ESP on.
-- [ ] Copy the ESP: mount `${NEW}-part1` at `/mnt/newefi`,
+- [x] Copy the ESP: mount `${NEW}-part1` at `/mnt/newefi`,
       `sudo rsync -rt /boot/efi/ /mnt/newefi/`.
-- [ ] Switch the live mounts: unmount `/mnt/*`, `umount /boot/efi /boot`,
+- [x] Switch the live mounts: unmount `/mnt/*`, `umount /boot/efi /boot`,
       `sudo cp /etc/fstab /etc/fstab.pre-swap`, then edit the `/boot` and
       `/boot/efi` lines in `/etc/fstab` to the new UUIDs
       (`blkid ${NEW}-part1 ${NEW}-part2`). Leave the other lines alone.
@@ -491,16 +497,16 @@ in between (upgrades are paused anyway).
       kernel and grub upgrades, which are paused. If `mount -a` fails, the
       old lines are in `fstab.pre-swap`, and the SanDisk's partitions are
       untouched.
-- [ ] `sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu`
+- [x] `sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu`
       and `sudo update-grub`. `grub-install` writes into whatever ESP is
       mounted at `/boot/efi` (the PNY's now, after the step above) and
       creates an NVRAM entry for it. `update-grub` rewrites
       `/boot/grub/grub.cfg` on the PNY's `/boot`. Neither touches the
       SanDisk's partitions, since they're no longer mounted.
-- [ ] **Review focus #1 check:** `grep -i uuid /boot/efi/EFI/ubuntu/grub.cfg`
+- [x] **Review focus #1 check:** `grep -i uuid /boot/efi/EFI/ubuntu/grub.cfg`
       shows the *new* `/boot` UUID, not the SanDisk's (the old `/boot` line in
       `/etc/fstab.pre-swap`, `238a1829-...`).
-- [ ] **Review focus #5:** `grub-install` just deleted the SanDisk's `ubuntu`
+- [x] **Review focus #5:** `grub-install` just deleted the SanDisk's `ubuntu`
       entry. Recreate it:
       `sudo efibootmgr -c -d "$OLD" -p 1 -L ubuntu-sandisk -l '\EFI\ubuntu\shimx64.efi'`
       (`-d`/`-p` name the SanDisk's partition 1, its ESP; `-l` is the shim
@@ -514,15 +520,18 @@ in between (upgrades are paused anyway).
       the default, and the PNY is only tried when asked. The SanDisk's
       `/boot` (`sda3`) is frozen at copy time, which is fine as long as
       upgrades stay paused.
-- [ ] **Review focus #6:** `sudo dpkg-reconfigure grub-efi-amd64-signed`
+- [x] **Review focus #6:** `sudo dpkg-reconfigure grub-efi-amd64-signed`
       (or `grub-efi-amd64`, whichever owns the question on this box). On this
       minimized install there's no `dialog` package, so it asks as a plain
       text prompt with numbered choices (see `homelab_03_host_setup.md`).
-      Pick only the PNY's ESP: the `usb-PNY_...-part1` path. It may also
+      Pick only the PNY's ESP. Done 2026-11-02 with `debconf-set-selections`
+      and a `/dev/disk/by-partuuid/<PNY ESP PARTUUID>` path rather than
+      `usb-PNY_...-part1`, since the by-id name changes at Swap and the
+      PARTUUID doesn't. It may also
       reinstall grub to the ESP you pick, which is the same thing the
       `grub-install` above did. Verify with
       `sudo debconf-show grub-efi-amd64 | grep install_devices`.
-- [ ] Confirm the fallback path is on the new ESP: `/boot/efi/EFI/BOOT/`
+- [x] Confirm the fallback path is on the new ESP: `/boot/efi/EFI/BOOT/`
       has `BOOTX64.EFI` and `fbx64.efi`, and `/boot/efi/EFI/ubuntu/BOOTX64.CSV`
       exists (`fbx64` uses it to rebuild a missing NVRAM entry).
 
