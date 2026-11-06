@@ -1,0 +1,19 @@
+[Unit]
+Description=Woodpecker agent switch (prefer the laptop agent while it is online)
+After=network-online.target docker.service woodpecker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=60
+WorkingDirectory=/opt/homelab/homelab/services/woodpecker
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+# Optional: put SWITCH_ARGS=--dry-run here to log intended changes without making
+# them (rollout phase 1). Absent file means live.
+EnvironmentFile=-/etc/opt/homelab/woodpecker-agent-switch.env
+# WOODPECKER_API_TOKEN resolves via `op run` from .env.op.template (written by
+# deploy.sh). --no-deps: the run joins the already-running ts-woodpecker netns and
+# must not start or recreate any other part of the stack; if that sidecar is down
+# the run fails, which is right because the API is down too.
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/woodpecker/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml --profile switch run --rm --no-deps woodpecker-agent-switch $SWITCH_ARGS

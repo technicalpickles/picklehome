@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "created": 1781972980,
+    "updated": 1781972980,
+    "name": "",
+    "owner_id": -1,
+    "last_contact": 0,
+    "last_work": 0,
+    "platform": "",
+    "backend": "",
+    "capacity": -1,
+    "version": "",
+    "no_schedule": false,
+    "custom_labels": null,
+    "org_id": -1,
+    "filters": null
+  },
+  {
+    "id": 20,
+    "created": 1789943271,
+    "updated": 1791612465,
+    "name": "woodpecker",
+    "owner_id": -1,
+    "last_contact": 1791612465,
+    "last_work": 1791517635,
+    "platform": "linux/amd64",
+    "backend": "docker",
+    "capacity": 2,
+    "version": "next-128113e5ef",
+    "no_schedule": false,
+    "custom_labels": null,
+    "org_id": -1,
+    "filters": null
+  },
+  {
+    "id": 23,
+    "created": 1792335814,
+    "updated": 1792352159,
+    "name": "woodpecker",
+    "owner_id": -1,
+    "last_contact": 1792352159,
+    "last_work": 1792350020,
+    "platform": "linux/amd64",
+    "backend": "docker",
+    "capacity": 2,
+    "version": "next-9f5568c20a",
+    "no_schedule": false,
+    "custom_labels": null,
+    "org_id": -1,
+    "filters": null
+  },
+  {
+    "id": 24,
+    "created": 1792339100,
+    "updated": 1792352154,
+    "name": "woodpecker-agent-vm",
+    "owner_id": 1,
+    "last_contact": 1792352154,
+    "last_work": 1792339613,
+    "platform": "linux/arm64",
+    "backend": "docker",
+    "capacity": 2,
+    "version": "next-9f5568c20a",
+    "no_schedule": false,
+    "custom_labels": {
+      "host": "laptop"
+    },
+    "org_id": 1,
+    "filters": {
+      "!host": "laptop"
+    }
+  }
+]
