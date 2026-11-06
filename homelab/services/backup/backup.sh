@@ -61,6 +61,16 @@ dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES
 # source of truth -- anything worth keeping gets moved to a real vault/repo/
 # service during the session. See docs/plans/2026-07-21-open-terminal-design.md.
 #
+# Exclude /srv/data/brineworks-server/keyring: the server's keyring (root 700,
+# live secrets), same deliberate gap as the openclaw secrets below.
+#
+# Exclude /srv/data/open-webui/openclaw-bridge: the OpenClaw pipe's state dir
+# (device identity and token, chat history ledger). Live pairing secrets, same
+# gap as above. Losing it only means re-pairing: `just install-openclaw-pipe`.
+#
+# Exclude /srv/data/open-webui/.cache and /srv/data/open-webui/cache/embedding:
+# pip's cache and the downloaded embedding model, re-downloaded on demand.
+#
 # Exclude /srv/data/openclaw/ssh and /srv/data/openclaw/gog-keyring: live
 # secrets (deploy keys, OAuth keyring) that reapply-acls.sh deliberately does
 # NOT grant the backup user read access to -- see that script's comment.
@@ -70,6 +80,10 @@ dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES
 echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
     --exclude "$DATA_DIR/brineworks-server/db" \
+    --exclude "$DATA_DIR/brineworks-server/keyring" \
+    --exclude "$DATA_DIR/open-webui/openclaw-bridge" \
+    --exclude "$DATA_DIR/open-webui/.cache" \
+    --exclude "$DATA_DIR/open-webui/cache/embedding" \
     --exclude "$DATA_DIR/open-terminal" \
     --exclude "$DATA_DIR/openclaw/ssh" \
     --exclude "$DATA_DIR/openclaw/gog-keyring"

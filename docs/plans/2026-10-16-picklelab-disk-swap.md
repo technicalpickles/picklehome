@@ -33,13 +33,13 @@ In order. Each one is a checklist [below](#stages), done by hand.
 | Stage | What it does | Downtime |
 |---|---|---|
 | [Rehearsal reboot](#rehearsal-reboot) | Boot the pending kernel, prep console access, prove the live USB works | ~15 min |
-| [Preflight](#preflight) | Pause timers, back up off-box, health- and load-test the PNY | none |
+| [Preflight](#preflight) | Pause upgrade and prune timers (nightly backups stay on until Swap), back up off-box, health- and load-test the PNY | none |
 | [Partition new](#partition-new) | Partition and format the PNY | none |
 | [Migrate LVM](#migrate-lvm) | `pvmove` root and srv onto the PNY while running | none (runs for a while) |
 | [Boot fixup](#boot-fixup) | Copy `/boot` and the ESP, point GRUB and fstab at the PNY | none |
 | [Test boot](#test-boot) | Prove the PNY boots on its own, SanDisk still the fallback | two short reboots |
-| [Swap](#swap) | Physically put the PNY in the bay | ~15-20 min |
-| [Soak](#soak) | Run a few days on the PNY, then turn timers back on. Ends the easy rollback | none |
+| [Swap](#swap) | Final backup and pause `backup.timer`, physically put the PNY in the bay, resume backups | ~15-20 min |
+| [Soak](#soak) | Run a few days on the PNY (nightly backups running), then turn the other timers back on. Ends the easy rollback | none |
 | [Disk monitor mounts](#disk-monitor-mounts) | Code PR so disk alerts cover the new LVs. Any time before Docker split | none |
 | [Docker split](#docker-split) | Move containerd and CI Docker onto their own LVs | a few minutes |
 | [Grow](#grow) | Grow root and srv | none |
@@ -322,16 +322,20 @@ install, a Docker prune, and tests that write only to the blank PNY.
       [Global constraints](#global-constraints)). Also confirm the PNY has no
       partitions: `lsblk $NEW` shows one line, no children.
 - [ ] Pause anything that writes on a schedule:
-      `sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades docker-prune.timer backup.timer`.
+      `sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades docker-prune.timer`.
       `disable`, not `stop`, so they stay off through the reboots in
-      Test boot and Swap. They stay off until Soak (backups run by
-      hand with `just backup-now` in between). Check with
+      Test boot and Swap. They stay off until Soak. Check with
       `systemctl list-unit-files <same list>`: all `disabled`. `disable`
-      also deletes the `backup.timer` and `docker-prune.timer` symlinks
-      (their units live under `/opt/homelab/...`), so Soak re-enables them
-      by path: `sudo systemctl enable --now
-      /opt/homelab/homelab/services/backup/backup.timer
+      also deletes the `docker-prune.timer` symlink (its unit lives under
+      `/opt/homelab/...`), so Soak re-enables it by path:
+      `sudo systemctl enable --now
       /opt/homelab/homelab/services/disk-hygiene/docker-prune.timer`.
+      **`backup.timer` is not in this list.** Nightly backups keep running
+      through Migrate LVM, Boot fixup and Test boot, so there's never more
+      than a day of unbacked-up data. They are paused only for the Swap
+      itself (see [Swap](#swap)). If `backup.timer` is currently disabled
+      from an earlier version of this step, re-enable it by path:
+      `sudo systemctl enable --now /opt/homelab/homelab/services/backup/backup.timer`.
 - [x] Run a fresh backup (on the Mac): `just backup-now`, then
       `just backup-snapshots` shows one from today.
 - [x] Prune so less gets copied and there's room for the tarball:
@@ -566,6 +570,14 @@ The real downtime: shut down, move drives, boot. Expect ~15-20 minutes
 including ~20 containers coming back. Same day as Migrate LVM if possible,
 to keep root off USB for as little time as possible.
 
+- [ ] **Finalize backups, then pause them.** Nightly backups stay on until
+      this point. Run `just backup-now` on the Mac and confirm it exits 0 and
+      lists a fresh snapshot, with no `database dump(s) failed` warning.
+      Then `sudo systemctl disable --now backup.timer` so nothing reads
+      `/srv/data` while the drives are being moved. `disable`, not `stop`,
+      so it stays off across the reboot. If the Swap goes badly and you roll
+      back, re-enable it by path (see Resume backups below) before leaving
+      the box.
 - [ ] Final `docker ps` list, then `sudo shutdown -h now`.
 - [ ] Pull the PNY out of the Ugreen case, SanDisk out of the NUC bay, PNY
       into the bay. SanDisk goes in the Ugreen case but **stays unplugged**
@@ -580,14 +592,21 @@ to keep root off USB for as little time as possible.
       `ubuntu-sandisk` NVRAM entry (`efibootmgr -b <num> -B`). Deleting it
       only removes the NVRAM record, not anything on a disk. Do it only after
       the verify step above passes: until then it's the Rollback path.
+- [ ] **Resume backups** once the verify step above passes:
+      `sudo systemctl enable --now /opt/homelab/homelab/services/backup/backup.timer`
+      (`disable` deleted the symlink, so enable by path), then
+      `sudo systemctl start backup.service` and check
+      `journalctl -u backup.service -n 50` shows `==> Backup complete`
+      with no `WARNING` lines, and `systemctl list-timers backup.timer`
+      shows a next run.
 - [ ] `$NEW` and `$OLD` are stale from here on (see
       [Global constraints](#global-constraints)). Re-set `NEW` to the PNY's
       `ata-...` link before anything else uses it.
 
 ### Soak
 
-- [ ] Leave it a few days, with `just backup-now` run by hand nightly-ish
-      while the timers are paused.
+- [ ] Leave it a few days. Nightly backups are already running again
+      (resumed in Swap), and the apt and prune timers are still paused.
 - [ ] Undo the console changes from Rehearsal reboot:
       `sudo systemctl revert emergency.service rescue.service` (removes all
       local overrides on those units; ours are the only ones, there were none
@@ -645,8 +664,8 @@ the riskiest part.
       trailing slashes mean rsync also copies the source dir's owner and mode
       onto the new filesystem's root.
 - [ ] Stop everything that writes there (**review focus #4**):
-      `sudo systemctl stop docker-prune.timer backup.timer` (if re-enabled
-      after Soak), the systemd units for the compose stacks,
+      `sudo systemctl stop docker-prune.timer backup.timer` (backup.timer is
+      running again since Swap; re-enable both after the split), the systemd units for the compose stacks,
       `sudo systemctl stop docker docker.socket containerd`, and
       `sudo systemctl stop user@2000.service`.
 - [ ] Immediately before the final pass, check that `pgrep -a containerd`,
