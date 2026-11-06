@@ -45,12 +45,13 @@ sudo mkdir -p "$BACKUP_DIR" "$CACHE_DIR" "$OP_CONFIG_DIR"
 sudo chown "$BACKUP_USER:$BACKUP_USER" "$BACKUP_DIR" "$CACHE_DIR" "$OP_CONFIG_DIR"
 # op refuses to use a config dir with permissions broader than 700.
 sudo chmod 700 "$OP_CONFIG_DIR"
-# Pre-create dump directories so backup user can write to them.
-# No Postgres services currently deployed. When one returns, add it here:
-#   for svc in <service>; do
-#       sudo mkdir -p "/srv/data/$svc/dumps"
-#       sudo chown "$BACKUP_USER:$BACKUP_USER" "/srv/data/$svc/dumps"
-#   done
+# Pre-create dump directories so backup user can write to them. Every service
+# that backup.sh's dump_postgres() handles needs one here, or its dump fails
+# with "mktemp: No such file or directory" and backup.service goes red.
+for svc in brineworks-server; do
+    sudo mkdir -p "/srv/data/$svc/dumps"
+    sudo chown "$BACKUP_USER:$BACKUP_USER" "/srv/data/$svc/dumps"
+done
 
 echo "==> Granting backup user read ACLs on service data"
 sudo "$SERVICE_DIR/reapply-acls.sh"

@@ -129,6 +129,10 @@ cat /srv/data/<service>/dumps/pg_dumpall.sql | docker exec -i <service>-db-1 psq
   never ACL-granted to `backup` -- standing plaintext read access there was explicitly rejected
   as a tradeoff. `backup.sh` excludes both from the restic run so this stays a deliberate gap,
   not a permission-denied warning on every run.
+- Other deliberate excludes, for the same reason (live secrets or disposable data, so no
+  permission-denied warnings): `brineworks-server/keyring`, `open-webui/openclaw-bridge` (the
+  OpenClaw pipe's device identity; losing it means re-pairing with `just install-openclaw-pipe`),
+  and `open-webui/.cache` plus `open-webui/cache/embedding` (re-downloaded on demand).
 - Restic encrypts all snapshots at rest, so it's safe to ship the repo offsite
 
 ### Why ACLs get re-applied every run
