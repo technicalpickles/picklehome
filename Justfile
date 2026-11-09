@@ -312,6 +312,18 @@ secret-entry *ARGS:
 deploy-backup host="picklelab":
     just _deploy-remote backup {{host}}
 
+# Deploy Telegram alert plumbing to picklelab (run before deploy-disk-monitor)
+deploy-notify host="picklelab":
+    just _deploy-remote notify {{host}}
+
+# Deploy disk monitor timer to picklelab (needs deploy-notify first)
+deploy-disk-monitor host="picklelab":
+    just _deploy-remote disk_monitor {{host}}
+
+# Run the disk monitor now on picklelab (triggers the systemd service, then shows its log)
+disk-monitor-run-now host="picklelab":
+    ssh {{host}} "sudo systemctl start disk-monitor.service; journalctl -u disk-monitor.service -n 60 --no-pager"
+
 # Run backup now on picklelab (manual trigger)
 backup-now host="picklelab":
     ssh {{host}} "sudo systemctl start backup.service"

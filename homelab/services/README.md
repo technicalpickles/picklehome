@@ -178,6 +178,48 @@ See [backup/README.md](backup/README.md) for what's captured and restore procedu
 
 ---
 
+### notify
+
+Telegram alerts. Pipe text into `notify-telegram.sh`, or add `OnFailure=notify-failure@%n.service` to a unit.
+
+| | |
+|---|---|
+| **Purpose** | Get picklelab alerts and failed-unit logs to Josh's phone |
+| **Compose** | N/A (host script plus a systemd template unit, no container) |
+| **Data** | None |
+| **Access** | No UI. Delivers to the `picklehomealertbot` Telegram bot |
+| **Env vars** | `TELEGRAM_ALERT_BOT_TOKEN`, `TELEGRAM_ALERT_CHAT_ID` |
+| **Backup** | N/A |
+| **Restart** | N/A (oneshot, runs only on failure or when piped to) |
+
+Commands: `just deploy-notify`
+
+See [notify/README.md](notify/README.md).
+
+---
+
+### disk-monitor
+
+Checks `/`, `/srv`, `/srv/containerd` and `/srv/ci-docker` every 2 hours and sends a Telegram alert on high usage, fast growth or a failed check. Silent when healthy.
+
+| | |
+|---|---|
+| **Purpose** | Warn before a mount fills up |
+| **Compose** | N/A (host systemd timer, no container) |
+| **Data** | `/var/lib/disk-monitor/disk-monitor.csv` (usage history, regenerable, not backed up) |
+| **Access** | No UI. systemd timer every 2 hours. |
+| **Env vars** | None of its own. Delivery uses the `notify` service's vars |
+| **Backup** | No (history is regenerable) |
+| **Restart** | N/A (runs on timer) |
+
+Run `just deploy-notify` before `just deploy-disk-monitor`. The deploy refuses to continue without the notify template.
+
+Commands: `just deploy-notify`, `just deploy-disk-monitor`, `just disk-monitor-run-now`
+
+See [disk_monitor/README.md](disk_monitor/README.md).
+
+---
+
 ### disk-hygiene
 
 Weekly docker prune (both roots) + a passwordless `disk-report` diagnostic. Keeps `/srv` from silently filling.
