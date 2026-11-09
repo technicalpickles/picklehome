@@ -14,14 +14,13 @@ Disk usage monitoring with rate-of-change detection and alerting.
 - **Loud when it can't look.** If picklelab is unreachable it prints an alert and
   exits 1, so a broken monitor never looks like a healthy one
 
-**Status:** nothing reliable schedules this. A Hermes cron job in the
-`kenny-chen` OrbStack VM was meant to run it every 2 hours and deliver alerts
-to Telegram, but it's stale: it ran on schedule once (2026-08-18), its path
-still says `homelab/services/disk-monitor/` (the directory is now
-`disk_monitor/`), Hermes logged `Failed to read cron database: Too many open
-files`, and the VM was off for most of the time since. Where this should run
-(that VM, this Mac, or a systemd timer on picklelab itself) and how alerts get
-delivered are still open.
+**Status:** `just deploy-disk-monitor` installs `disk-monitor.timer` on picklelab,
+which runs the monitor every 2 hours as root in local mode
+(`DISK_MONITOR_LOCAL=1`, no ssh). Alerts go to Telegram through the `notify`
+service, so run `just deploy-notify` first. Run it now with
+`just disk-monitor-run-now`. Before that deploy, nothing schedules it. The old
+Hermes cron job in the `kenny-chen` OrbStack VM is stale (it ran once on
+2026-08-18 and then hit `Too many open files`) and is not part of this.
 
 **ssh user:** unset by default, so it runs plain `ssh picklelab.<tailnet>`, which
 uses `~/.ssh/config` or your local username. Set `DISK_MONITOR_SSH_USER` to
@@ -34,11 +33,13 @@ uses; this Mac has no key for it. Anything running this as `kenny` should set
 | Command | What |
 |---------|------|
 | `just disk-monitor-check` | Run one check now. Prints an alert if there is one, and appends to the history CSV either way |
-| `just disk-monitor-status` | Show recent history and current trend |
+| `just disk-monitor-status` | Show recent history and current trend (the Mac's CSV, not picklelab's) |
+| `just deploy-disk-monitor` | Install the timer on picklelab |
+| `just disk-monitor-run-now` | Start the picklelab service once and show its journal |
 
-**Alert delivery:** stdout, for whatever scheduler runs it to forward.
+**Alert delivery:** stdout. On picklelab, `disk-monitor-run.sh` pipes it to `notify-telegram.sh`.
 
-**History file:** `~/.local/state/picklehome/disk-monitor.csv`
+**History file:** `~/.local/state/picklehome/disk-monitor.csv`, or the path in `DISK_MONITOR_CSV`. On picklelab it is `/var/lib/disk-monitor/disk-monitor.csv`.
 
 ## Why
 

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the disk monitor every 2 hours
+
+[Timer]
+OnCalendar=*-*-* 0/2:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

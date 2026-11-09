@@ -1,0 +1,12 @@
+[Unit]
+Description=Check picklelab disk usage and alert on Telegram
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+StateDirectory=disk-monitor
+Environment=DISK_MONITOR_LOCAL=1
+Environment=DISK_MONITOR_CSV=/var/lib/disk-monitor/disk-monitor.csv
+ExecStart=/opt/homelab/homelab/scripts/disk-monitor-run.sh

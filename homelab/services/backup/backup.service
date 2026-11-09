@@ -3,6 +3,7 @@ Description=Restic backup of /srv/data (with database dumps)
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
+OnFailure=notify-failure@%n.service
 
 [Service]
 Type=oneshot
