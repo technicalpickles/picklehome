@@ -337,3 +337,71 @@ class TestSshFailureIsLoud:
         with patch.object(disk_monitor, "ssh_command", side_effect=SshError("boom")):
             assert disk_monitor.get_top_paths() == []
             assert disk_monitor.get_disk_report() is None
+
+
+class TestLocalMode:
+    """DISK_MONITOR_LOCAL=1 runs commands with bash on this host instead of ssh."""
+
+    def test_runs_command_with_bash_not_ssh(self, monkeypatch):
+        monkeypatch.setenv("DISK_MONITOR_LOCAL", "1")
+        ok = type("R", (), {"returncode": 0, "stdout": "out\n", "stderr": ""})()
+        with patch.object(disk_monitor.subprocess, "run", return_value=ok) as run:
+            result = disk_monitor.ssh_command("echo hi")
+
+        assert run.call_args.args[0] == ["bash", "-c", "echo hi"]
+        assert result == "out"
+
+    def test_ssh_is_the_default(self, monkeypatch):
+        monkeypatch.delenv("DISK_MONITOR_LOCAL", raising=False)
+        ok = type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        with patch.object(disk_monitor.subprocess, "run", return_value=ok) as run:
+            disk_monitor.ssh_command("true")
+
+        assert run.call_args.args[0][0] == "ssh"
+
+    def test_local_failure_raises_with_stderr(self, monkeypatch):
+        monkeypatch.setenv("DISK_MONITOR_LOCAL", "1")
+        failed = type("R", (), {"returncode": 3, "stdout": "", "stderr": "no such file"})()
+        with patch.object(disk_monitor.subprocess, "run", return_value=failed):
+            with pytest.raises(SshError, match=r"failed \(3\): no such file"):
+                disk_monitor.ssh_command("false")
+
+    def test_local_timeout_raises(self, monkeypatch):
+        monkeypatch.setenv("DISK_MONITOR_LOCAL", "1")
+        timeout = disk_monitor.subprocess.TimeoutExpired("bash", 30)
+        with patch.object(disk_monitor.subprocess, "run", side_effect=timeout):
+            with pytest.raises(SshError, match="timed out after 30"):
+                disk_monitor.ssh_command("sleep 99")
+
+    def test_local_run_really_executes_bash(self, monkeypatch):
+        monkeypatch.setenv("DISK_MONITOR_LOCAL", "1")
+
+        assert disk_monitor.ssh_command("echo a | tr a b") == "b"
+
+    def test_empty_df_in_local_mode_is_loud(self, monkeypatch, capsys):
+        monkeypatch.setenv("DISK_MONITOR_LOCAL", "1")
+        with patch.object(disk_monitor, "ssh_command", return_value=""):
+            code = disk_monitor.main()
+
+        assert code == 1
+        assert "could not reach picklelab" in capsys.readouterr().out.lower()
+
+
+class TestCsvPath:
+    """DISK_MONITOR_CSV places the history file."""
+
+    def test_default_is_under_home_state_dir(self, monkeypatch):
+        monkeypatch.delenv("DISK_MONITOR_CSV", raising=False)
+
+        assert disk_monitor.csv_path() == Path.home() / ".local/state/picklehome/disk-monitor.csv"
+
+    def test_env_overrides_the_path(self, monkeypatch, tmp_path):
+        target = tmp_path / "state" / "h.csv"
+        monkeypatch.setenv("DISK_MONITOR_CSV", str(target))
+        usage = {"/": {"used_pct": 50, "used_gb": 5.0, "avail_gb": 5.0}}
+
+        disk_monitor.save_history(usage)
+        history = disk_monitor.load_history()
+
+        assert target.exists()
+        assert [h["mount"] for h in history] == ["/"]

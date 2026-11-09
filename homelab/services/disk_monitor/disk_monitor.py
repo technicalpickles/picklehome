@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Disk monitor for picklelab — runs locally, checks remote disk usage via SSH.
+Disk monitor for picklelab. Checks disk usage over SSH, or on the local host
+when DISK_MONITOR_LOCAL=1.
 
 Logs usage to CSV, calculates rate of change, prints alert to stdout when:
 - Usage > 80% (warning) or > 90% (critical)
@@ -24,7 +25,7 @@ PICKLELAB_HOST = "picklelab.tail2023b7.ts.net"
 # ssh user: unset means plain `ssh <host>`, which uses ~/.ssh/config or the
 # local username. Set DISK_MONITOR_SSH_USER to override.
 PICKLELAB_USER = os.environ.get("DISK_MONITOR_SSH_USER")
-CSV_PATH = Path.home() / ".local/state/picklehome/disk-monitor.csv"
+DEFAULT_CSV_PATH = Path.home() / ".local/state/picklehome/disk-monitor.csv"
 
 # Thresholds
 USAGE_WARN = 80      # Alert at 80%
@@ -50,20 +51,33 @@ def ssh_target(user=PICKLELAB_USER):
     return f"{user}@{PICKLELAB_HOST}" if user else PICKLELAB_HOST
 
 
+def csv_path():
+    """History file: DISK_MONITOR_CSV when set, else the per-user state dir."""
+    override = os.environ.get("DISK_MONITOR_CSV")
+    return Path(override) if override else DEFAULT_CSV_PATH
+
+
 def ssh_command(cmd):
-    """Run command on picklelab via SSH and return stdout. Raises SshError on failure."""
+    """Run command on picklelab and return stdout. Raises SshError on failure.
+
+    With DISK_MONITOR_LOCAL=1 the monitor is running on picklelab itself, so the
+    command runs under bash here instead of over ssh.
+    """
+    if os.environ.get("DISK_MONITOR_LOCAL") == "1":
+        argv = ["bash", "-c", cmd]
+        where = "local command"
+    else:
+        argv = ["ssh", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new",
+                ssh_target(), cmd]
+        where = f"ssh to {ssh_target()}"
     try:
-        result = subprocess.run(
-            ["ssh", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new",
-             ssh_target(), cmd],
-            capture_output=True, text=True, timeout=30
-        )
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=30)
     except subprocess.TimeoutExpired as e:
-        raise SshError(f"ssh to {ssh_target()} timed out after {e.timeout}s") from e
+        raise SshError(f"{where} timed out after {e.timeout}s") from e
     except OSError as e:
-        raise SshError(f"could not run ssh: {e}") from e
+        raise SshError(f"could not run {argv[0]}: {e}") from e
     if result.returncode != 0:
-        raise SshError(f"ssh to {ssh_target()} failed ({result.returncode}): {result.stderr.strip()}")
+        raise SshError(f"{where} failed ({result.returncode}): {result.stderr.strip()}")
     return result.stdout.strip()
 
 
@@ -121,10 +135,11 @@ def get_disk_report():
 
 def load_history():
     """Load CSV history, return list of {timestamp, mount, used_pct, used_gb}."""
-    if not CSV_PATH.exists():
+    path = csv_path()
+    if not path.exists():
         return []
     rows = []
-    with open(CSV_PATH, "r") as f:
+    with open(path, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append({
@@ -138,9 +153,10 @@ def load_history():
 
 def save_history(usage):
     """Append current usage to CSV."""
-    CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
-    exists = CSV_PATH.exists()
-    with open(CSV_PATH, "a", newline="") as f:
+    path = csv_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.exists()
+    with open(path, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["timestamp", "mount", "used_pct", "used_gb"])
         if not exists:
             writer.writeheader()
@@ -276,7 +292,6 @@ def main():
     disk_report = get_disk_report()
     message = build_alert(usage, history, top_paths, disk_report)
     
-    # Print alert to stdout — Hermes cron job delivers to configured target
     print(message)
     
     return 0
