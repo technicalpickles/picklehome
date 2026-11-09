@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Pipe text in, get it on Josh's phone: some-check | notify-telegram.sh
-# Callers pass only stdin. This wrapper owns the secret plumbing: it loads the
-# op service-account token (0600 root:root, so callers must be root) and runs
-# the notifier under `op run` with the notify service's filtered template.
-# Run `just deploy-notify` first, which writes that template.
+# Must run as root: the op token file is 0600 root:root. The template it reads
+# is written by `just deploy-notify`.
 set -euo pipefail
 
 set -a
