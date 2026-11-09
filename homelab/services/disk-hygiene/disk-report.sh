@@ -13,10 +13,10 @@ set -uo pipefail
 section() { printf '\n=== %s ===\n' "$1"; }
 
 section "Filesystem usage"
-df -h /srv /
+df -h / /srv /srv/containerd /srv/ci-docker 2>/dev/null
 
 section "/srv top-level breakdown"
-du -xh -d1 /srv 2>/dev/null | sort -rh
+du -h -d1 /srv 2>/dev/null | sort -rh
 
 section "/srv/data breakdown"
 du -xh -d1 /srv/data 2>/dev/null | sort -rh

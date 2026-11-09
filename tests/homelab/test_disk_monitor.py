@@ -8,7 +8,10 @@ from unittest.mock import patch
 
 import pytest
 
+from homelab.services.disk_monitor import disk_monitor
 from homelab.services.disk_monitor.disk_monitor import (
+    FILESYSTEMS,
+    SshError,
     build_alert,
     calculate_rate,
     estimate_time_to_full,
@@ -230,3 +233,107 @@ class TestShouldAlert:
         history = []
 
         assert should_alert(usage, history) is True
+
+
+FOUR_MOUNTS_DF = """Filesystem                1K-blocks     Used Available Use% Mounted on
+/dev/mapper/vg0-root       31457280  8000000  23457280  26% /
+/dev/mapper/vg0-srv        73400320 47000000  26400320  65% /srv
+/dev/mapper/vg0-containerd 157286400 142000000 15286400  91% /srv/containerd
+/dev/mapper/vg0-ci-docker  104857600 20000000  84857600  20% /srv/ci-docker"""
+
+
+class TestFourMounts:
+    """The Docker split adds /srv/containerd and /srv/ci-docker as own mounts."""
+
+    def test_monitors_all_four_mounts(self):
+        assert FILESYSTEMS == ["/", "/srv", "/srv/containerd", "/srv/ci-docker"]
+
+    def test_parse_df_handles_four_mounts(self):
+        result = parse_df(FOUR_MOUNTS_DF)
+
+        assert set(result) == {"/", "/srv", "/srv/containerd", "/srv/ci-docker"}
+        assert result["/srv/containerd"]["used_pct"] == 91
+
+    def test_alert_fires_for_containerd_when_others_are_fine(self):
+        usage = parse_df(FOUR_MOUNTS_DF)
+        usage["/srv/containerd"]["used_pct"] = 90
+        for mount in ("/", "/srv", "/srv/ci-docker"):
+            usage[mount]["used_pct"] = 40
+
+        assert should_alert(usage, []) is True
+
+    def test_no_alert_when_all_four_are_fine(self):
+        usage = parse_df(FOUR_MOUNTS_DF)
+        for data in usage.values():
+            data["used_pct"] = 40
+
+        assert should_alert(usage, []) is False
+
+
+class TestGetDiskUsage:
+    """get_disk_usage builds its df from FILESYSTEMS and tolerates missing mounts."""
+
+    def test_df_command_lists_every_monitored_mount(self):
+        with patch.object(disk_monitor, "ssh_command", return_value=FOUR_MOUNTS_DF) as ssh:
+            disk_monitor.get_disk_usage()
+
+        cmd = ssh.call_args.args[0]
+        for mount in FILESYSTEMS:
+            assert mount in cmd
+
+    def test_missing_mount_does_not_break_the_run(self):
+        # Before the Docker split, df prints only the mounts that exist.
+        partial = "\n".join(FOUR_MOUNTS_DF.splitlines()[:3])
+        with patch.object(disk_monitor, "ssh_command", return_value=partial):
+            usage = disk_monitor.get_disk_usage()
+
+        assert set(usage) == {"/", "/srv"}
+
+    def test_df_exit_status_does_not_fail_the_ssh_call(self):
+        # df exits non-zero when a mount is missing; ssh would then report failure.
+        with patch.object(disk_monitor, "ssh_command", return_value=FOUR_MOUNTS_DF) as ssh:
+            disk_monitor.get_disk_usage()
+
+        assert ssh.call_args.args[0].rstrip().endswith("|| true")
+
+    def test_top_paths_does_not_pin_to_one_filesystem(self):
+        with patch.object(disk_monitor, "ssh_command", return_value="1G /srv/data") as ssh:
+            disk_monitor.get_top_paths()
+
+        cmd = ssh.call_args.args[0]
+        assert "du " in cmd
+        assert " -x" not in cmd and "-xh" not in cmd
+
+
+class TestSshTarget:
+    """The ssh user is configuration, not a hardcoded name."""
+
+    def test_no_user_means_bare_host(self):
+        assert disk_monitor.ssh_target(None) == disk_monitor.PICKLELAB_HOST
+
+    def test_user_is_prefixed_when_set(self):
+        assert disk_monitor.ssh_target("josh") == f"josh@{disk_monitor.PICKLELAB_HOST}"
+
+
+class TestSshFailureIsLoud:
+    """An unreachable picklelab must not look the same as a healthy one."""
+
+    def test_ssh_command_raises_with_stderr_on_failure(self):
+        failed = type("R", (), {"returncode": 255, "stdout": "", "stderr": "Permission denied (publickey)."})()
+        with patch.object(disk_monitor.subprocess, "run", return_value=failed):
+            with pytest.raises(SshError, match="Permission denied"):
+                disk_monitor.ssh_command("true")
+
+    def test_main_exits_nonzero_and_prints_an_alert(self, capsys):
+        with patch.object(disk_monitor, "ssh_command", side_effect=SshError("Permission denied")):
+            code = disk_monitor.main()
+
+        out = capsys.readouterr().out
+        assert code == 1
+        assert "could not reach picklelab" in out.lower()
+        assert "Permission denied" in out
+
+    def test_a_failing_top_paths_lookup_does_not_hide_the_alert(self):
+        with patch.object(disk_monitor, "ssh_command", side_effect=SshError("boom")):
+            assert disk_monitor.get_top_paths() == []
+            assert disk_monitor.get_disk_report() is None

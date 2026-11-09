@@ -7,11 +7,13 @@ Logs usage to CSV, calculates rate of change, prints alert to stdout when:
 - Fill rate > 2GB/day or > 5%/week
 - Time to full < 7 days
 
-Output goes to stdout — Hermes cron job delivers to Telegram (or configured target).
-Silent (exits 0 with no output) when all is well.
+Output goes to stdout, for whatever scheduler runs this to deliver. Silent
+(exits 0 with no output) when all is well. If picklelab can't be reached it
+prints an alert and exits 1, so a broken monitor never looks like a healthy one.
 """
 
 import csv
+import os
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -19,7 +21,9 @@ from pathlib import Path
 
 # Config
 PICKLELAB_HOST = "picklelab.tail2023b7.ts.net"
-PICKLELAB_USER = "kenny"
+# ssh user: unset means plain `ssh <host>`, which uses ~/.ssh/config or the
+# local username. Set DISK_MONITOR_SSH_USER to override.
+PICKLELAB_USER = os.environ.get("DISK_MONITOR_SSH_USER")
 CSV_PATH = Path.home() / ".local/state/picklehome/disk-monitor.csv"
 
 # Thresholds
@@ -30,32 +34,37 @@ RATE_WARN_PCT = 5    # Or >5% per week
 TIME_TO_FULL_DAYS = 7  # Alert if <7 days to full
 
 # Filesystems to monitor
-FILESYSTEMS = ["/", "/srv"]
+FILESYSTEMS = ["/", "/srv", "/srv/containerd", "/srv/ci-docker"]
+
+
+class SshError(Exception):
+    """picklelab couldn't be reached or the remote command failed."""
 
 
 def log(msg):
     print(f"[{datetime.now().isoformat()}] {msg}", file=sys.stderr)
 
 
+def ssh_target(user=PICKLELAB_USER):
+    """ssh destination: user@host when a user is configured, else the bare host."""
+    return f"{user}@{PICKLELAB_HOST}" if user else PICKLELAB_HOST
+
+
 def ssh_command(cmd):
-    """Run command on picklelab via SSH, return stdout or None on failure."""
+    """Run command on picklelab via SSH and return stdout. Raises SshError on failure."""
     try:
         result = subprocess.run(
             ["ssh", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new",
-             f"{PICKLELAB_USER}@{PICKLELAB_HOST}", cmd],
+             ssh_target(), cmd],
             capture_output=True, text=True, timeout=30
         )
-        if result.returncode == 0:
-            return result.stdout.strip()
-        else:
-            log(f"SSH failed: {result.stderr.strip()}")
-            return None
-    except subprocess.TimeoutExpired:
-        log("SSH timed out")
-        return None
-    except Exception as e:
-        log(f"SSH error: {e}")
-        return None
+    except subprocess.TimeoutExpired as e:
+        raise SshError(f"ssh to {ssh_target()} timed out after {e.timeout}s") from e
+    except OSError as e:
+        raise SshError(f"could not run ssh: {e}") from e
+    if result.returncode != 0:
+        raise SshError(f"ssh to {ssh_target()} failed ({result.returncode}): {result.stderr.strip()}")
+    return result.stdout.strip()
 
 
 def parse_df(output):
@@ -78,17 +87,23 @@ def parse_df(output):
 
 
 def get_disk_usage():
-    """Get disk usage from picklelab."""
-    # Use df without -h to get KB values for parsing
-    output = ssh_command("df -k / /srv 2>/dev/null")
+    """Get disk usage from picklelab. Raises SshError if it can't be read."""
+    # df -k (not -h) for KB values. df exits non-zero when a mount doesn't exist
+    # yet (before the Docker split), which would make ssh report failure, so
+    # `|| true` keeps partial output; parse_df only sees the mounts that exist.
+    output = ssh_command(f"df -k {' '.join(FILESYSTEMS)} 2>/dev/null || true")
     if not output:
-        return None
+        raise SshError("df returned no output for any monitored mount")
     return parse_df(output)
 
 
 def get_top_paths():
-    """Get top 5 paths by size under /srv."""
-    output = ssh_command("du -xh -d1 /srv 2>/dev/null | sort -rh | head -5")
+    """Get top 5 paths by size under /srv, including separately mounted dirs."""
+    try:
+        output = ssh_command("du -h -d1 /srv 2>/dev/null | sort -rh | head -5")
+    except SshError as e:
+        log(f"top paths unavailable: {e}")
+        return []
     if not output:
         return []
     return output.strip().split("\n")
@@ -96,10 +111,12 @@ def get_top_paths():
 
 def get_disk_report():
     """Get full disk-report diagnostic output."""
-    output = ssh_command("sudo disk-report")
-    if not output:
+    try:
+        output = ssh_command("sudo disk-report")
+    except SshError as e:
+        log(f"disk-report unavailable: {e}")
         return None
-    return output
+    return output or None
 
 
 def load_history():
@@ -241,10 +258,12 @@ def should_alert(usage, history):
 def main():
     log("Starting disk monitor check")
     
-    usage = get_disk_usage()
-    if not usage:
-        log("Failed to get disk usage (SSH may be down)")
-        return 0
+    try:
+        usage = get_disk_usage()
+    except SshError as e:
+        log(f"Failed to get disk usage: {e}")
+        print(f"🚨 Disk monitor could not reach picklelab\n\n{e}")
+        return 1
     
     history = load_history()
     save_history(usage)
