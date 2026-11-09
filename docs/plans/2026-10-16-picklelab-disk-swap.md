@@ -637,11 +637,19 @@ until the last items.
       is still paused; the service runs anyway.
 - [ ] **Disk health after the backup and the prune.**
       `sudo dmesg -T | grep -iE 'ata[0-9]|I/O error|reset|remount'` shows no
-      link resets or I/O errors. Install the tool once, since apt timers
-      being paused doesn't stop a manual install:
-      `sudo apt-get install smartmontools`, then `sudo smartctl -a /dev/sda`
-      shows no reallocated or pending sectors and no CRC errors. Note the
-      wear and power-on counters so there's a baseline.
+      link resets or I/O errors (`journalctl -k` works without sudo too).
+      `smartmontools` is already installed (see `homelab_03_host_setup.md`),
+      so `sudo smartctl -a /dev/sda` shows no reallocated or pending sectors
+      and no CRC errors. Baseline 2026-11-09 15:51 UTC, after the on-demand
+      prune and before the first nightly backup: health PASSED;
+      `Reallocated_Sector_Ct`, `Current_Pending_Sector`,
+      `Offline_Uncorrectable`, `UDMA_CRC_Error_Count`, program and erase
+      fail counts all 0; `Power_On_Hours` 595, `Power_Cycle_Count` 6,
+      `Temperature_Celsius` 40, `Wear_Leveling_Count` 0 (value 100),
+      `Available_Reservd_Space` 100, `Total_LBAs_Written` raw 8635 (the
+      unit is vendor-specific, so compare against it, don't read it as an
+      absolute); no errors in the SMART log; the short self-test from
+      Preflight passed. Re-run after the first nightly backup and compare.
 - [ ] **Force the grub/shim test instead of waiting for an upgrade:**
       `sudo apt-get install --reinstall grub-efi-amd64-signed shim-signed`.
       Then `efibootmgr` still has the PNY's `ubuntu` entry first in
