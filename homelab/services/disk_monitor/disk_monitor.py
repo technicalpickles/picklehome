@@ -32,6 +32,7 @@ USAGE_WARN = 80      # Alert at 80%
 USAGE_CRIT = 90      # Critical at 90%
 RATE_WARN_GB = 2     # Alert if filling >2GB/day
 RATE_WARN_PCT = 5    # Or >5% per week
+MIN_RATE_WINDOW_HOURS = 6  # Need this much history before a rate means anything
 TIME_TO_FULL_DAYS = 7  # Alert if <7 days to full
 
 # Filesystems to monitor
@@ -184,7 +185,7 @@ def calculate_rate(history, mount, hours=24):
     oldest = recent[0]
     newest = recent[-1]
     time_diff_days = (newest["timestamp"] - oldest["timestamp"]).total_seconds() / 86400
-    if time_diff_days == 0:
+    if time_diff_days * 24 < MIN_RATE_WINDOW_HOURS:
         return None, None
     
     gb_diff = newest["used_gb"] - oldest["used_gb"]
@@ -258,9 +259,9 @@ def should_alert(usage, history):
             return True
         
         rate_gb, rate_pct = calculate_rate(history, mount)
-        if rate_gb and abs(rate_gb) > RATE_WARN_GB:
+        if rate_gb and rate_gb > RATE_WARN_GB:
             return True
-        if rate_pct and abs(rate_pct) > RATE_WARN_PCT:
+        if rate_pct and rate_pct > RATE_WARN_PCT:
             return True
         
         if rate_gb and rate_gb > 0:
