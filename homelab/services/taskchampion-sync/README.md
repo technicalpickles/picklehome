@@ -2,7 +2,7 @@
 
 Self-hosted Taskwarrior sync server. Replicates the Mac's `~/.task` to picklelab; encryption secret stays Mac-side, server only sees opaque blobs keyed by client ID.
 
-Single-client today (Mac only). Adding a second device is a config change: append a UUID to the allowlist, set the same env on the new device, run `task sync`.
+One task history, synced from the Mac today. A `client_id` names a task history, not a device: every replica of the same tasks uses the same `client_id` and the same encryption secret (taskchampion's `SyncServer::new` docs say so). Adding a device or a container that should see the Mac's tasks means giving it the same three sync settings and running `task sync`; the server allowlist does not change. A new UUID in the allowlist would start a second, empty task history.
 
 Design: [`docs/plans/2026-05-03-taskchampion-sync.md`](../../../docs/plans/2026-05-03-taskchampion-sync.md).
 
@@ -100,7 +100,7 @@ Server-side (set in compose, mapped from `.env`):
 
 | Internal name | From `.env` | Description |
 |---------------|-------------|-------------|
-| `CLIENT_ID` | `TASKCHAMPION_SYNC_SERVER_CLIENT_ID` | Allowlist of client UUIDs (comma-separated for multiple) |
+| `CLIENT_ID` | `TASKCHAMPION_SYNC_SERVER_CLIENT_ID` | Allowlist of client UUIDs (comma-separated). One per task history, not per device |
 | `LISTEN` | `TASKCHAMPION_SYNC_PORT` | Bind address; always `0.0.0.0:<port>` inside the container |
 | `DATA_DIR` | (constant) | `/var/lib/taskchampion` inside the container |
 
@@ -109,7 +109,7 @@ Mac-side: not env vars. `dotfiles/taskrc.sh` reads three fields from `op://pickl
 | `sync.rc` setting | From 1Password field | Description |
 |-------------------|----------------------|-------------|
 | `sync.server.url` | `host` (with `https://` prepended) | `https://taskchampion.<tailnet>.ts.net` |
-| `sync.server.client_id` | `client_id` | Same UUID as the server allowlist |
+| `sync.server.client_id` | `client_id` | Same UUID as the server allowlist, and the same on every replica of these tasks |
 | `sync.encryption_secret` | `encryption_secret` | base64; never leaves the Mac |
 
 ## Data Locations (on picklelab)

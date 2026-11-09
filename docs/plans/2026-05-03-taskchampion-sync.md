@@ -205,5 +205,5 @@ No `pg_dump` equivalent needed.
 
 ## Future
 
-- **Second device.** Add a UUID to the allowlist, set the same vars on the new device's shell, `task sync`. No server changes.
+- **Second device.** Set the same three vars (url, `client_id`, `encryption_secret`) on the new device and `task sync`. No server changes, and no allowlist change: a `client_id` names a task history, so a replica of the Mac's tasks uses the Mac's. (Corrected 2026-11-08; the original said to append a new UUID, which would start an empty second history.)
 - **Tasks readable to Claude Code on the web.** Separate service, not this one. Sync server stores encrypted blobs and won't help; the right shape is an HTTP/MCP API that decrypts and exposes (or queries against a different backend like Vikunja). Out of scope here.
