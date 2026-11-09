@@ -10,7 +10,7 @@
       "description": "Versions pinned in Dockerfile ARGs and compose build args, annotated with a '# renovate: datasource=... depName=...' comment on the line above.",
       "managerFilePatterns": ["/(^|/)Dockerfile[^/]*$/", "/(^|/)compose[^/]*\\.ya?ml$/"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*(?:ARG )?\\w+[=:] ?(?:\\$\\{\\w+:-)?(?<currentValue>[\\w.-]+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n\\s*(?:ARG )?\\w+[=:] ?(?:\\$\\{\\w+:-)?(?<currentValue>[\\w.-]+)"
       ]
     }
   ],
