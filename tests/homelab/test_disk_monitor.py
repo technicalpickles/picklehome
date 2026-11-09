@@ -330,7 +330,7 @@ class TestSshFailureIsLoud:
 
         out = capsys.readouterr().out
         assert code == 1
-        assert "could not reach picklelab" in out.lower()
+        assert "could not check picklelab" in out.lower()
         assert "Permission denied" in out
 
     def test_a_failing_top_paths_lookup_does_not_hide_the_alert(self):
@@ -384,7 +384,7 @@ class TestLocalMode:
             code = disk_monitor.main()
 
         assert code == 1
-        assert "could not reach picklelab" in capsys.readouterr().out.lower()
+        assert "could not check picklelab" in capsys.readouterr().out.lower()
 
 
 class TestCsvPath:

@@ -278,7 +278,7 @@ def main():
         usage = get_disk_usage()
     except SshError as e:
         log(f"Failed to get disk usage: {e}")
-        print(f"🚨 Disk monitor could not reach picklelab\n\n{e}")
+        print(f"🚨 Disk monitor could not check picklelab\n\n{e}")
         return 1
     
     history = load_history()
