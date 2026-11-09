@@ -14,15 +14,20 @@ Disk usage monitoring with rate-of-change detection and alerting.
 - **Loud when it can't look.** If picklelab is unreachable it prints an alert and
   exits 1, so a broken monitor never looks like a healthy one
 
-**Status:** nothing schedules this yet. It only runs when you run it. The old
-note about a "Hermes cron job" delivering to Telegram described the earlier
-agent setup, which no longer exists. Where it should run (this Mac, or a
-systemd timer on picklelab itself) and how alerts get delivered are both open.
+**Status:** nothing reliable schedules this. A Hermes cron job in the
+`kenny-chen` OrbStack VM was meant to run it every 2 hours and deliver alerts
+to Telegram, but it's stale: it ran on schedule once (2026-08-18), its path
+still says `homelab/services/disk-monitor/` (the directory is now
+`disk_monitor/`), Hermes logged `Failed to read cron database: Too many open
+files`, and the VM was off for most of the time since. Where this should run
+(that VM, this Mac, or a systemd timer on picklelab itself) and how alerts get
+delivered are still open.
 
 **ssh user:** unset by default, so it runs plain `ssh picklelab.<tailnet>`, which
 uses `~/.ssh/config` or your local username. Set `DISK_MONITOR_SSH_USER` to
-override. It used to be hardcoded to `kenny`, an account for the earlier agent
-that this Mac has no key for.
+override. It used to be hardcoded to `kenny`, the account the VM's Hermes agent
+uses; this Mac has no key for it. Anything running this as `kenny` should set
+`DISK_MONITOR_SSH_USER=kenny` (or run as that user, where plain ssh uses it).
 
 **Commands:**
 
