@@ -580,7 +580,7 @@ The real downtime: shut down, move drives, boot. Expect ~15-20 minutes
 including ~20 containers coming back. Same day as Migrate LVM if possible,
 to keep root off USB for as little time as possible.
 
-- [ ] **Finalize backups, then pause them.** Nightly backups stay on until
+- [x] **Finalize backups, then pause them.** Nightly backups stay on until
       this point. Run `just backup-now` on the Mac and confirm it exits 0 and
       lists a fresh snapshot, with no `database dump(s) failed` warning.
       Then `sudo systemctl disable --now backup.timer` so nothing reads
@@ -588,27 +588,44 @@ to keep root off USB for as little time as possible.
       so it stays off across the reboot. If the Swap goes badly and you roll
       back, re-enable it by path (see Resume backups below) before leaving
       the box.
-- [ ] Final `docker ps` list, then `sudo shutdown -h now`.
-- [ ] Pull the PNY out of the Ugreen case, SanDisk out of the NUC bay, PNY
+      Done 2026-11-09: a reboot cut the first attempt short, so the last
+      pre-swap backup was snapshot `8b333fd7` (15:23 UTC), and the timer
+      was disabled right after.
+- [x] Final `docker ps` list, then `sudo shutdown -h now`.
+      The reboot meant no list was taken before shutdown. The baseline was
+      the 15 containers up after the earlier reboot.
+- [x] Pull the PNY out of the Ugreen case, SanDisk out of the NUC bay, PNY
       into the bay. SanDisk goes in the Ugreen case but **stays unplugged**
       for now.
-- [ ] Power on. If it doesn't find a boot entry, pick the PNY from the F10
+- [x] Power on. If it doesn't find a boot entry, pick the PNY from the F10
       boot menu.
-- [ ] Verify: `lsblk` shows the PNY as `sda` with all mounts, `docker ps`
+      It booted by itself on the PNY's `ubuntu` entry (`BootCurrent: 0001`)
+      with no F10 needed.
+- [x] Verify: `lsblk` shows the PNY as `sda` with all mounts, `docker ps`
       matches the Preflight list, `just disk-monitor-check` is quiet,
       Tailscale Services resolve.
-- [ ] Re-point debconf at the PNY's new `ata-*` ESP path
+      Done 2026-11-09: PNY is `sda` on SATA with all mounts, 15 containers
+      up, no failed units. `just disk-monitor-check` is not quiet, but for
+      an unrelated reason: `disk_monitor.py` hardcodes the ssh user
+      `kenny` (task `b1c53be5`, fixed in Disk monitor mounts).
+- [x] Re-point debconf at the PNY's new `ata-*` ESP path
       (`dpkg-reconfigure` as in Boot fixup), and remove the dead
       `ubuntu-sandisk` NVRAM entry (`efibootmgr -b <num> -B`). Deleting it
       only removes the NVRAM record, not anything on a disk. Do it only after
       the verify step above passes: until then it's the Rollback path.
-- [ ] **Resume backups** once the verify step above passes:
+      No debconf change was needed: `install_devices` is already the PNY's
+      `/dev/disk/by-partuuid/...`, which the swap didn't change. Removed
+      the dead `ubuntu-sandisk` entry (`efibootmgr -b 0002 -B`);
+      `BootOrder` is now `0001,0005,0004,0000`.
+- [x] **Resume backups** once the verify step above passes:
       `sudo systemctl enable --now /opt/homelab/homelab/services/backup/backup.timer`
       (`disable` deleted the symlink, so enable by path), then
       `sudo systemctl start backup.service` and check
       `journalctl -u backup.service -n 50` shows `==> Backup complete`
       with no `WARNING` lines, and `systemctl list-timers backup.timer`
       shows a next run.
+      Done 2026-11-09: timer enabled by path, and the first post-swap
+      `backup.service` run was clean.
 - [ ] `$NEW` and `$OLD` are stale from here on (see
       [Global constraints](#global-constraints)). Re-set `NEW` to the PNY's
       `ata-...` link before anything else uses it.
