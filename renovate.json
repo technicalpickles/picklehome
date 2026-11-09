@@ -35,6 +35,14 @@
         "openclaw"
       ],
       "groupName": "openclaw"
+    },
+    {
+      "description": "Woodpecker server and agent must run the same version, so bump them together.",
+      "matchPackageNames": [
+        "woodpeckerci/woodpecker-server",
+        "woodpeckerci/woodpecker-agent"
+      ],
+      "groupName": "woodpecker"
     }
   ]
 }

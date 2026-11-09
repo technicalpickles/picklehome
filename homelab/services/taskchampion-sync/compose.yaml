@@ -1,6 +1,6 @@
 services:
   taskchampion-sync:
-    image: ghcr.io/gothenburgbitfactory/taskchampion-sync-server:latest
+    image: ghcr.io/gothenburgbitfactory/taskchampion-sync-server:0.7.1
     restart: unless-stopped
     environment:
       CLIENT_ID: ${TASKCHAMPION_SYNC_SERVER_CLIENT_ID:?required}

@@ -10,7 +10,7 @@
 #
 # Drop this file and point compose.yaml back at ghcr.io/open-webui/open-terminal
 # once the upstream :slim tag ships both.
-FROM ghcr.io/open-webui/open-terminal:slim
+FROM ghcr.io/open-webui/open-terminal:0.12.2-slim
 # pip isn't in the image: bootstrap it, upgrade certifi, then remove it again so
 # the final image only differs by the two packages.
 RUN apt-get update \
