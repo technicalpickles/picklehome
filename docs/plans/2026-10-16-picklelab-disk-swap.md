@@ -700,19 +700,21 @@ Docker split.
 `homelab/services/disk-hygiene/disk-report.sh`,
 `tests/homelab/test_disk_monitor.py`, `homelab/services/disk_monitor/README.md`.
 
-- [ ] Test first: `parse_df` handles four mounts, and `should_alert` fires
+- [x] Test first: `parse_df` handles four mounts, and `should_alert` fires
       for `/srv/containerd` at 90% while `/` and `/srv` are fine.
-- [ ] `FILESYSTEMS = ["/", "/srv", "/srv/containerd", "/srv/ci-docker"]`,
+- [x] `FILESYSTEMS = ["/", "/srv", "/srv/containerd", "/srv/ci-docker"]`,
       and `get_disk_usage` builds its `df -k` from `FILESYSTEMS` instead of
       the hardcoded `/ /srv`. A mount that doesn't exist yet must not break
       the run (`df` errors on it; tolerate partial output).
-- [ ] Drop `-x` from `du -xh -d1 /srv` in both `get_top_paths` and
+- [x] Drop `-x` from `du -xh -d1 /srv` in both `get_top_paths` and
       `disk-report.sh` (so the top-paths list still shows containerd/ci-docker
       once they're separate mounts), and add `df -h` for the new mounts to
       `disk-report.sh`.
-- [ ] While in the file, consider folding in `b1c53be5`'s items (hardcoded
+- [x] While in the file, consider folding in `b1c53be5`'s items (hardcoded
       `PICKLELAB_USER = "kenny"`, exit 0 on ssh failure), or leave them for
-      that task.
+      that task. Done: the ssh user is now `DISK_MONITOR_SSH_USER` (unset
+      by default), and an ssh failure prints an alert and exits 1. The
+      monitor still has no scheduler; that's a separate decision.
 - [ ] `uv run pytest tests/homelab/test_disk_monitor.py`, deploy
       `disk-hygiene` (for `disk-report.sh`), README says which mounts are
       watched.
