@@ -8,7 +8,10 @@
     {
       "customType": "regex",
       "description": "Versions pinned in Dockerfile ARGs and compose build args, annotated with a '# renovate: datasource=... depName=...' comment on the line above.",
-      "managerFilePatterns": ["/(^|/)Dockerfile[^/]*$/", "/(^|/)compose[^/]*\\.ya?ml$/"],
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile[^/]*$/",
+        "/(^|/)compose[^/]*\\.ya?ml$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n\\s*(?:ARG )?\\w+[=:] ?(?:\\$\\{\\w+:-)?(?<currentValue>[\\w.-]+)"
       ]
@@ -16,8 +19,21 @@
   ],
   "packageRules": [
     {
+      "description": "Python is on 3.12 deliberately (requires-python >=3.12). Patch bumps only; a new minor is a decision, not a PR.",
+      "matchDepNames": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "enabled": false
+    },
+    {
       "description": "The openclaw npm version is pinned in the goplaces-node Dockerfile and the compose build arg. Bump both in one PR so they stay in sync.",
-      "matchDepNames": ["openclaw"],
+      "matchDepNames": [
+        "openclaw"
+      ],
       "groupName": "openclaw"
     }
   ]
