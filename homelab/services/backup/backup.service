@@ -24,4 +24,9 @@ EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # so it can re-apply ACLs that other services' chmod() calls may have wiped
 # since the last run. See reapply-acls.sh for why this has to be unconditional.
 ExecStartPre=+/opt/homelab/homelab/services/backup/reapply-acls.sh
+# Snapshot openclaw's live SQLite DBs into openclaw/dumps/ as root, because
+# config/state is the dir whose ACL grant keeps getting wiped mid-run. The '-'
+# keeps a failed snapshot from blocking the whole backup; backup.sh then fails
+# the run loudly if the snapshots are missing or stale. See dump-sqlite.sh.
+ExecStartPre=-+/opt/homelab/homelab/services/backup/dump-sqlite.sh
 ExecStart=/usr/bin/op --config /srv/backups/op-config run --env-file=/opt/homelab/homelab/services/backup/.env.op.template -- /opt/homelab/homelab/services/backup/backup.sh
