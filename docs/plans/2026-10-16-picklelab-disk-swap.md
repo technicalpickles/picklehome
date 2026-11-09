@@ -285,6 +285,9 @@ is ~15 minutes.
       (next item). Still open: the BIOS photos and whether F10 lists USB,
       worth retrying with a plain wired keyboard in a back-panel port
       before Test boot, since F10 is the fallback there.
+      2026-11-09: a plain wired keyboard got into Visual BIOS via
+      `--firmware-setup`; settings photographed (see Record the BIOS
+      findings below). Still open: F10 at power-on with the stick in.
 - [x] Boot the live USB without F10 (done 2026-11-02). With the stick in,
       its device is `sdc` and its ESP is partition 2:
 
@@ -309,9 +312,9 @@ is ~15 minutes.
       After the reboot the firmware had reshuffled `BootOrder` to
       `0007,0001,000A,0004,0000` (it added the PNY's USB entry). The first
       two are unchanged, so harmless.
-- [ ] Record the BIOS findings in `findings.md` (USB in F10: yes/no,
-      Fast Boot, Legacy/CSM). Partly recorded 2026-11-02; the F10, Fast
-      Boot and Legacy/CSM answers are still open (see the previous note).
+- [x] Record the BIOS findings in `findings.md` (USB in F10: yes/no,
+      Fast Boot, Legacy/CSM). Recorded 2026-11-09, except whether F10 at
+      power-on lists the USB stick, which is still untested.
 
 ### Preflight
 
@@ -561,8 +564,11 @@ own while the SanDisk is still internal and is the default.
       proven; the removable path is untested until Swap.
 - [x] If either path *tries* and fails, reboot with nothing chosen: BootOrder
       lands on the SanDisk entry, and you debug from there.
-- [ ] Once both pass: `sudo efibootmgr -o <pny>,<sandisk>,...` so the PNY is
-      the default going into the swap.
+- [x] Once both pass: `sudo efibootmgr -o <pny>,<sandisk>,...` so the PNY is
+      the default going into the swap. Seen already in place 2026-11-09:
+      `BootOrder` is `0001` (PNY `ubuntu`), `0002` (`ubuntu-sandisk`), then
+      the legacy `0007`/`0008` and Windows entries; Visual BIOS shows the
+      same UEFI order.
 
 ### Swap
 

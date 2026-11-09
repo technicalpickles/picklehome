@@ -104,6 +104,34 @@ copy. The cost is more manual boot fixup, which is where the risk sits.
       through at power-on. Retry with a plain wired keyboard in a
       back-panel USB port. The PNY in the enclosure also shows as a USB
       boot entry, so a post-swap boot-from-`sdb` test looks feasible.
+
+      **BIOS settings, 2026-11-09** (Intel Visual BIOS 2.2.23, NUC6CAYB,
+      BIOS `AYAPLCEL.86A.0038`, 2017-03-10). Reached with a plain wired
+      keyboard via `sudo systemctl reboot --firmware-setup`; nothing
+      changed. The Kinesis Freestyle never got a key through to the
+      firmware.
+      - UEFI Boot **on**, Legacy Boot **on** (both). Legacy lists
+        `SATA : SanDisk` then `USB : PNY`, which are the `0007`/`0008`
+        BBS entries in `efibootmgr`. The blank screen on 2026-11-03 from
+        `BootNext` to the PNY's USB BBS entry fits a legacy boot of a GPT
+        disk with no BIOS boot code; unconfirmed.
+      - UEFI Boot Priority: `UEFI : USB : Ubuntu` (PNY, `0001`) first,
+        `UEFI : SATA : ubuntu-sandisk` (`0002`) second, matching
+        `BootOrder`.
+      - Boot Configuration: OS Selection Linux. Fast Boot **off**. Boot
+        USB Devices First off. Boot Network Devices Last on. Unlimited
+        Boot to Network Attempts off. Internal UEFI Shell off, USB on,
+        Optical on, Network Boot disabled.
+      - Boot Display Config: Failsafe Watchdog **on** (after a boot
+        failure it uses BIOS defaults to get back into Setup, keeping the
+        user's saved values). POST hotkeys displayed, "Display F2 to Enter
+        Setup", "F7 to Update BIOS" and "F10 to Enter Boot Menu" on.
+        F8 and F12 hints off.
+      - Inside Setup, F10 is "Save and exit", not the boot menu. The Boot
+        Order panel's "double-click a device to boot from it now" is a
+        one-time boot override that needs no power-on keypress.
+      - Still untested: F10 at power-on listing the USB stick. Fast Boot
+        being off and the F10 hint being on make it likely to work.
 - [x] Full `/etc/fstab` and LVM state: captured above. No sudo needed,
       `sudo -n /usr/local/sbin/disk-report` is on the passwordless list and
       prints `vgs`/`lvs`/`pvs`.
