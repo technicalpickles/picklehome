@@ -1,0 +1,7 @@
+[Unit]
+Description=Send the last journal lines of failed unit %i to Telegram
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/bin/bash -c 'journalctl -u %i -n 25 --no-pager | /opt/homelab/homelab/scripts/notify-telegram.sh'
