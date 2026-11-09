@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>technicalpickles/renovate-config",
+    "github>technicalpickles/renovate-config:mise"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Versions pinned in Dockerfile ARGs and compose build args, annotated with a '# renovate: datasource=... depName=...' comment on the line above.",
+      "managerFilePatterns": ["/(^|/)Dockerfile[^/]*$/", "/(^|/)compose[^/]*\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*(?:ARG )?\\w+[=:] ?(?:\\$\\{\\w+:-)?(?<currentValue>[\\w.-]+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "The openclaw npm version is pinned in the goplaces-node Dockerfile and the compose build arg. Bump both in one PR so they stay in sync.",
+      "matchDepNames": ["openclaw"],
+      "groupName": "openclaw"
+    }
+  ]
+}

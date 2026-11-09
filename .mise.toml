@@ -1,5 +1,5 @@
 [tools]
-go = "latest"
-just = "latest"
+go = "1.27.3"
+just = "1.59.0"
 python = "3.12"
 uv = { version = "0.13.4", minimum_release_age = "0s" }
