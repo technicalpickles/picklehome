@@ -71,7 +71,16 @@ Arena was skipped. Five model runs (four runners and a cross-judge) buy little w
 
 ## Implementation reconciliation
 
-None yet.
+Deviations from the sketch, accepted after review on 2026-11-09. None changes the usage or the module ownership above.
+
+- Both units set `User=root` explicitly. systemd sets `$HOME` only when `User=` is present, and `op` needs it.
+- The wrapper sources the op token itself, so neither unit has an `EnvironmentFile=`.
+- `disk-monitor.service` orders after `network-online.target`, mirroring `backup.service`.
+- `disk-monitor-run.sh` lives in `homelab/scripts/`, next to the notify wrapper, and not in the service dir.
+- `deploy-disk-monitor` passes the directory name `disk_monitor` (underscore) to `_deploy-remote`.
+- `disk-monitor-run-now` uses `;` and not `&&`, so the journal prints when the oneshot fails.
+- The timer is `OnCalendar=*-*-* 0/2:00:00` with `Persistent=true` and 300 seconds of jitter. `systemd-analyze calendar` on picklelab normalizes it to `00/2` and shows the next fire at 20:00 UTC.
+- The monitor's failure alert says "could not check picklelab" in both modes, changed from "could not reach" because a failed `df` in local mode is not a network problem.
 
 ## Open questions and risks
 
