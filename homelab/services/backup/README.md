@@ -151,3 +151,23 @@ though the unit itself runs as `backup`) before every nightly backup, and
 `deploy.sh` runs it too so a fresh deploy doesn't have to wait for the first
 scheduled run. Add a new consumer's data path to the `TREES` or `PATHS` array
 in that script, not a one-off `setfacl` in `deploy.sh`.
+
+### openclaw's SQLite state is snapshotted, not read in place
+
+Re-applying ACLs narrows the `openclaw/config/state` race but can't close it:
+openclaw re-chmods the dir whenever it likes, and a hit mid-run fails the
+backup with `permission denied`. The databases there are also live WAL-mode
+SQLite, so restic copying `openclaw.sqlite` on its own could capture a torn or
+stale file.
+
+So `backup.service` runs `dump-sqlite.sh` as root (`ExecStartPre=-+...`, after
+`reapply-acls.sh`). It uses SQLite's online backup API (via python3, since the
+`sqlite3` CLI isn't installed) to write integrity-checked snapshots of
+`openclaw.sqlite` and `openclaw-quarantine.sqlite` to
+`/srv/data/openclaw/dumps/`. `backup.sh` excludes `config/state` and fails the
+run if the snapshot is missing or older than 30 minutes. The `-` prefix means a
+failed snapshot doesn't block the rest of the backup; that check is what makes
+it loud.
+
+To restore: copy `dumps/openclaw.sqlite` back to `config/state/` with the
+gateway stopped, and delete any leftover `-wal`/`-shm` files first.

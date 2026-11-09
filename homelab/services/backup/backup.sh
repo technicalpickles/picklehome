@@ -47,8 +47,21 @@ dump_postgres() {
     echo "    $(wc -c < "$dump_dir/pg_dumpall.sql") bytes written"
 }
 
+# openclaw's SQLite snapshots are made by dump-sqlite.sh (ExecStartPre=+, as
+# root) just before this script runs. Verify they landed and are fresh; a
+# stale copy would silently back up yesterday's state.
+check_sqlite_snapshot() {
+    local f="$DATA_DIR/openclaw/dumps/$1"
+    echo "==> Checking openclaw SQLite snapshot ($1)"
+    if [ -z "$(find "$f" -mmin -30 2>/dev/null)" ]; then
+        echo "ERROR: $f is missing or older than 30 minutes (did dump-sqlite.sh fail?)" >&2
+        return 1
+    fi
+}
+
 DUMP_FAILURES=0
 dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
+check_sqlite_snapshot "openclaw.sqlite" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 
 # --- Restic backup ---
 # Exclude /srv/data/brineworks-server/db: the raw Postgres data dir. The
@@ -71,6 +84,12 @@ dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES
 # Exclude /srv/data/open-webui/.cache and /srv/data/open-webui/cache/embedding:
 # pip's cache and the downloaded embedding model, re-downloaded on demand.
 #
+# Exclude /srv/data/openclaw/config/state: openclaw re-chmods it, which wipes
+# the backup user's ACL grant and failed runs with "permission denied" (the
+# race reapply-acls.sh can only narrow, not close). Its live WAL-mode SQLite
+# files would not copy consistently anyway. dump-sqlite.sh snapshots them to
+# openclaw/dumps/ as root before each run, and that is what restic picks up.
+#
 # Exclude /srv/data/openclaw/ssh and /srv/data/openclaw/gog-keyring: live
 # secrets (deploy keys, OAuth keyring) that reapply-acls.sh deliberately does
 # NOT grant the backup user read access to -- see that script's comment.
@@ -85,6 +104,7 @@ restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
     --exclude "$DATA_DIR/open-webui/.cache" \
     --exclude "$DATA_DIR/open-webui/cache/embedding" \
     --exclude "$DATA_DIR/open-terminal" \
+    --exclude "$DATA_DIR/openclaw/config/state" \
     --exclude "$DATA_DIR/openclaw/ssh" \
     --exclude "$DATA_DIR/openclaw/gog-keyring"
 RESTIC_EXIT=$?
