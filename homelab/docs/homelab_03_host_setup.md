@@ -219,7 +219,7 @@ Installed on host: `sudo apt install neovim`
 
 Installed on host 2026-11-03, one command, for the disk swap: `sudo apt-get install -y smartmontools tmux`.
 
-**smartmontools** (7.4): `sudo smartctl -a /dev/sda` reads the root SSD's SMART data (the 1TB PNY since the 2026-11-09 swap). `smartd` is enabled and running from the package default, so it also watches the drive in the background. `smartctl` is on the passwordless sudo list only through `apt-get install`; running it needs the interactive password. The PNY isn't in smartctl's database, so several attributes show as `Unknown_Attribute`.
+**smartmontools** (7.4): `sudo smartctl -a /dev/sda` reads the root SSD's SMART data (the 1TB PNY since the 2026-11-09 swap). `smartd` is enabled and running from the package default, so it also watches the drive in the background. Running `smartctl` needs the interactive sudo password; only `apt-get install` is on the passwordless list. The PNY isn't in smartctl's database, so several attributes show as `Unknown_Attribute`.
 
 **tmux**: for the long steps in the disk-swap runbook (`pvmove` in particular), so a dropped ssh session doesn't lose the progress output.
 
