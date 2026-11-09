@@ -130,8 +130,9 @@ copy. The cost is more manual boot fixup, which is where the risk sits.
       - Inside Setup, F10 is "Save and exit", not the boot menu. The Boot
         Order panel's "double-click a device to boot from it now" is a
         one-time boot override that needs no power-on keypress.
-      - Still untested: F10 at power-on listing the USB stick. Fast Boot
-        being off and the F10 hint being on make it likely to work.
+      - F10 at power-on works (wired keyboard) and lists the live USB
+        stick when it's plugged in, as both a legacy and a UEFI entry. With
+        no stick it lists the four known entries.
 - [x] Full `/etc/fstab` and LVM state: captured above. No sudo needed,
       `sudo -n /usr/local/sbin/disk-report` is on the passwordless list and
       prints `vgs`/`lvs`/`pvs`.
