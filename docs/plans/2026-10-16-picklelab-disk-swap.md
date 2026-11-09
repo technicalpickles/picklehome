@@ -39,7 +39,7 @@ In order. Each one is a checklist [below](#stages), done by hand.
 | [Boot fixup](#boot-fixup) | Copy `/boot` and the ESP, point GRUB and fstab at the PNY | none |
 | [Test boot](#test-boot) | Prove the PNY boots on its own, SanDisk still the fallback | two short reboots |
 | [Swap](#swap) | Final backup and pause `backup.timer`, physically put the PNY in the bay, resume backups | ~15-20 min |
-| [Soak](#soak) | Run a few days on the PNY (nightly backups running), then turn the other timers back on. Ends the easy rollback | none |
+| [Soak](#soak) | Prove the PNY is healthy under real load (exit criteria, about 1-2 days), then turn the other timers back on. Ends the easy rollback | one short reboot |
 | [Disk monitor mounts](#disk-monitor-mounts) | Code PR so disk alerts cover the new LVs. Any time before Docker split | none |
 | [Docker split](#docker-split) | Move containerd and CI Docker onto their own LVs | a few minutes |
 | [Grow](#grow) | Grow root and srv | none |
@@ -615,8 +615,44 @@ to keep root off USB for as little time as possible.
 
 ### Soak
 
-- [ ] Leave it a few days. Nightly backups are already running again
-      (resumed in Swap), and the apt and prune timers are still paused.
+The soak guards one thing: giving up the reverse-`pvmove` rollback, which
+ends once Grow makes `/srv` too big for the SanDisk. That rollback only
+helps if the PNY itself misbehaves, so the soak is about disk health under
+real load. Boot-path trouble (a grub or shim upgrade rewriting entries) is
+fixable in place and doesn't need the rollback, so it's tested on purpose
+below instead of waited for.
+
+It ends when every check passes, not after a fixed time. Plan on 1-2 days,
+since the first item waits for a nightly run. Nightly backups are already
+running again (resumed in Swap), and the apt and prune timers stay paused
+until the last items.
+
+- [ ] **A nightly backup on the PNY.** After the 03:03 UTC run,
+      `journalctl -u backup.service -n 50` shows `==> Backup complete` with
+      no `WARNING` lines, and the snapshot has `pg_dumpall.sql` and
+      `openclaw/dumps/openclaw.sqlite`.
+- [ ] **Run the weekly prune on demand:** `just docker-prune-now`. It's a
+      heavy burst of disk I/O, which is the load that exposes a bad or
+      cache-starved SSD, and it doesn't need to wait for Saturday. The timer
+      is still paused; the service runs anyway.
+- [ ] **Disk health after the backup and the prune.**
+      `sudo dmesg -T | grep -iE 'ata[0-9]|I/O error|reset|remount'` shows no
+      link resets or I/O errors. Install the tool once, since apt timers
+      being paused doesn't stop a manual install:
+      `sudo apt-get install smartmontools`, then `sudo smartctl -a /dev/sda`
+      shows no reallocated or pending sectors and no CRC errors. Note the
+      wear and power-on counters so there's a baseline.
+- [ ] **Force the grub/shim test instead of waiting for an upgrade:**
+      `sudo apt-get install --reinstall grub-efi-amd64-signed shim-signed`.
+      Then `efibootmgr` still has the PNY's `ubuntu` entry first in
+      `BootOrder`, `sudo debconf-show grub-efi-amd64 | grep install_devices`
+      is still the PNY's PARTUUID, and `/boot/efi/EFI/ubuntu/` has
+      `shimx64.efi` and `grubx64.efi`. This is the real test of the debconf
+      fix, and a real upgrade later should behave the same.
+- [ ] **Reboot once more** (`sudo reboot`), unattended. It comes back on
+      `BootCurrent: 0001`, `docker ps` matches the Preflight list, and
+      `systemctl --failed` is empty. Doing it after the grub reinstall makes
+      it the proof that the reinstall didn't break the boot path.
 - [ ] Undo the console changes from Rehearsal reboot:
       `sudo systemctl revert emergency.service rescue.service` (removes all
       local overrides on those units; ours are the only ones, there were none
@@ -624,10 +660,10 @@ to keep root off USB for as little time as possible.
       `sudo rm /etc/default/grub.d/99-disk-swap.cfg && sudo update-grub`.
       Keep the 5s firmware timeout if you like it.
 - [ ] Then re-enable everything paused in Preflight
-      (`sudo systemctl enable --now ...` for the same list), and watch one
-      unattended-upgrades run, one nightly backup, and one weekly prune
-      succeed. A grub or shim upgrade in this window is the real test of the
-      debconf fix.
+      (`sudo systemctl enable --now ...` for the same list). One
+      unattended-upgrades run and the first Saturday prune don't gate Grow,
+      but check them when they happen: they're the slow part of the debconf
+      test and can't be forced.
 - [ ] After this, the reverse-`pvmove` rollback is deliberately given up.
 
 ### Disk monitor mounts
