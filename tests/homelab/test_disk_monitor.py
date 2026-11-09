@@ -405,3 +405,42 @@ class TestCsvPath:
 
         assert target.exists()
         assert [h["mount"] for h in history] == ["/"]
+
+
+def _history(mount, points):
+    """points: list of (minutes_ago, used_gb) at 100GB total."""
+    now = datetime.now()
+    return [
+        {"timestamp": now - timedelta(minutes=m), "mount": mount, "used_pct": float(gb), "used_gb": gb}
+        for m, gb in points
+    ]
+
+
+class TestRateAlertsAreNotNoise:
+    """Rates extrapolated from a short window, or from a shrinking disk, are not alerts."""
+
+    def test_a_cleanup_does_not_alert(self):
+        # The real incident: /srv fell 47.3G -> 45.0G in 25 minutes (prune, CI cleanup).
+        usage = {"/srv": {"used_pct": 69, "used_gb": 45.0, "avail_gb": 21.0}}
+        history = _history("/srv", [(25, 47.3), (0, 45.0)])
+
+        assert should_alert(usage, history) is False
+
+    def test_a_short_window_does_not_extrapolate_into_an_alert(self):
+        # +0.5GB in 25 minutes is ~29GB/day if extrapolated, but it is only 25 minutes of data.
+        usage = {"/srv": {"used_pct": 40, "used_gb": 40.5, "avail_gb": 59.5}}
+        history = _history("/srv", [(25, 40.0), (0, 40.5)])
+
+        assert should_alert(usage, history) is False
+
+    def test_no_rate_from_less_than_six_hours_of_history(self):
+        history = _history("/srv", [(300, 40.0), (0, 44.0)])
+
+        assert calculate_rate(history, "/srv") == (None, None)
+
+    def test_sustained_growth_still_alerts(self):
+        # 3GB over 12 hours is 6GB/day, past the 2GB/day threshold, and the window is long enough.
+        usage = {"/srv": {"used_pct": 60, "used_gb": 60.0, "avail_gb": 40.0}}
+        history = _history("/srv", [(720, 57.0), (0, 60.0)])
+
+        assert should_alert(usage, history) is True
