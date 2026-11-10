@@ -8,9 +8,13 @@ Disk usage monitoring with rate-of-change detection and alerting.
 - Tracks usage history in CSV (rate calculation, trend analysis)
 - Alerts when:
   - Usage > 80% (warning) or > 90% (critical)
-  - Fill rate > 2GB/day or > 5%/week
-  - Time to full < 7 days
-- Silent when all is well (no spam)
+  - Time to full < 7 days at the 24h fill rate. A fast rate with plenty of
+    runway does not alert on its own
+- Silent when all is well (no spam). An unchanged alert is sent once, then at
+  most daily. A new mount or an escalation to critical sends immediately. State
+  lives in `disk-monitor-alert.json` next to the history CSV
+- Lists only the breaching mounts, each with a next step. The full
+  `disk-report` is attached at critical only
 - **Loud when it can't look.** If picklelab is unreachable it prints an alert and
   exits 1, so a broken monitor never looks like a healthy one
 
