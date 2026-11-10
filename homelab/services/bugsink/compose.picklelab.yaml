@@ -1,0 +1,10 @@
+services:
+  db:
+    volumes:
+      # Raw Postgres data dir. backup.sh excludes it from restic and backs up a
+      # pg_dumpall into /srv/data/bugsink/dumps instead.
+      - /srv/data/bugsink/db:/var/lib/postgresql/data
+
+volumes:
+  db-data:
+    name: bugsink_db-data_unused

@@ -48,7 +48,7 @@ sudo chmod 700 "$OP_CONFIG_DIR"
 # Pre-create dump directories so backup user can write to them. Every service
 # that backup.sh's dump_postgres() handles needs one here, or its dump fails
 # with "mktemp: No such file or directory" and backup.service goes red.
-for svc in brineworks-server; do
+for svc in brineworks-server bugsink; do
     sudo mkdir -p "/srv/data/$svc/dumps"
     sudo chown "$BACKUP_USER:$BACKUP_USER" "/srv/data/$svc/dumps"
 done

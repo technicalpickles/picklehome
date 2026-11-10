@@ -1,0 +1,61 @@
+# Bugsink error tracker: web (Django + snappea worker in one container) plus Postgres.
+# Self-contained, so `docker compose up` works on the Mac with throwaway env values
+# (see README "Local run"). compose.picklelab.yaml swaps the named volume for a bind mount.
+#
+# The project name is fixed because backup.sh finds the database container by the
+# compose project label (com.docker.compose.project=bugsink) and service name `db`.
+name: bugsink
+
+services:
+  db:
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bugsink
+      POSTGRES_DB: bugsink
+      POSTGRES_PASSWORD: ${BUGSINK_DB_PASSWORD:?set via .env.vars / 1Password}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bugsink -d bugsink"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: bugsink/bugsink:2.6.3@sha256:d19378dc3ad8fac46b2d554019540e84d607c176b3e0774a10c55458f1288fa0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8000"
+      SECRET_KEY: ${BUGSINK_SECRET_KEY:?set via .env.vars / 1Password}
+      # The password is hex (openssl rand -hex), so it needs no URL escaping here.
+      DATABASE_URL: postgresql://bugsink:${BUGSINK_DB_PASSWORD:?set via .env.vars / 1Password}@db:5432/bugsink
+      # Only acts on an empty user table, so it is a no-op after the first start.
+      CREATE_SUPERUSER: ${BUGSINK_ADMIN_EMAIL:?set via .env.vars / 1Password}:${BUGSINK_ADMIN_PASSWORD:?set via .env.vars / 1Password}
+      # Used in DSNs and links, and to derive ALLOWED_HOSTS. deploy.sh writes the tailnet URL.
+      BASE_URL: ${BUGSINK_BASE_URL:?set by deploy.sh}
+      # tailscaled terminates TLS and proxies plain HTTP to the loopback port.
+      BEHIND_HTTPS_PROXY: ${BUGSINK_BEHIND_HTTPS_PROXY:-true}
+      # tailscale serve sends X-Forwarded-For, not X-Real-IP. Client IPs are only shown
+      # in the UI, so REMOTE_ADDR (the docker gateway) is fine.
+      USE_X_REAL_IP: "false"
+      # Install metadata and counts go to bugsink.com otherwise (plan decision D3).
+      PHONEHOME: "false"
+      # One operator. No sign-ups, no teams to manage.
+      SINGLE_USER: "true"
+      SINGLE_TEAM: "true"
+      USER_REGISTRATION: CB_NOBODY
+      # Retention (plan decision D1, /srv is 30G shared): a project can't be set above
+      # 10,000 stored events, and the daily bugsink-vacuum timer deletes events older
+      # than 90 days. Bugsink only applies the age cap when vacuum runs.
+      MAX_RETENTION_PER_PROJECT_EVENT_COUNT: "10000"
+      MAX_EVENT_AGE_DAYS: "90"
+    ports:
+      # Loopback only: tailscale serve proxies bugsink.<tailnet>.ts.net to this port.
+      - "127.0.0.1:${BUGSINK_PORT:?set by deploy.sh}:8000"
+
+volumes:
+  db-data:
