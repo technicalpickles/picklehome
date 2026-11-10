@@ -57,7 +57,7 @@ Settings, Keys, `Generate auth key…`. The dialog has:
 
 | Field | Set to |
 |---|---|
-| Description | `woodpecker ci, rotated YYYY-MM` (this is how you find it later) |
+| Description | `woodpecker ci rotated YYYY-MM-DD`, with the full date (this is how you find it later). Commas are not allowed in this field |
 | Reusable | On |
 | Expiration | Days until the key stops working, 1 to 90, default 90. Leave 90 |
 | Ephemeral | Off. On would delete the node whenever it goes offline |
@@ -103,6 +103,6 @@ The audit tool only reads, and the existing credential has the single scope
 ## Done when
 
 - Settings, Keys lists no key for brineworks-agent or second-brain-agent.
-- A key described `woodpecker ci, rotated YYYY-MM` exists and is in 1Password.
+- A key described `woodpecker ci rotated YYYY-MM-DD` exists and is in 1Password.
 - The old OAuth credential is deleted and the audit still works.
 - `task 4f58f8a5 done`.
