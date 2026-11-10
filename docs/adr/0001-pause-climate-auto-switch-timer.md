@@ -4,7 +4,9 @@ Date: 2026-10-18
 
 ## Status
 
-Accepted. Temporary: revisit by 2026-10-25 (taskwarrior project `picklehome.climate.ecobee`, due that date).
+Superseded by [ADR 0004](0004-keep-climate-auto-switch-paused-to-collect-data.md) on 2026-11-10. The pause continues, with a new reason and revisit date. The steps under "Resuming" below are still how to resume.
+
+Was: Accepted. Temporary: revisit by 2026-10-25 (taskwarrior project `picklehome.climate.ecobee`, due that date).
 
 ## Context
 
