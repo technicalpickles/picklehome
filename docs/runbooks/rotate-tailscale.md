@@ -7,7 +7,7 @@ Screens below were walked through in the admin console on 2026-11-10.
 | Secret | 1Password | Used by | Action |
 |---|---|---|---|
 | `WOODPECKER_TS_AUTHKEY` | `picklehome/Woodpecker CI/ts_authkey` | `ts-woodpecker` sidecar (Woodpecker's tailnet identity and Funnel) | Mint a fresh key, store it. No deploy needed |
-| `TAILSCALE_OAUTH_CLIENT_ID` / `_SECRET` | `picklehome/Tailscale API/client_id`, `client_secret` | `network/tailscale_audit.py` (read-only audit) | Replace the OAuth credential |
+| `TAILSCALE_OAUTH_CLIENT_ID` / `_SECRET` | `picklehome/Tailscale API/client_id`, `client_secret` | `network/tailscale_audit.py` and the pickled-claude-plugins tailscale skill (both read-only) | Replace the OAuth credential |
 | `TS_AUTHKEY` | none now | brineworks-agent sidecar (torn down) | Revoke only. Done 2026-11-10 |
 | `SECOND_BRAIN_AGENT_TS_AUTHKEY` | none now | second-brain-agent sidecar (torn down) | Revoke only. Done 2026-11-10 |
 
@@ -76,17 +76,40 @@ commit that triggers a pipeline.
 
 ## 3. Replace the OAuth credential
 
-The audit tool only reads, and the existing credential has the single scope
-`all:read`.
+The one credential under Settings, Trust credentials today:
 
-1. Settings, Trust credentials. Note the existing credential's Client ID and scope.
-2. `+ Credential`, choose OAuth, and give it the same read scope. **Verify** the
-   dialog's exact fields and which scope name to pick the first time.
+| Field | Value |
+|---|---|
+| Description | `pickled-claude-plugin tailscale` |
+| Type and scope | OAuth, `all:read` |
+| Created | 2026-09-12 |
+
+It is read-only, and its name says who it was made for. Two things read it, both
+through `TAILSCALE_OAUTH_CLIENT_ID` and `TAILSCALE_OAUTH_CLIENT_SECRET`:
+
+- `network/tailscale_audit.py` in this repo.
+- The tailscale plugin's skill in pickled-claude-plugins, which uses the same
+  variables to query the policy file through the API.
+
+Both get their values from `picklehome/Tailscale API` in 1Password, so replacing
+the credential and updating that one item covers both. **Verify** that the Client
+ID in that item matches the credential above before you delete anything.
+
+Name every replacement the same way as the keys: the existing name, then
+`rotated` and the full date, no commas. For example
+`pickled-claude-plugin tailscale rotated 2026-11-10`. Keeping the prefix makes the
+old and new ones easy to match up, and the date shows which is current.
+
+1. Settings, Trust credentials. Confirm the existing credential's Client ID and
+   scope (expand the row with the chevron).
+2. `+ Credential`, choose OAuth, give it the read scope and the description above.
+   **Verify** the dialog's exact fields and scope name the first time, and whether
+   the description field rejects commas like the auth key one does.
 3. Put the Client ID and secret in `picklehome/Tailscale API` in 1Password, using
-   the app.
+   the app. The secret is shown once.
 4. `just dotenv`, then run `network/tailscale_audit.py` and confirm it reads the
-   policy file.
-5. Delete the old credential from its `…` menu.
+   policy file. Also confirm the plugin's token request still works.
+5. Delete the old credential from its `...` menu.
 
 ## CLI alternatives
 
@@ -104,5 +127,5 @@ The audit tool only reads, and the existing credential has the single scope
 
 - Settings, Keys lists no key for brineworks-agent or second-brain-agent.
 - A key described `woodpecker ci rotated YYYY-MM-DD` exists and is in 1Password.
-- The old OAuth credential is deleted and the audit still works.
+- The old OAuth credential is deleted, the replacement is named `pickled-claude-plugin tailscale rotated YYYY-MM-DD`, and both the audit and the plugin still work.
 - `task 4f58f8a5 done`.
