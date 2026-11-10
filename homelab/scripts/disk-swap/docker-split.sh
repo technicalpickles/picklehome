@@ -106,7 +106,16 @@ resume() {
   systemctl start containerd docker.socket docker
   systemctl start user@2000.service
   if [ -f "$STATE/units" ]; then
-    while read -r u; do [ -n "$u" ] && { say "start $u"; systemctl start "$u"; }; done <"$STATE/units"
+    local failed=()
+    while read -r u; do
+      [ -n "$u" ] || continue
+      say "start $u"
+      systemctl start "$u" || failed+=("$u")
+    done <"$STATE/units"
+    for u in "${failed[@]}"; do
+      say "retry $u (it may have needed a sibling's network)"
+      systemctl start "$u" || die "$u still fails, see journalctl -u $u"
+    done
   fi
   if [ -f "$STATE/timers" ]; then
     while read -r t; do [ -n "$t" ] && systemctl start "$t"; done <"$STATE/timers"
