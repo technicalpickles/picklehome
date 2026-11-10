@@ -6,7 +6,7 @@ time either one leaks. See the [shared procedure](README.md#rotating-secrets) fi
 | Credential | 1Password | Used by | Rotation |
 |---|---|---|---|
 | Woodpecker auth key | `picklehome/Woodpecker CI/ts_authkey` | `ts-woodpecker` sidecar (Woodpecker's tailnet identity and Funnel) | Mint a fresh key, store it. No deploy needed |
-| API OAuth credential | `picklehome/Tailscale API/client_id`, `client_secret` | `network/tailscale_audit.py` and the pickled-claude-plugins tailscale skill (both read-only) | Replace the credential, update the item, delete the old one |
+| API OAuth credential | `picklehome/Tailscale API/client_id`, `client_secret` | `network/tailscale_audit.py` and the pickled-claude-plugins tailscale skill (both read-only) | Replace the credential, update the item, revoke the old one |
 
 Both are named with the date they were made, so the newest is always obvious:
 
@@ -42,7 +42,7 @@ Sign in at `https://login.tailscale.com/admin`, then the left nav, Settings:
 |---|---|---|
 | Auth keys | Settings, Keys (`/admin/settings/keys`) | "Auth keys" list. Each row shows ID and Type. Expand the row (chevron) for Created, Expires, Description and Tags. `Revoke…` is per row. |
 | API access tokens | Settings, Keys, same page, lower section | Short-lived tokens for the Tailscale API |
-| OAuth credentials | Settings, Trust credentials (`/admin/settings/trust-credentials`) | Columns: Client ID, Type, Scopes. Expand a row for Description, Created and Created by. `+ Credential` adds one, the row's `...` menu manages it. |
+| OAuth credentials | Settings, Trust credentials (`/admin/settings/trust-credentials`) | Columns: Client ID, Type, Scopes. Expand a row for Description, Created and Created by. `+ Credential` adds one, the row's `...` menu manages it. Removed credentials stay listed, marked `Revoked`. |
 
 Expired keys drop out of the list, and only the Description tells keys apart. Other
 keys on the page belong to other things, so only touch ones whose description you
@@ -94,7 +94,8 @@ credential and updating that one item covers both.
    the app. The secret is shown once.
 4. `just dotenv`, then run `network/tailscale_audit.py` and confirm it reads the
    policy file. Also confirm the plugin's token request still works.
-5. Delete the previous credential from its `...` menu.
+5. Remove the previous credential from its `...` menu. The console keeps it listed with a
+   `Revoked` label, so a `Revoked` row means it is dead, not that removal failed.
 
 ## CLI alternatives
 
