@@ -740,9 +740,11 @@ Docker split.
       that task. Done: the ssh user is now `DISK_MONITOR_SSH_USER` (unset
       by default), and an ssh failure prints an alert and exits 1. The
       monitor still has no scheduler; that's a separate decision.
-- [ ] `uv run pytest tests/homelab/test_disk_monitor.py`, deploy
+- [x] `uv run pytest tests/homelab/test_disk_monitor.py`, deploy
       `disk-hygiene` (for `disk-report.sh`), README says which mounts are
       watched.
+      Done 2026-11-10: 40 tests pass, and picklelab already runs the current
+      `disk-report` and `disk_monitor.py` (`df947d3`), so no redeploy was needed.
 
 ### Docker split
 
