@@ -1,6 +1,6 @@
 # Rotate GitHub credentials
 
-Task `d6ce7bad`. See the [shared procedure](README.md#rotating-secrets) first.
+Rotate these on a schedule, and whenever one leaks. See the [shared procedure](README.md#rotating-secrets) first.
 
 | Secret | 1Password | Used by | Action |
 |---|---|---|---|
@@ -8,21 +8,8 @@ Task `d6ce7bad`. See the [shared procedure](README.md#rotating-secrets) first.
 | `WOODPECKER_GITHUB_CLIENT` / `_SECRET` | `picklehome/Woodpecker CI/github_client`, `github_secret` | Woodpecker's GitHub OAuth app login | New client secret, `just deploy-woodpecker` |
 | `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `picklehome/OpenClaw Workspace/workspace_deploy_key_b64` | `deploy.sh`, one-time workspace clone | New key pair, `just deploy-openclaw` |
 | `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `picklehome/OpenClaw Pickleclaw Deploy Key/deploy_key_b64` | `deploy.sh`, clones `pickleclaw@main` (read-only) | New key pair, `just deploy-openclaw` |
-| `WORKSPACE_DEPLOY_KEY_B64` | none now | brineworks-agent (torn down) | Delete the deploy key on GitHub |
-| `GITHUB_RUNNER_TOKEN` | none now | self-hosted runner (retired, picklehome#151) | Confirm gone, nothing to rotate |
 
-## 1. Dead credentials
-
-- **Runner token.** It was a short-lived registration token and the runner is
-  gone. Confirm GitHub, Settings, Actions, Runners shows no picklelab runner,
-  and that no leftover `GITHUB_RUNNER_TOKEN` field remains in 1Password. Delete
-  the field if there is one.
-- **brineworks-agent deploy key.** On the repo it was attached to, Settings,
-  Deploy keys, delete the key whose fingerprint matches the retired agent's
-  `WORKSPACE_DEPLOY_KEY_B64`. If you can't tell which, the title and added date
-  usually say. Nothing to deploy.
-
-## 2. Woodpecker OAuth app
+## 1. Woodpecker OAuth app
 
 GitHub OAuth apps can hold two client secrets at once, so this has no downtime.
 
@@ -35,10 +22,11 @@ GitHub OAuth apps can hold two client secrets at once, so this has no downtime.
    empty commit to a repo with a pipeline and confirm it runs.
 5. Delete the old client secret on the OAuth app.
 
-`WOODPECKER_AGENT_SECRET` is a separate, internal shared secret. It wasn't in
-the exposure list, so don't touch it here.
+`WOODPECKER_AGENT_SECRET` is a separate, internal secret shared by the server and
+the agent, so it is not part of this flow. Rotate it on its own: update
+`agent_secret` in 1Password and `just deploy-woodpecker`, which restarts both.
 
-## 3. Workspace PAT
+## 2. Workspace PAT
 
 1. Open the existing token first and note its owner, repository access and
    permissions. The replacement must match; a fine-grained token scoped to just
@@ -52,7 +40,7 @@ the exposure list, so don't touch it here.
    ask him to touch it, or look at the container logs for a git auth error.
 6. Delete the old token.
 
-## 4. Deploy keys (workspace and pickleclaw)
+## 3. Deploy keys (workspace and pickleclaw)
 
 Each is an ed25519 key pair. The private half goes into 1Password base64
 encoded; the public half goes on the repo as a deploy key.
@@ -76,4 +64,3 @@ encoded; the public half goes on the repo as a deploy key.
 - Old OAuth secret, PAT and both old deploy keys are deleted on GitHub.
 - Woodpecker login and a pipeline both work.
 - `just deploy-openclaw` finished cleanly with the new keys.
-- `task d6ce7bad done`.

@@ -1,6 +1,6 @@
 # Rotate device and cloud account credentials
 
-Task `e14a8367`. See the [shared procedure](README.md#rotating-secrets) first.
+Rotate these on a schedule, and whenever one leaks. See the [shared procedure](README.md#rotating-secrets) first.
 
 These are third-party accounts, so each rotation happens in that vendor's app or
 console and the steps differ. This page gives the 1Password location, who reads
@@ -85,4 +85,3 @@ Ecobee and Nest, which are the ones that can need a re-auth flow.
 - Each module's status command works on the new credential.
 - `just deploy-climate` has run, and the next 15-minute climate timer succeeds.
 - Old keys and tokens are revoked.
-- `task e14a8367 done`.
