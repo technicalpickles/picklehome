@@ -25,7 +25,7 @@ GitHub (webhooks + OAuth)
 Three containers share one network namespace (`network_mode: service:ts-woodpecker`):
 
 - **ts-woodpecker** — Tailscale sidecar in **userspace mode** (`TS_USERSPACE=true`: HTTP-only, no `NET_ADMIN`, no `/dev/net/tun`). Owns the `woodpecker` MagicDNS name and the Funnel. Funnel config is the checked-in [`funnel.json`](funnel.json) (`TS_SERVE_CONFIG`), proxying `:443 → 127.0.0.1:8000`.
-- **woodpecker-server** — UI/API on loopback `:8000` (only Funnel exposes it). gRPC `:9000` is reachable by the local agent over loopback and, via a `TCPForward` in `funnel.json`, by tailnet members only (see [Remote agents](#remote-agents-optional)). It is deliberately absent from `AllowFunnel`, so it is not public. SQLite DB. Pinned to `:v3` (Woodpecker dropped `:latest` to prevent accidental major upgrades; `--pull always` gets patches/minors, never a major).
+- **woodpecker-server** — UI/API on loopback `:8000` (only Funnel exposes it). gRPC `:9000` is reachable by the local agent over loopback and, via a `TCPForward` in `funnel.json`, by tailnet members only (see [Remote agents](#remote-agents-optional)). It is deliberately absent from `AllowFunnel`, so it is not public. SQLite DB. Pinned to an exact version (see `compose.yaml`); Renovate bumps the server and agent together.
 - **woodpecker-agent** — runs as the `ci` uid, points at the rootless docker socket via `DOCKER_HOST`. `WOODPECKER_MAX_WORKFLOWS=2` so CI can't starve the home-automation containers on the Celeron J3455.
 
 ### Agent isolation: rootless Docker as a dedicated `ci` user

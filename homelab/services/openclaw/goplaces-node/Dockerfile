@@ -2,7 +2,9 @@
 FROM node:24.22.1-bookworm
 
 ARG TARGETARCH
+# renovate: datasource=github-releases depName=openclaw/goplaces extractVersion=^v(?<version>.+)$
 ARG GOPLACES_VERSION=0.4.4
+# renovate: datasource=npm depName=openclaw
 ARG OPENCLAW_VERSION=2026.10.6
 
 # goplaces: Google Places CLI, baked in at build time (installing at container

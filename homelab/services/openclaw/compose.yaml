@@ -70,6 +70,7 @@ services:
       # compose can't parse a version out of an image ref). Override with
       # OPENCLAW_VERSION=... in the environment when bumping.
       args:
+        # renovate: datasource=npm depName=openclaw
         OPENCLAW_VERSION: ${OPENCLAW_VERSION:-2026.10.6}
     restart: unless-stopped
     # Start-order only, not a readiness guarantee -- the node retries its own
