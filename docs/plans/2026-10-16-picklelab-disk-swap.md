@@ -644,15 +644,19 @@ since the first item waits for a nightly run. Nightly backups are already
 running again (resumed in Swap), and the apt and prune timers stay paused
 until the last items.
 
-- [ ] **A nightly backup on the PNY.** After the 03:03 UTC run,
+- [x] **A nightly backup on the PNY.** After the 03:03 UTC run,
       `journalctl -u backup.service -n 50` shows `==> Backup complete` with
       no `WARNING` lines, and the snapshot has `pg_dumpall.sql` and
       `openclaw/dumps/openclaw.sqlite`.
-- [ ] **Run the weekly prune on demand:** `just docker-prune-now`. It's a
+      Done 2026-11-10: the 03:00 UTC run saved snapshot `32250e27`, clean,
+      with both brineworks-server and bugsink `pg_dumpall.sql` plus
+      `openclaw.sqlite` in it.
+- [x] **Run the weekly prune on demand:** `just docker-prune-now`. It's a
       heavy burst of disk I/O, which is the load that exposes a bad or
       cache-starved SSD, and it doesn't need to wait for Saturday. The timer
       is still paused; the service runs anyway.
-- [ ] **Disk health after the backup and the prune.**
+      Done 2026-11-09 (the SMART baseline below was taken right after it).
+- [x] **Disk health after the backup and the prune.**
       `sudo dmesg -T | grep -iE 'ata[0-9]|I/O error|reset|remount'` shows no
       link resets or I/O errors (`journalctl -k` works without sudo too).
       `smartmontools` is already installed (see `homelab_03_host_setup.md`),
@@ -667,29 +671,50 @@ until the last items.
       unit is vendor-specific, so compare against it, don't read it as an
       absolute); no errors in the SMART log; the short self-test from
       Preflight passed. Re-run after the first nightly backup and compare.
-- [ ] **Force the grub/shim test instead of waiting for an upgrade:**
+      Re-run 2026-11-10 12:49 UTC, after the first nightly backup: health
+      PASSED; the same counters all still 0; `Power_On_Hours` 616,
+      `Power_Cycle_Count` 6, `Temperature_Celsius` 40, `Wear_Leveling_Count`
+      0, `Total_LBAs_Written` 9551 (up from 8635); no errors in the SMART
+      log; `journalctl -k` clean of ata/I/O/reset lines since the swap.
+- [x] **Force the grub/shim test instead of waiting for an upgrade:**
       `sudo apt-get install --reinstall grub-efi-amd64-signed shim-signed`.
       Then `efibootmgr` still has the PNY's `ubuntu` entry first in
       `BootOrder`, `sudo debconf-show grub-efi-amd64 | grep install_devices`
       is still the PNY's PARTUUID, and `/boot/efi/EFI/ubuntu/` has
       `shimx64.efi` and `grubx64.efi`. This is the real test of the debconf
       fix, and a real upgrade later should behave the same.
-- [ ] **Reboot once more** (`sudo reboot`), unattended. It comes back on
+      Done 2026-11-10 12:50 UTC (apt history confirms the reinstall):
+      `BootOrder` starts with `0001` Ubuntu on the PNY's ESP (PARTUUID
+      `eff7cf51`), `install_devices` is that same PARTUUID, and
+      `/boot/efi/EFI/ubuntu/` has fresh `shimx64.efi` and `grubx64.efi`.
+- [x] **Reboot once more** (`sudo reboot`), unattended. It comes back on
       `BootCurrent: 0001`, `docker ps` matches the Preflight list, and
       `systemctl --failed` is empty. Doing it after the grub reinstall makes
       it the proof that the reinstall didn't break the boot path.
-- [ ] Undo the console changes from Rehearsal reboot:
+      Done 2026-11-10 ~13:12 UTC, after the grub reinstall: `BootCurrent: 0001`,
+      `systemctl --failed` empty, 17 containers up (the Preflight 15 plus
+      bugsink x2 deployed since; `nikke-serve-1` took a few minutes because
+      `nikke.service` rebuilds its image on start). No ata or I/O errors in the
+      boot journal. It was a warm reboot, so the RTC issue (`9f3a6c94`) wasn't
+      exercised.
+- [x] Undo the console changes from Rehearsal reboot:
       `sudo systemctl revert emergency.service rescue.service` (removes all
       local overrides on those units; ours are the only ones, there were none
       on 2026-10-16),
       `sudo rm /etc/default/grub.d/99-disk-swap.cfg && sudo update-grub`.
       Keep the 5s firmware timeout if you like it.
-- [ ] Then re-enable everything paused in Preflight
+      Done 2026-11-10.
+- [x] Then re-enable everything paused in Preflight
       (`sudo systemctl enable --now ...` for the same list). One
       unattended-upgrades run and the first Saturday prune don't gate Grow,
       but check them when they happen: they're the slow part of the debconf
       test and can't be forced.
-- [ ] After this, the reverse-`pvmove` rollback is deliberately given up.
+      Done 2026-11-10: `apt-daily.timer`, `apt-daily-upgrade.timer` and
+      `unattended-upgrades` re-enabled; `docker-prune.timer` was already back
+      (relinked by path 2026-11-09). Still to watch: the first unattended-upgrades
+      run and the first Saturday prune (2026-11-14).
+- [x] After this, the reverse-`pvmove` rollback is deliberately given up.
+      Given up 2026-11-10.
 
 ### Disk monitor mounts
 
@@ -777,9 +802,15 @@ the riskiest part.
 
 Online, no downtime.
 
-- [ ] `sudo lvextend -r -L 50G vg0/root` and `sudo lvextend -r -L 100G vg0/srv`
+- [x] `sudo lvextend -r -L 50G vg0/root` and `sudo lvextend -r -L 100G vg0/srv`
       (`-r` resizes the ext4 too).
-- [ ] `sudo vgs` shows ~600G free; `disk-report` looks like the target layout table.
+      Done 2026-11-10 ~14:00 UTC: root 30G to 50G, srv 70G to 100G, both online.
+- [x] `sudo vgs` shows ~600G free; `disk-report` looks like the target layout table.
+      `vgs` shows 779.48G free, not ~600G, because the `containerd` (150G) and
+      `ci-docker` (30G) LVs from Docker split don't exist yet. `/srv` is 54%
+      (51G of 99G), `/` 17%. `disk-report`'s filesystem table lists `/srv` three
+      times, since `/srv/containerd` and `/srv/ci-docker` are still plain
+      directories and `df` reports their parent; that goes away at Docker split.
 
 ### Second backup target
 
@@ -797,12 +828,21 @@ so it gets its own PR touching `homelab/services/backup/`.
       the SanDisk has held nothing since Migrate LVM, and the guard rules out
       pointing at the PNY (931.5G, sata).
 - [ ] **Destructive:** `sudo wipefs -a "$OLD"` (erases the old partition
-      table and filesystem signatures), then a single GPT partition, ext4, `nofail` fstab
-      mount by UUID (mountpoint up to the backup PR). `nofail` is right here,
+      table and filesystem signatures), then a single GPT partition and ext4
+      (no LVM: one small disk, nothing to span or grow into). `nofail` fstab
+      mount by UUID, with `x-systemd.device-timeout=10`. `nofail` is right here,
       unlike the Docker LVs: it's an external disk, and a missing backup
       target shouldn't block boot.
+- [ ] **Mountpoint outside `/srv`** (`/mnt/backup-sandisk`, decided 2026-11-10).
+      The point of this disk is isolation: a full `/srv` or a dead PNY must not
+      take the second copy with it, so it can't live under `/srv`. `mkdir` the
+      empty directory and `sudo chattr +i` it before mounting, so an unmounted
+      disk means a failed write, not a quiet backup into `/`. The backup
+      script checks `mountpoint -q` before writing to the second repo and
+      alerts if it's missing, without failing the primary backup.
 - [ ] Second repo + schedule per `homelab/services/backup/README.md`; that
-      PR owns the details.
+      PR owns the details. The same PR adds `/mnt/backup-sandisk` to the disk
+      monitor's `FILESYSTEMS` (`9fd7f741`).
 
 ## Rollback
 
