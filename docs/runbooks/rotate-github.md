@@ -17,7 +17,7 @@ GitHub OAuth apps can hold two client secrets at once, so this has no downtime.
    Generate a new client secret. Don't delete the old one yet.
 2. Put it in `github_secret` on `Woodpecker CI` in 1Password. The client id does
    not change.
-3. `just deploy-woodpecker`
+3. `just deploy-woodpecker`, following [Redeploying Woodpecker](woodpecker-redeploy.md)
 4. Check: sign out of Woodpecker and sign back in with GitHub. Then push an
    empty commit to a repo with a pipeline and confirm it runs.
 5. Delete the old client secret on the OAuth app.

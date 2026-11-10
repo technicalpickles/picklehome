@@ -67,12 +67,10 @@ anywhere else.
 Then revoke the previous `woodpecker ci rotated …` key: Settings, Keys, expand the
 older row to check its description, `Revoke…`.
 
-Nothing needs deploying. If you want the running container to use the new key
-right away, `just deploy-woodpecker` restarts the stack. That kills any pipeline in
-flight and drops webhooks during the gap (GitHub does not retry them), so only do it
-in a quiet window, then redeliver any missed push from the repo's Settings,
-Webhooks, Recent deliveries. After the restart check `just woodpecker-status` and
-push a commit that triggers a pipeline.
+Nothing needs deploying. If you want the running container to read the new key
+right away, `just deploy-woodpecker` restarts the stack, which interrupts CI. Follow
+[Redeploying Woodpecker](woodpecker-redeploy.md) for what to check before and what to
+recover after.
 
 ## 2. Replace the OAuth credential
 

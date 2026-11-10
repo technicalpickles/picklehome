@@ -4,6 +4,12 @@ Step-by-step procedures you run by hand more than once. Unlike `docs/plans/`
 (point-in-time) these are meant to stay true, so fix them when a step turns out
 wrong.
 
+## Operating CI
+
+| Runbook | Covers |
+|---|---|
+| [Redeploying Woodpecker](woodpecker-redeploy.md) | what a restart interrupts, and how to find and redeliver the webhooks and pipelines it dropped |
+
 ## Rotating secrets
 
 One runbook per group, matching how the work splits up. Rotate on a schedule, and
