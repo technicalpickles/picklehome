@@ -8,7 +8,7 @@ import yaml
 # can fix. The only recovery is re-running the PIN auth flow (just climate-auth).
 from pyecobee.errors import InvalidTokenError
 
-from climate.ecobee import auth, comforts, history, schedule, sensors, status
+from climate.ecobee import auth, comforts, history, replay, schedule, sensors, status
 from climate.ecobee.thermostats import load_thermostats, get_managed_thermostats, get_thermostat_id
 from climate.ambient.client import DEFAULT_WEATHER_PATH
 
@@ -217,6 +217,37 @@ def cmd_status(args) -> None:
         print(json.dumps({"thermostats": statuses}, indent=2, default=str))
     else:
         print(status.format_status(statuses))
+
+
+def cmd_replay_band(args) -> None:
+    from climate.ambient.client import load_weather_config
+
+    thresholds = load_weather_config(args.weather)["thresholds"]
+    configured = replay.Band(thresholds["heat_below"], thresholds["cool_above"])
+    try:
+        extra = [replay.Band.parse(b) for b in args.band]
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    bands = [configured] + [b for b in extra if b != configured]
+    windows = args.window or [24]
+
+    ecobee = auth.make_ecobee()
+    if not ecobee.get_thermostats():
+        print("Failed to authenticate with Ecobee.")
+        sys.exit(1)
+    token = ecobee.access_token
+
+    start = args.start or replay.DATA_START
+    zones = []
+    for name, thermostat_id in get_managed_thermostats(load_thermostats(args.thermostats)):
+        _, equipment = history.fetch_range(token, thermostat_id, start, date.today(), with_equipment=True)
+        zones.append(equipment)
+
+    labels = replay.label_days(zones)
+    outdoor = replay.outdoor_series(zones[0])
+    results = [replay.replay(outdoor, labels, b, w) for b in bands for w in windows]
+    print(replay.format_replays(results, labels))
 
 
 def cmd_history(args) -> None:
@@ -1380,6 +1411,46 @@ def main() -> None:
         help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
     )
 
+    replay_parser = subparsers.add_parser(
+        "replay-band",
+        help="Replay the comfort auto-switch band against Ecobee runtime history",
+    )
+    replay_parser.add_argument(
+        "--band",
+        action="append",
+        default=[],
+        metavar="LO/HI",
+        help="Extra heat_below/cool_above band to compare, e.g. 58/67 (repeatable); the band in weather.yaml always runs first",
+    )
+    replay_parser.add_argument(
+        "--window",
+        action="append",
+        type=int,
+        metavar="HOURS",
+        help="Outdoor-mean window in hours (repeatable, default: 24)",
+    )
+    replay_parser.add_argument(
+        "--start",
+        type=date.fromisoformat,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help=f"First day to replay (default: {replay.DATA_START}, when the thermostats first reported)",
+    )
+    replay_parser.add_argument(
+        "--weather",
+        type=Path,
+        default=DEFAULT_WEATHER_PATH,
+        metavar="PATH",
+        help="Path to weather YAML (default: climate/config/weather.yaml)",
+    )
+    replay_parser.add_argument(
+        "--thermostats",
+        type=Path,
+        default=DEFAULT_THERMOSTATS_PATH,
+        metavar="PATH",
+        help="Path to thermostats YAML (default: climate/config/thermostats.yaml)",
+    )
+
     subparsers.add_parser(
         "locations", help="List configured locations (main house, beachhouse, ...)"
     ).add_argument(
@@ -1550,6 +1621,7 @@ def main() -> None:
     subparsers.choices["validate"].set_defaults(func=cmd_validate)
     subparsers.choices["status"].set_defaults(func=cmd_status)
     subparsers.choices["history"].set_defaults(func=cmd_history)
+    subparsers.choices["replay-band"].set_defaults(func=cmd_replay_band)
     subparsers.choices["capture-comforts"].set_defaults(func=cmd_comforts_capture)
     subparsers.choices["sync-comforts"].set_defaults(func=cmd_comforts_sync)
     subparsers.choices["create-climate"].set_defaults(func=cmd_create_climate)
