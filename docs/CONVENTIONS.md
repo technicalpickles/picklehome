@@ -44,6 +44,10 @@ CLAUDE.md should `@import` the README for shared context rather than duplicating
 
 Design documents and implementation plans. Named `YYYY-MM-DD-<topic>.md`. These are point-in-time artifacts: they capture the thinking behind a design, not ongoing reference material.
 
+### docs/runbooks/
+
+Step-by-step procedures you run by hand and expect to run again (rotating a secret, replacing a disk). Unlike `docs/plans/` these are meant to stay true: fix the runbook when a step turns out wrong. Steps the author could not confirm are marked **Verify** until someone runs them.
+
 ### docs/adr/
 
 Architecture decision records, `NNNN-<slug>.md` (Context / Decision / Consequences). For a decision that changes how something is run and that someone will wonder about later, including temporary ones like pausing a service. Point-in-time like `docs/plans/`, but short and numbered.
