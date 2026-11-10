@@ -444,3 +444,107 @@ class TestRateAlertsAreNotNoise:
         history = _history("/srv", [(720, 57.0), (0, 60.0)])
 
         assert should_alert(usage, history) is True
+
+
+class TestRateAloneIsNotAnAlert:
+    """A fast rate with plenty of runway is not worth a page."""
+
+    def test_fast_rate_with_long_runway_does_not_alert(self):
+        # The 2026-11-10 incident: /srv growing 4GB/day with 43.7GB free is ~10.8 days to full.
+        usage = {"/srv": {"used_pct": 54, "used_gb": 50.2, "avail_gb": 43.7}}
+        history = _history("/srv", [(720, 48.2), (0, 50.2)])
+
+        assert should_alert(usage, history) is False
+
+    def test_fast_rate_with_short_runway_still_alerts(self):
+        usage = {"/srv": {"used_pct": 54, "used_gb": 50.2, "avail_gb": 20.0}}
+        history = _history("/srv", [(720, 48.2), (0, 50.2)])
+
+        assert should_alert(usage, history) is True
+
+
+class TestAlertContent:
+    """Alerts name only the mounts that breach, and say what to do."""
+
+    def test_only_breaching_mounts_are_listed(self):
+        usage = {
+            "/": {"used_pct": 17, "used_gb": 7.8, "avail_gb": 38.9},
+            "/srv": {"used_pct": 85, "used_gb": 85.0, "avail_gb": 15.0},
+        }
+
+        message = disk_monitor.build_alert(usage, [], [])
+
+        assert "/srv" in message
+        assert "Used: 17%" not in message
+
+    def test_each_reason_carries_a_what_to_do_line(self):
+        usage = {"/srv": {"used_pct": 85, "used_gb": 85.0, "avail_gb": 15.0}}
+
+        message = disk_monitor.build_alert(usage, [], [])
+
+        assert "just docker-prune-now" in message
+        assert "just disk-report" in message
+
+
+class TestAlertDedupe:
+    """The same condition is not re-sent every run."""
+
+    def _reasons(self, kind="warning"):
+        return [disk_monitor.Reason("/srv", kind)]
+
+    def test_first_occurrence_sends(self):
+        assert disk_monitor.should_send(self._reasons(), None, datetime.now()) is True
+
+    def test_same_reasons_within_a_day_do_not_resend(self):
+        now = datetime.now()
+        state = disk_monitor.alert_state(self._reasons(), now - timedelta(hours=2))
+
+        assert disk_monitor.should_send(self._reasons(), state, now) is False
+
+    def test_same_reasons_resend_after_a_day(self):
+        now = datetime.now()
+        state = disk_monitor.alert_state(self._reasons(), now - timedelta(hours=25))
+
+        assert disk_monitor.should_send(self._reasons(), state, now) is True
+
+    def test_escalation_sends_immediately(self):
+        now = datetime.now()
+        state = disk_monitor.alert_state(self._reasons("warning"), now - timedelta(hours=2))
+
+        assert disk_monitor.should_send(self._reasons("critical"), state, now) is True
+
+    def test_a_new_mount_sends_immediately(self):
+        now = datetime.now()
+        state = disk_monitor.alert_state(self._reasons(), now - timedelta(hours=2))
+        more = self._reasons() + [disk_monitor.Reason("/", "warning")]
+
+        assert disk_monitor.should_send(more, state, now) is True
+
+    def test_main_stays_silent_on_the_second_identical_run(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("DISK_MONITOR_CSV", str(tmp_path / "h.csv"))
+        df = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 88080384 16777216 84% /srv"
+        monkeypatch.setattr(disk_monitor, "ssh_command", lambda cmd: df if cmd.startswith("df") else "")
+
+        disk_monitor.main()
+        first = capsys.readouterr().out
+        disk_monitor.main()
+        second = capsys.readouterr().out
+
+        assert "/srv" in first
+        assert second == ""
+
+    def test_clearing_resets_so_a_recurrence_alerts_again(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("DISK_MONITOR_CSV", str(tmp_path / "h.csv"))
+        bad = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 88080384 16777216 84% /srv"
+        good = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 41943040 62914560 40% /srv"
+        df = {"v": bad}
+        monkeypatch.setattr(disk_monitor, "ssh_command", lambda cmd: df["v"] if cmd.startswith("df") else "")
+
+        disk_monitor.main()
+        df["v"] = good
+        disk_monitor.main()
+        df["v"] = bad
+        capsys.readouterr()
+        disk_monitor.main()
+
+        assert "/srv" in capsys.readouterr().out
