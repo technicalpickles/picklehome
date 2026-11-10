@@ -27,8 +27,9 @@ The README's Secrets section explains the two paths (local `.env` via `just dote
 1. Add the value to 1Password (prefer the `picklehome` vault). Do this **before** step 3: `op inject` fails hard on a reference to a nonexistent item, and since the template is one shared file, that breaks `just dotenv` for every module.
 2. Look up the exact field name: `op item get "Item Name" --vault picklehome --format json | jq '[.fields[] | {label, id}]'`
 3. Add the `{{ op://picklehome/Item/field }}` reference to `.env.template`
-4. Run `just dotenv` to regenerate `.env`
-5. If a deployed service needs it too, add the var name to that service's `.env.vars` (the deploy side filters `.env.template` by that list)
+4. If code on the Mac reads it, add the name to `.env.local.vars`. `just dotenv` resolves only the keys listed there, so a deploy-only secret never lands in the laptop's `.env`. `tests/scripts/test_dotenv_scope.py` fails when local code reads a template key that is missing from the list.
+5. Run `just dotenv` to regenerate `.env`
+6. If a deployed service needs it too, add the var name to that service's `.env.vars` (the deploy side filters `.env.template` by that list)
 
 **Gotcha:** `op inject` scans the *entire* `.env.template`, comments included. Writing a bare `op:` + `//` secret-reference scheme in explanatory prose makes it parse that prose as a real reference and fail the whole run (`invalid secret reference ... too few '/'`). Describe references in words, never by writing the literal scheme in a comment.
 

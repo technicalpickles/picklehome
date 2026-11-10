@@ -2,20 +2,26 @@
 # scripts/dotenv: generate .env from 1Password via op inject
 # Usage: scripts/dotenv [--template <path>] [--output <path>] [--force]
 #
+# Resolves only the keys listed in .env.local.vars (--vars), so deploy-only secrets
+# never reach the laptop. Pass --vars "" to resolve the whole template.
+#
 # Snapshots keys from the existing .env (if any) and verifies the newly
 # generated .env contains at least all of them, catching accidental omissions.
+# Keys left out on purpose by --vars are reported, not treated as omissions.
 # Use --force to skip the key check and reset from the template unconditionally.
 
 set -euo pipefail
 
 TEMPLATE=".env.template"
 OUTPUT=".env"
+VARS=".env.local.vars"
 FORCE=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --template) TEMPLATE="$2"; shift 2 ;;
         --output)   OUTPUT="$2";   shift 2 ;;
+        --vars)     VARS="$2";     shift 2 ;;
         --force)    FORCE=1;       shift   ;;
         *) echo "Unknown argument: $1" >&2; exit 1 ;;
     esac
@@ -29,9 +35,23 @@ fi
 
 # Inject into a temp file so the original is untouched until we verify
 tmp=$(mktemp)
-trap 'rm -f "$tmp"' EXIT
+scoped_template=$(mktemp)
+trap 'rm -f "$tmp" "$scoped_template"' EXIT
 
-op inject -f -i "$TEMPLATE" -o "$tmp"
+# Keep only the template lines whose key is allowlisted. Comments go too, which also
+# keeps op inject from parsing prose as a secret reference.
+if [[ -n "$VARS" ]]; then
+    if [[ ! -f "$VARS" ]]; then
+        echo "ERROR: vars file not found: $VARS (pass --vars \"\" for the whole template)" >&2
+        exit 1
+    fi
+    awk 'NR==FNR { if ($0 !~ /^[[:space:]]*(#|$)/) want[$1]=1; next }
+         /^[A-Z0-9_]+=/ { split($0, kv, "="); if (kv[1] in want) print }' "$VARS" "$TEMPLATE" > "$scoped_template"
+else
+    cp "$TEMPLATE" "$scoped_template"
+fi
+
+op inject -f -i "$scoped_template" -o "$tmp"
 
 # Wrap multiline/space-containing values in double quotes so python-dotenv can parse them.
 scripts/quote-env-values "$tmp"
@@ -60,6 +80,15 @@ printf "PICKLEHOME_LOCATIONS='%s'\n" "$locations_json" >> "$tmp"
 if [[ -n "$old_keys" ]]; then
     new_keys=$(grep -v '^#' "$tmp" | grep -v '^[[:space:]]*$' | cut -d= -f1 | sort)
     missing=$(comm -23 <(echo "$old_keys") <(echo "$new_keys"))
+    if [[ -n "$VARS" && -n "$missing" ]]; then
+        wanted=$(grep -vE '^[[:space:]]*(#|$)' "$VARS" | awk '{print $1}' | sort)
+        scoped_out=$(comm -23 <(echo "$missing") <(echo "$wanted"))
+        missing=$(comm -12 <(echo "$missing") <(echo "$wanted"))
+        if [[ -n "$scoped_out" ]]; then
+            echo "Dropped $(echo "$scoped_out" | wc -l | tr -d ' ') key(s) not listed in $VARS (deploy-only):" >&2
+            echo "$scoped_out" | sed 's/^/  /' >&2
+        fi
+    fi
     if [[ -n "$missing" ]]; then
         echo "ERROR: these keys were in $OUTPUT but are missing from the new one:" >&2
         echo "$missing" >&2
