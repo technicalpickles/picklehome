@@ -170,6 +170,17 @@ def test_dev_overlay_covers_every_blocked_vault_key_openclaw_uses():
     assert blocked <= overlay_keys, sorted(blocked - overlay_keys)
 
 
+def test_dev_overlay_overrides_every_error_tracker_dsn():
+    """The dev service account can read the picklehome vault, so a DSN that
+    falls through to the base template would point a dev host at the prod
+    Bugsink project. Every *_SENTRY_DSN key must come from the dev overlay."""
+    base_keys = set(re.findall(r"^([A-Z0-9_]+)=", BASE_TEMPLATE.read_text(), re.M))
+    dsn_keys = {k for k in base_keys if k.endswith("_SENTRY_DSN")}
+    assert dsn_keys, "expected at least one *_SENTRY_DSN key in .env.template"
+    overlay_keys = set(re.findall(r"^([A-Z0-9_]+)=", DEV_OVERLAY.read_text(), re.M))
+    assert dsn_keys <= overlay_keys, sorted(dsn_keys - overlay_keys)
+
+
 def test_dev_overlay_only_references_dev_vault():
     for line in DEV_OVERLAY.read_text().splitlines():
         if re.match(r"^[A-Z0-9_]+=", line):

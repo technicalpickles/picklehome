@@ -30,6 +30,9 @@ services:
       # production without a usable token, so deploy.sh checks the file exists first.
       BRINEWORKS_KEYRING_FILE: /keyring/cryptfile.cfg
       KEYRING_CRYPTFILE_PASSWORD: ${BRINEWORKS_SERVER_KEYRING_PASSWORD:?set via .env.vars / 1Password}
+      # Bugsink on picklelab (Sentry protocol). The server only reads this from brineworks
+      # #145 on; older images ignore it (Settings has extra="ignore").
+      BRINEWORKS_SENTRY_DSN: ${BRINEWORKS_SENTRY_DSN:?set via .env.vars / 1Password}
     volumes:
       # Directory, not file: token refresh writes back. Seeded by `just seed-brineworks-gmail`.
       - /srv/data/brineworks-server/keyring:/keyring
