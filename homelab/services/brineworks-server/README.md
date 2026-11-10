@@ -94,7 +94,7 @@ Injected from the root `.env` via `compose.picklelab.yaml`:
 | `BRINEWORKS_OPENCLAW_MCP_KEY` | Secret for the `openclaw` label in `BRINEWORKS_API_KEYS` (the overlay builds the JSON). OpenClaw's MCP client authenticates with it, so `brineworks.auth` logs show `openclaw` instead of `default`. 1Password: `Brineworks Server` field `openclaw_mcp_key`. Must be hex (`openssl rand -hex 32`): the overlay embeds it in JSON unescaped. |
 | `BRINEWORKS_API_KEY` | Bearer token for API authentication (all endpoints except /health) |
 | `BRINEWORKS_SERVER_KEYRING_PASSWORD` | Master password for the Gmail token keyring. Set in the container as `KEYRING_CRYPTFILE_PASSWORD`; the `.env` name differs because that one is the agent's. |
-| `BRINEWORKS_SENTRY_DSN` | DSN for the Bugsink project the server reports its exceptions to (Bugsink speaks the Sentry protocol). 1Password: `Brineworks Server` field `sentry_dsn`. Required by the overlay; images older than brineworks#145 ignore it. |
+| `BRINEWORKS_SENTRY_DSN` | DSN for the Bugsink project the server reports its exceptions to (Bugsink speaks the Sentry protocol). 1Password: `Brineworks Server` field `sentry_dsn`; dev hosts read `Brineworks Server dev` in `picklehome-dev` instead, which points at a separate Bugsink project. Required by the overlay; images older than brineworks#145 ignore it. |
 
 `BRINEWORKS_KEYRING_FILE` (`/keyring/cryptfile.cfg`) is set directly in `compose.picklelab.yaml` (not a secret).
 
