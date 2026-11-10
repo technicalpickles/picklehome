@@ -22,6 +22,10 @@ climate-status *ARGS:
 climate-history *ARGS:
     uv run python -m climate.sync history {{ARGS}}
 
+# Replay the comfort auto-switch band (and --band LO/HI alternatives) against runtime history
+climate-replay-band *ARGS:
+    uv run python -m climate.sync replay-band {{ARGS}}
+
 # Push schedule.yaml to Ecobee
 climate-sync *ARGS:
     uv run python -m climate.sync sync {{ARGS}}
