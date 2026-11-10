@@ -2,55 +2,107 @@
 
 Task `4f58f8a5`. See the [shared procedure](README.md#rotating-secrets) first.
 
+Screens below were walked through in the admin console on 2026-11-10.
+
 | Secret | 1Password | Used by | Action |
 |---|---|---|---|
-| `WOODPECKER_TS_AUTHKEY` | `picklehome/Woodpecker CI/ts_authkey` | `ts-woodpecker` sidecar (Woodpecker's tailnet identity and Funnel) | Rotate and redeploy |
-| `TAILSCALE_OAUTH_CLIENT_ID` / `_SECRET` | `picklehome/Tailscale API/client_id`, `client_secret` | `network/tailscale_audit.py` (read-only audit) | Replace the OAuth client |
-| `TS_AUTHKEY` | none now | brineworks-agent sidecar (torn down) | Revoke only |
-| `SECOND_BRAIN_AGENT_TS_AUTHKEY` | none now | second-brain-agent sidecar (torn down) | Revoke only |
+| `WOODPECKER_TS_AUTHKEY` | `picklehome/Woodpecker CI/ts_authkey` | `ts-woodpecker` sidecar (Woodpecker's tailnet identity and Funnel) | Mint a fresh key, store it. No deploy needed |
+| `TAILSCALE_OAUTH_CLIENT_ID` / `_SECRET` | `picklehome/Tailscale API/client_id`, `client_secret` | `network/tailscale_audit.py` (read-only audit) | Replace the OAuth credential |
+| `TS_AUTHKEY` | none now | brineworks-agent sidecar (torn down) | Revoke only. Done 2026-11-10 |
+| `SECOND_BRAIN_AGENT_TS_AUTHKEY` | none now | second-brain-agent sidecar (torn down) | Revoke only. Done 2026-11-10 |
 
-Revoking an auth key does not remove a node that already joined with it. The
-sidecar keeps its node identity in `TS_STATE_DIR`. A key is only needed to
-join, so the risk of leaving the old one live is someone else joining the
-tailnet with it.
+## What an auth key is for
 
-## 1. Revoke the dead keys
+An auth key only lets a device join. `ts-woodpecker` keeps its node identity in
+`/srv/data/woodpecker/ts-state` on picklelab (bind-mounted to `/var/lib/tailscale`),
+so a running or restarted sidecar does not use the key. Checked 2026-11-10: the
+stack restarted at 13:12 UTC and came back healthy, tagged `tag:ci`, with no node
+key expiry, even though the Woodpecker auth key from the original build no longer
+appears in the Keys list. Auth keys last 90 days at most and expired keys drop out
+of the list, so it has almost certainly expired (it was created for the June build).
 
-Tailscale admin console, Settings, Keys. Find the keys for brineworks-agent and
-second-brain-agent (the auth keys, not the machines) and revoke them. Nothing to
-deploy. If you can't tell which is which, the creation dates and the `tag:`
-they carry narrow it down. Check that no machine you still use shows up as
-created by that key before revoking.
+What follows from that:
 
-## 2. Rotate the Woodpecker auth key
+- The exposed Woodpecker key is already dead. There is nothing to revoke.
+- A key only matters if the state directory is lost and the sidecar has to join
+  again. Because any key expires within 90 days, the one stored in 1Password
+  will be expired by then anyway. Keep a recent one there so a rebuild works,
+  and expect to mint a new one if you rebuild much later.
+- Revoking a key never removes a device that already joined with it.
+- Replacing the key does not need a deploy, so Woodpecker is not interrupted. The
+  new value is picked up on the next deploy.
 
-1. Admin console, Settings, Keys, Generate auth key. Reusable, tag `tag:ci`,
-   expiry as long as allowed. Auth keys expire (90 days at most), but only
-   matters if the sidecar has to rejoin.
-2. Put it in the `ts_authkey` field of `Woodpecker CI` in 1Password (app, not
-   `op`).
-3. `just deploy-woodpecker`
-4. Check: `just woodpecker-status` shows `ts-woodpecker` up, and
-   `https://woodpecker.tail2023b7.ts.net` loads from a tailnet device.
-5. Check the webhook path: push an empty commit to a repo with a Woodpecker
-   pipeline and confirm a pipeline starts. The Funnel is how GitHub reaches
-   Woodpecker.
-6. Revoke the old key in the admin console.
+## Admin console map
 
-## 3. Replace the OAuth client
+Sign in at `https://login.tailscale.com/admin`, then the left nav, Settings:
 
-1. Before anything, open the old OAuth client and note its scopes. The audit is
-   read-only, so it should need nothing writable. **Verify** against the header
-   of `network/tailscale_audit.py`.
-2. Admin console, Settings, OAuth clients, Generate with the same scopes.
-3. Put the id and secret into `picklehome/Tailscale API` in 1Password.
-4. `just dotenv` to refresh the local `.env`, then run `network/tailscale_audit.py`
-   and confirm it reads the policy file.
-5. Delete the old OAuth client.
+| You want | Go to | Notes |
+|---|---|---|
+| Auth keys | Settings, Keys (`/admin/settings/keys`) | "Auth keys" list. Each row shows ID and Type. Expand the row (chevron) for Created, Expires, Description and Tags. `Revoke…` is per row. |
+| API access tokens | Settings, Keys, same page, lower section | Short-lived tokens for the Tailscale API |
+| OAuth clients | Settings, Trust credentials (`/admin/settings/trust-credentials`) | Not called "OAuth clients" any more. Columns: Client ID, Type, Scopes. `+ Credential` adds one, the row's `…` menu manages it. |
+
+Expired keys drop out of the list, and only the Description tells keys apart, so
+always set one. As of 2026-11-10 the list holds three keys that belong to other
+projects (two dev keys, one laptop CI key tagged `tag:ci-agent`). Leave them.
+
+## 1. Dead keys (done 2026-11-10)
+
+The brineworks-agent and second-brain-agent keys were revoked from Settings,
+Keys, `Revoke…` on the row. Nothing was deployed.
+
+## 2. Mint a fresh Woodpecker key
+
+Settings, Keys, `Generate auth key…`. The dialog has:
+
+| Field | Set to |
+|---|---|
+| Description | `woodpecker ci, rotated YYYY-MM` (this is how you find it later) |
+| Reusable | On |
+| Expiration | Days until the key stops working, 1 to 90, default 90. Leave 90 |
+| Ephemeral | Off. On would delete the node whenever it goes offline |
+| Tags | On, then pick `tag:ci`. Tagging also disables node key expiry, which the sidecar relies on |
+
+`Generate key` shows the value once. Copy it into the `ts_authkey` field of the
+`Woodpecker CI` item in the 1Password app, then close the dialog. Do not paste it
+anywhere else.
+
+Nothing else is required. If you want the running container to use it right away,
+`just deploy-woodpecker` restarts the stack. That kills any pipeline in flight and
+drops webhooks during the gap (GitHub does not retry them), so only do it in a
+quiet window, then redeliver any missed push from the repo's Settings, Webhooks,
+Recent deliveries. After the restart check `just woodpecker-status` and push a
+commit that triggers a pipeline.
+
+## 3. Replace the OAuth credential
+
+The audit tool only reads, and the existing credential has the single scope
+`all:read`.
+
+1. Settings, Trust credentials. Note the existing credential's Client ID and scope.
+2. `+ Credential`, choose OAuth, and give it the same read scope. **Verify** the
+   dialog's exact fields and which scope name to pick the first time.
+3. Put the Client ID and secret in `picklehome/Tailscale API` in 1Password, using
+   the app.
+4. `just dotenv`, then run `network/tailscale_audit.py` and confirm it reads the
+   policy file.
+5. Delete the old credential from its `…` menu.
+
+## CLI alternatives
+
+- **Listing keys.** The existing read-only credential can list auth keys through
+  the API (`GET /api/v2/tailnet/-/keys`). **Verify** that `all:read` covers it.
+  `network/tailscale_audit.py` is the place to add a keys listing, which would let
+  you audit keys without opening the console.
+- **Creating or revoking keys.** The API can do both, but only with a credential
+  that can write keys. That is a stronger secret than the one you are rotating, and
+  the point of the incident was keeping secrets out of command lines. For a task you
+  do a few times a year, the console is the better tool. The `tailscale` CLI itself
+  cannot mint auth keys.
 
 ## Done when
 
-- The two dead keys and the old Woodpecker key show as revoked.
-- The old OAuth client is deleted.
-- Woodpecker runs a pipeline from a fresh push.
+- Settings, Keys lists no key for brineworks-agent or second-brain-agent.
+- A key described `woodpecker ci, rotated YYYY-MM` exists and is in 1Password.
+- The old OAuth credential is deleted and the audit still works.
 - `task 4f58f8a5 done`.
