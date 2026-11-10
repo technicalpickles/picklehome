@@ -724,6 +724,10 @@ Docker split.
 Second, short downtime for Docker only (the host stays up). Taskwarrior
 `b584df49`.
 
+Scripted: `homelab/scripts/disk-swap/docker-split.sh` (`seed`, then `cutover`,
+then `cleanup` a day later) does the steps below, rerunnable, and the
+checklist stays as the reference for what each phase does.
+
 Why after the swap and not folded into it: creating LVs on the PNY breaks the
 reverse-`pvmove` rollback, and the split's own downtime is minutes with a
 pre-seeded rsync. A second short window beats losing the escape hatch during
