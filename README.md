@@ -164,7 +164,7 @@ For a guided first-time walkthrough of the climate tools, see [`docs/climate-set
 
 Everything lives in 1Password (the `picklehome` vault, mostly). There are two ways it gets to code, and they don't overlap:
 
-- **Local dev on the Mac:** `just dotenv` runs `op inject` over `.env.template` to produce a gitignored `.env`, which scripts load via `python-dotenv` (and `just` loads via `set dotenv-load`).
+- **Local dev on the Mac:** `just dotenv` runs `op inject` over the keys listed in `.env.local.vars` (a subset of `.env.template`) to produce a gitignored `.env`, which scripts load via `python-dotenv` (and `just` loads via `set dotenv-load`). Deploy-only secrets are left out on purpose.
 - **Deployed services on picklelab:** no `.env` at all. Each service's systemd unit wraps `docker compose` in `op run` against a read-only service-account token on the host, so secrets resolve at container start and never touch disk. `just dotenv` isn't part of that path.
 
 `CLAUDE.md` has the step-by-step for adding a secret and the gotchas; `homelab/services/README.md` has the deploy side.
