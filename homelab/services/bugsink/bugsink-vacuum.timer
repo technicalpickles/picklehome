@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Bugsink event age cap
+
+[Timer]
+# After the 03:00 backup, so a dump never races a large delete.
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

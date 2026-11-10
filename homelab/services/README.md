@@ -281,6 +281,26 @@ See [brineworks-server/README.md](brineworks-server/README.md) for full setup.
 
 ---
 
+### bugsink
+
+Self-hosted error tracker (Sentry SDK protocol) for the Brent stack: brineworks-server's exceptions and Brent's failed tool calls.
+
+| | |
+|---|---|
+| **Purpose** | Group failures into issues, track resolve and regress |
+| **Compose** | `/opt/homelab/homelab/services/bugsink/` |
+| **Data** | `/srv/data/bugsink/` (Postgres) |
+| **Access** | `https://bugsink.<tailnet>.ts.net` (Tailscale Services, port 8380 internally) |
+| **Env vars** | `BUGSINK_SECRET_KEY`, `BUGSINK_DB_PASSWORD`, `BUGSINK_ADMIN_EMAIL`, `BUGSINK_ADMIN_PASSWORD` |
+| **Backup** | Yes, nightly (`pg_dumpall` via the `backup` service's `dump_postgres`) |
+| **Restart** | `restart: unless-stopped`; `bugsink-vacuum.timer` daily for the 90-day age cap |
+
+Commands: `just deploy-bugsink`, `just bugsink-verify`, `just bugsink-logs`
+
+See [bugsink/README.md](bugsink/README.md) for retention, secrets and the first-deploy order.
+
+---
+
 
 ---
 

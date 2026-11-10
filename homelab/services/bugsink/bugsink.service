@@ -1,0 +1,24 @@
+[Unit]
+Description=Bugsink error tracker (Django + Postgres)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+# Retry forever (never trip the start-rate limit): covers `op` not resolving DNS
+# right after boot, same as brineworks-server.service.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30
+WorkingDirectory=/opt/homelab/homelab/services/bugsink
+EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+# Written by deploy.sh: BUGSINK_PORT and BUGSINK_BASE_URL, which compose's strict
+# ${VAR:?...} interpolation needs when systemd restarts the unit with an empty env.
+EnvironmentFile=/opt/homelab/homelab/services/bugsink/.env.build
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/bugsink/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d
+ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/bugsink/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
+
+[Install]
+WantedBy=multi-user.target

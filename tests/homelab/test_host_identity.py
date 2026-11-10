@@ -165,8 +165,8 @@ def test_every_deploy_sh_that_uses_identity_sources_it():
 
 def test_deploy_scripts_have_no_bare_service_names_left():
     # Every svc: name must carry the suffix, so a dev box can't serve a prod name.
-    bare = re.compile(r"svc:(openclaw-widgets|openclaw|brineworks)(?!-widgets)(?!\$\{HOMELAB_SERVICE_SUFFIX\?\})")
-    for name in ("openclaw", "brineworks-server"):
+    bare = re.compile(r"svc:(openclaw-widgets|openclaw|brineworks|bugsink)(?!-widgets)(?!\$\{HOMELAB_SERVICE_SUFFIX\?\})")
+    for name in ("openclaw", "brineworks-server", "bugsink"):
         f = ROOT / "homelab" / "services" / name / "deploy.sh"
         for n, line in enumerate(f.read_text().splitlines(), 1):
             if line.lstrip().startswith("#"):

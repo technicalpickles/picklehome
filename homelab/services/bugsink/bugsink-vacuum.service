@@ -1,0 +1,11 @@
+[Unit]
+Description=Delete Bugsink events older than MAX_EVENT_AGE_DAYS
+After=bugsink.service docker.service
+Requires=docker.service
+OnFailure=notify-failure@%n.service
+
+[Service]
+Type=oneshot
+# Bugsink applies the age cap only when vacuum runs. By container name, not
+# `docker compose exec`, so no secrets are needed to interpolate the compose file.
+ExecStart=/usr/bin/docker exec bugsink-web-1 bugsink-manage vacuum --old-events

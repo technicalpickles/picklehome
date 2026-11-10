@@ -243,6 +243,36 @@ brineworks-server-logs-follow host="picklelab":
     ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs -f"
 
 
+# Deploy the Bugsink error tracker to picklelab (idempotent: first setup or update)
+deploy-bugsink host="picklelab":
+    just _deploy-remote bugsink {{host}}
+
+# Verify Bugsink: health, pinned version, Postgres, vacuum timer on the host, then the login page over the tailnet from here (read-only)
+bugsink-verify host="picklelab":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    ssh {{host}} 'bash -s' < homelab/services/bugsink/verify.sh
+    rc=$?
+    echo "==> Login page over the tailnet (from $(hostname -s))"
+    # deploy.sh writes the served URL into .env.build, so this never guesses the tailnet name.
+    url=$(ssh {{host}} "sed -n 's/^BUGSINK_BASE_URL=//p' /opt/homelab/homelab/services/bugsink/.env.build" </dev/null)
+    if [ -z "$url" ]; then
+        echo "    FAIL: no BUGSINK_BASE_URL in .env.build on {{host}} (deployed yet?)"
+        exit 1
+    fi
+    if curl -fsS --max-time 15 -o /dev/null "$url/accounts/login/"; then
+        echo "    PASS: $url/accounts/login/ loads"
+    else
+        echo "    FAIL: $url/accounts/login/ did not load (Tailscale Service approved?)"
+        rc=1
+    fi
+    if [ "$rc" -eq 0 ]; then echo "PASS"; else echo "FAIL"; fi
+    exit "$rc"
+
+# Tail Bugsink container logs from picklelab (by container name: compose would need the 1Password token)
+bugsink-logs host="picklelab" lines="50":
+    ssh {{host}} "docker logs --tail={{lines}} bugsink-web-1"
+
 # Deploy Woodpecker CI to picklelab (idempotent: first setup or update)
 deploy-woodpecker host="picklelab":
     just _deploy-remote woodpecker {{host}}

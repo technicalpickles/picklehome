@@ -10,6 +10,7 @@ Everything under `/srv/data`, except the raw Postgres data directories (backed u
 |---------|----------|-----|
 | climate-auto-switch | OAuth tokens, last-state, run log | restic snapshots `/srv/data/climate-auto-switch/` directly (flat files, no database) |
 | brineworks-server | Postgres data | `dump_postgres` runs `pg_dumpall` into `/srv/data/brineworks-server/dumps/pg_dumpall.sql`; the raw `db/` dir is excluded from the restic run |
+| bugsink | Postgres data | Same as brineworks-server, into `/srv/data/bugsink/dumps/pg_dumpall.sql`; raw `db/` excluded |
 
 See [How Database Dumps Work](#how-database-dumps-work) for the `dump_postgres` mechanics.
 

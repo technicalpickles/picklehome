@@ -61,10 +61,12 @@ check_sqlite_snapshot() {
 
 DUMP_FAILURES=0
 dump_postgres "brineworks-server" "brineworks" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
+dump_postgres "bugsink" "bugsink" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 check_sqlite_snapshot "openclaw.sqlite" || DUMP_FAILURES=$((DUMP_FAILURES + 1))
 
 # --- Restic backup ---
-# Exclude /srv/data/brineworks-server/db: the raw Postgres data dir. The
+# Exclude /srv/data/brineworks-server/db and /srv/data/bugsink/db: the raw
+# Postgres data dirs. The
 # pg_dumpall above is the authoritative database backup -- the raw dir is
 # large, owned by the postgres container's uid (unreadable by the backup
 # user), and not consistent unless postgres is stopped.
@@ -100,6 +102,7 @@ echo "==> Running restic backup"
 restic backup "$DATA_DIR" --tag "$BACKUP_TAG" --verbose \
     --exclude "$DATA_DIR/brineworks-server/db" \
     --exclude "$DATA_DIR/brineworks-server/keyring" \
+    --exclude "$DATA_DIR/bugsink/db" \
     --exclude "$DATA_DIR/open-webui/openclaw-bridge" \
     --exclude "$DATA_DIR/open-webui/.cache" \
     --exclude "$DATA_DIR/open-webui/cache/embedding" \
