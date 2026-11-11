@@ -358,6 +358,14 @@ deploy-disk-monitor host="picklelab":
 disk-monitor-run-now host="picklelab":
     ssh {{host}} "sudo systemctl start disk-monitor.service; journalctl -u disk-monitor.service -n 60 --no-pager"
 
+# Deploy the host-state collector timer to picklelab (writes /var/lib/host-state/picklelab.json every 5 min)
+deploy-host-state host="picklelab":
+    just _deploy-remote host-state {{host}}
+
+# Run the host-state collector now on picklelab (triggers the systemd service, then shows its log)
+host-state-run-now host="picklelab":
+    ssh {{host}} "sudo systemctl start host-state.service; journalctl -u host-state.service -n 60 --no-pager"
+
 # Run backup now on picklelab (manual trigger)
 backup-now host="picklelab":
     ssh {{host}} "sudo systemctl start backup.service"
