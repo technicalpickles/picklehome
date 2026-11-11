@@ -51,11 +51,11 @@ class TestCalculateRate:
     """Test rate of change calculation."""
 
     def test_calculate_rate_from_history(self):
-        # Create history: 12 hours ago at 50GB, now at 51GB (within 24h window)
+        # 48 hours ago at 50GB, now at 54GB
         now = datetime.now()
         history = [
             {
-                "timestamp": now - timedelta(hours=12),
+                "timestamp": now - timedelta(hours=48),
                 "mount": "/",
                 "used_pct": 50.0,
                 "used_gb": 50.0,
@@ -63,14 +63,14 @@ class TestCalculateRate:
             {
                 "timestamp": now,
                 "mount": "/",
-                "used_pct": 51.0,
-                "used_gb": 51.0,
+                "used_pct": 54.0,
+                "used_gb": 54.0,
             },
         ]
 
         gb_per_day, pct_per_week = calculate_rate(history, "/")
 
-        # 1GB over 12 hours = 2 GB/day
+        # 4GB over 48 hours = 2 GB/day
         assert gb_per_day == pytest.approx(2.0, rel=0.1)
         assert pct_per_week == pytest.approx(14.0, rel=0.1)
 
@@ -78,7 +78,7 @@ class TestCalculateRate:
         now = datetime.now()
         history = [
             {
-                "timestamp": now - timedelta(hours=12),
+                "timestamp": now - timedelta(hours=48),
                 "mount": "/",
                 "used_pct": 60.0,
                 "used_gb": 60.0,
@@ -86,14 +86,14 @@ class TestCalculateRate:
             {
                 "timestamp": now,
                 "mount": "/",
-                "used_pct": 59.0,
-                "used_gb": 59.0,
+                "used_pct": 56.0,
+                "used_gb": 56.0,
             },
         ]
 
         gb_per_day, _ = calculate_rate(history, "/")
 
-        # -1GB over 12 hours = -2 GB/day
+        # -4GB over 48 hours = -2 GB/day
         assert gb_per_day == pytest.approx(-2.0, rel=0.1)
 
     def test_calculate_rate_insufficient_history(self):
@@ -149,15 +149,15 @@ class TestShouldAlert:
         assert should_alert(usage, history) is False
 
     def test_alert_on_high_fill_rate(self):
-        # Normal usage but filling fast: 3GB over 12 hours = 6GB/day > 2GB/day threshold
+        # Normal usage but filling fast: 20GB over 48 hours = 10GB/day, 4 days of runway
         usage = {"/": {"used_pct": 60, "used_gb": 60, "avail_gb": 40}}
         now = datetime.now()
         history = [
             {
-                "timestamp": now - timedelta(hours=12),
+                "timestamp": now - timedelta(hours=48),
                 "mount": "/",
-                "used_pct": 57.0,
-                "used_gb": 57.0,
+                "used_pct": 40.0,
+                "used_gb": 40.0,
             },
             {
                 "timestamp": now,
@@ -169,30 +169,27 @@ class TestShouldAlert:
 
         assert should_alert(usage, history) is True
 
-    def test_build_alert_includes_disk_report(self):
+    def test_build_alert_points_at_disk_report_instead_of_embedding_it(self):
         usage = {"/": {"used_pct": 85, "used_gb": 25.5, "avail_gb": 4.5}}
-        history = []
-        top_paths = ["25G /srv/data", "10G /srv/containerd"]
-        disk_report = "=== Filesystem usage ===\nFilesystem..."
 
-        message = build_alert(usage, history, top_paths, disk_report)
+        message = build_alert(usage, [])
 
         assert "🚨 Picklelab Disk Alert" in message
         assert "⚠️ WARNING /" in message
-        assert "25G /srv/data" in message
-        assert "Full disk-report:" in message
-        assert "=== Filesystem usage ===" in message
+        assert "just disk-report" in message
+        assert "Top /srv paths" not in message
+        assert "Full disk-report:" not in message
 
     def test_alert_on_time_to_full(self):
-        # 10GB free, filling at 3GB over 12h = 6GB/day, ~1.67 days to full < 7 day threshold
+        # 10GB free, filling at 6GB over 48h = 3GB/day, ~3.3 days to full < 7 day threshold
         usage = {"/": {"used_pct": 70, "used_gb": 70, "avail_gb": 10}}
         now = datetime.now()
         history = [
             {
-                "timestamp": now - timedelta(hours=12),
+                "timestamp": now - timedelta(hours=48),
                 "mount": "/",
-                "used_pct": 67.0,
-                "used_gb": 67.0,
+                "used_pct": 64.0,
+                "used_gb": 64.0,
             },
             {
                 "timestamp": now,
@@ -296,14 +293,6 @@ class TestGetDiskUsage:
 
         assert ssh.call_args.args[0].rstrip().endswith("|| true")
 
-    def test_top_paths_does_not_pin_to_one_filesystem(self):
-        with patch.object(disk_monitor, "ssh_command", return_value="1G /srv/data") as ssh:
-            disk_monitor.get_top_paths()
-
-        cmd = ssh.call_args.args[0]
-        assert "du " in cmd
-        assert " -x" not in cmd and "-xh" not in cmd
-
 
 class TestSshTarget:
     """The ssh user is configuration, not a hardcoded name."""
@@ -332,11 +321,6 @@ class TestSshFailureIsLoud:
         assert code == 1
         assert "could not check picklelab" in out.lower()
         assert "Permission denied" in out
-
-    def test_a_failing_top_paths_lookup_does_not_hide_the_alert(self):
-        with patch.object(disk_monitor, "ssh_command", side_effect=SshError("boom")):
-            assert disk_monitor.get_top_paths() == []
-            assert disk_monitor.get_disk_report() is None
 
 
 class TestLocalMode:
@@ -433,15 +417,29 @@ class TestRateAlertsAreNotNoise:
 
         assert should_alert(usage, history) is False
 
-    def test_no_rate_from_less_than_six_hours_of_history(self):
-        history = _history("/srv", [(300, 40.0), (0, 44.0)])
+    def test_no_rate_from_less_than_a_day_of_history(self):
+        history = _history("/srv", [(23 * 60, 40.0), (0, 44.0)])
 
         assert calculate_rate(history, "/srv") == (None, None)
 
+    def test_a_new_mount_with_a_few_hours_of_history_does_not_alert(self):
+        # /srv/ci-docker, 2026-11-10: 1.5GB from one CI build over 6h read as 6GB/day, 3 days to full.
+        usage = {"/srv/ci-docker": {"used_pct": 38, "used_gb": 10.8, "avail_gb": 18.2}}
+        history = _history("/srv/ci-docker", [(480, 9.3), (360, 9.3), (0, 10.8)])
+
+        assert should_alert(usage, history) is False
+
+    def test_a_one_off_step_does_not_extrapolate_into_an_alert(self):
+        # /srv, 2026-11-10: a migration added 5GB in one day after three flat days.
+        usage = {"/srv": {"used_pct": 54, "used_gb": 50.2, "avail_gb": 30.0}}
+        history = _history("/srv", [(4300, 45.0), (1320, 45.0), (0, 50.2)])
+
+        assert should_alert(usage, history) is False
+
     def test_sustained_growth_still_alerts(self):
-        # 3GB over 12 hours is 6GB/day, past the 2GB/day threshold, and the window is long enough.
+        # 18GB over 48 hours is 9GB/day with 4 days of runway.
         usage = {"/srv": {"used_pct": 60, "used_gb": 60.0, "avail_gb": 40.0}}
-        history = _history("/srv", [(720, 57.0), (0, 60.0)])
+        history = _history("/srv", [(2880, 42.0), (0, 60.0)])
 
         assert should_alert(usage, history) is True
 
@@ -450,15 +448,15 @@ class TestRateAloneIsNotAnAlert:
     """A fast rate with plenty of runway is not worth a page."""
 
     def test_fast_rate_with_long_runway_does_not_alert(self):
-        # The 2026-11-10 incident: /srv growing 4GB/day with 43.7GB free is ~10.8 days to full.
+        # /srv growing 4GB/day with 43.7GB free is ~10.8 days to full.
         usage = {"/srv": {"used_pct": 54, "used_gb": 50.2, "avail_gb": 43.7}}
-        history = _history("/srv", [(720, 48.2), (0, 50.2)])
+        history = _history("/srv", [(2880, 42.2), (0, 50.2)])
 
         assert should_alert(usage, history) is False
 
     def test_fast_rate_with_short_runway_still_alerts(self):
         usage = {"/srv": {"used_pct": 54, "used_gb": 50.2, "avail_gb": 20.0}}
-        history = _history("/srv", [(720, 48.2), (0, 50.2)])
+        history = _history("/srv", [(2880, 42.2), (0, 50.2)])
 
         assert should_alert(usage, history) is True
 
@@ -472,7 +470,7 @@ class TestAlertContent:
             "/srv": {"used_pct": 85, "used_gb": 85.0, "avail_gb": 15.0},
         }
 
-        message = disk_monitor.build_alert(usage, [], [])
+        message = disk_monitor.build_alert(usage, [])
 
         assert "/srv" in message
         assert "Used: 17%" not in message
@@ -480,7 +478,7 @@ class TestAlertContent:
     def test_each_reason_carries_a_what_to_do_line(self):
         usage = {"/srv": {"used_pct": 85, "used_gb": 85.0, "avail_gb": 15.0}}
 
-        message = disk_monitor.build_alert(usage, [], [])
+        message = disk_monitor.build_alert(usage, [])
 
         assert "just docker-prune-now" in message
         assert "just disk-report" in message
@@ -533,18 +531,112 @@ class TestAlertDedupe:
         assert "/srv" in first
         assert second == ""
 
-    def test_clearing_resets_so_a_recurrence_alerts_again(self, monkeypatch, tmp_path, capsys):
+
+class _Clock:
+    """Stand-in for disk_monitor.datetime whose now() the test moves."""
+
+    def __init__(self, monkeypatch, start):
+        self.t = start
+        clock = self
+
+        class FakeDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return clock.t
+
+        monkeypatch.setattr(disk_monitor, "datetime", FakeDatetime)
+
+    def advance(self, **kw):
+        self.t += timedelta(**kw)
+
+
+BAD_DF = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 88080384 16777216 84% /srv"
+GOOD_DF = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 41943040 62914560 40% /srv"
+
+
+class TestAlertClearingHasHysteresis:
+    """One clean reading is not recovery; a mount hovering on a threshold must not re-alert every swing."""
+
+    def _setup(self, monkeypatch, tmp_path):
         monkeypatch.setenv("DISK_MONITOR_CSV", str(tmp_path / "h.csv"))
-        bad = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 88080384 16777216 84% /srv"
-        good = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 41943040 62914560 40% /srv"
-        df = {"v": bad}
-        monkeypatch.setattr(disk_monitor, "ssh_command", lambda cmd: df["v"] if cmd.startswith("df") else "")
+        df = {"v": BAD_DF}
+        commands = []
+
+        def fake(cmd):
+            commands.append(cmd)
+            return df["v"] if cmd.startswith("df") else ""
+
+        monkeypatch.setattr(disk_monitor, "ssh_command", fake)
+        return df, commands, _Clock(monkeypatch, datetime(2026, 11, 10, 12, 0))
+
+    def test_a_brief_dip_then_recurrence_stays_quiet(self, monkeypatch, tmp_path, capsys):
+        df, _, clock = self._setup(monkeypatch, tmp_path)
 
         disk_monitor.main()
-        df["v"] = good
+        assert "/srv" in capsys.readouterr().out
+
+        df["v"] = GOOD_DF
+        clock.advance(hours=2)
         disk_monitor.main()
-        df["v"] = bad
+        df["v"] = BAD_DF
+        clock.advance(hours=2)
+        disk_monitor.main()
+
+        assert capsys.readouterr().out == ""
+
+    def test_staying_clear_long_enough_resets_so_a_recurrence_alerts(self, monkeypatch, tmp_path, capsys):
+        df, _, clock = self._setup(monkeypatch, tmp_path)
+
+        disk_monitor.main()
+        df["v"] = GOOD_DF
+        for _ in range(4):
+            clock.advance(hours=2)
+            disk_monitor.main()
+        df["v"] = BAD_DF
+        clock.advance(hours=2)
         capsys.readouterr()
         disk_monitor.main()
 
         assert "/srv" in capsys.readouterr().out
+
+    def test_a_recurrence_restarts_the_clear_clock(self, monkeypatch, tmp_path, capsys):
+        df, _, clock = self._setup(monkeypatch, tmp_path)
+
+        disk_monitor.main()
+        df["v"] = GOOD_DF
+        clock.advance(hours=4)
+        disk_monitor.main()
+        df["v"] = BAD_DF
+        clock.advance(hours=2)
+        disk_monitor.main()
+        df["v"] = GOOD_DF
+        clock.advance(hours=2)
+        disk_monitor.main()
+        df["v"] = BAD_DF
+        clock.advance(hours=2)
+        capsys.readouterr()
+        disk_monitor.main()
+
+        assert capsys.readouterr().out == ""
+
+
+class TestAlertPathIsCheap:
+    """The alert never runs du or disk-report; the message points at `just disk-report` instead."""
+
+    def test_main_runs_only_df(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("DISK_MONITOR_CSV", str(tmp_path / "h.csv"))
+        critical = "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/x 104857600 99614720 5242880 95% /srv"
+        commands = []
+
+        def fake(cmd):
+            commands.append(cmd)
+            return critical
+
+        monkeypatch.setattr(disk_monitor, "ssh_command", fake)
+
+        disk_monitor.main()
+
+        out = capsys.readouterr().out
+        assert "CRITICAL /srv" in out
+        assert len(commands) == 1 and commands[0].startswith("df ")
+        assert "just disk-report" in out
