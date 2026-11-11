@@ -60,12 +60,13 @@ def _run(env, script, arg, **extra):
     )
 
 
-def _timer(env, *, active="active", realtime="@1794000000", monotonic="",
-           service="success", svc_state="inactive", changed=""):
-    _unit(env, "backup.timer", ActiveState=active, Unit="backup.service",
-          NextElapseUSecRealtime=realtime, NextElapseUSecMonotonic=monotonic)
-    _unit(env, "backup.service", ActiveState=svc_state, SubState="x", Result=service,
-          StateChangeTimestamp=changed)
+def _timer(env, *, active="active", realtime="Wed 2026-11-11 03:03:27 UTC", monotonic="0",
+           service="success", svc_state="inactive", changed="@1794316710", svc_load="loaded"):
+    _unit(env, "backup.timer", ActiveState=active, SubState="waiting", Unit="backup.service",
+          NextElapseUSecRealtime=realtime, NextElapseUSecMonotonic=monotonic,
+          Result="success", StateChangeTimestamp="@1794321404")
+    _unit(env, "backup.service", LoadState=svc_load, ActiveState=svc_state, SubState="dead",
+          Result=service, StateChangeTimestamp=changed)
 
 
 def _check(r, code, prefix, word=None):
@@ -79,11 +80,12 @@ def _check(r, code, prefix, word=None):
 
 def test_timer_ok(env):
     _timer(env)
-    _check(_run(env, "timer-check", "backup.timer"), 0, "TIMER backup.timer OK - next ")
+    r = _run(env, "timer-check", "backup.timer")
+    _check(r, 0, "TIMER backup.timer OK - next ", "2026-11-11 03:03")
 
 
 def test_timer_monotonic_only(env):
-    _timer(env, realtime="", monotonic="11h 26min 37.462686s")
+    _timer(env, realtime="", monotonic="11h 31min 39.049805s")
     _check(_run(env, "timer-check", "backup.timer"), 0, "TIMER backup.timer OK")
 
 
@@ -93,7 +95,7 @@ def test_timer_inactive(env):
 
 
 def test_timer_no_next(env):
-    _timer(env, realtime="", monotonic="")
+    _timer(env, realtime="", monotonic="0")
     _check(_run(env, "timer-check", "backup.timer"), 2, "TIMER backup.timer CRITICAL", "next")
 
 
@@ -110,6 +112,11 @@ def test_timer_stuck(env):
 def test_timer_activating_briefly(env):
     _timer(env, svc_state="activating", changed=f"@{NOW - 60}")
     _check(_run(env, "timer-check", "backup.timer"), 0, "TIMER backup.timer OK")
+
+
+def test_timer_service_not_found(env):
+    _timer(env, svc_load="not-found")
+    _check(_run(env, "timer-check", "backup.timer"), 2, "TIMER backup.timer CRITICAL", "not-found")
 
 
 def test_timer_not_found(env):
@@ -145,13 +152,9 @@ def test_unit_systemctl_fails(env):
     _check(_run(env, "unit-check", "x.service", FAKE_SYSTEMCTL_FAIL=1), 3, "UNIT x.service UNKNOWN")
 
 
-def test_site_200(env):
-    _check(_run(env, "site-check", "https://a.example/", FAKE_CURL_CODE=200), 0,
-           "SITE https://a.example/ OK")
+def test_site_200_following_redirects(env):
+    # the curl stub exits 2 unless -L is in argv
 
-
-def test_site_redirect_200(env):
-    # the curl stub exits 2 unless -L is in argv, so a pass proves redirects are followed
     _check(_run(env, "site-check", "https://a.example/", FAKE_CURL_CODE=200), 0,
            "SITE https://a.example/ OK")
 
