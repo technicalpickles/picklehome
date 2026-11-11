@@ -220,6 +220,26 @@ See [disk_monitor/README.md](disk_monitor/README.md).
 
 ---
 
+### host-state
+
+Writes one JSON report of failing timers, units and sites on picklelab every 5 minutes. brined-almanac pulls it and files a task when a check stays bad.
+
+| | |
+|---|---|
+| **Purpose** | Get a taskwarrior task filed when a timer, unit or site breaks |
+| **Compose** | N/A (host systemd timer, no container) |
+| **Data** | `/var/lib/host-state/picklelab.json` (regenerated every run, not backed up) |
+| **Access** | No UI. Read over ssh with a key fenced to one command |
+| **Env vars** | None |
+| **Backup** | No (regenerable) |
+| **Restart** | N/A (runs on timer) |
+
+Commands: `just deploy-host-state`, `just host-state-run-now`
+
+See [host-state/README.md](host-state/README.md).
+
+---
+
 ### disk-hygiene
 
 Weekly docker prune (both roots) + a passwordless `disk-report` diagnostic. Keeps `/srv` from silently filling.

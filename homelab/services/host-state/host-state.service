@@ -1,0 +1,12 @@
+[Unit]
+Description=Write the picklelab host-state report
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+StateDirectory=host-state
+StateDirectoryMode=0755
+UMask=0022
+ExecStart=/bin/bash -c '/opt/homelab/homelab/services/host-state/discover /var/lib/host-state/checks && /opt/homelab/homelab/services/host-state/collect /opt/homelab/homelab/services/host-state/picklelab.conf'
