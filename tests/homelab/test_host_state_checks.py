@@ -37,6 +37,7 @@ grep -E "^($(tr , '|' <<<"$props"))=" {units}/$unit
     _stub(bindir / "curl", """\
 case " $* " in *" -L "*) ;; *) echo "curl called without -L" >&2; exit 2;; esac
 [ -z "${FAKE_CURL_TIMEOUT:-}" ] || exit 28
+[ -z "${FAKE_CURL_EXIT:-}" ] || { printf '%s\\n' "$FAKE_CURL_ERR" "second line" >&2; exit "$FAKE_CURL_EXIT"; }
 printf '%s' "$FAKE_CURL_CODE"
 """)
     return {"bin": bindir, "units": units}
@@ -51,7 +52,7 @@ def _run(env, script, arg, **extra):
     e = {
         "PATH": f"{env['bin']}:{os.environ['PATH']}",
         "HOME": os.environ.get("HOME", "/"),
-        "HOST_STATE_NOW": str(NOW),
+        "HOST_STATE_NOW_EPOCH": str(NOW),
         **{k: str(v) for k, v in extra.items()},
     }
     return subprocess.run(
@@ -86,7 +87,17 @@ def test_timer_ok(env):
 
 def test_timer_monotonic_only(env):
     _timer(env, realtime="", monotonic="11h 31min 39.049805s")
+    _check(_run(env, "timer-check", "backup.timer"), 0, "TIMER backup.timer OK - scheduled (monotonic)")
+
+
+def test_timer_monotonic_infinity_service_activating(env):
+    _timer(env, realtime="", monotonic="infinity", svc_state="activating", changed=f"@{NOW - 60}")
     _check(_run(env, "timer-check", "backup.timer"), 0, "TIMER backup.timer OK")
+
+
+def test_timer_monotonic_infinity_service_inactive(env):
+    _timer(env, realtime="", monotonic="infinity", svc_state="inactive")
+    _check(_run(env, "timer-check", "backup.timer"), 2, "TIMER backup.timer CRITICAL", "next")
 
 
 def test_timer_inactive(env):
@@ -167,3 +178,10 @@ def test_site_500(env):
 def test_site_timeout(env):
     _check(_run(env, "site-check", "https://a.example/", FAKE_CURL_TIMEOUT=1), 2,
            "SITE https://a.example/ CRITICAL", "timed out")
+
+
+def test_site_curl_failure_reason(env):
+    r = _run(env, "site-check", "https://a.example/", FAKE_CURL_EXIT=6,
+             FAKE_CURL_ERR="curl: (6) Could not resolve host: x")
+    _check(r, 2, "SITE https://a.example/ CRITICAL", "curl: (6) Could not resolve host: x")
+    assert "second line" not in r.stdout
