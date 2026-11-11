@@ -146,3 +146,38 @@ def test_collect_is_a_copy():
         header.append(rest.pop(0))
     assert commit in "".join(header)
     assert lines[0] + "".join(rest) == (FIXTURES / "collect.upstream").read_text()
+
+
+def test_dangling_timer_link(world):
+    (world["units"] / "gone.timer").symlink_to(world["tmp"] / "opt" / "homelab" / "services" / "gone.timer")
+    r = _discover(world)
+    assert r.returncode == 0, r.stderr
+    assert f"exec {DIR}/timer-check gone.timer" in _listing(world)["timer-gone"]
+
+
+def test_url_with_ampersand_is_quoted(world):
+    world["sites"].write_text("amp https://x.example/a?b=1&c=2\n")
+    bindir = world["tmp"] / "bin"
+    bindir.mkdir()
+    _stub(bindir / "site-check", 'printf "%s\\n" "$@"; exit 2\n')
+    assert _discover(world).returncode == 0
+    wrapper = world["wrappers"] / "site-amp"
+    text = wrapper.read_text().replace(str(DIR / "site-check"), str(bindir / "site-check"))
+    wrapper.write_text(text)
+    r = subprocess.run(["bash", str(wrapper)], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 2
+    assert r.stdout == "https://x.example/a?b=1&c=2\n"
+
+
+def test_sites_line_without_url_skipped(world):
+    world["sites"].write_text("lonely\nbeta https://beta.example/\n")
+    r = _discover(world)
+    assert r.returncode == 0
+    assert "discover: skipping lonely: no url" in r.stderr
+    assert sorted(p for p in _listing(world) if p.startswith("site-")) == ["site-beta"]
+
+
+def test_sites_last_line_without_newline(world):
+    world["sites"].write_text("alpha https://alpha.example/")
+    assert _discover(world).returncode == 0
+    assert "site-alpha" in _listing(world)

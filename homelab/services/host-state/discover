@@ -22,7 +22,9 @@ wrapper() { # kind name command...
     echo "discover: skipping $name: bad name" >&2
     return 0
   fi
-  printf '#!/usr/bin/env bash\nexec %s\n' "$*" >"$new/$kind-$name"
+  local cmd
+  printf -v cmd '%q ' "$@" # a URL with & or ? must not reach the shell unquoted
+  printf '#!/usr/bin/env bash\nexec %s\n' "${cmd% }" >"$new/$kind-$name"
   chmod +x "$new/$kind-$name"
 }
 
@@ -36,7 +38,8 @@ for f in "$unit_dir"/*.timer; do
   ours "$f" || continue
   base=${f##*/}
   stem=${base%.timer}
-  target=$(sed -n 's/^Unit=//p' "$f" | head -n1)
+  # a dangling link fails the read; timer-check reports the missing timer as UNKNOWN
+  target=$({ sed -n 's/^Unit=//p' "$f" 2>/dev/null || true; } | head -n1)
   claimed+="${target:-$stem.service} "
   wrapper timer "$stem" "$service_dir/timer-check" "$base"
 done
@@ -50,8 +53,12 @@ for f in "$unit_dir"/*.service; do
   wrapper unit "$stem" "$service_dir/unit-check" "$base"
 done
 
-while read -r name url _; do
+while read -r name url _ || [[ -n $name ]]; do
   [[ -n $name && $name != "#"* ]] || continue
+  if [[ -z $url ]]; then
+    echo "discover: skipping $name: no url" >&2
+    continue
+  fi
   wrapper site "$name" "$service_dir/site-check" "$url"
 done <"$sites"
 
