@@ -181,3 +181,48 @@ def test_sites_last_line_without_newline(world):
     world["sites"].write_text("alpha https://alpha.example/")
     assert _discover(world).returncode == 0
     assert "site-alpha" in _listing(world)
+
+
+def _service(world, name, body):
+    target = world["tmp"] / "opt" / "homelab" / "services" / f"{name}.service"
+    target.write_text(body)
+    (world["units"] / f"{name}.service").symlink_to(target)
+
+
+def test_oneshot_without_remain_after_exit_skipped(world):
+    _service(world, "job", "[Service]\nType=oneshot\nExecStart=/bin/true\n")
+    r = _discover(world)
+    assert r.returncode == 0 and "job" not in r.stderr
+    assert "unit-job" not in _listing(world)
+
+
+@pytest.mark.parametrize("value", ["yes", "true", "1", "on", "YES", "True"])
+def test_oneshot_with_remain_after_exit_kept(world, value):
+    _service(world, "stack", f"[Service]\nType=oneshot\nRemainAfterExit={value}\n")
+    assert _discover(world).returncode == 0
+    assert "unit-stack" in _listing(world)
+
+
+def test_oneshot_remain_after_exit_no_skipped(world):
+    _service(world, "job", "[Service]\nType=oneshot\nRemainAfterExit=no\n")
+    assert _discover(world).returncode == 0
+    assert "unit-job" not in _listing(world)
+
+
+def test_service_without_type_kept(world):
+    _service(world, "daemon", "[Service]\nExecStart=/bin/true\n")
+    assert _discover(world).returncode == 0
+    assert "unit-daemon" in _listing(world)
+
+
+def test_oneshot_keys_outside_service_section_ignored(world):
+    _service(world, "odd", "[Unit]\nType=oneshot\n[Service]\nExecStart=/bin/true\n")
+    assert _discover(world).returncode == 0
+    assert "unit-odd" in _listing(world)
+
+
+def test_dangling_service_link_kept(world):
+    (world["units"] / "gone.service").symlink_to(world["tmp"] / "opt" / "homelab" / "services" / "gone.service")
+    r = _discover(world)
+    assert r.returncode == 0 and "gone" not in r.stderr
+    assert "unit-gone" in _listing(world)
