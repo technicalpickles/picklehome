@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Usage: timer-check <name>.timer
+# Exit 0 OK, 2 critical, 3 unknown. HOST_STATE_NOW_EPOCH (epoch seconds) overrides the clock.
+set -euo pipefail
+
+timer=${1:?usage: timer-check <name>.timer}
+stuck_limit=3600
+label="TIMER $timer"
+
+val() { sed -n "s/^$1=//p" <<<"$2" | head -n1; }
+unset_val() { [[ -z $1 || $1 == 0 || $1 == infinity ]]; }
+unknown() { echo "$label UNKNOWN - $1"; exit 3; }
+critical() { echo "$label CRITICAL - $1"; exit 2; }
+
+t=$(systemctl show -p LoadState,ActiveState,NextElapseUSecRealtime,NextElapseUSecMonotonic,Unit \
+  --timestamp=unix "$timer" 2>&1) || unknown "systemctl failed: ${t:0:120}"
+[[ $(val LoadState "$t") != not-found ]] || unknown "not-found"
+
+active=$(val ActiveState "$t")
+[[ $active == active ]] || critical "timer is $active"
+
+realtime=$(val NextElapseUSecRealtime "$t")
+monotonic=$(val NextElapseUSecMonotonic "$t")
+service=$(val Unit "$t")
+s=$(systemctl show -p LoadState,ActiveState,Result,StateChangeTimestamp --timestamp=unix "$service" 2>&1) \
+  || unknown "systemctl failed on $service: ${s:0:120}"
+
+# systemd prints 0 or empty for an unset elapse, and infinity for a monotonic timer whose
+# service is running or re-arming; neither is a fault while the service is in flight.
+# NextElapseUSecMonotonic is time since boot, not time from now, so never print it as "next in".
+service_state=$(val ActiveState "$s")
+if unset_val "$realtime" && unset_val "$monotonic" \
+  && [[ $service_state != active && $service_state != activating ]]; then
+  critical "no next elapse scheduled"
+fi
+
+[[ $(val LoadState "$s") != not-found ]] || critical "$service not-found"
+result=$(val Result "$s")
+[[ $result == success ]] || critical "$service last result $result"
+
+if [[ $service_state == activating ]]; then
+  changed=$(val StateChangeTimestamp "$s")
+  now=${HOST_STATE_NOW_EPOCH:-$(date +%s)}
+  if [[ $changed == @* ]] && (( now - ${changed#@} >= stuck_limit )); then
+    critical "$service stuck activating for $(( now - ${changed#@} ))s"
+  fi
+fi
+
+if ! unset_val "$realtime"; then
+  echo "$label OK - next $realtime"
+elif ! unset_val "$monotonic"; then
+  echo "$label OK - scheduled (monotonic)"
+else
+  echo "$label OK - service $service_state, next elapse set when it finishes"
+fi

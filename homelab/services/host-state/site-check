@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Usage: site-check <url>
+# Exit 0 OK, 2 critical. The final status after redirects decides.
+set -euo pipefail
+
+url=${1:?usage: site-check <url>}
+label="SITE $url"
+
+err=$(mktemp)
+trap 'rm -f "$err"' EXIT
+rc=0
+code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 10 "$url" 2>"$err") || rc=$?
+reason=$(head -n1 "$err" | tr -s '[:space:]' ' ')
+reason=${reason# }
+reason=${reason% }
+
+if (( rc == 28 )); then
+  echo "$label CRITICAL - timed out after 10s"
+  exit 2
+elif (( rc != 0 )); then
+  echo "$label CRITICAL - ${reason:-curl failed (exit $rc)}"
+  exit 2
+elif [[ $code =~ ^2[0-9][0-9]$ ]]; then
+  echo "$label OK - HTTP $code"
+else
+  echo "$label CRITICAL - HTTP $code"
+  exit 2
+fi
