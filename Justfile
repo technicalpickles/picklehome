@@ -407,7 +407,9 @@ deploy-disk-hygiene host="picklelab":
     source scripts/deploy-lock.sh
     deploy_lock_acquire {{host}} "deploy-disk-hygiene"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/disk-hygiene/deploy.sh"
+    # -t: deploy.sh installs a root-owned disk-report and a sudoers drop-in, which are not
+    # in the passwordless sudoers allowlist, so sudo needs a pty to prompt on.
+    ssh -t {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/disk-hygiene/deploy.sh"
 
 # Run docker prune now (triggers the systemd service, then shows its log)
 docker-prune-now host="picklelab":
