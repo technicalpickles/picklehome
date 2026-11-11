@@ -1,0 +1,148 @@
+"""Tests for homelab/services/host-state/{discover,collect,picklelab.conf}."""
+import json
+import os
+import re
+import stat
+import subprocess
+from pathlib import Path
+
+import pytest
+
+DIR = Path(__file__).resolve().parents[2] / "homelab" / "services" / "host-state"
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "host_state"
+
+
+def _stub(path, body):
+    path.write_text("#!/usr/bin/env bash\n" + body)
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+@pytest.fixture
+def world(tmp_path):
+    unit_dir = tmp_path / "etc-systemd"
+    unit_dir.mkdir()
+    prefix = f"{tmp_path}/opt/homelab/"
+    (tmp_path / "opt" / "homelab" / "services").mkdir(parents=True)
+    for name in ["backup.timer", "backup.service", "openclaw.service",
+                 "notify-failure@.service", "Bad_Name.service"]:
+        target = tmp_path / "opt" / "homelab" / "services" / name
+        target.write_text("[Timer]\n" if name.endswith(".timer") else "[Service]\n")
+        (unit_dir / name).symlink_to(target)
+    (unit_dir / "hand.timer").write_text("[Timer]\n")
+    (unit_dir / "hand.service").write_text("[Service]\n")
+    (unit_dir / "smartd.service").symlink_to("/usr/lib/systemd/system/smartd.service")
+    sites = tmp_path / "sites.conf"
+    sites.write_text("# comment\n\nalpha https://alpha.example/health\nbeta https://beta.example/\n")
+    return {"units": unit_dir, "sites": sites, "wrappers": tmp_path / "wrappers", "tmp": tmp_path,
+            "prefix": prefix}
+
+
+def _discover(world, **extra):
+    env = {
+        "PATH": os.environ["PATH"],
+        "HOST_STATE_UNIT_DIR": str(world["units"]),
+        "HOST_STATE_LINK_PREFIX": world["prefix"],
+        "HOST_STATE_SITES": str(world["sites"]),
+        **extra,
+    }
+    return subprocess.run(["bash", str(DIR / "discover"), str(world["wrappers"])],
+                          env=env, capture_output=True, text=True, timeout=30)
+
+
+def _listing(world):
+    return {p.name: p.read_text() for p in sorted(world["wrappers"].iterdir())}
+
+
+def test_discovers(world):
+    r = _discover(world)
+    assert r.returncode == 0 and r.stdout == ""
+    listing = _listing(world)
+    assert sorted(listing) == ["site-alpha", "site-beta", "timer-backup", "unit-openclaw"]
+    assert f"exec {DIR}/timer-check backup.timer" in listing["timer-backup"]
+    assert f"exec {DIR}/unit-check openclaw.service" in listing["unit-openclaw"]
+    assert f"exec {DIR}/site-check https://alpha.example/health" in listing["site-alpha"]
+    for p in world["wrappers"].iterdir():
+        assert p.stat().st_mode & stat.S_IXUSR
+    assert not list(world["tmp"].glob("wrappers.*"))
+
+
+def test_bad_stem(world):
+    r = _discover(world)
+    assert r.returncode == 0
+    assert "skipping Bad_Name" in r.stderr
+    assert "unit-Bad_Name" not in _listing(world)
+
+
+def test_converges(world):
+    _discover(world)
+    first = _listing(world)
+    assert _discover(world).returncode == 0
+    assert _listing(world) == first
+
+
+def test_removed_unit(world):
+    _discover(world)
+    assert "unit-openclaw" in _listing(world)
+    (world["units"] / "openclaw.service").unlink()
+    _discover(world)
+    assert "unit-openclaw" not in _listing(world)
+
+
+def test_timer_unit_key(world):
+    target = world["tmp"] / "opt" / "homelab" / "services" / "other.service"
+    target.write_text("[Service]\n")
+    (world["units"] / "other.service").symlink_to(target)
+    (world["tmp"] / "opt" / "homelab" / "services" / "backup.timer").write_text(
+        "[Timer]\nUnit=other.service\n")
+    assert _discover(world).returncode == 0
+    listing = _listing(world)
+    assert "timer-backup" in listing
+    assert "unit-other" not in listing
+    assert "unit-backup" in listing
+
+
+def test_timer_unit_key_default_service(world):
+    _discover(world)
+    assert "unit-backup" not in _listing(world)
+
+
+def test_collect_end_to_end(world):
+    bindir = world["tmp"] / "bin"
+    bindir.mkdir()
+    _stub(bindir / "systemctl", """\
+printf 'LoadState=loaded\\nActiveState=active\\nSubState=running\\nResult=success\\n'
+printf 'NextElapseUSecRealtime=Wed 2026-11-11 03:03:27 UTC\\nNextElapseUSecMonotonic=0\\n'
+printf 'Unit=backup.service\\n'
+""")
+    _stub(bindir / "curl", "printf 200\n")
+    checks = world["tmp"] / "checks"
+    assert _discover(world, PATH=f"{bindir}:{os.environ['PATH']}").returncode == 0
+    world["wrappers"].rename(checks)
+    out = world["tmp"] / "out" / "picklelab.json"
+    env = {
+        "PATH": f"{bindir}:{os.environ['PATH']}",
+        "HOME": os.environ.get("HOME", "/"),
+        "HOST_STATE_OUT": str(out),
+        "HOST_STATE_CHECK_DIR": str(checks),
+    }
+    r = subprocess.run(["bash", str(DIR / "collect"), str(DIR / "picklelab.conf")],
+                       env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    report = json.loads(out.read_text())
+    assert report["host"] == "picklelab"
+    assert report["interval_seconds"] == 300
+    assert [c["name"] for c in report["checks"]] == sorted(p.name for p in checks.iterdir())
+    assert len(report["checks"]) == 4
+    assert all(c["status"] == 0 for c in report["checks"]), report
+
+
+def test_collect_is_a_copy():
+    commit = re.search(r"^SOURCE_COMMIT=(\S+)$", (FIXTURES / "collect.upstream.commit").read_text(), re.M).group(1)
+    lines = (DIR / "collect").read_text().splitlines(keepends=True)
+    assert lines[0].startswith("#!")
+    header = []
+    rest = lines[1:]
+    while rest and rest[0].startswith("#"):
+        header.append(rest.pop(0))
+    assert commit in "".join(header)
+    assert lines[0] + "".join(rest) == (FIXTURES / "collect.upstream").read_text()

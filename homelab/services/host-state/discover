@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Usage: discover <wrappers-dir>
+# Writes one tiny wrapper per check into <wrappers-dir>, replacing the directory.
+# Env: HOST_STATE_UNIT_DIR, HOST_STATE_LINK_PREFIX, HOST_STATE_SITES.
+set -euo pipefail
+
+dest=${1:?usage: discover <wrappers-dir>}
+service_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+unit_dir=${HOST_STATE_UNIT_DIR:-/etc/systemd/system}
+prefix=${HOST_STATE_LINK_PREFIX:-/opt/homelab/}
+sites=${HOST_STATE_SITES:-$service_dir/sites.conf}
+
+new="$dest.new.$$"
+old="$dest.old.$$"
+trap 'rm -rf "$new" "$old"' EXIT
+mkdir -p "$new"
+
+wrapper() { # kind name command...
+  local kind=$1 name=$2
+  shift 2
+  if [[ ! $name =~ ^[a-z0-9-]+$ ]]; then
+    echo "discover: skipping $name: bad name" >&2
+    return 0
+  fi
+  printf '#!/usr/bin/env bash\nexec %s\n' "$*" >"$new/$kind-$name"
+  chmod +x "$new/$kind-$name"
+}
+
+ours() { # unit file is a symlink into the picklehome checkout
+  [[ -L $1 && $(readlink "$1") == "$prefix"* ]]
+}
+
+shopt -s nullglob
+claimed=" "
+for f in "$unit_dir"/*.timer; do
+  ours "$f" || continue
+  base=${f##*/}
+  stem=${base%.timer}
+  target=$(sed -n 's/^Unit=//p' "$f" | head -n1)
+  claimed+="${target:-$stem.service} "
+  wrapper timer "$stem" "$service_dir/timer-check" "$base"
+done
+
+for f in "$unit_dir"/*.service; do
+  ours "$f" || continue
+  base=${f##*/}
+  stem=${base%.service}
+  [[ $stem != *@* ]] || continue
+  [[ $claimed != *" $base "* ]] || continue
+  wrapper unit "$stem" "$service_dir/unit-check" "$base"
+done
+
+while read -r name url _; do
+  [[ -n $name && $name != "#"* ]] || continue
+  wrapper site "$name" "$service_dir/site-check" "$url"
+done <"$sites"
+
+if [[ -e $dest ]]; then mv "$dest" "$old"; fi
+mv "$new" "$dest"
