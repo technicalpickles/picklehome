@@ -9,7 +9,7 @@ Every 5 minutes picklelab writes one JSON report of what is broken on it. brined
 | Check | Made for | Passes when |
 |-------|----------|-------------|
 | `timer-<stem>` | each `*.timer` in `/etc/systemd/system` that is a symlink into `/opt/homelab/` | the timer is active with a next run (a monotonic-only timer counts), its service's last result is `success`, and the service is not stuck activating for 3600s or more |
-| `unit-<stem>` | each `*.service` there with the same symlink rule, minus instances (`name@.service`) and services a timer already claims | the unit is `active`. Not found is unknown, anything else critical |
+| `unit-<stem>` | each `*.service` there with the same symlink rule, minus instances (`name@.service`), services a timer already claims, and plain oneshot jobs (`Type=oneshot` without `RemainAfterExit=yes`, such as `climate-auto-switch` while its timer is paused) | the unit is `active`. Not found is unknown, anything else critical |
 | `site-<name>` | each line of `sites.conf` | `curl -L` gets a 2xx within 10s |
 
 Units that are not symlinks into `/opt/homelab/` (distro units, anything hand-made) are not watched. A name outside `[a-z0-9-]` is skipped with one line on stderr and the run carries on.
