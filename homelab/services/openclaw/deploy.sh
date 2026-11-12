@@ -711,14 +711,20 @@ systemctl status openclaw.service --no-pager || true
 
 echo ""
 echo "==> Checking local health endpoint"
-# 120s budget, polled until the gateway answers. The port accepts-then-resets for
+# 300s budget, polled until the gateway answers. The port accepts-then-resets for
 # a while after Docker reports the container Started (loading plugins, initializing
 # Telegram polling, etc.): that bit the old 5x3s loop twice on real deploys (curl
 # "Connection reset by peer"), a real deploy took ~24s on 2026-09-13, and a cold
 # start took ~47s on 2026-10-17, which blew through the old 10x3s (30s) loop and
 # aborted the deploy before the model-catalog warm and cron registration below.
+# Raised from 120s after 2026.10.6 starts kept taking about 3 min (2026-10-26
+# twice, 2026-10-27, 2026-11-12): the gateway came up fine each time, but the
+# deploy exited first and skipped the steps below.
 # The elapsed time is printed on success, so the real cold-start time is on record.
-if ! wait_for_health "the gateway" http://127.0.0.1:18789/healthz 120; then
+if ! wait_for_health "the gateway" http://127.0.0.1:18789/healthz 300; then
+    echo "    The gateway may still come up: look for '[gateway] ready' in"
+    echo "    'docker logs openclaw-openclaw-1'. Skipped: model catalog warm-up,"
+    echo "    workspace-git-sync cron check, Tailscale health check."
     echo "    Logs: $COMPOSE logs"
     exit 1
 fi
