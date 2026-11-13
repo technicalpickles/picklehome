@@ -833,28 +833,39 @@ The old SanDisk becomes a second local restic repo (`639457b8`'s last part).
 Small enough to fold in here, but its details belong to the backup service,
 so it gets its own PR touching `homelab/services/backup/`.
 
-- [ ] Plug the Ugreen case in. `lsblk` shows the SanDisk with its old
+- [x] Plug the Ugreen case in. `lsblk` shows the SanDisk with its old
       partitions and no LVM label (the `pvremove` in Migrate LVM).
-- [ ] Re-set `OLD`: in the enclosure, the SanDisk is a `usb-...` link now,
+      Done by 2026-11-12, when the disk was provisioned (see the last
+      Destructive item).
+- [x] Re-set `OLD`: in the enclosure, the SanDisk is a `usb-...` link now,
       not the `ata-SanDisk_...` one from before. Guard:
       `lsblk -dno SIZE,TRAN "$OLD"` shows `111.8G usb`,
       `lsblk -o NAME,MOUNTPOINTS "$OLD"` shows nothing mounted, and
       `sudo pvs` doesn't list it. Safe because
       the SanDisk has held nothing since Migrate LVM, and the guard rules out
       pointing at the PNY (931.5G, sata).
-- [ ] **Destructive:** `sudo wipefs -a "$OLD"` (erases the old partition
+      The same guard is in "Before you start" in
+      `docs/runbooks/provision-backup-sandisk.md`.
+- [x] **Destructive:** `sudo wipefs -a "$OLD"` (erases the old partition
       table and filesystem signatures), then a single GPT partition and ext4
       (no LVM: one small disk, nothing to span or grow into). `nofail` fstab
       mount by UUID, with `x-systemd.device-timeout=10`. `nofail` is right here,
       unlike the Docker LVs: it's an external disk, and a missing backup
       target shouldn't block boot.
-- [ ] **Mountpoint outside `/srv`** (`/mnt/backup-sandisk`, decided 2026-11-10).
+      Done 2026-11-12: one ext4 partition (110G), UUID
+      `b61cd797-9351-42e6-a0f8-ec194eea9077`, `nofail` fstab line, no failed
+      units. `partprobe` isn't installed on picklelab, so the runbook uses
+      `blockdev --rereadpt` instead.
+- [x] **Mountpoint outside `/srv`** (`/mnt/backup-sandisk`, decided 2026-11-10).
       The point of this disk is isolation: a full `/srv` or a dead PNY must not
       take the second copy with it, so it can't live under `/srv`. `mkdir` the
       empty directory and `sudo chattr +i` it before mounting, so an unmounted
       disk means a failed write, not a quiet backup into `/`. The backup
       script checks `mountpoint -q` before writing to the second repo and
       alerts if it's missing, without failing the primary backup.
+      Done 2026-11-12: mounted at `/mnt/backup-sandisk` with an immutable
+      mountpoint. The unmounted-write and unplugged-reboot checks have not
+      been run. The `mountpoint -q` guard belongs to the backup PR below.
 - [ ] Second repo + schedule per `homelab/services/backup/README.md`; that
       PR owns the details. The same PR adds `/mnt/backup-sandisk` to the disk
       monitor's `FILESYSTEMS` (`9fd7f741`).
