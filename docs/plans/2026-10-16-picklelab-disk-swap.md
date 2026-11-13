@@ -776,13 +776,15 @@ Docker was down a few minutes. Result: both LVs mounted, `/srv/ci-docker` is
 started before it; the rest was started by hand, and the script now retries
 failed units once.
 
-- [ ] Start things back up (`user@2000.service`, docker, the service units,
+- [x] Start things back up (`user@2000.service`, docker, the service units,
       the timers), compare `docker ps` to the Preflight list, and run a CI
       build to prove the rootless daemon works.
-- [ ] After a day of normal running: `sudo rm -rf /srv/containerd.old /srv/ci-docker.old`.
+- [x] After a day of normal running: `sudo rm -rf /srv/containerd.old /srv/ci-docker.old`.
       **Destructive.** Guard: `findmnt /srv/containerd /srv/ci-docker` shows
       both LVs mounted, and Docker and CI have run fine for that day. Safe
       because these are the pre-split copies. The live data is on the LVs.
+      Done 2026-11-12 with `docker-split.sh cleanup`: `/srv` went from 51G
+      to 11G used.
 
 ### Grow
 
