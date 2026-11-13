@@ -51,8 +51,11 @@ It must print `111.8G usb`. Anything else, stop.
 2. **One GPT partition, then ext4.**
 
    ```bash
-   sudo sgdisk -n1:0:0 -t1:8300 -c1:backup-sandisk "$OLD" && sudo partprobe "$OLD" && sudo udevadm settle && sudo mkfs.ext4 -m 1 -L backup-sandisk "$OLD"-part1
+   sudo sgdisk -n1:0:0 -t1:8300 -c1:backup-sandisk "$OLD" && sudo blockdev --rereadpt "$OLD" && sudo udevadm settle && ls -l "$OLD"-part1 && sudo mkfs.ext4 -m 1 -L backup-sandisk "$OLD"-part1
    ```
+
+   `blockdev`, not `partprobe`: picklelab has no `parted` package. The `ls`
+   stops the chain before `mkfs` if the partition link is missing.
 
    **Verify:** the `-part1` by-id link appears after `udevadm settle`. If
    `mkfs` says the file does not exist, run `ls -l /dev/disk/by-id | grep
@@ -88,6 +91,10 @@ It must print `111.8G usb`. Anything else, stop.
   `sudo mount /mnt/backup-sandisk`.
 - `systemctl --failed` is empty.
 - A reboot with the disk unplugged still reaches a login (`nofail`).
+
+Done 2026-11-12: UUID `b61cd797-9351-42e6-a0f8-ec194eea9077`, 110G, mounted
+from `/dev/sdb1`, `systemctl --failed` empty. The unmounted-write and
+unplugged-reboot checks were not run.
   **Verify** this the first time the disk is unplugged on purpose.
 
 ## After this
