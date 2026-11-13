@@ -238,13 +238,14 @@ openclaw-quiet host="picklelab" minutes="5":
 seed-brineworks-gmail host="picklelab":
     scripts/seed-brineworks-gmail {{host}}
 
-# Tail Brineworks server container logs from picklelab
+# Tail Brineworks server container logs from picklelab. By container name, not compose:
+# compose needs the root-only op token to interpolate its env (same reason as verify.sh)
 brineworks-server-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} docker logs --tail={{lines}} brineworks-server-server-1
 
 # Follow Brineworks server container logs live from picklelab
 brineworks-server-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} docker logs -f brineworks-server-server-1
 
 
 # Deploy the Bugsink error tracker to picklelab (idempotent: first setup or update)
