@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24.22.1-bookworm
+FROM node:26.13.0-bookworm
 
 ARG TARGETARCH
 # renovate: datasource=github-releases depName=openclaw/goplaces extractVersion=^v(?<version>.+)$
