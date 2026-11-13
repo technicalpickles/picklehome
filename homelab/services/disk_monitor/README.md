@@ -8,9 +8,18 @@ Disk usage monitoring with rate-of-change detection and alerting.
 - Tracks usage history in CSV (rate calculation, trend analysis)
 - Alerts when:
   - Usage > 80% (warning) or > 90% (critical)
-  - Fill rate > 2GB/day or > 5%/week
-  - Time to full < 7 days
-- Silent when all is well (no spam)
+  - Time to full < 7 days at the 72h fill rate, once a mount has 24h of history.
+    A fast rate with plenty of runway does not alert on its own, and a one-off
+    step (a migration, a CI build) is spread over the window instead of read as
+    a daily rate
+- Silent when all is well (no spam). An unchanged alert is sent once, then at
+  most daily. A new mount or an escalation to critical sends immediately. A
+  clean reading doesn't reset that: conditions must stay clear for 6 hours
+  first, so a mount hovering on a threshold doesn't re-alert every swing. State
+  lives in `disk-monitor-alert.json` next to the history CSV
+- Lists only the breaching mounts, each with a next step. It never runs `du`:
+  over `/srv` that takes about a minute, so finding what is big is the
+  follow-up, `just disk-report`
 - **Loud when it can't look.** If picklelab is unreachable it prints an alert and
   exits 1, so a broken monitor never looks like a healthy one
 
@@ -50,11 +59,12 @@ On 2026-07-03 `/srv` hit 100% and wedged second-brain-agent. The `disk-hygiene` 
 **Lofi approach:**
 - Simple Python script, no external dependencies
 - CSV for history (human-readable, survives restarts)
-- Rate calculation over last 24 hours
-- Alerts include diagnostic context (top paths, rate, ETA to full)
+- Rate calculation over last 72 hours
+- Alerts include rate and ETA to full; `just disk-report` is the explicit follow-up for what is big
 
 **Phase 2 (if useful):**
 - Smarter trending (linear regression over 7 days)
+- A nightly low-priority `du` snapshot the alert could quote, if the follow-up step proves annoying
 - Separate alerts for sudden spikes vs slow creep
 - Auto-remediation (trigger `docker-prune-now` at 85%)
 

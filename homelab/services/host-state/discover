@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Usage: discover <wrappers-dir>
+# Writes one tiny wrapper per check into <wrappers-dir>, replacing the directory.
+# Env: HOST_STATE_UNIT_DIR, HOST_STATE_LINK_PREFIX, HOST_STATE_SITES.
+set -euo pipefail
+
+dest=${1:?usage: discover <wrappers-dir>}
+service_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+unit_dir=${HOST_STATE_UNIT_DIR:-/etc/systemd/system}
+prefix=${HOST_STATE_LINK_PREFIX:-/opt/homelab/}
+sites=${HOST_STATE_SITES:-$service_dir/sites.conf}
+
+new="$dest.new.$$"
+old="$dest.old.$$"
+trap 'rm -rf "$new" "$old"' EXIT
+mkdir -p "$new"
+
+wrapper() { # kind name command...
+  local kind=$1 name=$2
+  shift 2
+  if [[ ! $name =~ ^[a-z0-9-]+$ ]]; then
+    echo "discover: skipping $name: bad name" >&2
+    return 0
+  fi
+  local cmd
+  printf -v cmd '%q ' "$@" # a URL with & or ? must not reach the shell unquoted
+  printf '#!/usr/bin/env bash\nexec %s\n' "${cmd% }" >"$new/$kind-$name"
+  chmod +x "$new/$kind-$name"
+}
+
+ours() { # unit file is a symlink into the picklehome checkout
+  [[ -L $1 && $(readlink "$1") == "$prefix"* ]]
+}
+
+# Why: a oneshot without RemainAfterExit is inactive after every run, so unit-check would
+# report a timer-driven job with a paused timer as down. A dangling link reads as empty
+# and stays checked.
+transient_oneshot() {
+  local t r
+  { read -r t; read -r r; } < <(awk '
+    /^[[:space:]]*\[/ { in_service = ($0 ~ /^[[:space:]]*\[Service\][[:space:]]*$/); next }
+    in_service && /^[[:space:]]*(Type|RemainAfterExit)[[:space:]]*=/ {
+      key = $0; sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*=.*/, "", key)
+      val = $0; sub(/^[^=]*=[[:space:]]*/, "", val); sub(/[[:space:]]*$/, "", val)
+      v[key] = val
+    }
+    END { print v["Type"]; print tolower(v["RemainAfterExit"]) }
+  ' "$1" 2>/dev/null || true)
+  [[ $t == oneshot && ! $r =~ ^(yes|true|1|on)$ ]]
+}
+
+shopt -s nullglob
+claimed=" "
+for f in "$unit_dir"/*.timer; do
+  ours "$f" || continue
+  base=${f##*/}
+  stem=${base%.timer}
+  # a dangling link fails the read; timer-check reports the missing timer as UNKNOWN
+  target=$({ sed -n 's/^Unit=//p' "$f" 2>/dev/null || true; } | head -n1)
+  claimed+="${target:-$stem.service} "
+  wrapper timer "$stem" "$service_dir/timer-check" "$base"
+done
+
+for f in "$unit_dir"/*.service; do
+  ours "$f" || continue
+  base=${f##*/}
+  stem=${base%.service}
+  [[ $stem != *@* ]] || continue
+  [[ $claimed != *" $base "* ]] || continue
+  ! transient_oneshot "$f" || continue
+  wrapper unit "$stem" "$service_dir/unit-check" "$base"
+done
+
+while read -r name url _ || [[ -n $name ]]; do
+  [[ -n $name && $name != "#"* ]] || continue
+  if [[ -z $url ]]; then
+    echo "discover: skipping $name: no url" >&2
+    continue
+  fi
+  wrapper site "$name" "$service_dir/site-check" "$url"
+done <"$sites"
+
+if [[ -e $dest ]]; then mv "$dest" "$old"; fi
+mv "$new" "$dest"

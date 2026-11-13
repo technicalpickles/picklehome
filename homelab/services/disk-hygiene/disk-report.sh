@@ -16,7 +16,9 @@ section "Filesystem usage"
 df -h / /srv /srv/containerd /srv/ci-docker 2>/dev/null
 
 section "/srv top-level breakdown"
-du -h -d1 /srv 2>/dev/null | sort -rh
+# -x: /srv/containerd and /srv/ci-docker are their own mounts full of overlay layers
+# (~1M inodes), which made this pass take ~53s. The docker sections below cover them.
+du -xh -d1 /srv 2>/dev/null | sort -rh
 
 section "/srv/data breakdown"
 du -xh -d1 /srv/data 2>/dev/null | sort -rh

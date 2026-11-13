@@ -4,6 +4,12 @@ Step-by-step procedures you run by hand more than once. Unlike `docs/plans/`
 (point-in-time) these are meant to stay true, so fix them when a step turns out
 wrong.
 
+## Disks and backups
+
+| Runbook | Covers |
+|---|---|
+| [Provision the SanDisk backup disk](provision-backup-sandisk.md) | format and mount the old boot SSD at `/mnt/backup-sandisk` as the second backup target |
+
 ## Operating CI
 
 | Runbook | Covers |

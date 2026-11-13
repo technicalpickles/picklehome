@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Usage: unit-check <name>.service
+# Exit 0 OK, 2 critical, 3 unknown.
+set -euo pipefail
+
+unit=${1:?usage: unit-check <name>.service}
+label="UNIT $unit"
+
+val() { sed -n "s/^$1=//p" <<<"$2" | head -n1; }
+
+t=$(systemctl show -p LoadState,ActiveState,SubState --timestamp=unix "$unit" 2>&1) || {
+  echo "$label UNKNOWN - systemctl failed: ${t:0:120}"
+  exit 3
+}
+if [[ $(val LoadState "$t") == not-found ]]; then
+  echo "$label UNKNOWN - not-found"
+  exit 3
+fi
+
+active=$(val ActiveState "$t")
+sub=$(val SubState "$t")
+if [[ $active != active ]]; then
+  echo "$label CRITICAL - $active ($sub)"
+  exit 2
+fi
+echo "$label OK - $active ($sub)"

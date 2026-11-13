@@ -1,6 +1,7 @@
 {
   "permissions": {
-    "allow": ["Bash(just deploy-*)"]
+    "allow": ["Bash(just deploy-*)"],
+    "deny": ["Read(**/.env)"]
   },
   "sandbox": {
     "network": {
