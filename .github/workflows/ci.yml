@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read uv version from .mise.toml
+        id: uv
+        run: echo "version=$(sed -n 's/^uv = { version = "\([^"]*\)".*/\1/p' .mise.toml)" >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ steps.uv.outputs.version }}
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run pytest tests
+
+  # Build only: catches a broken Dockerfile in the PR instead of at deploy on picklelab.
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-images
