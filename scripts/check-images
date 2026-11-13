@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Build every Dockerfile under homelab/services that picklelab builds from this repo,
+# so a broken Dockerfile fails the PR and not the deploy. Build only, nothing is run
+# or pushed. Needs a Docker daemon. Context dirs mirror each service's compose file;
+# keep this list in step when a service gains or moves a Dockerfile.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+S=homelab/services
+
+build() { # <name> <context> <dockerfile>
+  echo "==> $1"
+  docker build -t "check-images/$1" -f "$3" "$2"
+}
+
+build climate-auto-switch .                           "$S/climate-auto-switch/Dockerfile"
+build obsidian-sync       "$S/obsidian-sync"          "$S/obsidian-sync/Dockerfile"
+build goplaces-node       "$S/openclaw/goplaces-node" "$S/openclaw/goplaces-node/Dockerfile"
+build open-webui          .                           "$S/open-webui/Dockerfile"
+build open-terminal       .                           "$S/open-webui/Dockerfile.open-terminal"

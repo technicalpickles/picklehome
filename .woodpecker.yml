@@ -1,0 +1,30 @@
+# Woodpecker CI for picklehome (self-hosted on picklelab).
+# Same shape as brineworks's pipeline: push-centric (GitHub attaches the status to the
+# commit, so PRs still show it), tests and image builds run in parallel.
+when:
+  - event: push
+
+steps:
+  - name: test
+    image: python:3.12
+    depends_on: []
+    volumes:
+      - picklehome-uv:/root/.cache/uv
+    environment:
+      UV_LINK_MODE: copy
+    commands:
+      # Version comes from .mise.toml so CI and local can't drift.
+      - pip install "uv==$(sed -n 's/^uv = { version = "\([^"]*\)".*/\1/p' .mise.toml)"
+      - uv sync --locked
+      - uv run pytest tests
+
+  # Builds the service Dockerfiles against picklelab's rootless `ci` dockerd (the one the
+  # agent itself uses), via its bind-mounted socket. Same "Volumes" trust brineworks uses.
+  - name: images
+    image: docker:27-cli
+    depends_on: []
+    volumes:
+      - /run/user/2000/docker.sock:/var/run/docker.sock
+    commands:
+      - apk add --no-cache bash
+      - scripts/check-images
