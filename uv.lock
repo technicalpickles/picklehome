@@ -1,10 +1,10 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 
 [[package]]
 name = "aioambient"
-version = "2024.8.0"
+version = "2025.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -14,9 +14,9 @@ dependencies = [
     { name = "websockets" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/83/68/0846033ed3676295f6769e24621dba75689a9c31020b7c16fa73b0127122/aioambient-2024.8.0.tar.gz", hash = "sha256:a11643343db382ba9c5a79c70a9394dbf2ae6b1d4a28c4ef43b7c69618b237da", size = 16772, upload-time = "2024-08-27T18:48:55.564Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/ad/788b085efff05de3a604fbc67ab4fc6e1120ea91c92680db034b75f10337/aioambient-2025.2.0.tar.gz", hash = "sha256:07ab9f36e4e3d3ebd8f4ee9c75f0ab9b87ad09cf1d9e4515e238c9353328f7c8", size = 16343, upload-time = "2025-02-03T18:27:48.852Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/31/1a0b97c6e52a1748aa56f206e14e2cc704ffaa4869aaa71ab6fe198f0b9c/aioambient-2024.8.0-py3-none-any.whl", hash = "sha256:5656bfc3c614bb8fddd945ffbe6f9aaa19d3bbda4db2beed58c1b79e1d928fea", size = 13827, upload-time = "2024-08-27T18:48:54.241Z" },
+    { url = "https://files.pythonhosted.org/packages/32/56/3c5fabdb69a2bb0c8a2f833e41ede3bce300c17c7f97beae3d551b4c5599/aioambient-2025.2.0-py3-none-any.whl", hash = "sha256:369e078c97022e5cb5c302fbdf379febd91a82d36cd2341771e53ec700362000", size = 14005, upload-time = "2025-02-03T18:27:46.474Z" },
 ]
 
 [[package]]
@@ -1120,7 +1120,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aioambient", specifier = "==2024.8.0" },
+    { name = "aioambient", specifier = "==2025.2.0" },
     { name = "aioflo", specifier = ">=2026.9.3" },
     { name = "aiohttp", specifier = ">=3.9" },
     { name = "aiohue", specifier = ">=4.7" },
