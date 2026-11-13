@@ -1,6 +1,6 @@
 # Rotate OpenClaw tokens and model keys
 
-Task `f5ed8c7e`. See the [shared procedure](README.md#rotating-secrets) first.
+Rotate these on a schedule, and whenever one leaks. See the [shared procedure](README.md#rotating-secrets) first.
 
 All of these are read by the `openclaw` compose stack, so do them together and
 deploy once.
@@ -69,4 +69,3 @@ place; if Open WebUI also uses OpenRouter or Gemini, change those there too.
 - Brent answers on Telegram with search, memory and gog tools working.
 - Open WebUI chats still reach Ollama.
 - The old model keys are revoked and the Telegram token has been replaced.
-- `task f5ed8c7e done`.

@@ -1,6 +1,6 @@
 # Rotate Brineworks secrets
 
-Task `6cb99104`. See the [shared procedure](README.md#rotating-secrets) first.
+Rotate these on a schedule, and whenever one leaks. See the [shared procedure](README.md#rotating-secrets) first.
 
 | Secret | 1Password (`picklehome/Brineworks Server`) | Used by | Action |
 |---|---|---|---|
@@ -67,5 +67,3 @@ Put the old password back in the role (or in 1Password), redeploy, and retry.
 
 - Server health is green and Brent can read brineworks.
 - Anything that held the old API key has the new one.
-- `task 6cb99104 done`, minus the keyring password, which stays open under its
-  own decision task `16a96a24`.

@@ -1,6 +1,6 @@
 # Restic and keyring passwords
 
-Task `16a96a24`. Read the [shared procedure](README.md#rotating-secrets), but
+Read the [shared procedure](README.md#rotating-secrets), but
 these three break it: a password that protects data at rest cannot be swapped by
 editing 1Password, because the data was encrypted under the old one.
 
@@ -16,13 +16,13 @@ at all (below).
 
 ## Decide: is rotating worth it?
 
-The exposure was a transcript. A password that never left your machines is
-useless to an attacker without also having the encrypted file or repo.
+A password that never left your machines is useless to an attacker without also
+having the encrypted file or repo. Weigh a scheduled rotation against its cost, and
+rotate straight away if the password leaks (a transcript, a log, a screen share).
 
-- **Restic.** The repo is a local directory on the NUC. To use the leaked
+- **Restic.** The repo is a local directory on the NUC. To use a leaked
   password someone needs read access to `/srv/backups/restic`, which means they
-  are already on the box. Rotating still removes a long-lived secret from a
-  transcript, but the real risk is low until the repo moves off-box (a NAS or an
+  are already on the box. Rotating still removes a long-lived secret from wherever it leaked, but the real risk is low until the repo moves off-box (a NAS or an
   S3 copy is planned). Do it before that happens, since afterwards a copy of the
   old password-protected repo exists elsewhere.
 - **Keyrings.** Same argument: the encrypted files are on picklelab. The
@@ -30,7 +30,8 @@ useless to an attacker without also having the encrypted file or repo.
   revoking them at Google and re-authorising. That makes the old password
   worthless even for a stolen file.
 
-Pick one per password and write the decision on task `16a96a24`.
+Pick one per password and record the decision where you track it, citing the
+taskwarrior UUID.
 
 ## Restic
 
@@ -64,7 +65,7 @@ when the file is opened. The routes, safest first:
 1. **Re-authorise (preferred).** Revoke the app's access in the Google account
    security page, put the new password in 1Password, redeploy, then run the
    service's login flow again. It creates a new keyring under the new password
-   and obtains new tokens, so the leaked password and the old tokens are both
+   and obtains new tokens, so the old password and the old tokens are both
    dead. Cost: one OAuth consent for each service.
 2. **Re-key in place.** Only if the keyring library you use supports changing
    the master password. **Verify** this exists for the cryptfile backend before
@@ -81,8 +82,7 @@ Brineworks and gog redeploys need `just openclaw-quiet` first.
 
 ## Done when
 
-- A decision is recorded on `16a96a24`, per password.
+- A decision is recorded for each password.
 - For each one you rotated: the new password works, the old one no longer opens
   the data (restic: key removed; keyrings: re-authorised), and the next
   nightly backup succeeds.
-- `task 16a96a24 done`.

@@ -10,15 +10,21 @@ wrong.
 |---|---|
 | [Provision the SanDisk backup disk](provision-backup-sandisk.md) | format and mount the old boot SSD at `/mnt/backup-sandisk` as the second backup target |
 
+## Operating CI
+
+| Runbook | Covers |
+|---|---|
+| [Redeploying Woodpecker](woodpecker-redeploy.md) | what a restart interrupts, and how to find and redeliver the webhooks and pipelines it dropped |
+
 ## Rotating secrets
 
-Written after the Oct 22, 2026 exposure, when a batch of secrets landed in a
-Claude transcript. One runbook per group, matching how the work splits up:
+One runbook per group, matching how the work splits up. Rotate on a schedule, and
+immediately when a secret leaks:
 
 | Runbook | Covers |
 |---|---|
 | [Tailscale](rotate-tailscale.md) | auth keys, API OAuth client |
-| [GitHub](rotate-github.md) | workspace PAT, Woodpecker OAuth app, deploy keys, runner token |
+| [GitHub](rotate-github.md) | workspace PAT, Woodpecker OAuth app, deploy keys |
 | [OpenClaw](rotate-openclaw.md) | gateway token, Telegram bot, GOG MCP token, Ollama / OpenRouter / Gemini keys |
 | [Brineworks](rotate-brineworks.md) | API key, MCP key, Postgres password |
 | [Open WebUI, Open Terminal, UniFi](rotate-open-webui-unifi.md) | admin password, secret key, terminal key, UniFi login and key |
@@ -40,7 +46,7 @@ for nearly every secret, rotation is:
 3. Restart the consumer so `op run` re-reads it (`just deploy-<service>`).
 4. Check the service works on the new value.
 5. Revoke the old value at the provider.
-6. Close the taskwarrior task and note what changed.
+6. Close any taskwarrior task tracking it and note what changed.
 
 Revoke last. If step 4 fails you still have the old value to fall back to.
 
@@ -48,7 +54,7 @@ Revoke last. If step 4 fails you still have the old value to fall back to.
 
 - **Edit values in the 1Password app.** `op item edit field=value` puts the
   value on the command line, and a command line is visible in `ps` and in any
-  transcript that captures it. That is how the last exposure happened.
+  transcript that captures it.
 - **Never paste a value into a chat, a commit, a doc, or a command.** This repo
   is public. Write the `op://` path, never the value.
 - **Generate random values with `openssl rand -hex 32`** (or `-base64 32` where
@@ -65,8 +71,7 @@ Revoke last. If step 4 fails you still have the old value to fall back to.
 
 ### Order for a full sweep
 
-1. Dead credentials first (revoke only, nothing to deploy): old Tailscale auth
-   keys, the retired runner token, deploy keys for torn-down agents.
+1. Anything unused: revoke it, nothing to deploy.
 2. Things that grant access: Tailscale, GitHub.
 3. Bot and server tokens: OpenClaw, Brineworks.
 4. Web admin and UniFi, then device accounts.
@@ -77,5 +82,5 @@ secrets from several runbooks.
 
 ### Recording it
 
-Per secret, `task <uuid> annotate "rotated, old revoked"` then `task <uuid> done`.
-Cite tasks by UUID in commits, never by integer id.
+If a taskwarrior task tracks the rotation, `task <uuid> annotate "rotated, old revoked"`
+then `task <uuid> done`. Cite tasks by UUID in commits, never by integer id.

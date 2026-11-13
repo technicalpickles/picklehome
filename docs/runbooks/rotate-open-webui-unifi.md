@@ -1,6 +1,6 @@
 # Rotate Open WebUI, Open Terminal and UniFi credentials
 
-Task `66790ff9`. See the [shared procedure](README.md#rotating-secrets) first.
+Rotate these on a schedule, and whenever one leaks. See the [shared procedure](README.md#rotating-secrets) first.
 
 | Secret | 1Password | Used by | Action |
 |---|---|---|---|
@@ -50,4 +50,3 @@ that `just dotenv` builds. Nothing on picklelab reads these.
 
 - Open WebUI signs in with the new password and a chat plus the terminal work.
 - `just unifi clients` works on the new credentials and the old key is deleted.
-- `task 66790ff9 done`.
