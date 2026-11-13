@@ -5,8 +5,17 @@ when DISK_MONITOR_LOCAL=1.
 
 Logs usage to CSV, calculates rate of change, prints alert to stdout when:
 - Usage > 80% (warning) or > 90% (critical)
-- Fill rate > 2GB/day or > 5%/week
-- Time to full < 7 days
+- Time to full < 7 days at the 72h fill rate, once a mount has a day of
+  history (a fast rate with plenty of runway is not an alert, and neither is
+  a one-off step like a migration or a CI build)
+
+The same set of conditions is sent once, then again at most daily. A new
+mount or an escalation to critical sends immediately. A clean reading doesn't
+reset that: the conditions must stay clear for CLEAR_HOURS first.
+
+The alert is df and arithmetic only. Finding what is big (du over /srv) takes
+about a minute on picklelab, so it is the follow-up, `just disk-report`, not
+part of the alert.
 
 Output goes to stdout, for whatever scheduler runs this to deliver. Silent
 (exits 0 with no output) when all is well. If picklelab can't be reached it
@@ -14,10 +23,12 @@ prints an alert and exits 1, so a broken monitor never looks like a healthy one.
 """
 
 import csv
+import json
 import os
 import subprocess
 import sys
 from datetime import datetime, timedelta
+from typing import NamedTuple
 from pathlib import Path
 
 # Config
@@ -30,10 +41,11 @@ DEFAULT_CSV_PATH = Path.home() / ".local/state/picklehome/disk-monitor.csv"
 # Thresholds
 USAGE_WARN = 80      # Alert at 80%
 USAGE_CRIT = 90      # Critical at 90%
-RATE_WARN_GB = 2     # Alert if filling >2GB/day
-RATE_WARN_PCT = 5    # Or >5% per week
-MIN_RATE_WINDOW_HOURS = 6  # Need this much history before a rate means anything
+RATE_WINDOW_HOURS = 72  # A one-off step of X GB reads as X/3 GB/day, not X
+MIN_RATE_WINDOW_HOURS = 24  # Need this much history before a rate means anything
+CLEAR_HOURS = 6        # Conditions must stay clear this long before an alert can re-send
 TIME_TO_FULL_DAYS = 7  # Alert if <7 days to full
+REPEAT_HOURS = 24      # Re-send an unchanged alert at most this often
 
 # Filesystems to monitor
 FILESYSTEMS = ["/", "/srv", "/srv/containerd", "/srv/ci-docker"]
@@ -112,28 +124,6 @@ def get_disk_usage():
     return parse_df(output)
 
 
-def get_top_paths():
-    """Get top 5 paths by size under /srv, including separately mounted dirs."""
-    try:
-        output = ssh_command("du -h -d1 /srv 2>/dev/null | sort -rh | head -5")
-    except SshError as e:
-        log(f"top paths unavailable: {e}")
-        return []
-    if not output:
-        return []
-    return output.strip().split("\n")
-
-
-def get_disk_report():
-    """Get full disk-report diagnostic output."""
-    try:
-        output = ssh_command("sudo disk-report")
-    except SshError as e:
-        log(f"disk-report unavailable: {e}")
-        return None
-    return output or None
-
-
 def load_history():
     """Load CSV history, return list of {timestamp, mount, used_pct, used_gb}."""
     path = csv_path()
@@ -170,7 +160,7 @@ def save_history(usage):
             })
 
 
-def calculate_rate(history, mount, hours=24):
+def calculate_rate(history, mount, hours=RATE_WINDOW_HOURS):
     """Calculate fill rate over last N hours. Returns (gb_per_day, pct_per_week) or (None, None)."""
     mount_history = [h for h in history if h["mount"] == mount]
     if len(mount_history) < 2:
@@ -205,71 +195,109 @@ def estimate_time_to_full(usage, rate_gb_per_day):
     return free_gb / rate_gb_per_day
 
 
-def build_alert(usage, history, top_paths, disk_report=None):
-    """Build alert message with context."""
-    lines = ["🚨 Picklelab Disk Alert\n"]
-    
+class Reason(NamedTuple):
+    mount: str
+    kind: str  # "warning", "critical" or "fill"
+
+
+HINTS = {
+    "warning": "Prune with `just docker-prune-now`, find what's big with `just disk-report`, or grow the LV.",
+    "critical": "Act now: `just docker-prune-now`, then `just disk-report`, or grow the LV.",
+    "fill": "Check `just disk-report`. A one-off step (copy, restore) ages out of the 72h window by itself.",
+}
+
+
+def find_reasons(usage, history):
+    """Every (mount, kind) currently worth alerting on."""
+    reasons = []
     for mount in FILESYSTEMS:
         if mount not in usage:
             continue
         data = usage[mount]
-        rate_gb, rate_pct = calculate_rate(history, mount)
-        ttf = estimate_time_to_full(data, rate_gb) if rate_gb and rate_gb > 0 else None
-        
-        status = "⚠️ WARNING" if data["used_pct"] >= USAGE_WARN else ""
         if data["used_pct"] >= USAGE_CRIT:
-            status = "🔴 CRITICAL"
-        
-        lines.append(f"{status} {mount}")
-        lines.append(f"  Used: {data['used_pct']}% ({data['used_gb']}GB / {data['used_gb'] + data['avail_gb']}GB)")
-        lines.append(f"  Free: {data['avail_gb']}GB")
-        
-        if rate_gb is not None:
-            direction = "growing" if rate_gb > 0 else "shrinking"
-            lines.append(f"  Rate: {abs(rate_gb):.1f}GB/day {direction}")
-        if ttf:
-            lines.append(f"  ⏰ Time to full: {ttf:.1f} days")
-        lines.append("")
-    
-    if top_paths:
-        lines.append("Top /srv paths:")
-        for path in top_paths:
-            lines.append(f"  {path}")
-        lines.append("")
-    
-    if disk_report:
-        lines.append("Full disk-report:")
-        lines.append("```")
-        lines.append(disk_report)
-        lines.append("```")
-    else:
-        lines.append("\nRun: just disk-report")
-    
-    return "\n".join(lines)
+            reasons.append(Reason(mount, "critical"))
+        elif data["used_pct"] >= USAGE_WARN:
+            reasons.append(Reason(mount, "warning"))
 
-
-def should_alert(usage, history):
-    """Determine if we should send an alert."""
-    for mount in FILESYSTEMS:
-        if mount not in usage:
-            continue
-        data = usage[mount]
-        
-        if data["used_pct"] >= USAGE_WARN:
-            return True
-        
-        rate_gb, rate_pct = calculate_rate(history, mount)
-        if rate_gb and rate_gb > RATE_WARN_GB:
-            return True
-        if rate_pct and rate_pct > RATE_WARN_PCT:
-            return True
-        
+        rate_gb, _ = calculate_rate(history, mount)
         if rate_gb and rate_gb > 0:
             ttf = estimate_time_to_full(data, rate_gb)
             if ttf and ttf < TIME_TO_FULL_DAYS:
-                return True
-    
-    return False
+                reasons.append(Reason(mount, "fill"))
+    return reasons
+
+
+def should_alert(usage, history):
+    """Is anything wrong right now, ignoring whether we already said so."""
+    return bool(find_reasons(usage, history))
+
+
+def build_alert(usage, history):
+    """Build alert message for the mounts that breach, with a next step each."""
+    reasons = find_reasons(usage, history)
+    lines = ["🚨 Picklelab Disk Alert\n"]
+
+    for mount in dict.fromkeys(r.mount for r in reasons):
+        data = usage[mount]
+        kinds = [r.kind for r in reasons if r.mount == mount]
+        status = "🔴 CRITICAL" if "critical" in kinds else "⚠️ WARNING"
+        rate_gb, _ = calculate_rate(history, mount)
+
+        lines.append(f"{status} {mount}")
+        lines.append(f"  Used: {data['used_pct']}% ({data['used_gb']}GB / {data['used_gb'] + data['avail_gb']}GB)")
+        lines.append(f"  Free: {data['avail_gb']}GB")
+        if rate_gb is not None:
+            direction = "growing" if rate_gb > 0 else "shrinking"
+            lines.append(f"  Rate: {abs(rate_gb):.1f}GB/day {direction}")
+        if "fill" in kinds:
+            lines.append(f"  ⏰ Time to full: {estimate_time_to_full(data, rate_gb):.1f} days")
+        lines.append(f"  → {HINTS[max(kinds, key=['fill', 'warning', 'critical'].index)]}")
+        lines.append("")
+
+    return "\n".join(lines).rstrip()
+
+
+def state_path():
+    return csv_path().with_name("disk-monitor-alert.json")
+
+
+def alert_state(reasons, sent_at):
+    return {"reasons": sorted(f"{r.mount}:{r.kind}" for r in reasons), "sent_at": sent_at.isoformat()}
+
+
+def load_alert_state():
+    try:
+        return json.loads(state_path().read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def save_alert_state(state):
+    path = state_path()
+    if state is None:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state))
+
+
+def settle_state(state, now):
+    """State to keep after a clean reading: held until clear for CLEAR_HOURS, then dropped."""
+    if not state:
+        return None
+    since = datetime.fromisoformat(state["clear_since"]) if state.get("clear_since") else now
+    if now - since >= timedelta(hours=CLEAR_HOURS):
+        return None
+    return {**state, "clear_since": since.isoformat()}
+
+
+def should_send(reasons, state, now):
+    """Send when the conditions changed, or the last identical alert is a day old."""
+    if not reasons:
+        return False
+    if not state or state.get("reasons") != alert_state(reasons, now)["reasons"]:
+        return True
+    return now - datetime.fromisoformat(state["sent_at"]) >= timedelta(hours=REPEAT_HOURS)
 
 
 def main():
@@ -285,14 +313,21 @@ def main():
     history = load_history()
     save_history(usage)
     
-    if not should_alert(usage, history):
+    reasons = find_reasons(usage, history)
+    now = datetime.now()
+    state = load_alert_state()
+    if not reasons:
+        save_alert_state(settle_state(state, now))
         log("Disk usage normal, no alert needed")
         return 0
-    
-    top_paths = get_top_paths()
-    disk_report = get_disk_report()
-    message = build_alert(usage, history, top_paths, disk_report)
-    
+    if not should_send(reasons, state, now):
+        save_alert_state({k: v for k, v in state.items() if k != "clear_since"})
+        log("Same alert already sent recently, staying quiet")
+        return 0
+
+    message = build_alert(usage, history)
+    save_alert_state(alert_state(reasons, now))
+
     print(message)
     
     return 0

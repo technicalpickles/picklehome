@@ -22,6 +22,10 @@ climate-status *ARGS:
 climate-history *ARGS:
     uv run python -m climate.sync history {{ARGS}}
 
+# Replay the comfort auto-switch band (and --band LO/HI alternatives) against runtime history
+climate-replay-band *ARGS:
+    uv run python -m climate.sync replay-band {{ARGS}}
+
 # Push schedule.yaml to Ecobee
 climate-sync *ARGS:
     uv run python -m climate.sync sync {{ARGS}}
@@ -234,13 +238,14 @@ openclaw-quiet host="picklelab" minutes="5":
 seed-brineworks-gmail host="picklelab":
     scripts/seed-brineworks-gmail {{host}}
 
-# Tail Brineworks server container logs from picklelab
+# Tail Brineworks server container logs from picklelab. By container name, not compose:
+# compose needs the root-only op token to interpolate its env (same reason as verify.sh)
 brineworks-server-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} docker logs --tail={{lines}} brineworks-server-server-1
 
 # Follow Brineworks server container logs live from picklelab
 brineworks-server-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/brineworks-server && set -a; . /etc/opt/homelab/op-token-picklehome; set +a; op run --env-file=.env.op.template -- docker compose --project-directory /opt/homelab/homelab/services/brineworks-server --env-file .env.build -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} docker logs -f brineworks-server-server-1
 
 
 # Deploy the Bugsink error tracker to picklelab (idempotent: first setup or update)
@@ -354,6 +359,14 @@ deploy-disk-monitor host="picklelab":
 disk-monitor-run-now host="picklelab":
     ssh {{host}} "sudo systemctl start disk-monitor.service; journalctl -u disk-monitor.service -n 60 --no-pager"
 
+# Deploy the host-state collector timer to picklelab (writes /var/lib/host-state/picklelab.json every 5 min)
+deploy-host-state host="picklelab":
+    just _deploy-remote host-state {{host}}
+
+# Run the host-state collector now on picklelab (triggers the systemd service, then shows its log)
+host-state-run-now host="picklelab":
+    ssh {{host}} "sudo systemctl start host-state.service; journalctl -u host-state.service -n 60 --no-pager"
+
 # Run backup now on picklelab (manual trigger)
 backup-now host="picklelab":
     ssh {{host}} "sudo systemctl start backup.service"
@@ -395,7 +408,9 @@ deploy-disk-hygiene host="picklelab":
     source scripts/deploy-lock.sh
     deploy_lock_acquire {{host}} "deploy-disk-hygiene"
     echo "Deploying commit $(git rev-parse --short HEAD) to {{host}}"
-    ssh {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/disk-hygiene/deploy.sh"
+    # -t: deploy.sh installs a root-owned disk-report and a sudoers drop-in, which are not
+    # in the passwordless sudoers allowlist, so sudo needs a pty to prompt on.
+    ssh -t {{host}} "cd /opt/homelab && git pull && HOMELAB_DEPLOY_LOCK_HELD=1 homelab/services/disk-hygiene/deploy.sh"
 
 # Run docker prune now (triggers the systemd service, then shows its log)
 docker-prune-now host="picklelab":

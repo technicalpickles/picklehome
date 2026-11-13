@@ -62,7 +62,7 @@ The spread between heat and cool setpoints is intentional beyond just satisfying
 
 ### Seasonal switching
 
-Every occupied slot resolves to either Comfort Heat (`smart2`) or Comfort Cool (`smart1`) in the thermostat's live program; which one is active depends on season, not a shared target temperature — see the setpoints table for what each actually holds. `schedule.yaml` itself holds neither: occupied slots use the virtual ref `comfort`, resolved to one or the other at push time (see below). Run `just climate-comfort-switch auto` to decide which. The command uses a hysteresis band (60–65°F) applied to the mean outdoor temperature described below, not a live reading: below 60°F it decides Comfort Heat, above 65°F Comfort Cool, and in between it makes no change. When the mean sits in that mild range, the schedule is left on whichever mode is currently set; in that range the house doesn't need much active conditioning, and Home mode (68–73°F) acts as a comfortable fallback if neither heating nor cooling is needed. Thresholds are configured in `climate/config/weather.yaml`; station MACs are stored in 1Password and injected via `AMBIENT_STATION_MACS` in `.env`.
+Every occupied slot resolves to either Comfort Heat (`smart2`) or Comfort Cool (`smart1`) in the thermostat's live program; which one is active depends on season, not a shared target temperature — see the setpoints table for what each actually holds. `schedule.yaml` itself holds neither: occupied slots use the virtual ref `comfort`, resolved to one or the other at push time (see below). Run `just climate-comfort-switch auto` to decide which. The command uses a hysteresis band (60–65°F) applied to the mean outdoor temperature described below, not a live reading: below 60°F it decides Comfort Heat, above 65°F Comfort Cool, and in between it makes no change. When the mean sits in that mild range, the schedule is left on whichever mode is currently set; in that range the house doesn't need much active conditioning. Home mode (68–73°F) is defined on the thermostats but no `schedule.yaml` slot uses it, so it is not a fallback: in the band the house simply stays on Comfort Heat or Comfort Cool. Thresholds are configured in `climate/config/weather.yaml`; station MACs are stored in 1Password and injected via `AMBIENT_STATION_MACS` in `.env`.
 
 The mode is decided from a **24-hour mean** of outdoor temperature, not a single
 reading. Samples come from the run log, which records outdoor temperature every
@@ -71,10 +71,16 @@ logs why.
 
 A mean is used because a shoulder-season day genuinely spans the band — an April
 day running 45–80°F would otherwise flip the mode twice daily. Its mean lands
-near 62°F, inside the band, which correctly means "leave it alone". The
-tradeoff is stickiness: through a long mild spring the mean can sit in the band
-for weeks and the house holds whichever mode it was in. That is deliberate and
-comfortable, but the seasonal flip happens later than intuition suggests.
+near 62°F, inside the band, which correctly means "leave it alone".
+
+The band does not hold a mode for weeks through a mild spring. Replaying 60/65
+against 2026-03-11 to 2026-11-10 shows 16 flips, 11 of them between 03-22 and
+05-06, because day-to-day weather swings the mean across both edges. The mean at
+7am is 17 hours of yesterday plus 7 of today, so a switch lags the weather by
+about a day. Choosing a mode that disagrees with a day's actual demand costs
+little, since both modes carry a heat and a cool setpoint. See
+`docs/research/comfort-switch-band/findings.md` for the numbers and
+`just climate-replay-band` to retest.
 
 **The thermostat is the source of truth for the current mode.** `schedule.yaml`
 does not encode a season: occupied slots use the virtual ref `comfort`, resolved

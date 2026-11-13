@@ -87,6 +87,7 @@ just climate-comfort-switch heat|cool|auto [--dry-run] [--clear-holds]  # season
 just climate-hvac-mode MODE [--thermostat NAME] [--dry-run]  # set hvacMode (auto|heat|cool|off|auxHeatOnly); only manual writer, never the timer
 just climate-settings-sync [--thermostat NAME] [--dry-run]  # push per-thermostat settings (hold_action, follow_me_comfort) from thermostats.yaml
 just climate-sensors-sync [--thermostat NAME] [--dry-run]  # enroll thermostats.yaml `settings.sensors` in every climate (replaces the built-in sensor); manual only, never the timer
+just climate-replay-band [--band LO/HI ...] [--window HOURS ...] [--start YYYY-MM-DD]  # read-only: replay the weather.yaml band (plus any --band) against runtime history, scored against the heating/cooling the equipment actually did
 ```
 
 ### Weather
@@ -192,6 +193,7 @@ climate/
     status.py              # Live thermostat status extraction + formatting
     sensors.py             # Per-climate sensor enrollment (climate-sensors-sync)
     history.py             # Room-sensor temp + occupancy history (climate-history)
+    replay.py              # Replay the auto-switch band against history (climate-replay-band)
     thermostats.py         # Thermostat registry loader
   ambient/
     client.py              # Outdoor temp fetching via Ambient Weather API

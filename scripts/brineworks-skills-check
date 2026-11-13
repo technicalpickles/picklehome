@@ -3,8 +3,11 @@
 # Run by `just deploy-brineworks-server` after a healthy deploy (brineworks#34).
 #
 # Wraps brineworks' `scripts/sync-skills.sh --check`, which diffs
-# <brineworks>/skills/<name>/ against <openclaw-workspace>/skills/<name>/ on this Mac.
-# No network. Read-only: --check changes nothing.
+# <brineworks>/skills/<name>/ against <openclaw-workspace>/skills/<name>/. It fetches both
+# repos and runs the check on their origin/main trees (exported to a temp dir), since a
+# stale local checkout reports drift that isn't there. If a fetch fails it falls back to
+# the local working trees and says so. Read-only: --check changes nothing, and fetch only
+# updates remote-tracking refs.
 #
 # ALWAYS exits 0. Drift is expected between a deploy and the workspace PR (brineworks
 # ADR 0013 and docs/runbooks/deploy.md: deploy first, then sync), and a missing
@@ -26,15 +29,24 @@ if [ ! -f "$SYNC" ]; then
     exit 0
 fi
 
-# Which commit each side is on, since this compares working trees, not what's merged.
-describe() {
-    local dir=$1 branch sha
-    branch=$(git -C "$dir" branch --show-current 2>/dev/null) || return 0
-    sha=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null) || return 0
-    printf '%s@%s' "${branch:-detached}" "$sha"
-}
 ws="${OPENCLAW_WORKSPACE:-$HOME/github.com/technicalpickles/openclaw-workspace}"
-echo "    brineworks $(describe "$BRINEWORKS_DIR"), openclaw-workspace $(describe "$ws") (local checkouts: fetch first if unsure they're current)"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+export_main() {
+    local repo=$1 dest=$2; shift 2
+    git -C "$repo" fetch -q origin main 2>/dev/null || return 1
+    mkdir -p "$dest"
+    git -C "$repo" archive origin/main "$@" | tar -x -C "$dest"
+}
+if export_main "$BRINEWORKS_DIR" "$tmp/brineworks" scripts/sync-skills.sh skills \
+    && export_main "$ws" "$tmp/workspace" skills; then
+    echo "    Comparing origin/main: brineworks@$(git -C "$BRINEWORKS_DIR" rev-parse --short origin/main), openclaw-workspace@$(git -C "$ws" rev-parse --short origin/main)"
+    SYNC="$tmp/brineworks/scripts/sync-skills.sh"
+    export OPENCLAW_WORKSPACE="$tmp/workspace"
+else
+    echo "    Fetch failed, comparing local working trees instead (they may be stale)"
+fi
 
 out=$(bash "$SYNC" --check 2>&1)
 rc=$?
@@ -45,7 +57,7 @@ case "$rc" in
     1)
         echo "    WARNING: the openclaw-workspace skill copies are stale vs brineworks skills/"
         printf '%s\n' "$out" | grep -E ': (DRIFT|in sync)$' | sed 's/^/    /'
-        echo "    Sync them: $SYNC <name>, then commit and PR in openclaw-workspace."
+        echo "    Sync them: $BRINEWORKS_DIR/scripts/sync-skills.sh <name>, then commit and PR in openclaw-workspace."
         echo "    (Expected right after a deploy: this is step 2 of the update order in brineworks docs/runbooks/deploy.md.)"
         ;;
     2)

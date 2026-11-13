@@ -751,54 +751,67 @@ Docker split.
 Second, short downtime for Docker only (the host stays up). Taskwarrior
 `b584df49`.
 
+Scripted: `homelab/scripts/disk-swap/docker-split.sh` (`seed`, then `cutover`,
+then `cleanup` a day later) does the steps below, rerunnable, and the
+checklist stays as the reference for what each phase does.
+
 Why after the swap and not folded into it: creating LVs on the PNY breaks the
 reverse-`pvmove` rollback, and the split's own downtime is minutes with a
 pre-seeded rsync. A second short window beats losing the escape hatch during
 the riskiest part.
 
-- [ ] `sudo lvcreate -L 150G -n containerd vg0 && sudo mkfs.ext4 /dev/vg0/containerd`;
+- [x] `sudo lvcreate -L 150G -n containerd vg0 && sudo mkfs.ext4 /dev/vg0/containerd`;
       same with `-L 30G -n ci-docker`.
-- [ ] Pre-seed while running: mount each at `/mnt/<name>`,
+- [x] Pre-seed while running: mount each at `/mnt/<name>`,
       `sudo rsync -aHAX --numeric-ids /srv/containerd/ /mnt/containerd/`
       (and ci-docker). Inconsistent copy, the final pass fixes it. The
       trailing slashes mean rsync also copies the source dir's owner and mode
       onto the new filesystem's root.
-- [ ] Stop everything that writes there (**review focus #4**):
+- [x] Stop everything that writes there (**review focus #4**):
       `sudo systemctl stop docker-prune.timer backup.timer` (backup.timer is
       running again since Swap; re-enable both after the split), the systemd units for the compose stacks,
       `sudo systemctl stop docker docker.socket containerd`, and
       `sudo systemctl stop user@2000.service`.
-- [ ] Immediately before the final pass, check that `pgrep -a containerd`,
+- [x] Immediately before the final pass, check that `pgrep -a containerd`,
       `pgrep -u ci -a`, and `pgrep -a dockerd` all come back empty. Anything
       running there means stop again, don't copy.
-- [ ] Final pass: same rsync with `--delete` (this also removes the new
+- [x] Final pass: same rsync with `--delete` (this also removes the new
       filesystems' `lost+found`, which is harmless).
-- [ ] Unmount `/mnt/*`, `mv /srv/containerd /srv/containerd.old` (same for
+- [x] Unmount `/mnt/*`, `mv /srv/containerd /srv/containerd.old` (same for
       ci-docker), `mkdir` the empty mountpoints and `sudo chattr +i` them,
       so nothing can write into them while they're unmounted. The immutable
       flag is on the empty directory underneath. Mounting the LV over it
       still works, and writes go to the LV. `sudo chattr -i` undoes it if the
       directory ever needs changing.
-- [ ] fstab lines by `/dev/disk/by-id/dm-uuid-LVM-*` (match the existing
+- [x] fstab lines by `/dev/disk/by-id/dm-uuid-LVM-*` (match the existing
       style), **no `nofail`**. Then `sudo systemctl daemon-reload` and
       `sudo mount -a`.
-- [ ] **Review focus #8:** make the services require their mounts, so a
+- [x] **Review focus #8:** make the services require their mounts, so a
       missing LV means the service doesn't start (instead of starting on the
       empty dir), and the box still boots with ssh:
       - `sudo systemctl edit containerd.service` and `docker.service`: add
         `[Unit]` `RequiresMountsFor=/srv/containerd`
       - `sudo systemctl edit user@2000.service`: add
         `RequiresMountsFor=/srv/ci-docker`
-- [ ] Gate, not just a look: `stat -c '%U:%G %a' /srv/containerd /srv/containerd.old /srv/ci-docker /srv/ci-docker.old`
+- [x] Gate, not just a look: `stat -c '%U:%G %a' /srv/containerd /srv/containerd.old /srv/ci-docker /srv/ci-docker.old`
       must match pairwise (`/srv/ci-docker` owned by `ci`). Fix before
       starting anything.
-- [ ] Start things back up (`user@2000.service`, docker, the service units,
+Run 2026-11-10 with `docker-split.sh` (`seed`, then `cutover` at ~14:31 UTC).
+Docker was down a few minutes. Result: both LVs mounted, `/srv/ci-docker` is
+`ci:ci`, 17 containers back (same as before), `systemctl --failed` empty.
+`resume` stopped at `open-webui`, which needs `openclaw`'s network and was
+started before it; the rest was started by hand, and the script now retries
+failed units once.
+
+- [x] Start things back up (`user@2000.service`, docker, the service units,
       the timers), compare `docker ps` to the Preflight list, and run a CI
       build to prove the rootless daemon works.
-- [ ] After a day of normal running: `sudo rm -rf /srv/containerd.old /srv/ci-docker.old`.
+- [x] After a day of normal running: `sudo rm -rf /srv/containerd.old /srv/ci-docker.old`.
       **Destructive.** Guard: `findmnt /srv/containerd /srv/ci-docker` shows
       both LVs mounted, and Docker and CI have run fine for that day. Safe
       because these are the pre-split copies. The live data is on the LVs.
+      Done 2026-11-12 with `docker-split.sh cleanup`: `/srv` went from 51G
+      to 11G used.
 
 ### Grow
 

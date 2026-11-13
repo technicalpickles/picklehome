@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export LC_ALL=C
+
+conf=${1:?usage: collect <conf>}
+conf_dir=$(cd "$(dirname "$conf")" && pwd)
+# shellcheck source=/dev/null
+. "$conf"
+
+abs() {
+  case $1 in
+    /*) printf '%s' "$1" ;;
+    *) printf '%s/%s' "$conf_dir" "$1" ;;
+  esac
+}
+out_file=$(abs "$OUT")
+# shellcheck disable=SC2153
+check_dir=$(abs "$CHECK_DIR")
+timeout_s=${CHECK_TIMEOUT:-20}
+now=${HOST_STATE_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+interval=300
+
+tmo=""
+for cand in gtimeout timeout /opt/homebrew/bin/gtimeout; do
+  if tmo=$(command -v "$cand"); then break; fi
+  tmo=""
+done
+[ -n "$tmo" ] || { echo "collect: neither gtimeout nor timeout found" >&2; exit 1; }
+
+tmp="$out_file.tmp.$$"
+trap 'rm -f "$tmp"' EXIT
+
+prev=$(jq -c '
+  [.checks[]?
+   | select((.name | type) == "string" and (.status | type) == "number"
+            and (.since | type) == "string"
+            and (.since | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")))
+   | {key: .name, value: {status, since}}]
+  | from_entries' "$out_file" 2>/dev/null) || prev=""
+[ -n "$prev" ] || prev='{}'
+
+checks='[]'
+# shellcheck disable=SC2153
+for name in $CHECKS; do
+  if [[ ! $name =~ ^[a-z0-9-]+$ ]]; then
+    echo "collect: bad check name: $name" >&2
+    exit 1
+  fi
+  if [ "$name" = stale ]; then
+    echo "collect: check name stale is reserved for the stale finding" >&2
+    exit 1
+  fi
+  upper=$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')
+  path="$check_dir/$name"
+
+  rc=0
+  line=""
+  if [ ! -x "$path" ]; then
+    rc=3
+    line="$upper UNKNOWN - check is not executable"
+  else
+    raw=$("$tmo" -k "${CHECK_KILL_AFTER:-5}" "$timeout_s" "$path" </dev/null 2>/dev/null) || rc=$?
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+      rc=2
+      line="$upper CRITICAL - timed out after ${timeout_s}s"
+    else
+      [ "$rc" -le 3 ] || rc=3
+      line=${raw%%$'\n'*}
+      line=$(printf '%s' "$line" | tr -d '\000-\010\013-\037\177')
+      line=$(printf '%s' "${line:0:500}" | iconv -c -f UTF-8 -t UTF-8 2>/dev/null || true)
+      if [ -z "$line" ]; then
+        rc=3
+        line="$upper UNKNOWN - no output"
+      fi
+    fi
+  fi
+
+  since=$(jq -r --arg n "$name" --argjson s "$rc" --arg now "$now" \
+    '(.[$n] // empty | select(.status == $s) | .since) // $now' <<<"$prev")
+  checks=$(jq -c --arg name "$name" --argjson status "$rc" --arg since "$since" --arg output "$line" \
+    '. + [{name: $name, status: $status, since: $since, output: $output}]' <<<"$checks")
+done
+
+mkdir -p "$(dirname "$out_file")"
+jq -n --arg host "$HOST" --arg generated_at "$now" --argjson interval "$interval" --argjson checks "$checks" \
+  '{host: $host, generated_at: $generated_at, interval_seconds: $interval, checks: $checks}' >"$tmp"
+mv -f "$tmp" "$out_file"
