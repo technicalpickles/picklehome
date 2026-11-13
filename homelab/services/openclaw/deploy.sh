@@ -621,7 +621,8 @@ if [ -z "$OPENCLAW_WIDGETS_HOST" ]; then
     echo "    configured. See README 'Widget sandbox host'."
 fi
 # plugins.load.paths: brineworks-approval (pickleclaw ADR 0001) gates the model's
-# email_rules_add / triage_apply with an approval prompt. The dir is scp'd by
+# write-side brineworks tools (the GATED map in the plugin's index.mjs is the list)
+# with an approval prompt. The dir is scp'd by
 # `just deploy-openclaw` and bind-mounted ro by compose.picklelab.yaml, so it exists
 # for this one-off container too. The prompt reaches Telegram through the same
 # execApprovals.enabled + commands.ownerAllowFrom pair as exec approvals (Telegram's
