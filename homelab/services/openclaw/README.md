@@ -114,7 +114,7 @@ The plugin is loaded via `plugins.load.paths` (set in `deploy.sh`) from `/opt/op
 
 `deploy.sh` runs from the Mac, where `pickleclaw` is already cloned with your own GitHub access — `git pull` it before deploying, same as any other dependency.
 
-**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5`/`openclaw.env` from whatever local checkout you have here (no branch/cleanliness guard), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
+**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5`/`openclaw.env` from your local checkout here (`scripts/pickleclaw-guard` refuses unless it is clean and at `origin/main`), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
 
 ## First-time Setup
 

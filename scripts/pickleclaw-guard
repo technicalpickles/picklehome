@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Refuses unless every pickleclaw checkout that `just deploy-openclaw` copies
+# from is clean and at origin/main.
+#
+#   scripts/pickleclaw-guard [openclaw-dir]
+#
+# The deploy copies tools/mcp/image config, the brineworks-approval plugin and
+# workspace-git-sync.sh through symlinks into the private pickleclaw repo, so
+# whatever that working tree holds ships. Each symlink is resolved to its git
+# checkout, which is fetched and then compared with origin/main.
+#
+# openclaw-dir defaults to homelab/services/openclaw. Nothing is written to
+# stdout. On refusal: one reason on stderr, exit 1.
+set -euo pipefail
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+dir="${1:-homelab/services/openclaw}"
+links=(
+    openclaw.tools.json5
+    openclaw.mcp.json5
+    openclaw.image.env
+    workspace-git-sync.sh
+    plugins/brineworks-approval
+)
+
+roots=()
+for name in "${links[@]}"; do
+    link="$dir/$name"
+    [ -L "$link" ] || continue
+    target="$(realpath "$link" 2>/dev/null)" || die "$link is a dangling symlink"
+    root="$(git -C "$(dirname "$target")" rev-parse --show-toplevel 2>/dev/null)" \
+        || die "$link points at $target, which is not inside a git checkout"
+    case " ${roots[*]:-} " in
+        *" $root "*) ;;
+        *) roots+=("$root") ;;
+    esac
+done
+[ "${#roots[@]}" -gt 0 ] || die "no symlinks into pickleclaw under $dir. See homelab/services/openclaw/README.md."
+
+for root in "${roots[@]}"; do
+    git -C "$root" fetch -q origin main \
+        || die "git fetch origin main failed in $root"
+    if [ -n "$(git -C "$root" status --porcelain)" ]; then
+        die "$root has uncommitted changes. Commit, stash or remove them first."
+    fi
+    head="$(git -C "$root" rev-parse HEAD)"
+    want="$(git -C "$root" rev-parse origin/main)"
+    if [ "$head" != "$want" ]; then
+        branch="$(git -C "$root" branch --show-current)"
+        die "$root is at ${head:0:9} (${branch:-detached HEAD}), not origin/main (${want:0:9}). Check out and pull main first."
+    fi
+done
