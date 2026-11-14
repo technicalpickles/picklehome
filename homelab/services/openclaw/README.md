@@ -110,7 +110,7 @@ ln -sfn ~/github.com/technicalpickles/pickleclaw/openclaw-config/plugins/brinewo
   homelab/services/openclaw/plugins/brineworks-approval
 ```
 
-The plugin is loaded via `plugins.load.paths` (set in `deploy.sh`) from `/opt/openclaw-plugins/brineworks-approval` inside the container. Its approval prompts reach Telegram through `channels.telegram.execApprovals.enabled` + `commands.ownerAllowFrom` (same as exec approvals); with no route the gated call fails closed. The same plugin also blocks the agent's `exec` of `openclaw mcp show` and `openclaw mcp list`, which print bearer tokens into the transcript. Exec policy has no deny pattern and `tools.exec.mode` is `full`, so a `before_tool_call` hook is the only place to refuse one command. A guardrail on the command text, not a security boundary; see pickleclaw's `docs/gotchas/mcp-show-prints-bearer-token.md`.
+The plugin is loaded via `plugins.load.paths` (set in `deploy.sh`) from `/opt/openclaw-plugins/brineworks-approval` inside the container. Its approval prompts reach Telegram through `channels.telegram.execApprovals.enabled` + `commands.ownerAllowFrom` (same as exec approvals); with no route the gated call fails closed. The same plugin also blocks the agent's `exec` of `openclaw mcp show` and `openclaw mcp list --json`, which print bearer tokens into the transcript. Exec policy has no deny pattern and `tools.exec.mode` is `full`, so a `before_tool_call` hook is the only place to refuse one command. A guardrail on the command text, not a security boundary; see pickleclaw's `docs/gotchas/mcp-show-prints-bearer-token.md`.
 
 `deploy.sh` runs from the Mac, where `pickleclaw` is already cloned with your own GitHub access — `git pull` it before deploying, same as any other dependency.
 
