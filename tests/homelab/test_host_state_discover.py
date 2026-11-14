@@ -114,7 +114,7 @@ def test_collect_end_to_end(world):
 printf 'LoadState=loaded\\nActiveState=active\\nSubState=running\\nResult=success\\n'
 printf 'NextElapseUSecRealtime=Wed 2026-11-11 03:03:27 UTC\\nNextElapseUSecMonotonic=0\\n'
 printf 'Unit=backup.service\\n'
-printf 'MainPID=0\\nActiveEnterTimestampMonotonic=1\\n'
+printf 'MainPID=1\\nActiveEnterTimestampMonotonic=1\\n'
 """)
     _stub(bindir / "curl", "printf 200\n")
     checks = world["tmp"] / "checks"

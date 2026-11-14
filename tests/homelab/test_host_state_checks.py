@@ -230,3 +230,10 @@ def test_runtime_unit_down(env, tmp_path):
 
 def test_runtime_unit_missing(env):
     _check(_run(env, "runtime-check", ""), 3, "RUNTIME docker+containerd UNKNOWN", "not-found")
+
+
+def test_runtime_no_main_pid(env, tmp_path):
+    _runtime(env, tmp_path)
+    _unit(env, "docker.service", ActiveState="active", MainPID=0, ActiveEnterTimestampMonotonic=300)
+    _check(_run(env, "runtime-check", "", HOST_STATE_PROC=tmp_path / "proc"), 3,
+           "RUNTIME docker+containerd UNKNOWN", "docker.service has no start time or main pid")

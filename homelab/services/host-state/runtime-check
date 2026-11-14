@@ -25,7 +25,7 @@ read_unit() {
   local since pid
   since=$(val ActiveEnterTimestampMonotonic "$t")
   pid=$(val MainPID "$t")
-  if [[ ! $since =~ ^[0-9]+$ || ! $pid =~ ^[0-9]+$ ]]; then
+  if [[ ! $since =~ ^[0-9]+$ || ! $pid =~ ^[1-9][0-9]*$ ]]; then
     echo "$label UNKNOWN - $unit has no start time or main pid"
     exit 3
   fi
