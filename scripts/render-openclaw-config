@@ -1,10 +1,42 @@
 #!/usr/bin/env bash
-# Prints the openclaw config writes deploy.sh makes, as one JSON array, without
-# deploying. Takes only the top-level `config set` statements out of deploy.sh and
-# runs them with RUN_CLI pointed at a stub that echoes its args, using dummy values.
+# Prints the openclaw config writes deploy.sh makes on every deploy, as one JSON
+# array, without deploying. Takes each top-level `$RUN_CLI config set ... --batch-json '[`
+# statement through its closing `]'` line and runs only those, with RUN_CLI pointed
+# at a stub that echoes its args, using dummy values.
+#
+#   scripts/render-openclaw-config [deploy.sh]
+#
+# Any other top-level `config set` form, or a batch line that is not JSON, refuses
+# before anything runs, so a new statement shape can't pull deploy.sh's own shell
+# lines (sudo, docker) into the eval. Not rendered: the onboard-only writes inside
+# the first-deploy if-block, and the tools.json5 `config patch --stdin`.
 set -euo pipefail
 
-deploy="$(dirname "$0")/../homelab/services/openclaw/deploy.sh"
+deploy="${1:-$(dirname "$0")/../homelab/services/openclaw/deploy.sh}"
+
+snippet="$(awk '
+function fail(msg) {
+    printf "render-openclaw-config: %s:%d: %s\n", FILENAME, FNR, msg > "/dev/stderr"
+    bad = 1
+    exit 1
+}
+/^\$RUN_CLI config set/ {
+    if (inside) fail("config set before the previous batch closed")
+    if ($0 !~ /--batch-json '\''\[$/) fail("expected `--batch-json '\''[` at end of line: " $0)
+    inside = 1
+    print
+    next
+}
+inside && /^\]'\''$/ { inside = 0; print; next }
+inside {
+    if ($0 !~ /^[ \t]+[][{}"]/ || $0 ~ /\$\(|`/) fail("not a JSON line inside a batch: " $0)
+    print
+}
+END {
+    if (bad) exit 1
+    if (inside) { bad = 1; fail("batch never closed with a line holding only ]'\''") }
+}
+' "$deploy")"
 
 stub="$(mktemp)"
 trap 'rm -f "$stub"' EXIT
@@ -18,5 +50,4 @@ RUN_CLI="$stub"
 OPENCLAW_HOST="${OPENCLAW_HOST:-openclaw.example.ts.net}"
 ALLOW_FROM_JSON='["1"]'
 
-snippet="$(awk '/^\$RUN_CLI config set/{p=1} p{print} /^\]'"'"'$/{p=0}' "$deploy")"
 eval "$snippet" | jq -s '[.[][]] | sort_by(.path)'
