@@ -185,3 +185,48 @@ def test_site_curl_failure_reason(env):
              FAKE_CURL_ERR="curl: (6) Could not resolve host: x")
     _check(r, 2, "SITE https://a.example/ CRITICAL", "curl: (6) Could not resolve host: x")
     assert "second line" not in r.stdout
+
+
+LIBC = "/usr/lib/x86_64-linux-gnu/libc.so.6"
+
+
+def _runtime(env, tmp_path, *, containerd_since=200, docker_since=300, containerd_state="active",
+             maps=None):
+    _unit(env, "containerd.service", ActiveState=containerd_state, MainPID=11,
+          ActiveEnterTimestampMonotonic=containerd_since)
+    _unit(env, "docker.service", ActiveState="active", MainPID=22,
+          ActiveEnterTimestampMonotonic=docker_since)
+    proc = tmp_path / "proc"
+    for pid in (11, 22):
+        (proc / str(pid)).mkdir(parents=True, exist_ok=True)
+        (proc / str(pid) / "maps").write_text((maps or {}).get(pid, f"7f00-7f01 r-xp 0 fd:00 1 {LIBC}\n"))
+    return _run(env, "runtime-check", "", HOST_STATE_PROC=proc)
+
+
+def test_runtime_ok(env, tmp_path):
+    _check(_runtime(env, tmp_path), 0, "RUNTIME docker+containerd OK")
+
+
+def test_runtime_containerd_restarted_under_dockerd(env, tmp_path):
+    _check(_runtime(env, tmp_path, containerd_since=400), 2, "RUNTIME docker+containerd CRITICAL",
+           "containerd restarted under a running dockerd")
+
+
+def test_runtime_replaced_library(env, tmp_path):
+    r = _runtime(env, tmp_path, maps={11: f"7f00-7f01 r-xp 0 fd:00 1 {LIBC} (deleted)\n"})
+    _check(r, 1, "RUNTIME docker+containerd WARNING", "containerd running replaced libraries")
+    assert "dockerd" not in r.stdout.split(";")[0]
+
+
+def test_runtime_deleted_shm_is_not_a_library(env, tmp_path):
+    r = _runtime(env, tmp_path, maps={22: "7f00-7f01 rw-s 0 00:d7 3 /dev/shm/sem.x (deleted)\n"})
+    _check(r, 0, "RUNTIME docker+containerd OK")
+
+
+def test_runtime_unit_down(env, tmp_path):
+    _check(_runtime(env, tmp_path, containerd_state="failed"), 2,
+           "RUNTIME docker+containerd CRITICAL", "containerd.service is failed")
+
+
+def test_runtime_unit_missing(env):
+    _check(_run(env, "runtime-check", ""), 3, "RUNTIME docker+containerd UNKNOWN", "not-found")

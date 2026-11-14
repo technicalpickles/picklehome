@@ -57,7 +57,8 @@ def test_discovers(world):
     r = _discover(world)
     assert r.returncode == 0 and r.stdout == ""
     listing = _listing(world)
-    assert sorted(listing) == ["site-alpha", "site-beta", "timer-backup", "unit-openclaw"]
+    assert sorted(listing) == ["runtime-docker", "site-alpha", "site-beta", "timer-backup", "unit-openclaw"]
+    assert f"exec {DIR}/runtime-check" in listing["runtime-docker"]
     assert f"exec {DIR}/timer-check backup.timer" in listing["timer-backup"]
     assert f"exec {DIR}/unit-check openclaw.service" in listing["unit-openclaw"]
     assert f"exec {DIR}/site-check https://alpha.example/health" in listing["site-alpha"]
@@ -113,6 +114,7 @@ def test_collect_end_to_end(world):
 printf 'LoadState=loaded\\nActiveState=active\\nSubState=running\\nResult=success\\n'
 printf 'NextElapseUSecRealtime=Wed 2026-11-11 03:03:27 UTC\\nNextElapseUSecMonotonic=0\\n'
 printf 'Unit=backup.service\\n'
+printf 'MainPID=0\\nActiveEnterTimestampMonotonic=1\\n'
 """)
     _stub(bindir / "curl", "printf 200\n")
     checks = world["tmp"] / "checks"
@@ -132,7 +134,7 @@ printf 'Unit=backup.service\\n'
     assert report["host"] == "picklelab"
     assert report["interval_seconds"] == 300
     assert [c["name"] for c in report["checks"]] == sorted(p.name for p in checks.iterdir())
-    assert len(report["checks"]) == 4
+    assert len(report["checks"]) == 5
     assert all(c["status"] == 0 for c in report["checks"]), report
 
 

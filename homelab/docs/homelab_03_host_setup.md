@@ -116,6 +116,19 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 
 On minimized installs, this falls back to readline (no `dialog` package). Answer `yes`.
 
+### Keep needrestart off containerd
+
+Scripted: `homelab/scripts/setup-needrestart.sh`
+
+After a library upgrade, unattended-upgrades runs needrestart, which restarts every service still using the old library. The stock config already skips `docker.service` but not `containerd.service`. On 2026-11-14 a glibc upgrade restarted containerd under a running dockerd, and dockerd then failed every `docker exec`, healthcheck and image build with "not found" until docker restarted.
+
+The script installs `homelab/config/needrestart-containerd.conf` to `/etc/needrestart/conf.d/` as a root-owned copy, then checks that needrestart skips both daemons. Both then stay on the old library until someone restarts them. host-state's `runtime-docker` check reports that as a warning, and reports a containerd restart under a running dockerd as critical. Fix either one in a quiet window with `sudo systemctl restart containerd docker`, which restarts every container.
+
+```bash
+cd /opt/homelab
+homelab/scripts/setup-needrestart.sh
+```
+
 ### Docker Engine + Compose + `/srv` layout
 
 Scripted install: `homelab/scripts/setup-docker.sh`
