@@ -630,6 +630,11 @@ fi
 # entries.<id>.enabled is required, not optional: without it the plugin shows `loaded` but
 # activates by default only, the gateway never imports it at startup, and the hook never
 # runs (found on first picklelab deploy 2026-10-18; startup line lacked the plugin name).
+# heartbeat every "0m" + target "none": the documented off switch, so the gateway stops
+# depending on the monitor scratch row in the state DB happening to be an empty template
+# (a non-empty or missing row would run gpt-oss:20b every 30m and DM tool errors).
+# device-pair publicUrl: the gateway is reached through `tailscale serve`, so `/pair`
+# must advertise the tailnet URL. allowLegacyAuth false: nothing is paired through it.
 $RUN_CLI config set --batch-json '[
     {"path":"secrets.providers.team-store","value":{"source":"store"}},
     {"path":"gateway.bind","value":"lan"},
@@ -642,6 +647,8 @@ $RUN_CLI config set --batch-json '[
     {"path":"channels.telegram.execApprovals.enabled","value":true},
     {"path":"plugins.load.paths","value":["/opt/openclaw-plugins/brineworks-approval"]},
     {"path":"plugins.entries.brineworks-approval.enabled","value":true},
+    {"path":"plugins.entries.device-pair.config.publicUrl","value":"wss://'"${OPENCLAW_HOST:?required}"'"},
+    {"path":"browser.extensionRelay.allowLegacyAuth","value":false},
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
     {"path":"skills.entries.goplaces.enabled","value":true},
     {"path":"skills.entries.email-triage-widget.enabled","value":false},
@@ -649,6 +656,8 @@ $RUN_CLI config set --batch-json '[
     {"path":"skills.workshop.autonomous.mode","value":"off"},
     {"path":"agents.defaults.model.primary","value":"ollama-cloud/glm-5.3"},
     {"path":"agents.defaults.model.fallbacks","value":["ollama-cloud/glm-5.1"]},
+    {"path":"agents.defaults.heartbeat.every","value":"0m"},
+    {"path":"agents.defaults.heartbeat.target","value":"none"},
     {"path":"agents.defaults.heartbeat.model","value":"ollama-cloud/gpt-oss:20b"},
     {"path":"agents.defaults.heartbeat.isolatedSession","value":true},
     {"path":"agents.defaults.heartbeat.lightContext","value":true},
