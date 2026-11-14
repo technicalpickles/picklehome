@@ -472,6 +472,9 @@ obsidian-sync-status host="picklelab":
 deploy-openclaw host="picklelab":
     #!/usr/bin/env bash
     set -euo pipefail
+    # The pickleclaw checkout behind the include symlinks must be clean and at origin/main.
+    # First, so a refusal happens before preflight pushes or anything is copied.
+    scripts/pickleclaw-guard
     # Guards and push live in scripts/deploy-preflight. Assign first, then eval:
     # `eval "$(...)"` would swallow a refusal (eval of nothing exits 0).
     PREFLIGHT=$(scripts/deploy-preflight {{host}})
