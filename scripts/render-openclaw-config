@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # Prints the openclaw config writes deploy.sh makes on every deploy, as one JSON
-# array, without deploying. Takes each top-level `$RUN_CLI config set ... --batch-json '[`
-# statement through its closing `]'` line and runs only those, with RUN_CLI pointed
-# at a stub that echoes its args, using dummy values.
+# array, without deploying.
 #
 #   scripts/render-openclaw-config [deploy.sh]
 #
-# Any other top-level `config set` form, or a batch line that is not JSON, refuses
-# before anything runs, so a new statement shape can't pull deploy.sh's own shell
-# lines (sudo, docker) into the eval. Not rendered: the onboard-only writes inside
-# the first-deploy if-block, and the tools.json5 `config patch --stdin`.
+# Renders only top-level `$RUN_CLI config set ... --batch-json '[` blocks whose body
+# lines are JSON. Any other shape refuses before the eval, so deploy.sh's own shell
+# lines never run here. Not rendered: the onboard-only writes in the first-deploy
+# if-block and the tools.json5 `config patch --stdin`.
 set -euo pipefail
 
 deploy="${1:-$(dirname "$0")/../homelab/services/openclaw/deploy.sh}"
