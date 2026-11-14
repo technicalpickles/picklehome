@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Usage: runtime-check
-# Is dockerd still in step with containerd? Exit 0 OK, 1 warning, 2 critical, 3 unknown.
-# Env: HOST_STATE_PROC (default /proc).
+# Exit 0 OK, 1 warning, 2 critical, 3 unknown.
 set -euo pipefail
 
 label="RUNTIME docker+containerd"
@@ -10,7 +8,7 @@ fix="restart both in a quiet window: sudo systemctl restart containerd docker"
 
 val() { sed -n "s/^$1=//p" <<<"$2" | head -n1; }
 
-read_unit() { # unit -> sets since, pid; exits on anything but a running unit
+read_unit() {
   local unit=$1 t
   t=$(systemctl show -p LoadState,ActiveState,MainPID,ActiveEnterTimestampMonotonic "$unit" 2>&1) || {
     echo "$label UNKNOWN - systemctl failed for $unit: ${t:0:120}"
@@ -24,18 +22,20 @@ read_unit() { # unit -> sets since, pid; exits on anything but a running unit
     echo "$label CRITICAL - $unit is $(val ActiveState "$t")"
     exit 2
   fi
+  local since pid
   since=$(val ActiveEnterTimestampMonotonic "$t")
   pid=$(val MainPID "$t")
   if [[ ! $since =~ ^[0-9]+$ || ! $pid =~ ^[0-9]+$ ]]; then
     echo "$label UNKNOWN - $unit has no start time or main pid"
     exit 3
   fi
+  echo "$since $pid"
 }
 
-read_unit containerd.service
-containerd_since=$since containerd_pid=$pid
-read_unit docker.service
-docker_since=$since docker_pid=$pid
+out=$(read_unit containerd.service) || { rc=$?; echo "$out"; exit "$rc"; }
+read -r containerd_since containerd_pid <<<"$out"
+out=$(read_unit docker.service) || { rc=$?; echo "$out"; exit "$rc"; }
+read -r docker_since docker_pid <<<"$out"
 
 # dockerd keeps container handles from the containerd it started against; after a
 # containerd restart, exec, healthchecks and builds fail with "not found".
@@ -44,7 +44,6 @@ if (( containerd_since > docker_since )); then
   exit 2
 fi
 
-# needrestart skips both daemons, so a library upgrade leaves them on the old copy.
 stale=""
 replaced() { grep -qE '\.so[.0-9]* \(deleted\)$' "$proc/$1/maps" 2>/dev/null; }
 if replaced "$containerd_pid"; then stale+=" containerd"; fi

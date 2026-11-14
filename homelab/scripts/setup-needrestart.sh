@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# Stop needrestart from restarting containerd under a running dockerd.
-# Idempotent: safe to re-run.
-# Run on the target host (picklelab), not from Mac.
 set -euo pipefail
 
-# One mutation of picklelab at a time (shared with the deploy scripts).
 source "$(dirname "${BASH_SOURCE[0]}")/deploy-lock.sh"
 
 REPO_DIR="${REPO_DIR:-/opt/homelab}"

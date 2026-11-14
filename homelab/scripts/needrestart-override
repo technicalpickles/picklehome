@@ -1,7 +1,4 @@
 #!/usr/bin/perl
-# Usage: needrestart-override <needrestart.conf> <unit>...
-# Loads the config the way needrestart does and prints "<unit> <0|1|default>" per unit:
-# 0 means needrestart never restarts it on its own.
 use strict;
 use warnings;
 
