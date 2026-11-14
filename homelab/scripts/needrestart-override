@@ -1,0 +1,23 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+our %nrconf;
+our $LOGPREF = '[needrestart-override]';
+$nrconf{verbosity} = 0;
+
+my $conf = shift or die "usage: needrestart-override <needrestart.conf> <unit>...\n";
+-r $conf or die "cannot read $conf\n";
+do $conf;
+die "cannot load $conf: $@" if $@;
+
+for my $unit (@ARGV) {
+    my $value = 'default';
+    for my $re (keys %{ $nrconf{override_rc} || {} }) {
+        if ($unit =~ /$re/) {
+            $value = $nrconf{override_rc}{$re};
+            last;
+        }
+    }
+    print "$unit $value\n";
+}

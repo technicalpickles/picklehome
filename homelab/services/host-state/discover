@@ -80,5 +80,7 @@ while read -r name url _ || [[ -n $name ]]; do
   wrapper site "$name" "$service_dir/site-check" "$url"
 done <"$sites"
 
+wrapper runtime docker "$service_dir/runtime-check"
+
 if [[ -e $dest ]]; then mv "$dest" "$old"; fi
 mv "$new" "$dest"
