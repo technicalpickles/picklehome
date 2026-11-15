@@ -41,9 +41,11 @@ def descendants(k):
 tree = descendants(chain_of_parent) if chain_of_parent in parent_of else []
 print("descendants (deepest first):", len(tree))
 for d in tree: print("   ", d[:40], "<- parent", parent_of[d][:20])
-active = [d for d in tree if not d.startswith("sha256:")]
-if active:
-    raise SystemExit(f"ABORT: {len(active)} descendants are not committed chains (active snapshots or containers): {active[:5]}")
+import re
+containers = [d for d in tree if re.fullmatch(r"[0-9a-f]{64}", d)]
+if containers:
+    raise SystemExit(f"ABORT: descendants look like container snapshots (64 hex): {containers[:5]}")
+print("non-chain descendants (buildkit-style keys, all rest on the broken parent):", len([d for d in tree if not d.startswith("sha256:")]))
 victims = tree + ([chain_of_parent] if chain_of_parent in parent_of else [])
 print("would remove (deepest first):", len(victims), "records")
 if APPLY:
