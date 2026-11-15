@@ -48,6 +48,25 @@ store referenced content and snapshots that are not on disk.
 - Kernel log shows no ext4, I/O or dm errors since 11-10.
 - containerd on the host is v2.2.2, docker 29.6.0.
 
+## Correction, 2026-11-15 evening
+
+- **Four** locally built images were damaged, not three. `openclaw-gog-mcp:latest`
+  also failed: `ctr images check` reported it complete, but running it fails with
+  `failed to stat parent .../snapshots/45061/fs` and all 15 of its blobs are gone.
+  `ctr images check` verifies blobs and snapshot metadata only, so it can miss
+  damaged images. A functional test (`evidence/image-mount-test.sh`, run each image
+  with `--entrypoint /bin/true`) found it. The weekly check in this PR should use
+  that test, not `ctr images check` alone.
+- With that test, every registry-pulled image mounts, and so do `nikke:local`,
+  `open-webui:local`, `open-terminal:local` and climate-auto-switch. Damaged images
+  are all locally built (4 of 8). Still a small sample.
+- `snap-check.sh` could not map missing snapshot directories: `ctr snapshots usage`
+  only touches the disk for active snapshots, so it reported 10 stale active
+  snapshots and nothing for committed ones. Do not rely on its "0 chain missing".
+- `docker pull node:22-slim` fails on `snapshots/46521/fs` (a committed parent whose
+  directory is gone), which blocks the brineworks build. Something still holds that
+  chain (likely buildkit's cache), so removing images did not clear it.
+
 ## Hypotheses
 
 | # | Hypothesis | Status | Why |
