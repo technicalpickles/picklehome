@@ -1,0 +1,14 @@
+== date 2026-11-15T19:31:59Z apply=1
+leases to delete=166 container leases kept=14
+active units to restart: bugsink.service open-webui.service taskchampion-sync.service woodpecker.service
+content records without file before: 78
+70M	/srv/docker/buildkit
+moved /srv/docker/buildkit aside
+leases delete rc 0
+docker start rc 0
+start bugsink.service rc 0
+start open-webui.service rc 0
+start taskchampion-sync.service rc 0
+start woodpecker.service rc 0
+leases now=59
+content records without file after: 1

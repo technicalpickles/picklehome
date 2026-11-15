@@ -1,0 +1,10 @@
+Nov 14 04:04:24 picklelab docker-prune.sh[420521]: /dev/mapper/vg0-containerd  147G   37G  109G  25% /srv/containerd
+Nov 14 04:04:33 picklelab docker-prune.sh[420521]: Images          24        16        26.63GB   8.716GB (32%)
+Nov 14 04:04:33 picklelab docker-prune.sh[420521]: Build Cache     232       0         21.95GB   8.995GB
+Nov 14 04:04:45 picklelab docker-prune.sh[420521]: Images          8         1         5.723GB   4.098GB (71%)
+Nov 14 04:04:45 picklelab docker-prune.sh[420521]: Build Cache     255       14        7.686GB   7.159GB
+Nov 14 04:05:24 picklelab docker-prune.sh[421377]: /dev/mapper/vg0-containerd  147G   28G  118G  20% /srv/containerd
+Nov 14 04:05:29 picklelab docker-prune.sh[421377]: Images          24        16        26.63GB   8.716GB (32%)
+Nov 14 04:05:29 picklelab docker-prune.sh[421377]: Build Cache     94        0         13GB      43.11MB
+Nov 14 04:05:32 picklelab docker-prune.sh[421377]: Images          8         1         5.723GB   4.098GB (71%)
+Nov 14 04:05:32 picklelab docker-prune.sh[421377]: Build Cache     14        14        526.5MB   0B
