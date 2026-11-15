@@ -458,11 +458,11 @@ obsidian-sync-exec vault *ARGS:
 
 # Tail Obsidian Sync container logs from picklelab
 obsidian-sync-logs host="picklelab" lines="50":
-    ssh {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose --env-file .env.image -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Follow Obsidian Sync container logs live from picklelab
 obsidian-sync-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/obsidian-sync && docker compose --env-file .env.image -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Show Obsidian Sync service status on picklelab
 obsidian-sync-status host="picklelab":
