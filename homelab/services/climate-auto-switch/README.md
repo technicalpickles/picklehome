@@ -26,7 +26,7 @@ just the deployment wrapper that runs it on a schedule on picklelab.
 
 ```bash
 just seed-climate-tokens  # one-time: copy the local ecobee token file onto the host
-just deploy-climate       # build image, install systemd units, enable timer
+just deploy-climate       # pull the published image, install systemd units, enable timer
 ```
 
 `just seed-climate-tokens` matters: the container can't run the interactive Ecobee PIN flow,
@@ -39,7 +39,7 @@ so it needs an already-authorized token file seeded from a machine where you've 
 ## Deploy updates
 
 ```bash
-just deploy-climate       # rebuilds the image and restarts the timer
+just deploy-climate       # pulls the new image and restarts the timer
 ```
 
 Secrets aren't scp'd anymore: `deploy.sh` regenerates a filtered, checked-in-safe

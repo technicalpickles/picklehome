@@ -12,6 +12,16 @@
 set -euo pipefail
 
 : "${IMAGE_SHA:?IMAGE_SHA required (from .env.image)}"
+# compose refuses to parse a file with an unset ${VAR:?required}, even for `pull`,
+# which never reads them. When the service lists its vars in .env.vars, give each a
+# placeholder, same trick as the services' deploy.sh files.
+if [ -f .env.vars ]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
+        export "${line}=pull-placeholder"
+    done < .env.vars
+fi
+
 attempts=${PULL_ATTEMPTS:-40}
 interval=${PULL_INTERVAL:-15}
 
