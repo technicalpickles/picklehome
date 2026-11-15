@@ -160,6 +160,53 @@ def test_dangling_symlink_refuses(setup):
     assert r.returncode == 1
 
 
+def test_plain_file_include_refuses(setup):
+    oc, _, _, env = setup
+    (oc / "openclaw.tools.json5").unlink()
+    (oc / "openclaw.tools.json5").write_text("{ local: 1 }")
+    r = run(oc, env)
+    assert r.returncode == 1
+    assert "openclaw.tools.json5 is a plain file" in r.stderr
+
+
+def test_plain_directory_plugin_refuses(setup):
+    oc, _, _, env = setup
+    plugin = oc / "plugins" / "brineworks-approval"
+    plugin.unlink()
+    plugin.mkdir()
+    (plugin / "index.js").write_text("// local copy")
+    r = run(oc, env)
+    assert r.returncode == 1
+    assert "brineworks-approval is a plain file or directory" in r.stderr
+
+
+def commit_gitignore(clone, env, pattern):
+    (clone / ".gitignore").write_text(pattern + "\n")
+    git(clone, "add", ".gitignore", env=env)
+    git(clone, "commit", "-q", "-m", "ignore", env=env)
+    git(clone, "push", "-q", "origin", "main", env=env)
+
+
+def test_gitignored_file_inside_plugin_refuses(setup):
+    oc, clone, _, env = setup
+    commit_gitignore(clone, env, "node_modules/")
+    deps = clone / "openclaw-config" / "plugins" / "brineworks-approval" / "node_modules"
+    deps.mkdir()
+    (deps / "dep.js").write_text("//")
+    r = run(oc, env)
+    assert r.returncode == 1
+    assert "gitignored" in r.stderr
+
+
+def test_gitignored_file_outside_shipped_paths_passes(setup):
+    oc, clone, _, env = setup
+    commit_gitignore(clone, env, "node_modules/")
+    (clone / "node_modules").mkdir()
+    (clone / "node_modules" / "dep.js").write_text("//")
+    r = run(oc, env)
+    assert r.returncode == 0, r.stderr
+
+
 def test_guard_runs_before_preflight_in_deploy_recipe():
     recipe = JUSTFILE.read_text().split("deploy-openclaw host=", 1)[1]
     assert recipe.index("scripts/pickleclaw-guard") < recipe.index("scripts/deploy-preflight")

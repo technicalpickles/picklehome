@@ -298,6 +298,20 @@ One step, on `main` pushes only, after the repo's tests:
   `~/.docker/config.json`. That design is still unimplemented, so it blocks every
   private image (brineworks-server, gog-mcp, nikke) and may be the longest step.
   Public picklehome images do not need it.
+  - **Built (pull-auth):** a docker credential helper,
+    `homelab/scripts/docker-credential-picklehome-ghcr`, installed by
+    `setup-ghcr-pull-auth.sh` and wired in as `credHelpers["ghcr.io"]` in root's docker
+    config. On `get` it sources the 0600 service-account token and runs
+    `op read "op://picklehome/GHCR Pull/credential"`, so the PAT is never on disk.
+    `store` refuses, so a stray `docker login` cannot write it.
+  - **By hand first:** create a classic PAT with only `read:packages`, and store it as
+    item `GHCR Pull`, field `credential`, in the picklehome vault. The helper fails
+    closed until that exists.
+  - **Not solved:** the helper only works as root. The units run as root, so `compose up`
+    pulls fine. `deploy.sh` runs as the deploy user, so its `docker manifest inspect`
+    wait-for-tag poll gets a 401 on a private image. Options: poll through a narrow
+    `sudo` wrapper like the `read-picklehome-var.sh` ones, or let the unit's pull be
+    the wait and retry it. Decide when the first private swap is written.
 - **Visibility.** Images from private repos stay private packages. An image with nothing
   sensitive in it could be public and then needs no pull token. Decide per image.
 
