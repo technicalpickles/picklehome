@@ -100,34 +100,79 @@ repo's "Volumes" trust, so no new trust is added.
 
 ### Pipeline: picklehome on GitHub Actions
 
-Extend the existing `images` job rather than adding a new one. On pull requests it
-keeps building only. On pushes to `main` it also logs in and pushes each image tagged
-with the commit SHA:
+Two jobs in `.github/workflows/ci.yml`, split by event (PR #229, written 2026-11-15
+and not yet run on `main`):
 
-```yaml
-# Untested sketch.
-images:
-  runs-on: ubuntu-latest
-  permissions:
-    contents: read
-    packages: write
-  steps:
-    - uses: actions/checkout@v4
-    - if: github.event_name == 'push'
-      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-    - run: scripts/check-images
-      # scripts/check-images gains a --push <sha> mode that tags
-      # ghcr.io/technicalpickles/<name>:<sha> and pushes. Without it, build only.
-```
+- `images` runs on pull requests only. It builds the images whose inputs changed
+  (`scripts/check-images --changed-since HEAD^1`) and pushes nothing. A newer push to
+  the same PR cancels the stale run.
+- `publish-images` runs on pushes to `main` only, after `test` passes
+  (`needs: test`). It logs in with `GITHUB_TOKEN` (`packages: write`), sets up buildx,
+  and runs `scripts/check-images --push "$GITHUB_SHA"`, which pushes every image as
+  `ghcr.io/technicalpickles/<name>:<full-sha>`.
 
-- `scripts/check-images` already holds the name, context and Dockerfile for each
-  image, so it stays the one list. A path filter can skip unchanged images later. It is
-  not needed at first, because rebuilding all five on a hosted runner is cheap.
-- Add the `org.opencontainers.image.source` label so each package links to the repo.
+- `scripts/check-images` holds the name, context, Dockerfile and input paths for each
+  image, so it stays the one list. Each `build` line names the repo paths the image
+  reads. Keep them in step with the Dockerfile's `COPY` lines. A change to the script
+  or `ci.yml` rebuilds all five.
+- Every image carries the `org.opencontainers.image.source` label so each package
+  links to the repo, and an `org.opencontainers.image.revision` label.
 - **Visibility.** These images can likely be public, which means the host needs no pull
   token for them. Their inputs are source already public in this repo plus version
   build args (checked 2026-11-15: the `COPY` lines bring in `climate/`, `pyproject.toml`,
   `uv.lock` and an entrypoint). Confirm per image before making a package public.
+
+### Timing and order (picklehome pipeline)
+
+Decisions from working through what races what. All inferred from how GitHub Actions
+and GHCR behave, none observed yet.
+
+**Built in PR #229**
+
+- **Tests before tags.** `publish-images` needs `test`, so a tag never exists for a
+  commit CI rejected. It costs about 30s on `main` before the roughly 3 minute build.
+  PRs build in parallel with the tests, since they publish nothing.
+- **Main publishes every image on every commit.** The PR path filter does not apply
+  here. If `main` skipped unchanged images, most commits would have no tag for most
+  images, and a deploy waiting on its own SHA would hang. Unchanged images are layer
+  cache hits and cost seconds.
+- **No `concurrency` group on `main`.** GitHub drops older pending runs in a group even
+  with `cancel-in-progress: false`. A dropped commit would never get tags. The one
+  shared object is the `:buildcache` tag per package, where the last writer wins. A
+  stale cache costs time, not correctness.
+- **Per-PR concurrency with cancel.** Only the latest head of a PR needs an image.
+- **Registry layer cache.** `main` builds with buildx and
+  `--cache-from/--cache-to type=registry,ref=...:buildcache,mode=max`. This needs the
+  docker-container builder, so `publish-images` sets up buildx. The `:buildcache` tag
+  is cache, not a deploy target.
+
+**Designed, not built** (tracked in taskwarrior, project `picklehome.homelab.disk-hygiene`)
+
+- **Branch and PR images.** Push images from a same-repo PR when it carries a
+  `publish-images` label, so a change can run on picklelab before merge. Tag
+  `pr-<n>-<full head sha>`. Use `github.event.pull_request.head.sha`, because
+  `github.sha` on a PR is a synthetic merge commit that matches nothing in `git log`.
+  The `pr-` prefix keeps these out of the namespace a deploy waits on. Publish only the
+  images the path filter picked. Read `:buildcache` but never write it, so a PR cannot
+  poison the cache `main` builds from. Skip fork PRs, whose token is read-only and
+  would fail at login.
+- **Cleanup is a time-based sweep, not on PR close.** Deleting on close races a build
+  still pushing (the tag reappears as an orphan). It also races a PR image deployed to
+  picklelab and not yet replaced by `main`'s, and deleting that breaks a re-pull after
+  image-store damage. A scheduled job deletes `pr-*` versions older than about 14 days
+  and never touches other tags. GHCR has no retention setting of its own.
+- **A PR image is not what `main` will build.** A merge creates a new SHA, so `main`
+  rebuilds anyway. The first `main` build after a Dockerfile change is cold for the
+  changed layers, once.
+
+**Constraint on the deploy side**
+
+- A compose file cannot pin the SHA of the commit that edits it, because the hash
+  depends on the file contents. A pinned `image: ...:<sha>` always lags by at least one
+  commit. Prefer injecting the SHA at deploy time (an env var such as `IMAGE_SHA` that
+  compose interpolates), taken from the commit `deploy.sh` fast-forwarded to, which is
+  what "Where the SHA comes from" below already says. Digest pins in the file remain an
+  option for images that rarely change. Not checked against each service's `deploy.sh`.
 
 ### Pipeline: brineworks on Woodpecker
 
@@ -166,7 +211,8 @@ One step, on `main` pushes only, after the repo's tests:
 - **The Brent window.** Per ADR 0003 the quiet check runs first. With a pull instead of
   a build between the check and the restart, the gap shrinks to a pull.
 - **Compose.** `build:` is replaced by `image: ghcr.io/technicalpickles/<name>@sha256:...`
-  (or `:<sha>`). brineworks-server's unit drops `--build` from `docker compose up -d`.
+  or by an `IMAGE_SHA` interpolated at deploy time (see "Timing and order": a file
+  cannot pin its own commit's SHA). brineworks-server's unit drops `--build` from `docker compose up -d`.
   Renovate is already configured in this repo and can bump pinned digests, but whether
   it handles digests in these compose files has not been checked.
 

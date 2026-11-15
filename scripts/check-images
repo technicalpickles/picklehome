@@ -1,20 +1,90 @@
 #!/usr/bin/env bash
 # Build every Dockerfile under homelab/services that picklelab builds from this repo,
-# so a broken Dockerfile fails the PR and not the deploy. Build only, nothing is run
-# or pushed. Needs a Docker daemon. Context dirs mirror each service's compose file;
-# keep this list in step when a service gains or moves a Dockerfile.
+# so a broken Dockerfile fails the PR and not the deploy. Needs a Docker daemon.
+# Context dirs mirror each service's compose file; keep this list in step when a
+# service gains or moves a Dockerfile. The trailing args of each `build` line are the
+# repo paths the image reads: keep them in step with its COPY lines.
+#
+#   scripts/check-images                       build all, nothing is run or pushed
+#   scripts/check-images --changed-since <ref> build only images whose paths changed
+#                                              between <ref> and HEAD. A change to this
+#                                              script or the CI workflow builds all.
+#   scripts/check-images --push <sha>          buildx build and push
+#                                              ghcr.io/technicalpickles/<name>:<sha> for
+#                                              every image, reusing a registry layer cache.
+#                                              Needs `docker login ghcr.io` and a
+#                                              docker-container buildx builder.
+#
+# Pushes never filter: every commit on main gets a tag for every image, so a deploy can
+# wait on its own SHA. Unchanged images are cache hits and cost seconds.
+#
+# Design: docs/plans/2026-11-15-ghcr-image-publishing-design.md
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 S=homelab/services
+REGISTRY=ghcr.io/technicalpickles
+SOURCE=https://github.com/technicalpickles/picklehome
+# Changing either of these can change every image.
+SHARED=(scripts/check-images .github/workflows/ci.yml)
 
-build() { # <name> <context> <dockerfile>
-  echo "==> $1"
-  docker build -t "check-images/$1" -f "$3" "$2"
+SHA=""
+CHANGED=""
+FILTER=0
+case "${1:-}" in
+  "") ;;
+  --push)
+    SHA="${2:-}"
+    [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "--push needs a full 40-char commit SHA, got '${SHA}'" >&2; exit 2; }
+    ;;
+  --changed-since)
+    [[ -n "${2:-}" ]] || { echo "--changed-since needs a git ref" >&2; exit 2; }
+    CHANGED=$(git diff --name-only "$2" HEAD)
+    FILTER=1
+    ;;
+  *) echo "usage: $0 [--push <full-commit-sha> | --changed-since <ref>]" >&2; exit 2 ;;
+esac
+
+# True when any changed file is, or sits under, one of the given paths.
+touches() { # <path>...
+  local f p
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    for p in "$@"; do
+      [[ "$f" == "$p" || "$f" == "$p"/* ]] && return 0
+    done
+  done <<<"$CHANGED"
+  return 1
 }
 
-build climate-auto-switch .                           "$S/climate-auto-switch/Dockerfile"
-build obsidian-sync       "$S/obsidian-sync"          "$S/obsidian-sync/Dockerfile"
-build goplaces-node       "$S/openclaw/goplaces-node" "$S/openclaw/goplaces-node/Dockerfile"
-build open-webui          .                           "$S/open-webui/Dockerfile"
-build open-terminal       .                           "$S/open-webui/Dockerfile.open-terminal"
+build() { # <name> <context> <dockerfile> <input-path>...
+  local name=$1 context=$2 dockerfile=$3
+  shift 3
+  if ((FILTER)) && ! touches "$@" "${SHARED[@]}"; then
+    echo "==> $name (skipped, inputs unchanged)"
+    return
+  fi
+  echo "==> $name"
+  local labels=(--label "org.opencontainers.image.source=$SOURCE"
+    --label "org.opencontainers.image.revision=${SHA:-unknown}")
+  if [[ -n "$SHA" ]]; then
+    local ref="$REGISTRY/$name"
+    docker buildx build "${labels[@]}" \
+      --cache-from "type=registry,ref=$ref:buildcache" \
+      --cache-to "type=registry,ref=$ref:buildcache,mode=max" \
+      -t "$ref:$SHA" --push -f "$dockerfile" "$context"
+  else
+    docker build "${labels[@]}" -t "check-images/$name" -f "$dockerfile" "$context"
+  fi
+}
+
+build climate-auto-switch    .                           "$S/climate-auto-switch/Dockerfile" \
+  "$S/climate-auto-switch/Dockerfile" climate pyproject.toml uv.lock
+build obsidian-sync          "$S/obsidian-sync"          "$S/obsidian-sync/Dockerfile" \
+  "$S/obsidian-sync"
+build openclaw-goplaces-node "$S/openclaw/goplaces-node" "$S/openclaw/goplaces-node/Dockerfile" \
+  "$S/openclaw/goplaces-node"
+build open-webui             .                           "$S/open-webui/Dockerfile" \
+  "$S/open-webui/Dockerfile"
+build open-terminal          .                           "$S/open-webui/Dockerfile.open-terminal" \
+  "$S/open-webui/Dockerfile.open-terminal"
