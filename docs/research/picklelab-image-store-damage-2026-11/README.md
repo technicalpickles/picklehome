@@ -84,17 +84,41 @@ What was tried, in order, with the result. Remaining work is the last list.
 | 9 | `docker builder prune -f` (freed 3.7G, 117 to 74 records), then the mount test on every image | no intact image broke. node pull still failed |
 | 10 | `fix-dangling-parent.sh` dry run (root) | found the parent record (layer 0 of `node:22-slim`) and one child |
 | 11 | `fix-dangling-parent.sh --apply`, first version | **failed**: `cannot remove snapshot with child snapshots`. The child has its own children and the script looked one level down. Nothing removed |
-| 12 | Script rewritten to walk the whole subtree, deepest first, abort if any descendant is not a committed chain | shipped to picklelab, not yet run |
+| 12 | Script rewritten to walk the whole subtree, deepest first, abort only on container-style (64-hex) keys | |
+| 13 | `fix-dangling-parent.sh --apply` | removed 10 snapshot records, all rc 0. Node pull got further, then failed on the content side: `Already exists` for layer `dd051e1b`, then `blob not found`. A content record with no file |
+| 14 | Stopped the per-layer surgery. Every fix so far (image records, prune, snapshot subtree) cleared one layer and exposed the next, so the premise "the damage is a few dangling records, delete them layer by layer" was tested directly with `store-audit.sh` (root, read-only, whole namespace) | see "What the whole-store audit showed" below. All live images and containers intact; the damage was a closed leftover set pinned by buildkit leases |
+| 15 | `image-mount-test.sh`, then `docker builder prune -a -f` (no root), then the mount test again | freed 9.1G, all 22 tagged images still mount (the moby#45287 risk did not show). But 215MB of cache records survived, including 0-byte `node:22-slim` records, and the node pull failed the same way |
+| 16 | `reset-buildkit.sh --apply` (root): stop docker, move `/srv/docker/buildkit` aside, delete the 166 non-container leases with `ctr leases delete --sync`, start docker and the 4 units that require it | content records without a file 78 to 1, leases 180 to 59 (docker recreates some on start). About a minute of downtime for bugsink, open-webui, taskchampion-sync, woodpecker; all came back healthy |
+| 17 | `docker pull node:22-slim`, then the mount test | pull works, every image mounts |
+| 18 | `sudo -n systemctl start brineworks-server`, `obsidian-sync`, `nikke` | all three built and are up. Postgres is a bind mount on `/srv/data/brineworks-server/db`, so no data moved. obsidian-sync reports "Fully synced" |
+
+### What the whole-store audit showed
+
+`evidence/store-audit.2026-11-15T19-23Z.out`, before steps 15 and 16:
+
+- Every one of the 25 images is intact, and no blob or snapshot that an image or
+  container uses is missing.
+- The damage was 78 content records with no file (65 from local builds, 10
+  `library/node`, 3 `astral-sh/uv`) and 9 snapshots with no directory. Nothing live
+  pointed at any of it.
+- 263 leases, none with an expiry, the oldest from 2026-09-27. All but the 14
+  container leases had buildkit-style ids (25 chars, `-variants`, `gc.flat`).
+  containerd GC never collects what a lease holds, which is why dead records sat
+  there and why per-record deletion kept finding more behind them.
+
+So the inconsistency lived in buildkit's cache state, not in the image store
+proper: buildkit kept cache records and leases whose data was gone. That fits H1's
+shape (a build cache operation removing data it still recorded) without proving it.
+The nikke failure was the same thing: its 11-14 start died on the dead
+`astral-sh/uv` blob, not on its own image.
 
 ### Remaining
 
-1. Run `sudo bash /tmp/fix-dangling-parent.sh --apply` (root), read `/tmp/fix-dangling-parent.out`.
-2. `docker pull node:22-slim`. If it still fails, find what holds the chain (leases or content labels) before removing more.
-3. Rebuild, mount-testing each image after: brineworks-server, obsidian-sync, `openclaw-gog-mcp`, `openclaw-goplaces-node`, then openclaw (Brent, confirm quiet first). `just deploy-*` where it applies.
-4. Look at why `nikke.service` fails: its image mounts, so the cause is something else.
-5. Look at `backup.service`: failed 11-15 03:05, `1 database dump(s) failed`, probably brineworks being down.
-6. `brineworks-server.service` is stopped on purpose. Start it again after the image builds.
-7. Switch the weekly check in `docker-prune.sh` from `ctr images check` to the mount test, since `ctr images check` missed a damaged image.
+1. Deploy openclaw (`just deploy-openclaw`), which builds `openclaw-gog-mcp` and `openclaw-goplaces-node`. Then validate Brent (`/health`, no `sessionTarget: main` cron jobs, `openclaw mcp show` blocked).
+2. Look at `backup.service`: failed 11-15 03:05, `1 database dump(s) failed`, probably brineworks being down. Rerun it now that brineworks is up.
+3. Switch the weekly check in `docker-prune.sh` from `ctr images check` to the mount test, since `ctr images check` missed a damaged image.
+4. One content record without a file is left after step 16. Nothing live uses it.
+5. Delete `/srv/docker/buildkit.broken-*` once builds have run cleanly for a week.
 
 ## Hypotheses
 
@@ -129,8 +153,6 @@ scale (232 records), the disk-split history, buildx through compose, the rootles
   blobs alive are unchecked.
 - Why all container records vanished at the 06:40 restart (H3). Needs the
   containerd bolt `meta.db` from before the restart, which was not kept.
-- `nikke:local` reports complete and unpacked, so its failure is a different
-  cause (likely its container snapshot).
 - Whether the prune log's `Images 24 / 16 active` held through 11-07 and earlier
   Saturdays while images were later found fine (a baseline `images check` was
   never taken before this).
@@ -139,8 +161,9 @@ scale (232 records), the disk-split history, buildx through compose, the rootles
 
 - `docker-prune.timer` stopped on picklelab 2026-11-15 (manual `systemctl stop`).
 - This PR: remove `docker builder prune` from the weekly prune until it is shown
-  safe, and add an image integrity check (`ctr -n moby images check`) to the host
-  checks, so damage is found the day it happens instead of at the next restart.
+  safe, and check the store before and after every prune (mount every tagged
+  image, count content records with no blob file), so damage is found the day it
+  happens instead of at the next restart.
 - Separately, needrestart no longer restarts containerd (pickleclaw-adjacent PR
   225 in picklehome).
 

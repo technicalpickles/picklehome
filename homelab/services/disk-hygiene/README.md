@@ -8,8 +8,10 @@ Keeps `/srv` from silently filling. Two pieces:
   `--volumes`, so no tagged/deployed image is ever removed. Build cache is not
   pruned (see
   [the 2026-11 image store damage](../../../docs/research/picklelab-image-store-damage-2026-11/README.md)).
-  It runs `ctr -n moby images check` before and after, and fails the unit if any
-  image is damaged or incomplete (the check covers the main dockerd only).
+  Before and after, it runs every tagged image with `/bin/true` (so the daemon
+  mounts every layer) and counts content records whose blob file is gone, and
+  fails the unit on either (main dockerd only). `ctr images check` is not used:
+  it passed an image whose layer directories were missing.
   Fails the unit if `/srv` is still above 85% afterward, so a prune that can no
   longer keep up surfaces instead of rotting.
 - **`disk-report`**: a root-owned read-only diagnostic installed to
