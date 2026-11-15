@@ -48,7 +48,7 @@ A root login is the one kind of signature av is built to gate.
 - In av: Settings → SSH Agent → Add SSH Key… → generate Ed25519, named `picklelab-root`. Generation happens inside av's signed helper and the private key never touches disk.
 - Policy: **Approval Required** for every Launcher, Terminal included. Never Allow Authentication.
 - One approval covers one ssh connection, not one command. `ssh -t picklelab-root` is a root shell for the life of the connection on one approval. Multiplexing stays off so a connection can't quietly outlive the approval.
-- **Approval is blind to the command.** The signed payload holds no command (ADR 0044: remote command arguments are "context, not verified destination restrictions"). When an agent asks, the av prompt can't show what it will run, so the agent has to say so in chat first. The wrapper log is the after-the-fact record.
+- **The approval shows the command but can't verify it.** The av prompt shows the local ssh command line (seen in rollout: `/usr/bin/ssh picklelab-root id`), but the signed payload holds no command. ADR 0044 calls remote command arguments "context, not verified destination restrictions". An agent should still say the command in chat first, and the wrapper log is the record of what actually ran.
 
 ### picklelab side (`root-authorized-keys`)
 
@@ -141,3 +141,15 @@ The ask to av upstream: let a key flagged for PAM use sign `pam_ssh_agent_auth`'
 - Ed25519 support in `pam_ssh_agent_auth` 0.10.3 is untested. **Verify** it before filing.
 
 The root-key setup doesn't block this. If the PAM mode lands, the `picklelab-root` key can stay for agents, or be removed.
+
+## Rollout result (2026-11-15)
+
+- **Positive checks passed:**
+  - `ssh picklelab-root` ran as `uid=0`.
+  - Root's only key is `SHA256:IYBegJhW…`, and `authorized_keys2` is gone.
+  - `sshd -T` shows the drop-in's settings. OpenSSH 9.6 prints `prohibit-password` as `without-password`, which the setup script normalizes.
+  - `journalctl -t root-ssh` logged every command.
+- **`restrict` holds:** `ssh -A picklelab-root` got no `SSH_AUTH_SOCK`.
+- **Agent path works:** both root signatures from a Claude session show `Approved Manual` in av history, while the user key stays at `Approved Auto`. `ssh picklelab` is unchanged.
+- **Not exercised:** the deny path (both prompts were approved), and `from=`, which was checked by inspection only, as planned.
+- **Real `sudo` inside a picklelab shell** isn't covered. Options are tracked in taskwarrior `9957c75f-d657-49c7-9446-a09c663ade42`.
