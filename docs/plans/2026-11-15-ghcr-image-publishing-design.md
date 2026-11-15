@@ -307,11 +307,14 @@ One step, on `main` pushes only, after the repo's tests:
   - **By hand first:** create a classic PAT with only `read:packages`, and store it as
     item `GHCR Pull`, field `credential`, in the picklehome vault. The helper fails
     closed until that exists.
-  - **Not solved:** the helper only works as root. The units run as root, so `compose up`
-    pulls fine. `deploy.sh` runs as the deploy user, so its `docker manifest inspect`
-    wait-for-tag poll gets a 401 on a private image. Options: poll through a narrow
-    `sudo` wrapper like the `read-picklehome-var.sh` ones, or let the unit's pull be
-    the wait and retry it. Decide when the first private swap is written.
+  - **Decided: root pulls, through a oneshot unit.** The deploy user cannot read the
+    credential, so `deploy.sh` does not poll. It writes `.env.image` and runs
+    `sudo systemctl start compose-pull@<service>` (`systemctl start *` is already
+    passwordless). `homelab/config/compose-pull@.service` runs
+    `homelab/scripts/pull-images.sh` as root, which retries `docker compose pull` for
+    about 10 minutes until CI has pushed the SHA. The start blocks until it finishes, so
+    the wait happens before the restart and the old container keeps running. No sudoers
+    change. Public images need no auth and keep their poll in `deploy.sh`.
 - **Visibility.** Images from private repos stay private packages. An image with nothing
   sensitive in it could be public and then needs no pull token. Decide per image.
 

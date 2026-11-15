@@ -1,7 +1,8 @@
 services:
   rpg:
-    image: obsidian-sync
-    build: .
+    # Published by CI (private package, pulled via the root credential helper).
+    # deploy.sh writes IMAGE_SHA to .env.image; obsidian-sync.service loads it.
+    image: ghcr.io/technicalpickles/picklehome-obsidian-sync:${IMAGE_SHA:?required}
     user: "1000:1000"
     init: true
     restart: unless-stopped
@@ -10,7 +11,7 @@ services:
       - rpg:/vault
 
   pickled-knowledge:
-    image: obsidian-sync
+    image: ghcr.io/technicalpickles/picklehome-obsidian-sync:${IMAGE_SHA:?required}
     user: "1000:1000"
     init: true
     restart: unless-stopped
