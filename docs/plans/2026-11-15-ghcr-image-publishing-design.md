@@ -120,13 +120,28 @@ and not yet run on `main`):
   suffix. The first run published unprefixed names (`climate-auto-switch` and the
   rest). Those are superseded and can be deleted once nothing references them.
 - Public images carry the `org.opencontainers.image.source` label so the package links
-  to the repo, and every image carries `org.opencontainers.image.revision`. Images
-  listed in `PRIVATE` in `scripts/check-images` are built without the source label,
-  because linking to this public repo is the likely reason the first run's packages
-  came out public. After pushing one, the script makes an anonymous request and fails
-  the run if the package answers, so a package meant to be private cannot go public
-  unnoticed. CI cannot change visibility itself, and the first push of a new package
-  name can still create it public for the length of that run.
+  to the repo, and every image carries `org.opencontainers.image.revision`.
+- **A new package from this repo's Actions comes out public.** Probed 2026-11-15 with
+  two empty images pushed by `GITHUB_TOKEN`, one with the source label and one without.
+  Both were created public and linked to `picklehome`, so the label is not the cause.
+  CI cannot change visibility, so it must never be the one that creates a package that
+  has to be private. The packages in `PRIVATE` in `scripts/check-images`
+  (`climate-auto-switch`, `obsidian-sync`) therefore have to exist already. To create
+  one:
+  1. Push an empty placeholder image to `ghcr.io/technicalpickles/picklehome-<name>`
+     with a personal token that has `write:packages`. Nothing sensitive is in it, so
+     a public moment is harmless.
+  2. Confirm it is private (an anonymous pull returns 403). If not, set it private in
+     the package's settings.
+  3. In the package settings, give the `picklehome` repository write access under
+     "Manage Actions access".
+
+  Before pushing a `PRIVATE` image the script checks the package exists with an
+  authenticated request (200 when it does, 404 `NAME_UNKNOWN` when it does not). If it
+  does not, the script skips that image and the run ends red after the public images
+  have been published. After a push it also checks the package is not anonymously
+  pullable. These images are built without the source label as a precaution, so
+  nothing links them to the public repo.
 - **Visibility.** These images can likely be public, which means the host needs no pull
   token for them. Their inputs are source already public in this repo plus version
   build args (checked 2026-11-15: the `COPY` lines bring in `climate/`, `pyproject.toml`,
