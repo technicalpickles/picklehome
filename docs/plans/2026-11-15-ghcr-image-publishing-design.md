@@ -222,7 +222,23 @@ and GHCR behave, none observed yet.
   commit. Prefer injecting the SHA at deploy time (an env var such as `IMAGE_SHA` that
   compose interpolates), taken from the commit `deploy.sh` fast-forwarded to, which is
   what "Where the SHA comes from" below already says. Digest pins in the file remain an
-  option for images that rarely change. Not checked against each service's `deploy.sh`.
+  option for images that rarely change.
+- **Decided: `deploy.sh` writes an untracked env file, the systemd unit loads it.**
+  Checked against `open-webui` (2026-11-15): `deploy.sh` does not run compose. It runs
+  `systemctl restart`, and the unit's `ExecStart` runs `docker compose up -d --build`
+  under `op-run-dual.sh`. A SHA exported inside `deploy.sh` never reaches compose.
+  So `deploy.sh` writes `IMAGE_SHA=$(git rev-parse HEAD)` to `$SERVICE_DIR/.env.image`
+  (gitignored) before the restart, and the unit adds `EnvironmentFile=` for it. `op run`
+  passes the inherited environment through to compose, which interpolates
+  `ghcr.io/technicalpickles/picklehome-<name>:${IMAGE_SHA:?required}`. A restart outside
+  `deploy.sh` (reboot, `systemctl restart`) reuses the last file, which is the right
+  behavior: it comes back on the image that was last deployed.
+  - Any compose command run by hand or by `deploy.sh` itself (the open-webui
+    `exec` health check) must also see `IMAGE_SHA`, or `:?required` fails the parse. Add
+    it to the placeholder list the way the secret vars are.
+  - `open-terminal` lives in `open-webui`'s compose files, unit and `deploy.sh`, so the
+    two images swap together in one PR.
+  - Not yet checked: the other services' `deploy.sh`. Each swap re-checks its own.
 
 ### Pipeline: brineworks on Woodpecker
 

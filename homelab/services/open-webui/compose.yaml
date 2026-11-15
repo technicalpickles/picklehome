@@ -1,6 +1,9 @@
 services:
   open-webui:
-    image: open-webui:local
+    # Published by CI for every main commit (scripts/check-images). deploy.sh writes
+    # IMAGE_SHA to .env.image and open-webui.service loads it; see the design doc
+    # docs/plans/2026-11-15-ghcr-image-publishing-design.md "Compose".
+    image: ghcr.io/technicalpickles/picklehome-open-webui:${IMAGE_SHA:?required}
     restart: unless-stopped
     # Run as 1000 per the container user model (homelab/services/README.md).
     # The stock image ships root and is only tested that way -- Dockerfile
@@ -45,8 +48,8 @@ services:
   open-terminal:
     # Use slim image (~430MB vs 5.15GB full) -- same features, smaller footprint.
     # See https://github.com/open-webui/open-terminal#readme for tag options.
-    # Built from Dockerfile.open-terminal in compose.picklelab.yaml (eMudhra CA fix).
-    image: open-terminal:local
+    # Dockerfile.open-terminal (eMudhra CA fix), published by CI like open-webui.
+    image: ghcr.io/technicalpickles/picklehome-open-terminal:${IMAGE_SHA:?required}
     restart: unless-stopped
     environment:
       OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?required}
