@@ -109,7 +109,7 @@ and not yet run on `main`):
 - `publish-images` runs on pushes to `main` only, after `test` passes
   (`needs: test`). It logs in with `GITHUB_TOKEN` (`packages: write`), sets up buildx,
   and runs `scripts/check-images --push "$GITHUB_SHA"`, which pushes every image as
-  `ghcr.io/technicalpickles/<name>:<full-sha>`.
+  `ghcr.io/technicalpickles/picklehome-<name>:<full-sha>`.
 
 - `scripts/check-images` holds the name, context, Dockerfile and input paths for each
   image, so it stays the one list. Each `build` line names the repo paths the image
@@ -142,10 +142,35 @@ and not yet run on `main`):
   have been published. After a push it also checks the package is not anonymously
   pullable. These images are built without the source label as a precaution, so
   nothing links them to the public repo.
-- **Visibility.** These images can likely be public, which means the host needs no pull
-  token for them. Their inputs are source already public in this repo plus version
-  build args (checked 2026-11-15: the `COPY` lines bring in `climate/`, `pyproject.toml`,
-  `uv.lock` and an entrypoint). Confirm per image before making a package public.
+- **Visibility audit (2026-11-15).** The first `main` run (PR #229) published all five
+  packages public and anonymously pullable, before anything had been checked. The
+  design had called for confirming each image first, but nothing enforced that order.
+  Rule for new images: state the visibility here and make sure the package starts that
+  way before its first push, which for a private one means creating it by hand as
+  described above. What was checked for the published amd64 images:
+  - **Secrets.** None. No credentials in any image's `Env`. open-webui's `OPENAI_API_KEY`
+    and `WEBUI_SECRET_KEY` are the upstream image's empty defaults.
+  - **Repo content.** CI builds from a clean checkout, so the `COPY` lines (`climate/`,
+    `pyproject.toml`, `uv.lock`, `entrypoint.sh`) carry only tracked files that are
+    already public in this repo. The `OPENCLAW_NODE_*` values in goplaces-node are the
+    compose service name and port, not secrets.
+  - **Upstream terms and decisions.**
+    - `picklehome-obsidian-sync` **private.** It installs `obsidian-headless`, which npm
+      lists as `UNLICENSED`, so no right to redistribute is granted.
+    - `picklehome-climate-auto-switch` **private.** The repo has no license, so its code
+      is visible but not licensed for reuse. Adding one is tracked as a task.
+    - `picklehome-open-terminal` public. Upstream is MIT. The upstream notice stays in
+      the base layers, since we only add a layer.
+    - `picklehome-open-webui` public, with a caveat. Upstream's license is BSD-3-style
+      plus a clause that bars altering or removing "Open WebUI" branding above 50 users
+      in 30 days. The wrapper only runs `chown` and a CA-certificate upgrade and leaves
+      branding alone, so it should comply. Not checked: that the license text ships in
+      the image layers (clause 2).
+    - `picklehome-openclaw-goplaces-node` public. The bundled `openclaw` npm package and
+      `goplaces` binary are both MIT.
+  - Public gives a small benefit, since only public images skip the host pull token.
+    That token (`pull-auth`) is needed for the private repos' images anyway, so when an
+    image's status is in doubt, make it private.
 
 ### Timing and order (picklehome pipeline)
 
