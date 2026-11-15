@@ -8,6 +8,8 @@
 # workspace-git-sync.sh through symlinks into the private pickleclaw repo, so
 # whatever that working tree holds ships. Each symlink is resolved to its git
 # checkout, which is fetched and then compared with origin/main.
+# Also refuses when an include is a plain file or directory instead of a symlink,
+# or when a path the deploy copies holds gitignored files.
 #
 # openclaw-dir defaults to homelab/services/openclaw. Nothing is written to
 # stdout. On refusal: one reason on stderr, exit 1.
@@ -30,10 +32,15 @@ links=(
 roots=()
 for name in "${links[@]}"; do
     link="$dir/$name"
-    [ -L "$link" ] || continue
+    if [ ! -L "$link" ]; then
+        [ -e "$link" ] || continue
+        die "$link is a plain file or directory, not a symlink into pickleclaw. Replace it with the symlink. See homelab/services/openclaw/README.md."
+    fi
     target="$(realpath "$link" 2>/dev/null)" || die "$link is a dangling symlink"
     root="$(git -C "$(dirname "$target")" rev-parse --show-toplevel 2>/dev/null)" \
         || die "$link points at $target, which is not inside a git checkout"
+    ignored="$(git -C "$root" status --porcelain --ignored -- "$target" | sed -n 's/^!! //p' | tr '\n' ' ')"
+    [ -z "$ignored" ] || die "$link would ship gitignored files from $root: ${ignored% }. Remove them first."
     case " ${roots[*]:-} " in
         *" $root "*) ;;
         *) roots+=("$root") ;;
