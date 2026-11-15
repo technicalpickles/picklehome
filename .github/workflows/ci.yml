@@ -23,8 +23,8 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest tests
 
-  # Pull requests build only: catches a broken Dockerfile in the PR instead of at deploy
-  # on picklelab. Pushes to main also publish each image to GHCR tagged by commit SHA.
+  # Pull requests build only, and only the images whose inputs changed: catches a broken
+  # Dockerfile in the PR instead of at deploy on picklelab. Pushes to main also publish each image to GHCR tagged by commit SHA.
   images:
     runs-on: ubuntu-latest
     permissions:
@@ -32,6 +32,13 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A PR checks out a merge commit; depth 2 brings its first parent (the base),
+          # so `HEAD^1` is the diff base for --changed-since.
+          fetch-depth: 2
+      - name: Set up buildx (registry layer cache needs the docker-container driver)
+        if: github.event_name == 'push'
+        uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
         if: github.event_name == 'push'
         env:
@@ -45,5 +52,5 @@ jobs:
           if [ "$EVENT" = push ]; then
             scripts/check-images --push "$GITHUB_SHA"
           else
-            scripts/check-images
+            scripts/check-images --changed-since HEAD^1
           fi
