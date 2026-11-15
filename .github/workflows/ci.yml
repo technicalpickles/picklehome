@@ -23,34 +23,43 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest tests
 
-  # Pull requests build only, and only the images whose inputs changed: catches a broken
-  # Dockerfile in the PR instead of at deploy on picklelab. Pushes to main also publish each image to GHCR tagged by commit SHA.
+  # Pull requests build only the images whose inputs changed, so a broken Dockerfile
+  # fails the PR instead of the deploy on picklelab. A newer push to the same PR cancels
+  # the stale run: only the latest head matters.
   images:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    concurrency:
+      group: images-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
         with:
           # A PR checks out a merge commit; depth 2 brings its first parent (the base),
           # so `HEAD^1` is the diff base for --changed-since.
           fetch-depth: 2
+      - run: scripts/check-images --changed-since HEAD^1
+
+  # Pushes to main publish every image to GHCR tagged by commit SHA, but only after the
+  # tests pass, so a tag never exists for a commit CI rejected. Deliberately no
+  # `concurrency` here: GitHub drops older *pending* runs in a group even without
+  # cancel-in-progress, and a dropped commit would never get its tags, so a deploy
+  # waiting on that SHA would hang. The only shared state is the :buildcache tag, where
+  # last writer wins and a stale cache costs time, not correctness.
+  publish-images:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
       - name: Set up buildx (registry layer cache needs the docker-container driver)
-        if: github.event_name == 'push'
         uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
-        if: github.event_name == 'push'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
-      - name: Build (and push on main)
-        env:
-          EVENT: ${{ github.event_name }}
-        run: |
-          if [ "$EVENT" = push ]; then
-            scripts/check-images --push "$GITHUB_SHA"
-          else
-            scripts/check-images --changed-since HEAD^1
-          fi
+      - run: scripts/check-images --push "$GITHUB_SHA"
