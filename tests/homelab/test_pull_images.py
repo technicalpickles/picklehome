@@ -51,3 +51,18 @@ def test_requires_image_sha(stub_docker):
     result = _run(stub_docker)
     assert result.returncode != 0
     assert "IMAGE_SHA" in result.stderr
+
+
+def test_exports_placeholders_for_vars_listed_in_env_vars(stub_docker, tmp_path):
+    work = tmp_path / "svc"
+    work.mkdir()
+    (work / ".env.vars").write_text("# comment\nFOO\n\nBAR\n")
+    dump = tmp_path / "env.out"
+    docker = stub_docker["bin"] / "docker"
+    docker.write_text(f'#!/usr/bin/env bash\nenv > {dump}\n')
+    env = {"PATH": f"{stub_docker['bin']}:{os.environ['PATH']}", "IMAGE_SHA": "abc1234def"}
+    result = subprocess.run([str(SCRIPT)], capture_output=True, text=True, env=env, cwd=work)
+    assert result.returncode == 0, result.stderr
+    pulled_env = dump.read_text()
+    assert "FOO=pull-placeholder" in pulled_env
+    assert "BAR=pull-placeholder" in pulled_env
