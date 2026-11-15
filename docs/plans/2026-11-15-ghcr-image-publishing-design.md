@@ -117,10 +117,26 @@ and not yet run on `main`):
   or `ci.yml` rebuilds all five.
 - Every image carries the `org.opencontainers.image.source` label so each package
   links to the repo, and an `org.opencontainers.image.revision` label.
-- **Visibility.** These images can likely be public, which means the host needs no pull
-  token for them. Their inputs are source already public in this repo plus version
-  build args (checked 2026-11-15: the `COPY` lines bring in `climate/`, `pyproject.toml`,
-  `uv.lock` and an entrypoint). Confirm per image before making a package public.
+- **Visibility.** Decide it before the first publish, not after. On 2026-11-15 the
+  first `main` run (PR #229) pushed all five packages and they were public and
+  anonymously pullable straight away (an unauthenticated request for the `f0f6ba8`
+  manifest returned HTTP 200). It is not known whether GitHub made them public because
+  they carry the `org.opencontainers.image.source` label for a public repo, or someone
+  flipped them. The design had called for confirming each image before making it
+  public, but nothing in the pipeline enforced that order. Audit of the published
+  amd64 images that day:
+  - **Secrets.** None. No credentials in any image's `Env`. open-webui's `OPENAI_API_KEY`
+    and `WEBUI_SECRET_KEY` are the upstream image's empty defaults.
+  - **Repo content.** CI builds from a clean checkout, so the `COPY` lines (`climate/`,
+    `pyproject.toml`, `uv.lock`, `entrypoint.sh`) carry only tracked files that are
+    already public in this repo. The `OPENCLAW_NODE_*` values in goplaces-node are the
+    compose service name and port, not secrets.
+  - **Not checked.** Whether redistributing each image is allowed by its upstream terms.
+    open-webui and open-terminal are modified copies of upstream images, and
+    obsidian-sync installs the `obsidian-headless` npm package. Tracked in taskwarrior.
+  - **Rule for new images.** Before an image's first push, state its visibility in this
+    document and confirm the package starts that way. For images from private repos,
+    check whether the source label changes the default before adding it.
 
 ### Timing and order (picklehome pipeline)
 
