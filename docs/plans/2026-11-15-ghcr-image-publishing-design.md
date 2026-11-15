@@ -132,7 +132,7 @@ and not yet run on `main`):
     already public in this repo. The `OPENCLAW_NODE_*` values in goplaces-node are the
     compose service name and port, not secrets.
   - **Upstream terms (read 2026-11-15).** Visibility per package:
-    - `obsidian-sync` **private.** It installs `obsidian-headless`, which npm lists as
+    - `obsidian-sync` **private** (set 2026-11-15, anonymous pull returns 403). It installs `obsidian-headless`, which npm lists as
       `UNLICENSED`, so no right to redistribute is granted. This is the one that must
       not be public.
     - `open-terminal` public. Upstream is MIT. The upstream notice stays in the base
@@ -144,7 +144,9 @@ and not yet run on `main`):
       the image layers (clause 2).
     - `openclaw-goplaces-node` public. The bundled `openclaw` npm package and
       `goplaces` binary are both MIT.
-    - `climate-auto-switch` public. Its Python dependencies were not audited one by one.
+    - `climate-auto-switch` **private** (set 2026-11-15, anonymous pull returns 403). The
+      repo has no license, so its code is visible but not licensed for reuse. Tracked as
+      a task to add one.
     Public gives a small benefit, since only public images skip the host pull token.
     That token (`pull-auth`) is needed for the private repos' images anyway, so when an
     image's status is in doubt, make it private.
