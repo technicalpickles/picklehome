@@ -1,0 +1,17 @@
+#!/bin/bash
+# Forced command for the av-approved root key (root-authorized-keys).
+# Installed to /usr/local/sbin/root-ssh-audit by homelab/scripts/setup-root-key.sh.
+#
+# The av approval prompt can't show the command (the signed payload has none),
+# so this journald line is the only per-command record. sshd logs the key
+# fingerprint itself ("Accepted publickey for root").
+# Read with: journalctl -t root-ssh
+set -u
+
+if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
+    logger -t root-ssh -- "from=${SSH_CONNECTION%% *} cmd=${SSH_ORIGINAL_COMMAND}"
+    exec /bin/bash -c "$SSH_ORIGINAL_COMMAND"
+fi
+
+logger -t root-ssh -- "from=${SSH_CONNECTION%% *} interactive shell"
+exec /bin/bash -l
