@@ -3,11 +3,15 @@
 Keeps `/srv` from silently filling. Two pieces:
 
 - **`docker-prune`**: a weekly systemd timer (Sat 04:00) that prunes dangling
-  images + build cache on **both** docker roots: the main dockerd and the
-  rootless `ci` dockerd (uid 2000). Dangling-only (`docker builder prune -f` +
-  `docker image prune -f`); never `-a`, never `--volumes`, so no tagged/deployed
-  image is ever removed. Fails the unit if `/srv` is still above 85% afterward,
-  so a prune that can no longer keep up surfaces instead of rotting.
+  images on **both** docker roots: the main dockerd and the rootless `ci`
+  dockerd (uid 2000). Dangling-only (`docker image prune -f`); never `-a`, never
+  `--volumes`, so no tagged/deployed image is ever removed. Build cache is not
+  pruned (see
+  [the 2026-11 image store damage](../../../docs/research/picklelab-image-store-damage-2026-11/README.md)).
+  It runs `ctr -n moby images check` before and after, and fails the unit if any
+  image is damaged or incomplete (the check covers the main dockerd only).
+  Fails the unit if `/srv` is still above 85% afterward, so a prune that can no
+  longer keep up surfaces instead of rotting.
 - **`disk-report`**: a root-owned read-only diagnostic installed to
   `/usr/local/sbin/disk-report`, made passwordless via a pinned sudoers line, so
   investigating disk is a single `sudo disk-report` (df, `/srv` du breakdown,
