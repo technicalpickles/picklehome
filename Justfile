@@ -582,14 +582,14 @@ open-webui-status host="picklelab":
     # .env.vars (via `env \$(...)`, escaped so the substitution runs on the
     # remote host, not locally) so adding/removing a var propagates
     # automatically.
-    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml exec -T open-terminal curl -fsS http://localhost:8000/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "Open Terminal health check FAILED"
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.image -f compose.yaml -f compose.picklelab.yaml exec -T open-terminal curl -fsS http://localhost:8000/health -w '\nHTTP %{http_code}  %{time_total}s\n'" || echo "Open Terminal health check FAILED"
 
 # Tail Open WebUI container logs
 open-webui-logs host="picklelab" lines="50":
     # See open-webui-status's Open Terminal check for why `logs` needs
     # placeholder env vars too: compose.yaml's ${VAR:?required} guards are
     # evaluated at parse time for every subcommand, not just `up`.
-    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
+    ssh {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.image -f compose.yaml -f compose.picklelab.yaml logs --tail={{lines}}"
 
 # Install or update the OpenClaw pipe in Open WebUI (runs on the Mac; needs `just dotenv`)
 install-openclaw-pipe host="picklelab":
@@ -597,7 +597,7 @@ install-openclaw-pipe host="picklelab":
 
 # Follow Open WebUI container logs
 open-webui-logs-follow host="picklelab":
-    ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose -f compose.yaml -f compose.picklelab.yaml logs -f"
+    ssh -t {{host}} "cd /opt/homelab/homelab/services/open-webui && env \$(sed -e '/^#/d' -e '/^[[:space:]]*\$/d' -e 's/\$/=build-placeholder/' .env.vars) docker compose --env-file .env.image -f compose.yaml -f compose.picklelab.yaml logs -f"
 
 # Inspect Open WebUI's persistent config (web search, RAG, etc.) and per-model
 # capability overrides. No sqlite3 CLI in the image, so this pipes the local
