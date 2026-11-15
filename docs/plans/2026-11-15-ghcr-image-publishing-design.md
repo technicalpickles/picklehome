@@ -131,9 +131,23 @@ and not yet run on `main`):
     `pyproject.toml`, `uv.lock`, `entrypoint.sh`) carry only tracked files that are
     already public in this repo. The `OPENCLAW_NODE_*` values in goplaces-node are the
     compose service name and port, not secrets.
-  - **Not checked.** Whether redistributing each image is allowed by its upstream terms.
-    open-webui and open-terminal are modified copies of upstream images, and
-    obsidian-sync installs the `obsidian-headless` npm package. Tracked in taskwarrior.
+  - **Upstream terms (read 2026-11-15).** Visibility per package:
+    - `obsidian-sync` **private.** It installs `obsidian-headless`, which npm lists as
+      `UNLICENSED`, so no right to redistribute is granted. This is the one that must
+      not be public.
+    - `open-terminal` public. Upstream is MIT. The upstream notice stays in the base
+      layers, since we only add a layer.
+    - `open-webui` public, with a caveat. Upstream's license is BSD-3-style plus a
+      clause that bars altering or removing "Open WebUI" branding above 50 users in 30
+      days. The wrapper only runs `chown` and a CA-certificate upgrade and leaves
+      branding alone, so it should comply. Not checked: that the license text ships in
+      the image layers (clause 2).
+    - `openclaw-goplaces-node` public. The bundled `openclaw` npm package and
+      `goplaces` binary are both MIT.
+    - `climate-auto-switch` public. Its Python dependencies were not audited one by one.
+    Public gives a small benefit, since only public images skip the host pull token.
+    That token (`pull-auth`) is needed for the private repos' images anyway, so when an
+    image's status is in doubt, make it private.
   - **Rule for new images.** Before an image's first push, state its visibility in this
     document and confirm the package starts that way. For images from private repos,
     check whether the source label changes the default before adding it.
