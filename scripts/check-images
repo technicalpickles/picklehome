@@ -10,8 +10,8 @@
 #                                              between <ref> and HEAD. A change to this
 #                                              script or the CI workflow builds all.
 #   scripts/check-images --push <sha>          buildx build and push
-#                                              ghcr.io/technicalpickles/<name>:<sha> for
-#                                              every image, reusing a registry layer cache.
+#                                              ghcr.io/technicalpickles/picklehome-<name>:<sha>
+#                                              for every image, reusing a registry layer cache.
 #                                              Needs `docker login ghcr.io` and a
 #                                              docker-container buildx builder.
 #
@@ -25,6 +25,13 @@ cd "$(dirname "$0")/.."
 S=homelab/services
 REGISTRY=ghcr.io/technicalpickles
 SOURCE=https://github.com/technicalpickles/picklehome
+# Every package is named picklehome-<name>, so they group together under the account.
+PREFIX=picklehome-
+# Packages that must not be public. They are built without the source label, because
+# the label links a package to this public repo and the first run showed linked
+# packages come out public. After a push, an anonymous pull of one of these fails the
+# run. A package's visibility is a setting in its GitHub page, not something CI can change.
+PRIVATE=(climate-auto-switch obsidian-sync)
 # Changing either of these can change every image.
 SHARED=(scripts/check-images .github/workflows/ci.yml)
 
@@ -57,6 +64,23 @@ touches() { # <path>...
   return 1
 }
 
+is_private() { local n; for n in "${PRIVATE[@]}"; do [[ "$n" == "$1" ]] && return 0; done; return 1; }
+
+# Fails when a package meant to be private answers an anonymous pull.
+assert_private() { # <package>
+  local pkg=$1 token code
+  # A private package makes the anonymous token request itself fail, so no -f here and
+  # an empty token just leads to a denied manifest request below.
+  token=$(curl -sS "https://ghcr.io/token?scope=repository:technicalpickles/$pkg:pull" | jq -r '.token // empty' || true)
+  code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json' \
+    "https://ghcr.io/v2/technicalpickles/$pkg/manifests/$SHA")
+  if [[ "$code" == 200 ]]; then
+    echo "::error::$pkg is publicly pullable but is listed in PRIVATE. Set it to private in its package settings." >&2
+    return 1
+  fi
+}
+
 build() { # <name> <context> <dockerfile> <input-path>...
   local name=$1 context=$2 dockerfile=$3
   shift 3
@@ -65,14 +89,15 @@ build() { # <name> <context> <dockerfile> <input-path>...
     return
   fi
   echo "==> $name"
-  local labels=(--label "org.opencontainers.image.source=$SOURCE"
-    --label "org.opencontainers.image.revision=${SHA:-unknown}")
+  local labels=(--label "org.opencontainers.image.revision=${SHA:-unknown}")
+  is_private "$name" || labels+=(--label "org.opencontainers.image.source=$SOURCE")
   if [[ -n "$SHA" ]]; then
-    local ref="$REGISTRY/$name"
+    local ref="$REGISTRY/$PREFIX$name"
     docker buildx build "${labels[@]}" \
       --cache-from "type=registry,ref=$ref:buildcache" \
       --cache-to "type=registry,ref=$ref:buildcache,mode=max" \
       -t "$ref:$SHA" --push -f "$dockerfile" "$context"
+    if is_private "$name"; then assert_private "$PREFIX$name"; fi
   else
     docker build "${labels[@]}" -t "check-images/$name" -f "$dockerfile" "$context"
   fi

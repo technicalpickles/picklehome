@@ -115,8 +115,18 @@ and not yet run on `main`):
   image, so it stays the one list. Each `build` line names the repo paths the image
   reads. Keep them in step with the Dockerfile's `COPY` lines. A change to the script
   or `ci.yml` rebuilds all five.
-- Every image carries the `org.opencontainers.image.source` label so each package
-  links to the repo, and an `org.opencontainers.image.revision` label.
+- **Package names.** Every package is `ghcr.io/technicalpickles/picklehome-<name>`, so
+  they group together under the account. The `<name>` in the image table above is the
+  suffix. The first run published unprefixed names (`climate-auto-switch` and the
+  rest). Those are superseded and can be deleted once nothing references them.
+- Public images carry the `org.opencontainers.image.source` label so the package links
+  to the repo, and every image carries `org.opencontainers.image.revision`. Images
+  listed in `PRIVATE` in `scripts/check-images` are built without the source label,
+  because linking to this public repo is the likely reason the first run's packages
+  came out public. After pushing one, the script makes an anonymous request and fails
+  the run if the package answers, so a package meant to be private cannot go public
+  unnoticed. CI cannot change visibility itself, and the first push of a new package
+  name can still create it public for the length of that run.
 - **Visibility.** These images can likely be public, which means the host needs no pull
   token for them. Their inputs are source already public in this repo plus version
   build args (checked 2026-11-15: the `COPY` lines bring in `climate/`, `pyproject.toml`,
