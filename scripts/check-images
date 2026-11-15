@@ -1,20 +1,45 @@
 #!/usr/bin/env bash
 # Build every Dockerfile under homelab/services that picklelab builds from this repo,
-# so a broken Dockerfile fails the PR and not the deploy. Build only, nothing is run
-# or pushed. Needs a Docker daemon. Context dirs mirror each service's compose file;
-# keep this list in step when a service gains or moves a Dockerfile.
+# so a broken Dockerfile fails the PR and not the deploy. Needs a Docker daemon.
+# Context dirs mirror each service's compose file; keep this list in step when a
+# service gains or moves a Dockerfile.
+#
+#   scripts/check-images               build only, nothing is run or pushed
+#   scripts/check-images --push <sha>  also tag ghcr.io/technicalpickles/<name>:<sha>
+#                                      and push it. Needs `docker login ghcr.io` first.
+#
+# Design: docs/plans/2026-11-15-ghcr-image-publishing-design.md
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 S=homelab/services
+REGISTRY=ghcr.io/technicalpickles
+SOURCE=https://github.com/technicalpickles/picklehome
+
+SHA=""
+case "${1:-}" in
+  "") ;;
+  --push)
+    SHA="${2:-}"
+    [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "--push needs a full 40-char commit SHA, got '${SHA}'" >&2; exit 2; }
+    ;;
+  *) echo "usage: $0 [--push <full-commit-sha>]" >&2; exit 2 ;;
+esac
 
 build() { # <name> <context> <dockerfile>
   echo "==> $1"
-  docker build -t "check-images/$1" -f "$3" "$2"
+  local tags=(-t "check-images/$1")
+  [[ -n "$SHA" ]] && tags+=(-t "$REGISTRY/$1:$SHA")
+  docker build --label "org.opencontainers.image.source=$SOURCE" \
+    --label "org.opencontainers.image.revision=${SHA:-unknown}" \
+    "${tags[@]}" -f "$3" "$2"
+  if [[ -n "$SHA" ]]; then
+    docker push "$REGISTRY/$1:$SHA"
+  fi
 }
 
-build climate-auto-switch .                           "$S/climate-auto-switch/Dockerfile"
-build obsidian-sync       "$S/obsidian-sync"          "$S/obsidian-sync/Dockerfile"
-build goplaces-node       "$S/openclaw/goplaces-node" "$S/openclaw/goplaces-node/Dockerfile"
-build open-webui          .                           "$S/open-webui/Dockerfile"
-build open-terminal       .                           "$S/open-webui/Dockerfile.open-terminal"
+build climate-auto-switch    .                           "$S/climate-auto-switch/Dockerfile"
+build obsidian-sync          "$S/obsidian-sync"          "$S/obsidian-sync/Dockerfile"
+build openclaw-goplaces-node "$S/openclaw/goplaces-node" "$S/openclaw/goplaces-node/Dockerfile"
+build open-webui             .                           "$S/open-webui/Dockerfile"
+build open-terminal          .                           "$S/open-webui/Dockerfile.open-terminal"

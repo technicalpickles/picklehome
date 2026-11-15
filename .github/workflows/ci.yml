@@ -23,9 +23,27 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest tests
 
-  # Build only: catches a broken Dockerfile in the PR instead of at deploy on picklelab.
+  # Pull requests build only: catches a broken Dockerfile in the PR instead of at deploy
+  # on picklelab. Pushes to main also publish each image to GHCR tagged by commit SHA.
   images:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
-      - run: scripts/check-images
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - name: Build (and push on main)
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            scripts/check-images --push "$GITHUB_SHA"
+          else
+            scripts/check-images
+          fi
