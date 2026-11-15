@@ -109,50 +109,68 @@ and not yet run on `main`):
 - `publish-images` runs on pushes to `main` only, after `test` passes
   (`needs: test`). It logs in with `GITHUB_TOKEN` (`packages: write`), sets up buildx,
   and runs `scripts/check-images --push "$GITHUB_SHA"`, which pushes every image as
-  `ghcr.io/technicalpickles/<name>:<full-sha>`.
+  `ghcr.io/technicalpickles/picklehome-<name>:<full-sha>`.
 
 - `scripts/check-images` holds the name, context, Dockerfile and input paths for each
   image, so it stays the one list. Each `build` line names the repo paths the image
   reads. Keep them in step with the Dockerfile's `COPY` lines. A change to the script
   or `ci.yml` rebuilds all five.
-- Every image carries the `org.opencontainers.image.source` label so each package
-  links to the repo, and an `org.opencontainers.image.revision` label.
-- **Visibility.** Decide it before the first publish, not after. On 2026-11-15 the
-  first `main` run (PR #229) pushed all five packages and they were public and
-  anonymously pullable straight away (an unauthenticated request for the `f0f6ba8`
-  manifest returned HTTP 200). It is not known whether GitHub made them public because
-  they carry the `org.opencontainers.image.source` label for a public repo, or someone
-  flipped them. The design had called for confirming each image before making it
-  public, but nothing in the pipeline enforced that order. Audit of the published
-  amd64 images that day:
+- **Package names.** Every package is `ghcr.io/technicalpickles/picklehome-<name>`, so
+  they group together under the account. The `<name>` in the image table above is the
+  suffix. The first run published unprefixed names (`climate-auto-switch` and the
+  rest). Those are superseded and can be deleted once nothing references them.
+- Public images carry the `org.opencontainers.image.source` label so the package links
+  to the repo, and every image carries `org.opencontainers.image.revision`.
+- **A new package from this repo's Actions comes out public.** Probed 2026-11-15 with
+  two empty images pushed by `GITHUB_TOKEN`, one with the source label and one without.
+  Both were created public and linked to `picklehome`, so the label is not the cause.
+  CI cannot change visibility, so it must never be the one that creates a package that
+  has to be private. The packages in `PRIVATE` in `scripts/check-images`
+  (`climate-auto-switch`, `obsidian-sync`) therefore have to exist already. To create
+  one:
+  1. Push an empty placeholder image to `ghcr.io/technicalpickles/picklehome-<name>`
+     with a personal token that has `write:packages`. Nothing sensitive is in it, so
+     a public moment is harmless.
+  2. Confirm it is private (an anonymous pull returns 403). If not, set it private in
+     the package's settings.
+  3. In the package settings, give the `picklehome` repository write access under
+     "Manage Actions access".
+
+  Before pushing a `PRIVATE` image the script checks the package exists with an
+  authenticated request (200 when it does, 404 `NAME_UNKNOWN` when it does not). If it
+  does not, the script skips that image and the run ends red after the public images
+  have been published. After a push it also checks the package is not anonymously
+  pullable. These images are built without the source label as a precaution, so
+  nothing links them to the public repo.
+- **Visibility audit (2026-11-15).** The first `main` run (PR #229) published all five
+  packages public and anonymously pullable, before anything had been checked. The
+  design had called for confirming each image first, but nothing enforced that order.
+  Rule for new images: state the visibility here and make sure the package starts that
+  way before its first push, which for a private one means creating it by hand as
+  described above. What was checked for the published amd64 images:
   - **Secrets.** None. No credentials in any image's `Env`. open-webui's `OPENAI_API_KEY`
     and `WEBUI_SECRET_KEY` are the upstream image's empty defaults.
   - **Repo content.** CI builds from a clean checkout, so the `COPY` lines (`climate/`,
     `pyproject.toml`, `uv.lock`, `entrypoint.sh`) carry only tracked files that are
     already public in this repo. The `OPENCLAW_NODE_*` values in goplaces-node are the
     compose service name and port, not secrets.
-  - **Upstream terms (read 2026-11-15).** Visibility per package:
-    - `obsidian-sync` **private** (set 2026-11-15, anonymous pull returns 403). It installs `obsidian-headless`, which npm lists as
-      `UNLICENSED`, so no right to redistribute is granted. This is the one that must
-      not be public.
-    - `open-terminal` public. Upstream is MIT. The upstream notice stays in the base
-      layers, since we only add a layer.
-    - `open-webui` public, with a caveat. Upstream's license is BSD-3-style plus a
-      clause that bars altering or removing "Open WebUI" branding above 50 users in 30
-      days. The wrapper only runs `chown` and a CA-certificate upgrade and leaves
+  - **Upstream terms and decisions.**
+    - `picklehome-obsidian-sync` **private.** It installs `obsidian-headless`, which npm
+      lists as `UNLICENSED`, so no right to redistribute is granted.
+    - `picklehome-climate-auto-switch` **private.** The repo has no license, so its code
+      is visible but not licensed for reuse. Adding one is tracked as a task.
+    - `picklehome-open-terminal` public. Upstream is MIT. The upstream notice stays in
+      the base layers, since we only add a layer.
+    - `picklehome-open-webui` public, with a caveat. Upstream's license is BSD-3-style
+      plus a clause that bars altering or removing "Open WebUI" branding above 50 users
+      in 30 days. The wrapper only runs `chown` and a CA-certificate upgrade and leaves
       branding alone, so it should comply. Not checked: that the license text ships in
       the image layers (clause 2).
-    - `openclaw-goplaces-node` public. The bundled `openclaw` npm package and
+    - `picklehome-openclaw-goplaces-node` public. The bundled `openclaw` npm package and
       `goplaces` binary are both MIT.
-    - `climate-auto-switch` **private** (set 2026-11-15, anonymous pull returns 403). The
-      repo has no license, so its code is visible but not licensed for reuse. Tracked as
-      a task to add one.
-    Public gives a small benefit, since only public images skip the host pull token.
+  - Public gives a small benefit, since only public images skip the host pull token.
     That token (`pull-auth`) is needed for the private repos' images anyway, so when an
     image's status is in doubt, make it private.
-  - **Rule for new images.** Before an image's first push, state its visibility in this
-    document and confirm the package starts that way. For images from private repos,
-    check whether the source label changes the default before adding it.
 
 ### Timing and order (picklehome pipeline)
 
