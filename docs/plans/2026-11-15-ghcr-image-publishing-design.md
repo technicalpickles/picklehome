@@ -35,7 +35,8 @@ Read-only, over ssh to picklelab on 2026-11-15:
 
 - `/srv` is 99G with 84G free. `/` is 50G with 39G free. The sketch cites 123G free on
   the containerd path, which is its own mount.
-- 4 cores (`nproc`) and 15GiB RAM.
+- 4 cores (`nproc`) and 15GiB RAM. The CPU is a Celeron J3455 (`homelab/README.md`),
+  so "4 cores" overstates how much build it can absorb.
 - `docker image ls` and `docker system df` on the main daemon fail with
   `blob sha256:438abc8a... not found` under `/srv/containerd/...`. The sketch already
   notes this and tracks the rebuild as task `9bc7abb8`.
@@ -44,11 +45,31 @@ Read-only, over ssh to picklelab on 2026-11-15:
 
 ## Decision
 
-**Build on picklelab in Woodpecker, on the rootless `ci` daemon, then push to GHCR.
-The main daemon only pulls.**
+**Build each image in CI where its repo already runs CI, push to GHCR, and have the
+main daemon only pull.** That means two builders:
 
-GitHub-hosted Actions remains the fallback builder, but nothing found rules out the
-Woodpecker route, so the sketch's "short spike" mostly resolves on paper.
+- **GitHub Actions for images built from picklehome.** The repo is public and its
+  `images` job in `.github/workflows/ci.yml` already builds all five of them
+  (`scripts/check-images`). Actions minutes are free for public repos, the runners
+  are native amd64 and much faster than the J3455, and the workflow's `GITHUB_TOKEN`
+  can push to GHCR, so no personal token is involved.
+- **Woodpecker on the rootless `ci` daemon for brineworks.** Brineworks already
+  builds its server image there. Nothing found rules out this route, so the sketch's
+  "short spike" mostly resolves on paper. The pilot measures the build time, and
+  GitHub Actions stays the fallback if the J3455 can't keep up.
+
+### Images to publish
+
+| Image | Source repo | Builder | Notes |
+|---|---|---|---|
+| brineworks-server | brineworks (private) | Woodpecker, `ci` daemon | Pilot. Extends the existing `server-image` step |
+| climate-auto-switch | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
+| obsidian-sync | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
+| openclaw-goplaces-node | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
+| open-webui | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
+| open-terminal | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
+| openclaw-gog-mcp | pickleclaw (private) | Not decided | The repo has no CI today |
+| nikke | nikke-roster-scanner (private) | Not decided | The repo has no CI today |
 
 ### Why Woodpecker works without a new plugin
 
@@ -77,7 +98,38 @@ repo's "Volumes" trust, so no new trust is added.
 
 ## Design
 
-### Pipeline, per image-producing repo
+### Pipeline: picklehome on GitHub Actions
+
+Extend the existing `images` job rather than adding a new one. On pull requests it
+keeps building only. On pushes to `main` it also logs in and pushes each image tagged
+with the commit SHA:
+
+```yaml
+# Untested sketch.
+images:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+    packages: write
+  steps:
+    - uses: actions/checkout@v4
+    - if: github.event_name == 'push'
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+    - run: scripts/check-images
+      # scripts/check-images gains a --push <sha> mode that tags
+      # ghcr.io/technicalpickles/<name>:<sha> and pushes. Without it, build only.
+```
+
+- `scripts/check-images` already holds the name, context and Dockerfile for each
+  image, so it stays the one list. A path filter can skip unchanged images later. It is
+  not needed at first, because rebuilding all five on a hosted runner is cheap.
+- Add the `org.opencontainers.image.source` label so each package links to the repo.
+- **Visibility.** These images can likely be public, which means the host needs no pull
+  token for them. Their inputs are source already public in this repo plus version
+  build args (checked 2026-11-15: the `COPY` lines bring in `climate/`, `pyproject.toml`,
+  `uv.lock` and an entrypoint). Confirm per image before making a package public.
+
+### Pipeline: brineworks on Woodpecker
 
 One step, on `main` pushes only, after the repo's tests:
 
@@ -120,7 +172,9 @@ One step, on `main` pushes only, after the repo's tests:
 
 ### Auth
 
-- **Push (CI).** GHCR accepts classic personal access tokens only, with `write:packages`
+- **Push (GitHub Actions).** The workflow's `GITHUB_TOKEN` with `packages: write`. No
+  stored secret.
+- **Push (Woodpecker).** GHCR accepts classic personal access tokens only, with `write:packages`
   ([GitHub docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)).
   Stored as a Woodpecker secret `ghcr_push_token`. Restrict it to the `push` event and to
   the `docker:27-cli` image so no pull-request step can read it. A classic PAT cannot be
@@ -129,7 +183,9 @@ One step, on `main` pushes only, after the repo's tests:
 - **Pull (host).** A `read:packages` token for the main (root) daemon only. `ci` never
   pulls the published images. Delivered through the 1Password path in the secrets
   design (`op run` or a credential helper) so it is not left as plaintext in
-  `~/.docker/config.json`. That design is still unimplemented, so this is a dependency.
+  `~/.docker/config.json`. That design is still unimplemented, so it blocks every
+  private image (brineworks-server, gog-mcp, nikke) and may be the longest step.
+  Public picklehome images do not need it.
 - **Visibility.** Images from private repos stay private packages. An image with nothing
   sensitive in it could be public and then needs no pull token. Decide per image.
 
@@ -167,9 +223,28 @@ First because it is Brent-critical, it was damaged, and its unit rebuilds on eve
    image, drop `--build` from the unit, add the wait-for-tag poll to `deploy.sh`.
 5. Deploy through the normal `just deploy-brineworks-server` path.
 6. Rollback drill: deploy the previous SHA and confirm it runs without any build.
+7. Time the image step on the J3455, cold cache and warm, and note whether a `main`
+   build queued behind it. If the step adds more than about 10 minutes to a `main`
+   build, or regularly delays another repo's pipeline, move this image to GitHub
+   Actions. That costs Actions minutes, because brineworks is private.
 
-Done means the host has no `build:` for this service, a deploy pulls, and the rollback
-drill works. Then the rest, one service at a time (order in the sketch).
+Done means the host has no `build:` for this service, a deploy pulls, the rollback
+drill works, and the build time is recorded here. Then the rest, one service at a time
+(order in the sketch).
+
+## Rollout order
+
+Each step names a slug so plans and commits can cite it.
+
+1. **`brineworks-pilot`:** the pilot above.
+2. **`picklehome-actions-publish`:** extend the `images` job and `scripts/check-images`
+   to push on `main`. Then move each picklehome service from `build:` to a pinned image,
+   one at a time, with a rollback drill on the first. Public packages make this
+   independent of `pull-auth`, so it can run alongside the pilot.
+3. **`pull-auth`:** the host's `read:packages` credential through 1Password. Blocks the
+   pilot's step 3 and every private image.
+4. **`private-repo-ci`:** pick a builder for pickleclaw (gog-mcp) and
+   nikke-roster-scanner, neither of which has CI today, then add the build and push.
 
 ## Proxy or mirror: not now
 
@@ -188,6 +263,34 @@ Nothing measured shows a rate-limit problem. Cheaper steps come first, in order:
    candidate is a Zot instance with on-demand sync, or `docker-registry-proxy`. Both are
    compared in the research findings.
 
+## Our own CI step images: not now
+
+The question: should Woodpecker steps run on images we build and publish (a Python or
+Node toolchain with dependencies preinstalled) instead of stock `python:3.11`,
+`python:3.12` and `node:22` from Docker Hub?
+
+Not now, for three reasons:
+
+- **The expensive setup is already cached.** Brineworks keeps its venv in a per-branch
+  named volume and caches pip and uv, so a prebuilt image would save only the
+  `pip install uv` and pyrefly lines. pirpg, gilliam-ii and claudeofhours run `npm ci`
+  or a `uv` install on stock images. That is not slow enough to justify an image.
+- **Rate limits are unproven.** Woodpecker's docker backend is believed to pull a step
+  image only when it is missing locally, unless the step sets `pull: true`. Unverified.
+  If so, Docker Hub limits don't come into play. The proxy section's log grep settles it.
+- **It costs upkeep.** Every base bump needs a rebuild pipeline. Mirroring Docker Hub
+  images into GHCR also makes Renovate track our copy instead of upstream, which loses
+  the update signal.
+
+The cheaper way to get pinned step and base images is to have Renovate pin them by
+digest (the `docker:pinDigests` preset). That also answers the Renovate open question
+below for upstream images.
+
+Revisit if a step gains setup that a volume can't cache (apt packages, Playwright
+browsers, multi-minute installs), if three or more repos share a toolchain, or if the
+logs show `toomanyrequests`. A related idea for later, outside this design: run the
+tests inside the image about to ship, so CI tests exactly what gets deployed.
+
 ## Open questions
 
 - **GHCR terms.** GitHub's docs say container storage and bandwidth are free "currently",
@@ -195,7 +298,12 @@ Nothing measured shows a rate-limit problem. Cheaper steps come first, in order:
   GitLab.com's registry is the fallback.
 - **Token scope.** Machine user versus the personal account for the push token.
 - **Woodpecker pull policy.** Does it re-pull step images every run?
-- **Renovate.** Can it bump image digests in these compose files?
+- **Renovate.** Can it bump image digests in these compose files? For upstream images
+  `docker:pinDigests` should cover it. Our own GHCR images are tagged by commit SHA, so
+  the bump comes from the deploy rather than from Renovate.
+- **Builder for pickleclaw and nikke-roster-scanner.** Both are private and have no CI.
+  Woodpecker reuses the brineworks pattern. Actions costs minutes but doesn't load the
+  J3455. Decide after the pilot's build timing is in.
 - **Storage in the `ci` daemon.** Which graph driver, and how much does the cache
   grow between prunes. Needs someone with `sudo` on picklelab.
 - **Pending evidence.** If damage turns up in a registry-pulled image or in the `ci`
@@ -205,9 +313,9 @@ Nothing measured shows a rate-limit problem. Cheaper steps come first, in order:
 
 - **Self-hosted registry on picklelab (option C).** Lives on the box it serves, so it is
   unavailable exactly when a re-pull is needed. Doubles disk use on the host.
-- **GitHub-hosted Actions as the builder.** Native amd64 and no push PAT
-  (`GITHUB_TOKEN`), but a second CI system and Actions minutes on private repos. Kept
-  as the fallback if Woodpecker builds prove too heavy for the box.
+- **GitHub-hosted Actions as the only builder.** Adopted for picklehome, where it
+  already runs and is free. For the private repos it costs Actions minutes and adds a
+  second CI system next to Woodpecker, so it stays the fallback there.
 - **Building on the Mac.** It is arm64 and picklelab is amd64, so it needs emulated
   cross-builds.
 - **Kaniko or Buildah plugins.** Exist for daemonless builds. Not needed because the
