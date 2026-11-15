@@ -67,6 +67,35 @@ store referenced content and snapshots that are not on disk.
   directory is gone), which blocks the brineworks build. Something still holds that
   chain (likely buildkit's cache), so removing images did not clear it.
 
+## Recovery log, 2026-11-15
+
+What was tried, in order, with the result. Remaining work is the last list.
+
+| # | Action | Result |
+|---|---|---|
+| 1 | `docker rmi obsidian-sync:latest` (index blob gone) | worked, `docker image ls` lists again |
+| 2 | `docker rmi brineworks-server:local openclaw-goplaces-node:latest` | worked, but brineworks kept failing to build |
+| 3 | Watched `brineworks-server.service` | its unit runs `up -d --build` every 30s, and each failed build still re-tags `brineworks-server:local`, so the broken image kept coming back. Stopped with `sudo -n systemctl stop brineworks-server` |
+| 4 | Manual `docker build --no-cache` outside the unit | failed before any cache use: `failed to stat parent .../snapshots/46521/fs` |
+| 5 | `docker pull python:3.11-slim` / `node:22-slim` | python worked, node failed on snapshot 46521 (a committed parent with a record but no directory) |
+| 6 | `snap-check.sh` (root) | only 10 stale active snapshots found. **Method flaw**: `ctr snapshots usage` skips the disk for committed snapshots, so it cannot find missing committed directories |
+| 7 | `image-mount-test.sh` (no root): run every image with `/bin/true` | found a 4th damaged image, `openclaw-gog-mcp:latest` (`ctr images check` had said complete). All registry images and `nikke:local`, `open-webui:local`, `open-terminal:local`, climate-auto-switch pass |
+| 8 | `docker rmi openclaw-gog-mcp:latest brineworks-server:local` | worked, node pull still failed |
+| 9 | `docker builder prune -f` (freed 3.7G, 117 to 74 records), then the mount test on every image | no intact image broke. node pull still failed |
+| 10 | `fix-dangling-parent.sh` dry run (root) | found the parent record (layer 0 of `node:22-slim`) and one child |
+| 11 | `fix-dangling-parent.sh --apply`, first version | **failed**: `cannot remove snapshot with child snapshots`. The child has its own children and the script looked one level down. Nothing removed |
+| 12 | Script rewritten to walk the whole subtree, deepest first, abort if any descendant is not a committed chain | shipped to picklelab, not yet run |
+
+### Remaining
+
+1. Run `sudo bash /tmp/fix-dangling-parent.sh --apply` (root), read `/tmp/fix-dangling-parent.out`.
+2. `docker pull node:22-slim`. If it still fails, find what holds the chain (leases or content labels) before removing more.
+3. Rebuild, mount-testing each image after: brineworks-server, obsidian-sync, `openclaw-gog-mcp`, `openclaw-goplaces-node`, then openclaw (Brent, confirm quiet first). `just deploy-*` where it applies.
+4. Look at why `nikke.service` fails: its image mounts, so the cause is something else.
+5. Look at `backup.service`: failed 11-15 03:05, `1 database dump(s) failed`, probably brineworks being down.
+6. `brineworks-server.service` is stopped on purpose. Start it again after the image builds.
+7. Switch the weekly check in `docker-prune.sh` from `ctr images check` to the mount test, since `ctr images check` missed a damaged image.
+
 ## Hypotheses
 
 | # | Hypothesis | Status | Why |
