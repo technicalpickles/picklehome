@@ -36,6 +36,15 @@ store referenced content and snapshots that are not on disk.
   images and 26.63GB both before and after.
 - **`docker system df` reads metadata, not files.** It cannot see missing
   layers. This is why nothing looked wrong between the prune and the restart.
+- **The rootless `ci` store is intact and acts as a control.** `ctr images check`
+  reports no errors, snapshot metadata matches the directories on disk (119), and
+  it holds 8 registry-pulled images. It went through the same disk-split cutover
+  (same script, same day), the same weekly prune (build cache 255 records to 14,
+  about 7G), and the same reboot. It has its own containerd, which needrestart did
+  not restart at 06:40. It has no locally built images, so it cannot say whether
+  the prune hurts local builds. (`evidence/ci-docker-check.2026-11-15T18-26Z.out`)
+- `moby_history` is a normal namespace: the `ci` containerd has it too. It is not
+  something a person created.
 - Kernel log shows no ext4, I/O or dm errors since 11-10.
 - containerd on the host is v2.2.2, docker 29.6.0.
 
@@ -46,7 +55,7 @@ store referenced content and snapshots that are not on disk.
 | H1 | Prune deleted files that images still reference | **open, leading** | Right size (9.0G reclaimable vs 9G drop), right day, and nothing re-reads layers until a restart, so quiet until 06:40 is expected. Not reproduced (see below). The 9G only proves the prune freed its own cache, not that it touched image layers. |
 | H2 | containerd restart exposed damage that already existed | **supported** | Restart is when errors begin. Does not say who removed the files. |
 | H3 | containerd restarted onto stale metadata (older than the data) | open, weaker | Registry images are all intact; stale metadata would be expected to hit them too. But all 17 container records vanished at restart, which looks like a metadata rollback. Unexplained. |
-| H4 | disk split lost files (seed/cutover copy) | **unlikely** | Builds and containers worked 11-10 to 11-13, and containerd was restarted on the new LV at 14:30 on 11-10. |
+| H4 | disk split lost files (seed/cutover copy) | **unlikely** | Builds and containers worked 11-10 to 11-13, and containerd was restarted on the new LV at 14:30 on 11-10. The `ci` store went through the identical cutover and is intact. |
 | H5 | `.old` cleanup removed live files | **ruled out** | containerd restarted after cutover, so nothing held `.old`. |
 | H6 | missing mount | **ruled out** | `/srv/containerd` mounted from `vg0-containerd` throughout (disk-report). |
 | H7 | filesystem or hardware errors | **ruled out** | no kernel errors. |
@@ -67,8 +76,9 @@ scale (232 records), the disk-split history, buildx through compose, the rootles
 
 ## Not yet checked
 
-- `moby_history` namespace: 7,550 blobs, 0 snapshots, origin unknown. Check
-  `ctr -n moby_history images ls` and who created it.
+- `moby_history` holds 7,550 blobs on the main store, far more than `moby`'s 416.
+  The namespace is normal, but what fills it and whether it keeps the missing
+  blobs alive are unchecked.
 - Why all container records vanished at the 06:40 restart (H3). Needs the
   containerd bolt `meta.db` from before the restart, which was not kept.
 - `nikke:local` reports complete and unpacked, so its failure is a different

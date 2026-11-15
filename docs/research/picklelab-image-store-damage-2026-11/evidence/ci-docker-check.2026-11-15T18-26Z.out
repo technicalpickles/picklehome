@@ -1,0 +1,107 @@
+== date: 2026-11-15T18:26:15Z
+== mount
+/dev/mapper/vg0-ci--docker /srv/ci-docker ext4   rw,relatime
+/dev/mapper/vg0-ci--docker   30G   16G   14G  54% /srv/ci-docker
+== top level of /srv/ci-docker
+total 72
+drwx--x--- 14 ci   ci    4096 Nov 14 20:13 .
+drwxr-xr-x  9 root root  4096 Nov 13 00:59 ..
+drwx--x--x  5 ci   ci    4096 Nov  2 02:02 buildkit
+drwx------  3 ci   ci    4096 Jun 20 02:42 containerd
+drwx--x---  3 ci   ci    4096 Nov 14 14:01 containers
+-rw-------  1 ci   ci      36 Jun 20 02:42 engine-id
+drwx------  2 ci   ci    4096 Jun 20 02:42 image
+drwx------  2 root root 16384 Nov 10 14:01 lost+found
+drwxr-x---  3 ci   ci    4096 Jun 20 02:42 network
+drwx------  3 ci   ci    4096 Jun 20 02:42 plugins
+drwx--x---  3 ci   ci    4096 Jun 20 02:42 rootfs
+drwx------  2 ci   ci    4096 Nov 14 20:13 runtimes
+drwx------  2 ci   ci    4096 Jun 20 02:42 swarm
+drwx------  2 ci   ci    4096 Nov 14 20:13 tmp
+drwx-----x 27 ci   ci    4096 Nov 14 14:01 volumes
+== du by dir (one level, same fs)
+360M	/srv/ci-docker/volumes/brineworks-venv-almanac-case-records-2026-11-11
+360M	/srv/ci-docker/volumes/brineworks-venv-almanac-skill-examples
+360M	/srv/ci-docker/volumes/brineworks-venv-emulator-sender-fixtures
+360M	/srv/ci-docker/volumes/brineworks-venv-gmailctl-apply-docs
+360M	/srv/ci-docker/volumes/brineworks-venv-hk-whole-repo-ruff
+360M	/srv/ci-docker/volumes/brineworks-venv-mcp-call-logging
+360M	/srv/ci-docker/volumes/brineworks-venv-review-nits-79-80
+360M	/srv/ci-docker/volumes/brineworks-venv-rules-correctness
+360M	/srv/ci-docker/volumes/brineworks-venv-rules-preview-history
+360M	/srv/ci-docker/volumes/brineworks-venv-server-reporting
+405M	/srv/ci-docker/volumes/brineworks-venv-main
+7.6G	/srv/ci-docker/containerd
+7.6G	/srv/ci-docker/containerd/daemon
+7.9G	/srv/ci-docker/volumes
+16G	/srv/ci-docker
+== user@2000 unit and drop-ins
+active
+# /etc/systemd/system/user@2000.service.d/10-requires-mount.conf
+RequiresMountsFor=/srv/ci-docker
+== ci user docker units
+Failed to connect to bus: No medium found
+== ci daemon.json
+{
+  "data-root": "/srv/ci-docker",
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+== ci systemd user overrides
+/home/ci/.config/systemd/user:
+default.target.wants
+docker.service
+
+/home/ci/.config/systemd/user/default.target.wants:
+docker.service
+== processes
+   1145 ci       Sat Nov 14 20:13:39 2026 rootlesskit --state-dir=/run/user/2000/dockerd-rootless --net=slirp4netns --mtu=65520 --slirp4netns-sandbox=auto --slirp4netns-seccomp=auto --disable-host-loopback --port-driver=
+   1166 ci       Sat Nov 14 20:13:39 2026 /proc/self/exe --state-dir=/run/user/2000/dockerd-rootless --net=slirp4netns --mtu=65520 --slirp4netns-sandbox=auto --slirp4netns-seccomp=auto --disable-host-loopback --port-driv
+   1235 ci       Sat Nov 14 20:13:39 2026 slirp4netns --mtu 65520 -r 3 --disable-host-loopback --enable-seccomp --userns-path=/proc/1166/ns/user --netns-type=path /proc/1166/root/run/user/2000/dockerd-rootless/netns tap0
+   1254 ci       Sat Nov 14 20:13:39 2026 dockerd
+   1318 ci       Sat Nov 14 20:13:40 2026 containerd --config /run/user/2000/docker/containerd/containerd.toml
+== docker info (ci)
+root=/srv/ci-docker driver=overlayfs [[driver-type io.containerd.snapshotter.v1]] ver=29.6.0 containers=1 images=8
+== docker system df (ci)
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          8         1         5.723GB   4.098GB (71%)
+Containers      1         0         55.31MB   55.31MB (100%)
+Local Volumes   25        1         7.784GB   7.776GB (99%)
+Build Cache     68        0         2.311GB   2.311GB
+== images (ci)
+python:3.12  1.62GB  10 days ago
+postgres:16-alpine  420MB  3 weeks ago
+alpine:3  13MB  3 weeks ago
+node:22  1.64GB  3 weeks ago
+woodpeckerci/plugin-git:2.11.0  77MB  3 weeks ago
+woodpeckerci/plugin-git:2.10.1  76.8MB  2 months ago
+python:3.11  1.61GB  5 months ago
+docker:27-cli  278MB  21 months ago
+== containers (ci)
+wp_01M57RK0HS8NR7DA3EDEAMJH74  python:3.11  Exited (137) 4 weeks ago
+== volumes (ci), reclaimable ones
+25
+== rootless containerd socket + images check
+socket=/run/user/2000/docker/containerd/containerd.sock
+NAME         LABELS 
+moby                
+moby_history        
+153
+120
+== content blobs and snapshot dirs on disk
+/srv/ci-docker/containerd/daemon/io.containerd.content.v1.content/blobs/sha256: 363
+/srv/ci-docker/containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots: 119
+== woodpecker agent and runner state
+woodpecker-woodpecker-agent-1  woodpeckerci/woodpecker-agent:v3.20.1  Up 22 hours (healthy)
+woodpecker-woodpecker-server-1  woodpeckerci/woodpecker-server:v3.20.1  Up 22 hours (healthy)
+woodpecker-ts-woodpecker-1  tailscale/tailscale:v1.104.4  Up 22 hours
+== leftovers
+ls: cannot access '/srv/ci-docker*.old': No such file or directory
+ls: cannot access '/srv/ci-docker/*.old': No such file or directory
+== newest/oldest mtimes under ci-docker (depth 2)
+2026-06-20 02:42  /srv/ci-docker/buildkit/containerd-overlayfs
+2026-06-20 02:42  /srv/ci-docker/containerd
+2026-06-20 02:42  /srv/ci-docker/containerd/daemon
+2026-11-15 18:13  /srv/ci-docker/image/identity-cache.db
+== kernel log, ci-docker device
+[    5.498564] EXT4-fs (dm-3): mounted filesystem 108d5160-8e0c-47f9-b5cc-0fe2e62a608c r/w with ordered data mode. Quota mode: none.
