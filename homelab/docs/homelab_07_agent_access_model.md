@@ -99,6 +99,18 @@ These actions are not forbidden forever, but they should not be the default oper
 
 The `brineworks-agent` service runs a `tailscale` sidecar with `NET_ADMIN` + `/dev/net/tun` so the container is its own tailnet node (kernel/TUN mode), which is what lets mosh's UDP reach it. Accepted under this principle: the grant lets the container manage *its own* network interface, not the host. It is not `--privileged`, grants no docker socket, no sudo, no `/opt/homelab` mount, no host reach. The principle guards against ops/host reach, which this does not introduce. See `homelab/services/README.md` "container-as-node" and the brineworks repo ADR 0006.
 
+### Accepted exception: av-approved root login (2026-11-15)
+
+`ssh picklelab-root '<cmd>'` gives a root shell or command through a dedicated Automic Vault SSH key.
+
+- **Approval:** the key is set to Approval Required for every Launcher, so each connection needs Josh to approve in av. One approval covers one connection.
+- **Audit trail:** av history on the Mac, plus a forced `root-ssh-audit` wrapper that logs each command to journald (`journalctl -t root-ssh`).
+- **Key restrictions:** `restrict,pty,from=<Mac tailnet IP>`.
+
+It's unrestricted in scope but gated by a human per connection. Prefer the `deploy-ops` allowlist where it covers the command.
+
+Caveat: this isn't yet a meaningful gate. The `technicalpickles` account, which agents reach unattended, is still root-equivalent through the `docker` and `lxd` groups and wildcard sudoers rules (taskwarrior `2c666587-a747-41ef-9354-4fdd3c5fe643`). Design and rollout: `docs/plans/2026-11-15-av-root-key-design.md`.
+
 ---
 
 ## Preferred Control Surface
