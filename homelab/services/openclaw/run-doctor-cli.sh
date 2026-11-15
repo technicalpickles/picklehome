@@ -26,6 +26,13 @@ if [ -f "$SERVICE_DIR/openclaw.image.env" ]; then
     set +a
 fi
 
+# compose.yaml requires IMAGE_SHA (goplaces-node's image), even for a run of openclaw.
+if [ -f "$SERVICE_DIR/.env.image" ]; then
+    set -a
+    . "$SERVICE_DIR/.env.image"
+    set +a
+fi
+
 exec "$SERVICE_DIR/op-run-dual.sh" \
     "$SERVICE_DIR/.env.op.picklehome.template" "$SERVICE_DIR/.env.op.pickleclaw.template" -- \
     docker compose -f compose.yaml -f compose.picklelab.yaml run --rm --no-deps --entrypoint node openclaw dist/index.js "$@"

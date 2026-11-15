@@ -239,6 +239,11 @@ and GHCR behave, none observed yet.
   - `open-terminal` lives in `open-webui`'s compose files, unit and `deploy.sh`, so the
     two images swap together in one PR.
   - Not yet checked: the other services' `deploy.sh`. Each swap re-checks its own.
+  - **Dev hosts build instead.** A dev host deploys unmerged branches, which have no
+    published image, so openclaw's `compose.yaml` keeps `build:` next to `image:`.
+    With `HOMELAB_HOST_KIND=dev`, `deploy.sh` skips the poll, sets `IMAGE_SHA` to
+    `dev-<short sha>`, and builds `goplaces-node` locally. Prod polls and pulls.
+    Removing this needs PR images (`ghcr-pr-images`).
 
 ### Pipeline: brineworks on Woodpecker
 
