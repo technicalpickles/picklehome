@@ -41,7 +41,8 @@ def _run_audit(tmp_path, original_command):
     env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "SSH_CONNECTION": "100.114.32.22 5000 100.123.122.68 22"}
     if original_command is not None:
         env["SSH_ORIGINAL_COMMAND"] = original_command
-    r = subprocess.run([str(AUDIT)], capture_output=True, text=True, env=env, timeout=30, input="exit\n")
+    r = subprocess.run([str(AUDIT)], capture_output=True, text=True, env=env, timeout=30,
+                       input="echo shell-ran\nexit 0\n")
     return r, log.read_text()
 
 
@@ -54,5 +55,5 @@ def test_audit_logs_then_runs_the_command(tmp_path):
 
 def test_audit_logs_interactive_shell(tmp_path):
     r, logged = _run_audit(tmp_path, None)
-    assert r.returncode == 0
+    assert "shell-ran" in r.stdout, r.stderr
     assert "from=100.114.32.22 interactive shell" in logged
