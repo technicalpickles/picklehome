@@ -75,6 +75,42 @@ echo "==> Writing build metadata"
     echo "BRINEWORKS_SERVER_PORT=$BRINEWORKS_SERVER_PORT"
 } > "$SERVICE_DIR/.env.build"
 
+echo "==> Getting the server image"
+# .env.image is what the unit and compose-pull@ load. COMPOSE_FILE and the port are
+# here because compose-pull@ runs in this directory with no -f flags, and compose
+# refuses to parse the files without the port. PULL_PROJECT_DIR keeps compose's project
+# directory here, not in /opt/brineworks/server where the first file lives.
+BRINEWORKS_COMPOSE_FILES="$BRINEWORKS_REPO/server/compose.yaml:$SERVICE_DIR/compose.picklelab.yaml"
+if [ "$HOMELAB_HOST_KIND" = dev ]; then
+    # Unmerged branches have no published image: build it here under a dev-<sha> tag.
+    IMAGE_SHA="dev-$BRINEWORKS_SHA"
+else
+    IMAGE_SHA=$(git -C "$BRINEWORKS_REPO" rev-parse HEAD)
+fi
+{
+    echo "IMAGE_SHA=$IMAGE_SHA"
+    echo "COMPOSE_FILE=$BRINEWORKS_COMPOSE_FILES"
+    echo "BRINEWORKS_SERVER_PORT=$BRINEWORKS_SERVER_PORT"
+    echo "PULL_PROJECT_DIR=$SERVICE_DIR"
+} > "$SERVICE_DIR/.env.image"
+if [ "$HOMELAB_HOST_KIND" = dev ]; then
+    # compose refuses to parse the files unless every ${VAR:?required} is set, even for
+    # `build`, so give each var in .env.vars a placeholder.
+    declare -a build_env
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
+        build_env+=("${line}=build-placeholder")
+    done < "$SERVICE_DIR/.env.vars"
+    (cd "$SERVICE_DIR" && env "${build_env[@]}" IMAGE_SHA="$IMAGE_SHA" BRINEWORKS_SERVER_PORT="$BRINEWORKS_SERVER_PORT" BRINEWORKS_GIT_SHA="$BRINEWORKS_SHA" COMPOSE_FILE="$BRINEWORKS_COMPOSE_FILES" docker compose --project-directory "$SERVICE_DIR" build server)
+else
+    # The package is private, so the pull runs as root (credential helper, see
+    # setup-ghcr-pull-auth.sh). compose-pull@ retries until CI has pushed this
+    # commit's image, and runs before the restart so the old container stays up.
+    sudo ln -sf "$REPO_DIR/homelab/config/compose-pull@.service" /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl start compose-pull@brineworks-server.service
+fi
+
 echo "==> Writing filtered op-run template"
 "$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" ${OVERLAY_ARGS[@]+"${OVERLAY_ARGS[@]}"} > "$SERVICE_DIR/.env.op.template"
 
