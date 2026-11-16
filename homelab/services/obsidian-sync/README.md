@@ -26,7 +26,7 @@ long-lived container continuously syncing against Obsidian's cloud.
 ## First-time setup (from Mac)
 
 ```bash
-just deploy-obsidian-sync   # create data dirs, build image, install + start the service unit
+just deploy-obsidian-sync   # create data dirs, pull the published image, install + start the service unit
 ```
 
 Then do the one-time interactive auth per vault (persisted in that vault's config volume):
@@ -50,7 +50,7 @@ just obsidian-sync-status                       # systemd unit status
 just obsidian-sync-logs                          # last 50 lines (both containers)
 just obsidian-sync-logs-follow                   # tail -f
 just obsidian-sync-exec rpg sync-status          # sync state for one vault
-just deploy-obsidian-sync                        # redeploy (git pull + rebuild + restart)
+just deploy-obsidian-sync                        # redeploy (git pull + pull image + restart)
 ```
 
 ## Adding a vault

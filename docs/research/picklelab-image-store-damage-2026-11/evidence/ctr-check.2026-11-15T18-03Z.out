@@ -1,0 +1,61 @@
+== date: 2026-11-15T18:03:25Z
+== namespaces
+NAME         LABELS 
+moby                
+moby_history        
+== images check (moby)
+time="2026-11-15T18:03:25Z" level=error msg="unable to check docker.io/library/obsidian-sync:latest" error="failed to check image sha256:438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145: rpc error: code = NotFound desc = blob sha256:438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145 expected at /srv/containerd/io.containerd.content.v1.content/blobs/sha256/438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145: blob not found: not found"
+time="2026-11-15T18:03:25Z" level=error msg="unable to check unpack for docker.io/library/obsidian-sync:latest" error="rpc error: code = NotFound desc = blob sha256:438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145 expected at /srv/containerd/io.containerd.content.v1.content/blobs/sha256/438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145: blob not found: not found"
+REF                                                                                                    TYPE                                                      DIGEST                                                                  STATUS            SIZE                UNPACKED 
+docker.io/alpine/socat:1.8.0.3                                                                         application/vnd.docker.distribution.manifest.list.v2+json sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e complete (3/3)    4.2 MiB/4.2 MiB     true
+docker.io/bugsink/bugsink@sha256:d19378dc3ad8fac46b2d554019540e84d607c176b3e0774a10c55458f1288fa0      application/vnd.oci.image.index.v1+json                   sha256:d19378dc3ad8fac46b2d554019540e84d607c176b3e0774a10c55458f1288fa0 complete (11/11)  79.5 MiB/79.5 MiB   true
+docker.io/library/alpine:latest                                                                        application/vnd.oci.image.index.v1+json                   sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b complete (2/2)    3.7 MiB/3.7 MiB     true
+docker.io/library/brineworks-server:local                                                              application/vnd.oci.image.index.v1+json                   sha256:9ae055f914f0dacaa88b1e595e4b41bd11662cb64551edf95502dcedf4347538 incomplete (6/18) 43.5 MiB/119.9 MiB  false
+docker.io/library/climate-auto-switch-climate-auto-switch:latest                                       application/vnd.oci.image.index.v1+json                   sha256:ebfdf7d2980e3d8c50a7c8a0947c5206fb3839ea09fb56126e51e64ae243f529 complete (11/11)  136.7 MiB/136.7 MiB true
+docker.io/library/nikke:local                                                                          application/vnd.oci.image.index.v1+json                   sha256:f2e84d385c0a114d5691e1e8de48d2a976ee1e089b6f1b624a2ac9f3e4e48c78 complete (16/16)  597.3 MiB/597.3 MiB true
+docker.io/library/obsidian-sync:latest                                                                 application/vnd.oci.image.index.v1+json                   sha256:438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145 error             -                   false
+docker.io/library/open-terminal:local                                                                  application/vnd.oci.image.index.v1+json                   sha256:e41536f44e6e212d5b8189e596feb7bf55e12ca1ad163e9a6b0a741c25dcff79 complete (14/14)  130.1 MiB/130.1 MiB true
+docker.io/library/open-webui:local                                                                     application/vnd.oci.image.index.v1+json                   sha256:d2ac5a3739ccb64cc256e9ed2adf17e36b665f02bf5956d6510ed205b645af2f complete (22/22)  1.5 GiB/1.5 GiB     true
+docker.io/library/openclaw-gog-mcp:latest                                                              application/vnd.oci.image.index.v1+json                   sha256:6000f95120fbd2de1f7755e19f7832d274ec3480b23f1b3b1e09498b8a3600e5 complete (16/16)  412.2 MiB/412.2 MiB true
+docker.io/library/openclaw-goplaces-node:latest                                                        application/vnd.oci.image.index.v1+json                   sha256:13097b6f2da8b36658d907fcfb492ff5b0eb9c87190889eb02339f53aedae2e7 incomplete (2/12) 7.6 KiB/739.0 MiB   false
+docker.io/library/postgres:16-alpine                                                                   application/vnd.oci.image.index.v1+json                   sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36 complete (12/12)  110.7 MiB/110.7 MiB true
+docker.io/library/postgres@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139     application/vnd.oci.image.index.v1+json                   sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139 complete (12/12)  110.7 MiB/110.7 MiB true
+docker.io/library/python:3.13-slim                                                                     application/vnd.oci.image.index.v1+json                   sha256:57b29a7c050c4e679e4bea572e14b3965cf4b5839de2da49d55e49ffc4024f39 complete (5/5)    41.1 MiB/41.1 MiB   true
+docker.io/myoung34/github-runner:ubuntu-noble                                                          application/vnd.oci.image.index.v1+json                   sha256:b8cce4ad6b59d76a90283b955c0d791d1f3553ed1437ab49544dfca202b57e8d complete (10/10)  812.9 MiB/812.9 MiB true
+docker.io/tailscale/tailscale:latest                                                                   application/vnd.oci.image.index.v1+json                   sha256:ed6480b33c6eb67c9cbd203ed42b9fb57e361986725b6856def71b7a3d9e276c complete (6/6)    60.9 MiB/60.9 MiB   true
+docker.io/tailscale/tailscale:v1.104.4                                                                 application/vnd.oci.image.index.v1+json                   sha256:ed6480b33c6eb67c9cbd203ed42b9fb57e361986725b6856def71b7a3d9e276c complete (6/6)    60.9 MiB/60.9 MiB   true
+docker.io/tailscale/tailscale:v1.98.4                                                                  application/vnd.oci.image.index.v1+json                   sha256:25cde9ad76020b0e29229136d0c38b5962e9a0e1774ffac9b0df68e4a37d6cf0 complete (6/6)    55.2 MiB/55.2 MiB   true
+docker.io/woodpeckerci/woodpecker-agent:v3                                                             application/vnd.oci.image.index.v1+json                   sha256:a7d7299a13add0b3936fa0ac9ed23507fe283a7fc7d9596c4289d7e8206541eb complete (3/3)    16.4 MiB/16.4 MiB   true
+docker.io/woodpeckerci/woodpecker-agent:v3.20.1                                                        application/vnd.oci.image.index.v1+json                   sha256:a7d7299a13add0b3936fa0ac9ed23507fe283a7fc7d9596c4289d7e8206541eb complete (3/3)    16.4 MiB/16.4 MiB   true
+docker.io/woodpeckerci/woodpecker-server:v3                                                            application/vnd.oci.image.index.v1+json                   sha256:0f31560e29d67ec4a06d6eeee4bac38d2a2697a6a741b8a0db3998180f3a3517 complete (3/3)    20.3 MiB/20.3 MiB   true
+docker.io/woodpeckerci/woodpecker-server:v3.20.1                                                       application/vnd.oci.image.index.v1+json                   sha256:0f31560e29d67ec4a06d6eeee4bac38d2a2697a6a741b8a0db3998180f3a3517 complete (3/3)    20.3 MiB/20.3 MiB   true
+docker.io/zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f application/vnd.oci.image.index.v1+json                   sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f complete (5/5)    23.9 MiB/23.9 MiB   true
+ghcr.io/gothenburgbitfactory/taskchampion-sync-server:0.7.1                                            application/vnd.oci.image.index.v1+json                   sha256:7903477ff4857cc7c702377d1c93a3f6703eed2f89e1733400b8599a4d0bb1bc complete (5/5)    7.1 MiB/7.1 MiB     true
+ghcr.io/gothenburgbitfactory/taskchampion-sync-server:latest                                           application/vnd.oci.image.index.v1+json                   sha256:7903477ff4857cc7c702377d1c93a3f6703eed2f89e1733400b8599a4d0bb1bc complete (5/5)    7.1 MiB/7.1 MiB     true
+ghcr.io/open-webui/open-terminal:slim                                                                  application/vnd.oci.image.index.v1+json                   sha256:92bfafbbbbf2db6fd0674c45a0cd4bf01cfa787ae3481c9949845d13a76d4182 complete (13/13)  127.5 MiB/127.5 MiB true
+ghcr.io/openclaw/openclaw:2026.10.6                                                                    application/vnd.oci.image.index.v1+json                   sha256:7dbff0fe5f5359b1badefe90a23efa9f203cd0d3c36bee095f4896c7a1d3864b complete (42/42)  642.1 MiB/642.1 MiB true
+ghcr.io/openclaw/openclaw:2026.9.3                                                                     application/vnd.oci.image.index.v1+json                   sha256:6cb72e1599b3b76e2ea3dcc2f4dd7f112247367fbecadfcdee8caa7423f4989b complete (32/32)  1.1 GiB/1.1 GiB     true
+ctr: unable to check docker.io/library/obsidian-sync:latest: failed to check image sha256:438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145: rpc error: code = NotFound desc = blob sha256:438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145 expected at /srv/containerd/io.containerd.content.v1.content/blobs/sha256/438abc8ac3abdbd6623a122829856e096c4a9a21f54c8ed14b10c5e4739b9145: blob not found: not found
+== counts
+content meta=416 disk=7739
+snapshots meta=341 disk=249
+content-in-meta-but-no-file=90
+leases=303
+== other namespaces content counts
+moby content=416 snapshots=341
+moby_history content=7550 snapshots=0
+== newest and oldest snapshot dirs on disk
+drwx------ 4 root root 4096 2026-11-14 20:14 46884
+drwx------ 4 root root 4096 2026-11-14 20:14 46883
+drwx------ 4 root root 4096 2026-11-14 20:14 46882
+drwx------ 4 root root 4096 2026-05-04 01:36 7201
+drwx------ 4 root root 4096 2026-05-04 01:36 7202
+drwx------ 4 root root 4096 2026-05-04 01:36 7203
+== metadata db files
+-rw------- 1 root root 2097152 2026-11-15 18:03:06.762242598 +0000 /srv/containerd/io.containerd.snapshotter.v1.overlayfs/metadata.db
+
+/srv/containerd/io.containerd.metadata.v1.bolt/:
+total 18800
+drwx--x--x  2 root root     4096 2026-03-21 19:56:28.430607108 +0000 .
+drwx------ 14 root root     4096 2026-03-22 22:27:26.597372690 +0000 ..
+-rw-r--r--  1 root root 33562624 2026-11-15 18:03:06.746242320 +0000 meta.db

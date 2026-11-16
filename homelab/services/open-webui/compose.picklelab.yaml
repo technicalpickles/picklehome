@@ -1,13 +1,5 @@
 services:
   open-webui:
-    build:
-      # Build context is the whole picklehome repo (Dockerfile lives inside
-      # it); deploy.sh ensures /opt/homelab is fast-forwarded before this
-      # runs. Same layering as second-brain-agent/brineworks-agent.
-      context: /opt/homelab
-      dockerfile: homelab/services/open-webui/Dockerfile
-      args:
-        USE_SLIM: "true"
     volumes:
       - /srv/data/open-webui:/app/backend/data
     environment:
@@ -38,9 +30,6 @@ services:
       - openclaw
 
   open-terminal:
-    build:
-      context: /opt/homelab
-      dockerfile: homelab/services/open-webui/Dockerfile.open-terminal
     volumes:
       - /srv/data/open-terminal:/home/user
 

@@ -63,6 +63,30 @@ sudo chown -R "$CONTAINER_UID:$CONTAINER_GID" "$OPEN_TERMINAL_DATA_DIR"
 echo "==> Configuring Tailscale serve for openwebui"
 sudo tailscale serve --service=svc:openwebui --https=443 "http://127.0.0.1:$PORT"
 
+echo "==> Waiting for the published images"
+# CI pushes picklehome-open-webui and picklehome-open-terminal tagged with the full
+# commit SHA after `test` passes, so a deploy can run before they exist. Poll for a
+# bounded time and fail with a clear message instead of a pull error from compose.
+IMAGE_SHA=$(git rev-parse HEAD)
+for image in picklehome-open-webui picklehome-open-terminal; do
+    ref="ghcr.io/technicalpickles/$image:$IMAGE_SHA"
+    for i in $(seq 1 40); do
+        if docker manifest inspect "$ref" >/dev/null 2>&1; then
+            echo "    $image has ${IMAGE_SHA:0:7}"
+            break
+        fi
+        if [ "$i" -eq 40 ]; then
+            echo "ERROR: $ref not found after 40 attempts (~10 min). CI may still be building, or failed: check the publish-images run for ${IMAGE_SHA:0:7}." >&2
+            exit 1
+        fi
+        echo "    Waiting for $image:${IMAGE_SHA:0:7} (attempt $i/40)..."
+        sleep 15
+    done
+done
+# open-webui.service loads this with EnvironmentFile=, so a reboot or a bare
+# `systemctl restart` comes back on the last deployed image. Gitignored.
+echo "IMAGE_SHA=$IMAGE_SHA" > "$SERVICE_DIR/.env.image"
+
 echo "==> Linking systemd unit"
 sudo ln -sf "$SERVICE_DIR/open-webui.service" /etc/systemd/system/
 
@@ -114,6 +138,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
     env_overrides+=("${line}=build-placeholder")
 done < "$SERVICE_DIR/.env.vars"
+env_overrides+=("IMAGE_SHA=$IMAGE_SHA")
 COMPOSE="env ${env_overrides[*]} $COMPOSE"
 for i in $(seq 1 12); do
     if $COMPOSE exec -T open-terminal curl -fsS http://localhost:8000/health -o /dev/null 2>&1; then

@@ -1,0 +1,4 @@
+# av-approved root login, see docs/plans/2026-11-15-av-root-key-design.md.
+# Installed to /root/.ssh/authorized_keys by homelab/scripts/setup-root-key.sh,
+# which refuses any key that does not match its pinned EXPECTED_FP.
+restrict,pty,from="100.114.32.22",command="/usr/local/sbin/root-ssh-audit" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOrhJ9toVrnxN4RFJgkRiEH+pOPc57tWn8rtMozQHipO av:picklelab-root

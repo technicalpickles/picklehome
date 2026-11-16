@@ -1,0 +1,33 @@
+<stdin>:11: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+5.9G	/srv/containerd/io.containerd.content.v1.content/blobs/sha256
+18G	/srv/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots
+19M	/srv/containerd/io.containerd.metadata.v1.bolt
+== date 2026-11-15T19:23:32.976495Z
+== content records=393 record_without_file=78
+     65  (no source label: built locally)
+     10  library/node
+      3  astral-sh/uv
+== blob files on disk=8062 with no record in any namespace=0
+== snapshots=311 kinds={'Active': 23, 'Committed': 287, 'View': 1} record_without_dir=9
+   snapshots whose parent is missing or dir-less: 0
+== images=25 damaged=[]
+   live-referenced blobs missing a file: 0
+   live-referenced snapshots (image chains + container ancestry) missing dir or record: 0
+== damage outside anything live: content=78 snapshots=9
+   snapshots not referenced by any image or container (GC candidates once unleased): 93
+== leases=263
+   by id prefix: [('hex', 14), ('05ocadd2wwue', 2), ('1motzmk2k4lt', 2), ('1x8emmhgl00s', 2), ('21p6dt9krlu2', 2), ('3mtfo8zjpkm8', 2), ('4lw2f30l6uzn', 2), ('56vukjbodue8', 2)]
+   oldest: 2026-09-27T17:51:14Z newest: 2026-11-15T19:00:50Z
+   with gc.expire label: 0
+   sample:
+      045c632ed205a6208487c92e41c75ca258952a10480231b1bca134e500f3afc3 2026-11-14T20:13:44Z -                                                                         
+      05ocadd2wwue6wuu96446cd23                                        2026-10-31T20:34:15Z containerd.io/gc.flat=2026-10-31T20:34:15.388360867Z                      
+      05ocadd2wwue6wuu96446cd23-variants                               2026-10-31T20:34:15Z -                                                                         
+      0d030c9a56ba8a733537f72050f37174d3515d7e853eee9a8217539d28732c24 2026-11-14T20:13:47Z -                                                                         
+      1bi0gihl0jlhb7nqyiqghkev3                                        2026-10-31T00:00:44Z containerd.io/gc.flat=2026-10-31T00:00:44.156581456Z                      
+      1motzmk2k4ltnw1s75mesn3oj                                        2026-10-31T00:00:46Z containerd.io/gc.flat=2026-10-31T00:00:46.214963348Z                      
+== moby_history content=7882 sample labels:
+      sha256:00037d46fa1a2b26ef7c2fd465ebd77d5c9bde26e90f04324aca0add8d8945dc	79.91kB	19 hours	-
+      sha256:000f89fa0cb7635366a4485b3faa74825265aea74f02b70c74976fc88e2f2916	79.9kB	22 hours	-
+      sha256:001a975af253d7aaca8a22e184fafb5ad24fdc892a322343c521c0be39a98ac8	81.97kB	22 hours	-
+== disk usage
