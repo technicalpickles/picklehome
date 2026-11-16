@@ -66,7 +66,7 @@ The `search-shim` service is the SearXNG-shaped backend for the gateway's `searx
 
 `SEARCH_SHIM_IMAGE` (full ref with tag) is pinned in pickleclaw's `openclaw-config/openclaw.env` beside `OPENCLAW_IMAGE`, and loads the same way. Compose refuses to parse without it, so merge this only after pickleclaw's `main` has it. To roll the shim forward, bump that pin and deploy.
 
-`deploy.sh` installs `@openclaw/searxng-plugin` at the gateway's version before the restart (a plugin installed after the gateway started stays invisible until a restart) and sets the plugin's `baseUrl` to `http://search-shim:8080`. The shim reads `OLLAMA_API_KEY` from the environment. Brave is not wired, so Ollama is the only backend until a Brave key reaches the service.
+`deploy.sh` installs `@openclaw/searxng-plugin` at the gateway's version before the restart (a plugin installed after the gateway started stays invisible until a restart) and sets the plugin's `baseUrl` to `http://search-shim:8080`. The shim reads `OLLAMA_API_KEY` and `BRAVE_API_KEY` from the environment. Ollama answers first and Brave takes over when Ollama fails.
 
 Switching the gateway over is a separate step: set `tools.web.search.provider` to `searxng` in pickleclaw's `openclaw-config/tools.json5`. Rollback is that value back to `gemini` and a redeploy.
 
@@ -174,6 +174,7 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `OPENCLAW_WIDGETS_HOST` | `.env` (1Password), optional | Second Tailscale Services hostname dedicated to the widget sandbox origin. See "Widget sandbox host" below. |
 | `OPENCLAW_GATEWAY_TOKEN` | `.env` (1Password) | Control-UI/API bearer token |
 | `OLLAMA_API_KEY` | `.env` (1Password) | Ollama Cloud subscription key (chat/heartbeat) |
+| `BRAVE_API_KEY` | `.env` (1Password) | Brave Search key for the search shim's fallback backend |
 | `OPENROUTER_API_KEY` | `.env` (1Password) | Embeddings only — Ollama Cloud doesn't support them |
 | `TELEGRAM_BOT_TOKEN` | `.env` (1Password) | Bot identity (same bot as `pickleclaw`) |
 | `GEMINI_API_KEY` | `.env` (1Password) | `web_search` (gemini provider) — reused from `pickleclaw` |
