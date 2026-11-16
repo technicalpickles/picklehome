@@ -334,7 +334,13 @@ else
         sleep 15
     done
 fi
-echo "IMAGE_SHA=$IMAGE_SHA" > "$SERVICE_DIR/.env.image"
+# OPENCLAW_IMAGE and SEARCH_SHIM_IMAGE are repeated here because compose-pull@ below runs
+# as root with only this file loaded, and compose needs both to resolve the image refs.
+{
+    echo "IMAGE_SHA=$IMAGE_SHA"
+    echo "OPENCLAW_IMAGE=$OPENCLAW_IMAGE"
+    echo "SEARCH_SHIM_IMAGE=$SEARCH_SHIM_IMAGE"
+} > "$SERVICE_DIR/.env.image"
 
 echo "==> Pulling image"
 # compose.yaml's environment: entries use ${VAR:?required} for every service in
@@ -357,12 +363,17 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 done < "$SERVICE_DIR/.env.vars"
 env_overrides+=("IMAGE_SHA=$IMAGE_SHA")
 
-env "${env_overrides[@]}" $COMPOSE pull --ignore-buildable
 if [ "$HOMELAB_HOST_KIND" = dev ]; then
+    env "${env_overrides[@]}" $COMPOSE pull --ignore-buildable
     echo "==> Building goplaces-node (dev host, no published image for this branch)"
     env "${env_overrides[@]}" $COMPOSE build goplaces-node
 else
-    env "${env_overrides[@]}" $COMPOSE pull goplaces-node
+    # search-shim's package is private, so the pull runs as root (credential helper, see
+    # setup-ghcr-pull-auth.sh). compose-pull@ pulls every image in the stack, public ones
+    # included, and runs before the restart so the old container stays up.
+    sudo ln -sf "$REPO_DIR/homelab/config/compose-pull@.service" /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl start compose-pull@openclaw.service
 fi
 
 if [ -d "$PICKLECLAW_DIR/nodes/gog-mcp" ]; then
