@@ -9,4 +9,6 @@ Type=oneshot
 TimeoutStartSec=300
 WorkingDirectory=/opt/homelab/homelab/services/climate-auto-switch
 EnvironmentFile=/etc/opt/homelab/op-token-picklehome
+# IMAGE_SHA, written by deploy.sh; compose's ${IMAGE_SHA:?required} fails without it.
+EnvironmentFile=/opt/homelab/homelab/services/climate-auto-switch/.env.image
 ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/climate-auto-switch/.env.op.template -- /usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml run --rm climate-auto-switch

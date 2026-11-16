@@ -179,8 +179,8 @@ Things that bit or could bite:
 ## Upgrades
 
 Bump the pinned tag in the `FROM` line of `Dockerfile` (not `compose.yaml` --
-the image is built locally, see "Non-root fix" below), commit,
-`just deploy-open-webui`. Data (SQLite `webui.db`, uploads, embedding-model
+the image is built by CI, see "Non-root fix" below), merge, wait for `publish-images`
+on `main`, then `just deploy-open-webui` (it polls for the image tag for ~10 minutes). Data (SQLite `webui.db`, uploads, embedding-model
 cache) lives in `/srv/data/open-webui`, backed up nightly by the restic
 `/srv/data` job.
 
@@ -193,12 +193,12 @@ untested. Confirmed on the pinned tag: running it as any non-root UID fails
 overrides. Tracked upstream: [open-webui/open-webui#26662](https://github.com/open-webui/open-webui/issues/26662),
 fix PR [#26664](https://github.com/open-webui/open-webui/pull/26664) has merged,
 but the errors still reproduce on v0.12.5 (checked 2026-10-30). `Dockerfile` here wraps the pinned image and chowns that dir at build
-time instead. `compose.yaml` points at `open-webui:local`; `compose.picklelab.yaml`
-adds the `build:` stanza that produces it (same layering as
-`second-brain-agent`/`brineworks-agent`), and `open-webui.service` runs
-`docker compose up -d --build`, not `--pull always`.
+time instead. CI builds it as `ghcr.io/technicalpickles/picklehome-open-webui:<commit sha>`
+(public package) and `compose.yaml` runs it via `${IMAGE_SHA}`. `deploy.sh` writes
+`IMAGE_SHA` to the gitignored `.env.image`, which `open-webui.service` loads with
+`EnvironmentFile=`; the unit runs `docker compose up -d --pull missing`. Open Terminal
+works the same way (`picklehome-open-terminal`).
 
 Once the upstream fix ships and the pin is bumped past it: delete
 `Dockerfile`, point `compose.yaml` back at `ghcr.io/open-webui/open-webui:<tag>`
-directly, drop the `build:` stanza from `compose.picklelab.yaml`, and switch
-`open-webui.service` back to `--pull always`.
+directly, and drop the `open-webui` entry from `scripts/check-images`.

@@ -21,7 +21,10 @@ EnvironmentFile=/etc/opt/homelab/op-token-picklehome
 # (BRINEWORKS_GIT_SHA, BRINEWORKS_SERVER_PORT) into the docker compose
 # process env so compose's strict ${VAR:?...} interpolation succeeds.
 EnvironmentFile=-/opt/homelab/homelab/services/brineworks-server/.env.build
-ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-server/.env.op.template -- /usr/bin/docker compose --project-directory /opt/homelab/homelab/services/brineworks-server -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml up -d --build
+# IMAGE_SHA (which published image to run), written by deploy.sh. Without it a
+# boot-time start fails compose's ${IMAGE_SHA:?required}.
+EnvironmentFile=/opt/homelab/homelab/services/brineworks-server/.env.image
+ExecStart=/usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-server/.env.op.template -- /usr/bin/docker compose --project-directory /opt/homelab/homelab/services/brineworks-server -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml up -d
 ExecStop=/usr/bin/op run --env-file=/opt/homelab/homelab/services/brineworks-server/.env.op.template -- /usr/bin/docker compose --project-directory /opt/homelab/homelab/services/brineworks-server -f /opt/brineworks/server/compose.yaml -f compose.picklelab.yaml down
 
 [Install]

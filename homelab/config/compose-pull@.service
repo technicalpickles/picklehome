@@ -1,0 +1,17 @@
+[Unit]
+Description=Pull published images for %i
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+# Run by deploy.sh as `sudo systemctl start compose-pull@<service>` before it
+# restarts the service, so the new images are on disk before the old container
+# goes down. Root, so the ghcr.io credential helper can read the 1Password token.
+# The start blocks until the pull finishes (or gives up), which is the wait.
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/homelab/homelab/services/%i
+EnvironmentFile=/opt/homelab/homelab/services/%i/.env.image
+Environment=COMPOSE_FILE=compose.yaml:compose.picklelab.yaml
+ExecStart=/opt/homelab/homelab/scripts/pull-images.sh
+TimeoutStartSec=15min

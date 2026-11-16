@@ -8,6 +8,9 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/homelab/homelab/services/obsidian-sync
+# IMAGE_SHA is written by deploy.sh. Without it a boot-time start fails compose's
+# ${IMAGE_SHA:?required}.
+EnvironmentFile=/opt/homelab/homelab/services/obsidian-sync/.env.image
 ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml up -d
 ExecStop=/usr/bin/docker compose -f compose.yaml -f compose.picklelab.yaml down
 

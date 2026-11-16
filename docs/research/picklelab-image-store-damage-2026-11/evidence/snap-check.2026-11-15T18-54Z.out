@@ -1,0 +1,53 @@
+== date 2026-11-15T18:54:38.188349Z
+== snapshots in metadata: 341, dir missing (usage fails): 10
+   missing by key shape: {'chain': 0, 'other': 10}
+   sample non-chain missing keys: ['hunptarfelzh7bn2fd2w92nri', 'roeofctq21gf2zb2mnqpohp4g', 'rax1x85gbqdbqi8ugmag5x2yq', 'hrvntz2vqqo0mge0e85awayi0', 'hzba6pxagy4ui19rf9mqs3huc']
+== per image: layers / layers whose snapshot is missing / layers with no snapshot at all / blob problems
+docker.io/alpine/socat:1.8.0.3: layers=2 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/bugsink/bugsink@sha256:d19378dc3ad8fac46b2d554019540e84d607c176b3e0774a10c55458f1288fa0: layers=10 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/alpine:latest: layers=1 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/brineworks-server:local: layers=17 snapshot_dir_missing=0 no_snapshot=13 blobs_missing=12  <== DAMAGED
+docker.io/library/climate-auto-switch-climate-auto-switch:latest: layers=10 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/nikke:local: layers=15 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/open-terminal:local: layers=13 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/open-webui:local: layers=21 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/openclaw-gog-mcp:latest: layers=15 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=15  <== DAMAGED
+docker.io/library/postgres:16-alpine: layers=11 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/postgres@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139: layers=11 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/python:3.11-slim: layers=4 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/library/python:3.13-slim: layers=4 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/myoung34/github-runner:ubuntu-noble: layers=9 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/tailscale/tailscale:latest: layers=5 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/tailscale/tailscale:v1.104.4: layers=5 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/tailscale/tailscale:v1.98.4: layers=5 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/woodpeckerci/woodpecker-agent:v3: layers=2 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/woodpeckerci/woodpecker-agent:v3.20.1: layers=2 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/woodpeckerci/woodpecker-server:v3: layers=2 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/woodpeckerci/woodpecker-server:v3.20.1: layers=2 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+docker.io/zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f: layers=4 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+ghcr.io/gothenburgbitfactory/taskchampion-sync-server:0.7.1: layers=4 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+ghcr.io/gothenburgbitfactory/taskchampion-sync-server:latest: layers=4 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+ghcr.io/open-webui/open-terminal:slim: layers=12 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+ghcr.io/openclaw/openclaw:2026.10.6: layers=41 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+ghcr.io/openclaw/openclaw:2026.9.3: layers=31 snapshot_dir_missing=0 no_snapshot=0 blobs_missing=0
+== missing-dir snapshots not part of any image's chain (buildkit cache, containers, leftovers): 10
+   hunptarfelzh7bn2fd2w92nri <- parent -
+   roeofctq21gf2zb2mnqpohp4g <- parent -
+   rax1x85gbqdbqi8ugmag5x2yq <- parent -
+   hrvntz2vqqo0mge0e85awayi0 <- parent -
+   hzba6pxagy4ui19rf9mqs3huc <- parent -
+   smav05inm6rrlci9a5j6l4k1d <- parent -
+   wamubfroym1ecb8m1zlegavp4 <- parent -
+   6t53wk7cj21lkn2n0fj3zl3v3 <- parent -
+   uyoyu9de5lykyjnbelz0n71dz <- parent e08dwk8edrua9fxqnon6drvml
+   oxxeursgmhjmik8z5tmadv5tx <- parent -
+== containers (moby) and whether their snapshot dir exists
+   045c632ed205a620 docker.io/library/postgres@sha256:aa6cb33cf4c19c76 ok
+   0d030c9a56ba8a73 docker.io/woodpeckerci/woodpecker-server:v3.20.1 ok
+   4af61eba9712b3b4 docker.io/tailscale/tailscale:v1.104.4 ok
+   6d4373693ead40ee ghcr.io/gothenburgbitfactory/taskchampion-sync-ser ok
+   7b95fd7e468bdc72 docker.io/woodpeckerci/woodpecker-agent:v3.20.1 ok
+   a50ac7255dfa3a3d docker.io/bugsink/bugsink@sha256:d19378dc3ad8fac46 ok
+   ad8b0c82fd0bfbd2 docker.io/library/open-webui:local ok
+   c8a90bb5f5c2a19b docker.io/alpine/socat:1.8.0.3 ok
+   f5deae61fb51b728 docker.io/library/open-terminal:local ok
