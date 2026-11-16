@@ -22,11 +22,19 @@ if [ -f .env.vars ]; then
     done < .env.vars
 fi
 
+# A service whose compose base file lives in another checkout (brineworks-server) sets
+# PULL_PROJECT_DIR in .env.image: compose takes the project directory from the first
+# file otherwise, and then cannot find the service's relative env_file.
+compose_args=()
+if [ -n "${PULL_PROJECT_DIR:-}" ]; then
+    compose_args=(--project-directory "$PULL_PROJECT_DIR")
+fi
+
 attempts=${PULL_ATTEMPTS:-40}
 interval=${PULL_INTERVAL:-15}
 
 for i in $(seq 1 "$attempts"); do
-    if docker compose pull --quiet; then
+    if docker compose ${compose_args[@]+"${compose_args[@]}"} pull --quiet; then
         echo "images for ${IMAGE_SHA:0:7} pulled"
         exit 0
     fi

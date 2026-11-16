@@ -23,10 +23,11 @@ def stub_docker(tmp_path):
         "#!/usr/bin/env bash\n"
         f'n=$(( $(cat {counter} 2>/dev/null || echo 0) + 1 ))\n'
         f'echo $n > {counter}\n'
+        f'echo "$@" >> {tmp_path / "args"}\n'
         '[ "$n" -ge "${DOCKER_SUCCEEDS_ON:-1}" ]\n'
     )
     docker.chmod(docker.stat().st_mode | stat.S_IEXEC)
-    return {"bin": bindir, "counter": counter}
+    return {"bin": bindir, "counter": counter, "args": tmp_path / "args"}
 
 
 def _run(stub, **env_extra):
@@ -66,3 +67,15 @@ def test_exports_placeholders_for_vars_listed_in_env_vars(stub_docker, tmp_path)
     pulled_env = dump.read_text()
     assert "FOO=pull-placeholder" in pulled_env
     assert "BAR=pull-placeholder" in pulled_env
+
+
+def test_passes_the_project_directory_when_set(stub_docker):
+    result = _run(stub_docker, IMAGE_SHA="abc1234def", PULL_PROJECT_DIR="/srv/svc")
+    assert result.returncode == 0
+    assert stub_docker["args"].read_text().strip() == "compose --project-directory /srv/svc pull --quiet"
+
+
+def test_no_project_directory_flag_by_default(stub_docker):
+    result = _run(stub_docker, IMAGE_SHA="abc1234def")
+    assert result.returncode == 0
+    assert stub_docker["args"].read_text().strip() == "compose pull --quiet"

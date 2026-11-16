@@ -46,7 +46,7 @@ The deploy script checks both the local and Tailscale health endpoints and print
 just deploy-brineworks-server
 ```
 
-This pulls the latest from both `picklehome` and `brineworks`, rebuilds the container image, and restarts the service. Alembic migrations run automatically on container startup.
+This pulls the latest from both `picklehome` and `brineworks`, pulls the image CI published for the brineworks commit, and restarts the service. If CI has not pushed it yet, the deploy waits up to about 10 minutes for it (`compose-pull@`). Alembic migrations run automatically on container startup.
 
 For deploying CLI changes to the `~/brineworks-workspace` install, see [`docs/dev-vs-prod-pipeline.md`](https://github.com/technicalpickles/brineworks/blob/main/docs/dev-vs-prod-pipeline.md#deploying-changes) in the brineworks repo.
 
@@ -78,8 +78,9 @@ After a healthy deploy, `just deploy-brineworks-server` also runs `scripts/brine
 
 ## Architecture
 
-- **Build from source:** The brineworks repo is cloned to `/opt/brineworks` on picklelab. The compose build context points at `server/` there. No published container image.
-- **Compose layering:** `compose.yaml` is a portable base (`image: brineworks-server:local`). `compose.picklelab.yaml` adds the `build:` directive, loopback port binding, and host volume mounts. Docker Compose merges both: it builds from source and tags the result.
+- **Published image:** CI in the brineworks repo pushes `ghcr.io/technicalpickles/brineworks-server:<full commit sha>` after every green `main` build (private package). `deploy.sh` writes that SHA, from the `/opt/brineworks` checkout, to a gitignored `.env.image`, the unit loads it, and `compose-pull@brineworks-server` pulls the image as root before the restart, so the old container stays up while CI finishes. The `/opt/brineworks` checkout is still needed: the base `compose.yaml` and `verify.sh` read it.
+- **Dev hosts build instead:** an unmerged brineworks branch has no published image, so with `HOMELAB_HOST_KIND=dev` `deploy.sh` builds `build:` locally and tags it `dev-<sha>`. Removing that needs PR images (see the GHCR design doc).
+- **Compose layering:** `compose.yaml` is a portable base (`image: brineworks-server:local`). `compose.picklelab.yaml` adds the `ghcr.io` image reference (plus `build:` for dev hosts), loopback port binding, and host volume mounts. Docker Compose merges both.
 - **Networking:** Server binds to `127.0.0.1:$BRINEWORKS_SERVER_PORT` (loopback only, default `8765`). Tailscale serve proxies `https://brineworks.<tailnet>.ts.net` to it. The `tailscale serve` rule is reapplied unconditionally on every deploy: re-running with a different upstream idempotently replaces the previous rule, no manual `off` needed.
 - **Port configuration:** The server port is controlled by one env var, `BRINEWORKS_SERVER_PORT`, threaded end-to-end. `deploy.sh` sets it once at the top (default `8765`) and exports it. Compose files fail fast (`${BRINEWORKS_SERVER_PORT:?...}`) if it's unset. The brineworks image bakes `ENV BRINEWORKS_SERVER_PORT=8765` so containers without an explicit override still work. To change the port, set `BRINEWORKS_SERVER_PORT` in the environment before running `deploy.sh`. Full decision record with alternatives considered: [brineworks `docs/decisions/0001-server-port-configuration.md`](https://github.com/technicalpickles/brineworks/blob/main/docs/decisions/0001-server-port-configuration.md).
 - **Healthcheck layering:** Two independent probes catch different failure modes. The container healthcheck is declared in the brineworks `Dockerfile` (`python -m brineworks_server.healthcheck`) and reads the port from its own ENV, so the image is self-contained. It catches "uvicorn crashed or hung." The `deploy.sh` end-to-end curl against the published port catches "container is healthy but the port publish is wrong" (e.g. the port drift we hit on 2026-04-11).
