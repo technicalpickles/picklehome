@@ -60,6 +60,16 @@ The workspace (`github.com/technicalpickles/openclaw-workspace` — `AGENTS.md`,
    ```
    Until the ref exists it's skipped silently and `deploy.sh` degrades to an empty workspace with a warning. Delete the local keypair once it's in 1Password and on GitHub.
 
+### Search shim
+
+The `search-shim` service is the SearXNG-shaped backend for the gateway's `searxng` web search provider (pickleclaw ADR 0006, `docs/reference/search-shim.md`). Prod pulls the image pickleclaw's Woodpecker CI publishes as `ghcr.io/technicalpickles/pickleclaw-search-shim:<pickleclaw commit sha>`. The package is private, so on prod `deploy.sh` pulls through `compose-pull@openclaw` (root, with the host pull token) instead of a direct `docker compose pull` as the deploy user.
+
+`SEARCH_SHIM_IMAGE` (full ref with tag) is pinned in pickleclaw's `openclaw-config/openclaw.env` beside `OPENCLAW_IMAGE`, and loads the same way. Compose refuses to parse without it, so merge this only after pickleclaw's `main` has it. To roll the shim forward, bump that pin and deploy.
+
+`deploy.sh` installs `@openclaw/searxng-plugin` at the gateway's version before the restart (a plugin installed after the gateway started stays invisible until a restart) and sets the plugin's `baseUrl` to `http://search-shim:8080`. The shim reads `OLLAMA_API_KEY` from the environment. Brave is not wired, so Ollama is the only backend until a Brave key reaches the service.
+
+Switching the gateway over is a separate step: set `tools.web.search.provider` to `searxng` in pickleclaw's `openclaw-config/tools.json5`. Rollback is that value back to `gemini` and a redeploy.
+
 ### Pickleclaw deploy key (one-time)
 
 `gog-mcp`'s source (`nodes/gog-mcp/` in the private `pickleclaw` repo) isn't open source like `goplaces-node`, so it can't be baked into this public repo's Dockerfile — instead `deploy.sh` clones/pulls `pickleclaw@main` directly on picklelab, host-side, using a scoped **read-only** deploy key.
@@ -104,17 +114,17 @@ ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/mcp.json5 \
   homelab/services/openclaw/openclaw.mcp.json5
 ln -sf ~/github.com/technicalpickles/pickleclaw/openclaw-config/openclaw.env \
   homelab/services/openclaw/openclaw.image.env
-# gateway policy plugin (approval prompt on the model's brineworks writes), scp'd + mounted ro
+# gateway policy plugin (approval prompt on the model's brineworks writes; blocks `openclaw mcp show`/`list`), scp'd + mounted ro
 mkdir -p homelab/services/openclaw/plugins
 ln -sfn ~/github.com/technicalpickles/pickleclaw/openclaw-config/plugins/brineworks-approval \
   homelab/services/openclaw/plugins/brineworks-approval
 ```
 
-The plugin is loaded via `plugins.load.paths` (set in `deploy.sh`) from `/opt/openclaw-plugins/brineworks-approval` inside the container. Its approval prompts reach Telegram through `channels.telegram.execApprovals.enabled` + `commands.ownerAllowFrom` (same as exec approvals); with no route the gated call fails closed.
+The plugin is loaded via `plugins.load.paths` (set in `deploy.sh`) from `/opt/openclaw-plugins/brineworks-approval` inside the container. Its approval prompts reach Telegram through `channels.telegram.execApprovals.enabled` + `commands.ownerAllowFrom` (same as exec approvals); with no route the gated call fails closed. The same plugin also blocks the agent's `exec` of `openclaw mcp show` and `openclaw mcp list --json`, which print bearer tokens into the transcript. Exec policy has no deny pattern and `tools.exec.mode` is `full`, so a `before_tool_call` hook is the only place to refuse one command. A guardrail on the command text, not a security boundary; see pickleclaw's `docs/gotchas/mcp-show-prints-bearer-token.md`.
 
 `deploy.sh` runs from the Mac, where `pickleclaw` is already cloned with your own GitHub access — `git pull` it before deploying, same as any other dependency.
 
-**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5`/`openclaw.env` from whatever local checkout you have here (no branch/cleanliness guard), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
+**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5`/`openclaw.env` from your local checkout here (`scripts/pickleclaw-guard` refuses unless it is clean and at `origin/main`, every include is a symlink rather than a copy, and nothing gitignored sits under a path the deploy copies), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
 
 ## First-time Setup
 
@@ -241,7 +251,7 @@ Tool profile is `coding`, full local tool surface, no `deny` list (browser/canva
 
 This routes around [openclaw/openclaw#114180](https://github.com/openclaw/openclaw/issues/114180): under the default `tree`, `sessions_list` hands the agent a session key that `sessions_history` then refuses, because history derives tree membership from a display-filtered listing whose child links expire 30 minutes after the child ends. The agent gets a bare `{"status":"forbidden"}` it can't act on, and the error text blames `tools.sessions.visibility`, which sends you off editing config for something that isn't a config problem. There is no narrower setting: upstream #55420 (open) asks for a glob allowlist precisely because nothing sits between `tree` and `agent`.
 
-**The trade is explicit.** Before this, two independent things had to fail for one session to read another: the chat allowlist and the tool-layer tree check. Now the allowlist does all of it. That's acceptable only because it holds exactly one chat id and groups are closed (`deploy.sh` never sets `groupPolicy`, so it resolves to `"disabled"`). A second id, or an allowlisted group, would grant that person history access to every session on the box plus memory search across them. So `OPENCLAW_ALLOWED_CHAT_IDS` is a security control now, not just an access list, and `.env.template` says so at the point of editing.
+**The trade is explicit.** Before this, two independent things had to fail for one session to read another: the chat allowlist and the tool-layer tree check. Now the allowlist does all of it. That's acceptable only because it holds exactly one chat id and groups are closed (`deploy.sh` never sets `groupPolicy`, which resolves to `"allowlist"`, and with no `channels.telegram.groups` entry every group is blocked). A second id, or an allowlisted group, would grant that person history access to every session on the box plus memory search across them. So `OPENCLAW_ALLOWED_CHAT_IDS` is a security control now, not just an access list, and `.env.template` says so at the point of editing.
 
 "Single-trusted-operator bot" is load-bearing for two settings now, not one: it justifies both `exec: { security: "full", ask: "off" }` above and this. If that premise stops being true, both need revisiting together. Verified on the pickleclaw dev VM before landing here; background and a model-free gateway-RPC repro live in `pickleclaw`'s `docs/setup-notes.md`, "Unrelated find: `sessions_list` and `sessions_history` disagree about tree".
 

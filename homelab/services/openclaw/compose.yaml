@@ -64,14 +64,15 @@ services:
           - openclaw.local
 
   goplaces-node:
+    # Prod pulls the image CI publishes from goplaces-node/Dockerfile (public
+    # package). Dev hosts run unmerged branches that have no published image, so
+    # deploy.sh builds from `build:` instead and tags it dev-<sha> (HOMELAB_HOST_KIND).
+    # The openclaw npm version is the ARG default in that Dockerfile, which renovate
+    # bumps; keep it in step with OPENCLAW_IMAGE's tag above. deploy.sh writes
+    # IMAGE_SHA to .env.image and openclaw.service loads it.
+    image: ghcr.io/technicalpickles/picklehome-openclaw-goplaces-node:${IMAGE_SHA:?required}
     build:
       context: ./goplaces-node
-      # Keep in sync with OPENCLAW_IMAGE's tag above (no automatic link --
-      # compose can't parse a version out of an image ref). Override with
-      # OPENCLAW_VERSION=... in the environment when bumping.
-      args:
-        # renovate: datasource=npm depName=openclaw
-        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-2026.10.6}
     restart: unless-stopped
     # Start-order only, not a readiness guarantee -- the node retries its own
     # connection (restart: unless-stopped) until the gateway's actually up.
@@ -86,6 +87,21 @@ services:
       OPENCLAW_NODE_HOST: openclaw.local
     volumes:
       - goplaces_node_state:/root/.openclaw
+
+  # SearXNG-shaped web search for the gateway's `searxng` provider (pickleclaw ADR 0006).
+  # Prod pulls the image pickleclaw CI publishes, tagged with the pickleclaw commit SHA.
+  # The package is private, so the host pull token (pull-auth) covers the pull.
+  # SEARCH_SHIM_IMAGE is the full ref incl. tag, pinned in pickleclaw's
+  # openclaw-config/openclaw.env next to OPENCLAW_IMAGE and loaded the same way
+  # (deploy.sh, openclaw.service, run-doctor-cli.sh). The gateway reaches it at
+  # http://search-shim:8080 (deploy.sh sets the plugin's baseUrl).
+  # It reads OLLAMA_API_KEY from the environment and falls back to Brave only when
+  # BRAVE_API_KEY is also set; nothing wires that yet, so Ollama is the only backend.
+  search-shim:
+    image: ${SEARCH_SHIM_IMAGE:?pin a ref, e.g. ghcr.io/technicalpickles/pickleclaw-search-shim:<pickleclaw sha>}
+    restart: unless-stopped
+    environment:
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:?required}
 
   gog-mcp:
     build:

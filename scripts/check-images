@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Build every Dockerfile under homelab/services that picklelab builds from this repo,
+# so a broken Dockerfile fails the PR and not the deploy. Needs a Docker daemon.
+# Context dirs mirror each service's compose file; keep this list in step when a
+# service gains or moves a Dockerfile. The trailing args of each `build` line are the
+# repo paths the image reads: keep them in step with its COPY lines.
+#
+#   scripts/check-images                       build all, nothing is run or pushed
+#   scripts/check-images --changed-since <ref> build only images whose paths changed
+#                                              between <ref> and HEAD. A change to this
+#                                              script or the CI workflow builds all.
+#   scripts/check-images --push <sha>          buildx build and push
+#                                              ghcr.io/technicalpickles/picklehome-<name>:<sha>
+#                                              for every image, reusing a registry layer cache.
+#                                              Needs `docker login ghcr.io`, GHCR_USER and
+#                                              GHCR_TOKEN, and a docker-container builder.
+#
+# Pushes never filter: every commit on main gets a tag for every image, so a deploy can
+# wait on its own SHA. Unchanged images are cache hits and cost seconds.
+#
+# Design: docs/plans/2026-11-15-ghcr-image-publishing-design.md
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+S=homelab/services
+REGISTRY=ghcr.io/technicalpickles
+SOURCE=https://github.com/technicalpickles/picklehome
+# Every package is named picklehome-<name>, so they group together under the account.
+PREFIX=picklehome-
+# Packages that must not be public. CI cannot make a package private, and the first
+# push of a new package name from this repo's Actions creates it linked to the repo and
+# public, whatever the labels say (probed 2026-11-15). So a PRIVATE package must already
+# exist, created and set private by hand (see the design doc, "Visibility"). The script
+# refuses to be the one that creates it, and after a push it checks the package is
+# still not anonymously pullable. They are also built without the source label so
+# nothing links them to the public repo.
+PRIVATE=(climate-auto-switch obsidian-sync)
+# Changing either of these can change every image.
+SHARED=(scripts/check-images .github/workflows/ci.yml)
+
+SHA=""
+CHANGED=""
+FILTER=0
+case "${1:-}" in
+  "") ;;
+  --push)
+    SHA="${2:-}"
+    [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "--push needs a full 40-char commit SHA, got '${SHA}'" >&2; exit 2; }
+    [[ -n "${GHCR_USER:-}" && -n "${GHCR_TOKEN:-}" ]] || { echo "--push needs GHCR_USER and GHCR_TOKEN set" >&2; exit 2; }
+    ;;
+  --changed-since)
+    [[ -n "${2:-}" ]] || { echo "--changed-since needs a git ref" >&2; exit 2; }
+    CHANGED=$(git diff --name-only "$2" HEAD)
+    FILTER=1
+    ;;
+  *) echo "usage: $0 [--push <full-commit-sha> | --changed-since <ref>]" >&2; exit 2 ;;
+esac
+
+# True when any changed file is, or sits under, one of the given paths.
+touches() { # <path>...
+  local f p
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    for p in "$@"; do
+      [[ "$f" == "$p" || "$f" == "$p"/* ]] && return 0
+    done
+  done <<<"$CHANGED"
+  return 1
+}
+
+is_private() { local n; for n in "${PRIVATE[@]}"; do [[ "$n" == "$1" ]] && return 0; done; return 1; }
+
+# Fails when a package meant to be private answers an anonymous pull.
+assert_private() { # <package>
+  local pkg=$1 token code
+  # A private package makes the anonymous token request itself fail, so no -f here and
+  # an empty token just leads to a denied manifest request below.
+  token=$(curl -sS "https://ghcr.io/token?scope=repository:technicalpickles/$pkg:pull" | jq -r '.token // empty' || true)
+  code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json' \
+    "https://ghcr.io/v2/technicalpickles/$pkg/manifests/$SHA")
+  if [[ "$code" == 200 ]]; then
+    echo "::error::$pkg is publicly pullable but is listed in PRIVATE. Set it to private in its package settings." >&2
+    return 1
+  fi
+}
+
+# True when the package already exists and this token can write to it: an authenticated
+# pull-scope tags/list answers 200. A missing package answers 404 NAME_UNKNOWN.
+package_exists() { # <package>
+  local token code
+  token=$(curl -sS -u "$GHCR_USER:$GHCR_TOKEN" \
+    "https://ghcr.io/token?scope=repository:technicalpickles/$1:pull" | jq -r '.token // empty' || true)
+  [[ -n "$token" ]] || return 1
+  code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
+    "https://ghcr.io/v2/technicalpickles/$1/tags/list")
+  [[ "$code" == 200 ]]
+}
+
+SKIPPED=()
+
+build() { # <name> <context> <dockerfile> <input-path>...
+  local name=$1 context=$2 dockerfile=$3
+  shift 3
+  if ((FILTER)) && ! touches "$@" "${SHARED[@]}"; then
+    echo "==> $name (skipped, inputs unchanged)"
+    return
+  fi
+  if [[ -n "$SHA" ]] && is_private "$name" && ! package_exists "$PREFIX$name"; then
+    echo "::error::$PREFIX$name does not exist yet, not creating it from CI because a new package comes out public. Create it private by hand first, then give this repo write access." >&2
+    SKIPPED+=("$PREFIX$name")
+    return
+  fi
+  echo "==> $name"
+  local labels=(--label "org.opencontainers.image.revision=${SHA:-unknown}")
+  is_private "$name" || labels+=(--label "org.opencontainers.image.source=$SOURCE")
+  if [[ -n "$SHA" ]]; then
+    local ref="$REGISTRY/$PREFIX$name"
+    docker buildx build "${labels[@]}" \
+      --cache-from "type=registry,ref=$ref:buildcache" \
+      --cache-to "type=registry,ref=$ref:buildcache,mode=max" \
+      -t "$ref:$SHA" --push -f "$dockerfile" "$context"
+    if is_private "$name"; then assert_private "$PREFIX$name"; fi
+  else
+    docker build "${labels[@]}" -t "check-images/$name" -f "$dockerfile" "$context"
+  fi
+}
+
+build climate-auto-switch    .                           "$S/climate-auto-switch/Dockerfile" \
+  "$S/climate-auto-switch/Dockerfile" climate pyproject.toml uv.lock
+build obsidian-sync          "$S/obsidian-sync"          "$S/obsidian-sync/Dockerfile" \
+  "$S/obsidian-sync"
+build openclaw-goplaces-node "$S/openclaw/goplaces-node" "$S/openclaw/goplaces-node/Dockerfile" \
+  "$S/openclaw/goplaces-node"
+build open-webui             .                           "$S/open-webui/Dockerfile" \
+  "$S/open-webui/Dockerfile"
+build open-terminal          .                           "$S/open-webui/Dockerfile.open-terminal" \
+  "$S/open-webui/Dockerfile.open-terminal"
+
+((${#SKIPPED[@]} == 0)) || { echo "skipped: ${SKIPPED[*]}" >&2; exit 1; }

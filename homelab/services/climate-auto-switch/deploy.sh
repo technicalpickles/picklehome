@@ -21,24 +21,14 @@ echo "==> Deploying commit $(git rev-parse --short HEAD)"
 echo "==> Creating data directory"
 sudo mkdir -p "$DATA_DIR"
 
-echo "==> Building image"
-cd "$SERVICE_DIR"
-# compose.yaml's environment: entries use ${VAR:?required}, so compose refuses to even
-# parse the file unless every var is set in the process environment - regardless of
-# whether the command being run (build) actually consumes them. The Dockerfile has no
-# ARGs and never reads these at build time; only the systemd unit's `op run`-wrapped
-# ExecStart needs the real values. Placeholder values here just satisfy compose's
-# interpolation check so the build step (unwrapped, unprivileged) can run standalone.
-# Derive placeholder assignments from .env.vars so adding/removing a var propagates
-# automatically with no separate manual edit.
-declare -a env_overrides
-while IFS= read -r line || [[ -n "$line" ]]; do
-  # Skip comments and blank lines
-  [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
-  env_overrides+=("${line}=build-placeholder")
-done < "$SERVICE_DIR/.env.vars"
-
-env "${env_overrides[@]}" docker compose -f compose.yaml -f compose.picklelab.yaml build
+echo "==> Pulling the published image"
+# Private package, so the pull runs as root (credential helper, see
+# setup-ghcr-pull-auth.sh) through compose-pull@, which retries until CI has pushed
+# this commit's image. The timer is paused (below) but the pull still has to work.
+echo "IMAGE_SHA=$(git rev-parse HEAD)" > "$SERVICE_DIR/.env.image"
+sudo ln -sf "$REPO_DIR/homelab/config/compose-pull@.service" /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start compose-pull@climate-auto-switch.service
 
 echo "==> Linking systemd units"
 sudo ln -sf "$SERVICE_DIR/climate-auto-switch.service" /etc/systemd/system/
