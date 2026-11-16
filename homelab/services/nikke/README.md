@@ -5,8 +5,9 @@ Reachable at `https://nikke.tail2023b7.ts.net`.
 
 ## Shape
 
-One image (`nikke:local`, built from `/opt/nikke-roster-scanner`) backing two
-Compose services:
+One image (`ghcr.io/technicalpickles/nikke:<sha>`, published by nikke-roster-scanner's
+Woodpecker pipeline and pulled as root by `compose-pull@nikke`) backing two Compose
+services:
 
 | Service | Lifetime | What |
 |---------|----------|------|
@@ -38,7 +39,7 @@ sync to confirm it took.
 ## Operating
 
 ```sh
-just deploy-nikke        # full deploy (pull, build, restart, health check)
+just deploy-nikke        # full deploy (pull source, pull image, restart, health check)
 just nikke-logs          # recent container logs
 just nikke-logs-follow   # live logs
 just nikke-sync-now      # run a sync instead of waiting for the timer
@@ -56,9 +57,16 @@ ssh picklelab "sudo sqlite3 /srv/data/nikke/roster.db \
 - **`--db /data/roster.db` is passed explicitly** in both Compose commands. The
   CLI defaults to a cwd-relative `roster.db` with no env-var override, so
   dropping the flag silently writes into the container.
-- **`nikke.service` runs `up -d --build serve`**, naming the service. A bare
+- **`nikke.service` runs `up -d serve`**, naming the service. A bare
   `up -d` would also start `sync`, firing a full blablalink sync on every deploy
   and every boot.
+- **Nothing builds on the host.** `deploy.sh` fast-forwards `/opt/nikke-roster-scanner`
+  for its `compose.yaml` and its HEAD sha, writes that sha to `.env.image` as
+  `IMAGE_SHA`, and starts `compose-pull@nikke`, which retries until the pipeline has
+  pushed that commit's image. A cold pipeline run takes about 13 minutes (tests, then
+  publish), longer than the pull's roughly 10 minute budget, so deploying right after a
+  merge can time out. Re-run the deploy once the Woodpecker run is green. `just
+  nikke-logs` reads `.env.image` too, since compose needs `IMAGE_SHA` to parse the files.
 - **Chromium lives at `/ms-playwright`**, not in the build user's home, so uid
   1000 can read it. Changing the Dockerfile's `USER` without keeping
   `PLAYWRIGHT_BROWSERS_PATH` breaks sync but not serve, so it fails 6 hours
