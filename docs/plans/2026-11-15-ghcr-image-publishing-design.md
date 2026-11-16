@@ -1,8 +1,10 @@
 # Publishing picklelab's built images to GHCR (design)
 
-Status: **design, not implemented.** A snapshot from 2026-11-15. Check the code and
-`git log` before treating anything here as current. Nothing in this document has been
-run against picklelab except the read-only checks listed under "Measured".
+Status: **partly implemented.** A snapshot from 2026-11-15. Check the code and
+`git log` before treating anything here as current. As of the end of 2026-11-15 all five
+picklehome images and brineworks-server run from GHCR on picklelab. The brineworks pilot
+ran and its results are under "Pilot: brineworks-server". Still designed only: PR images,
+the PR sweep, the rollback drill, and the long-term push credential.
 
 Follows [the options sketch](2026-11-15-picklelab-built-images-options.md) (branch
 `picklelab-built-images-options`; the link resolves once it merges) and picks its
@@ -62,7 +64,7 @@ main daemon only pull.** That means two builders:
 
 | Image | Source repo | Builder | Notes |
 |---|---|---|---|
-| brineworks-server | brineworks (private) | Woodpecker, `ci` daemon | Pilot. Extends the existing `server-image` step |
+| brineworks-server | brineworks (private) | Woodpecker, `ci` daemon | Pilot, done 2026-11-15 (`publish-server-image` step) |
 | climate-auto-switch | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
 | obsidian-sync | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
 | openclaw-goplaces-node | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
@@ -239,13 +241,20 @@ and GHCR behave, none observed yet.
   - `open-terminal` lives in `open-webui`'s compose files, unit and `deploy.sh`, so the
     two images swap together in one PR.
   - Not yet checked: the other services' `deploy.sh`. Each swap re-checks its own.
+  - **Dev hosts build instead.** A dev host deploys unmerged branches, which have no
+    published image, so openclaw's `compose.yaml` keeps `build:` next to `image:`.
+    With `HOMELAB_HOST_KIND=dev`, `deploy.sh` skips the poll, sets `IMAGE_SHA` to
+    `dev-<short sha>`, and builds `goplaces-node` locally. Prod polls and pulls.
+    Removing this needs PR images (`ghcr-pr-images`).
 
 ### Pipeline: brineworks on Woodpecker
 
 One step, on `main` pushes only, after the repo's tests:
 
 ```yaml
-# Untested sketch. Shape follows brineworks' server-image step.
+# Sketch. The step that shipped is `publish-server-image` in brineworks'
+# `.woodpecker.yml` (brineworks#173). It adds `depends_on` on every blocking step, skips
+# itself under `scripts/ci-local`, and ends with `docker logout`.
 - name: image
   image: docker:27-cli
   volumes:
@@ -292,6 +301,21 @@ One step, on `main` pushes only, after the repo's tests:
   the `docker:27-cli` image so no pull-request step can read it. A classic PAT cannot be
   limited to specific packages, so it is account-wide. A separate GitHub machine user
   that owns only the images would narrow that. Not decided.
+  - **Current state (2026-11-15):** `ghcr_push_token` is a test PAT on the
+    `technicalpickles` account (`write:packages`, 30 day expiry, so about 2026-12-15),
+    in 1Password as `GHCR Push (test)`. If it lapses, the brineworks `main` build fails
+    at `publish-server-image` and the next deploy waits for a tag and then fails with
+    "image not built yet". The running container is unaffected. Fine-grained tokens
+    still did not cover the container registry when checked on 2026-11-15, from docs and
+    third-party posts, not the current English changelog.
+  - **Plan, not decided:** GitHub's terms allow one free machine account (registered by a
+    person, for automation only). It would own its own namespace
+    (`ghcr.io/<machine-user>/<name>`) for Woodpecker-built images, with a push token and
+    a separate `read:packages` pull token for the hosts. Actions-built picklehome images
+    stay under `technicalpickles` on `GITHUB_TOKEN`. Unverified: that a user cannot push
+    a new package into another user's namespace. Test that with a throwaway package
+    first. The account name appears in every image path, so pick it before creating it.
+    Tracked in taskwarrior `a28d6dcb-0ce6-4ed8-b8f5-77a0e1443206`.
 - **Pull (host).** A `read:packages` token for the main (root) daemon only. `ci` never
   pulls the published images. Delivered through the 1Password path in the secrets
   design (`op run` or a credential helper) so it is not left as plaintext in
@@ -307,11 +331,14 @@ One step, on `main` pushes only, after the repo's tests:
   - **By hand first:** create a classic PAT with only `read:packages`, and store it as
     item `GHCR Pull`, field `credential`, in the picklehome vault. The helper fails
     closed until that exists.
-  - **Not solved:** the helper only works as root. The units run as root, so `compose up`
-    pulls fine. `deploy.sh` runs as the deploy user, so its `docker manifest inspect`
-    wait-for-tag poll gets a 401 on a private image. Options: poll through a narrow
-    `sudo` wrapper like the `read-picklehome-var.sh` ones, or let the unit's pull be
-    the wait and retry it. Decide when the first private swap is written.
+  - **Decided: root pulls, through a oneshot unit.** The deploy user cannot read the
+    credential, so `deploy.sh` does not poll. It writes `.env.image` and runs
+    `sudo systemctl start compose-pull@<service>` (`systemctl start *` is already
+    passwordless). `homelab/config/compose-pull@.service` runs
+    `homelab/scripts/pull-images.sh` as root, which retries `docker compose pull` for
+    about 10 minutes until CI has pushed the SHA. The start blocks until it finishes, so
+    the wait happens before the restart and the old container keeps running. No sudoers
+    change. Public images need no auth and keep their poll in `deploy.sh`.
 - **Visibility.** Images from private repos stay private packages. An image with nothing
   sensitive in it could be public and then needs no pull token. Decide per image.
 
@@ -355,7 +382,31 @@ First because it is Brent-critical, it was damaged, and its unit rebuilds on eve
    Actions. That costs Actions minutes, because brineworks is private.
 
 Done means the host has no `build:` for this service, a deploy pulls, the rollback
-drill works, and the build time is recorded here. Then the rest, one service at a time
+drill works, and the build time is recorded here.
+
+**Result (2026-11-15).** Steps 1 to 5 and 7 are done. Step 6 (the rollback drill) is not,
+tracked as `1a4424bf-c604-415a-b8e9-9382f8dbc122`.
+
+- Brineworks pipeline 445 (the merge of brineworks#173) passed and pushed
+  `ghcr.io/technicalpickles/brineworks-server:309b809956e6aeb8e5e2ee7b84bfc0ef4c5c1cef`,
+  private and linked to the repo.
+- Timing, from `woodpecker-cli pipeline ps --format` start and stop times:
+  `publish-server-image` took 37s, because `server-image` had just built the same layers
+  on the same daemon (86s). `test-server` took 437s and the whole pipeline about 9.5
+  minutes. That is under the 10 minute line, so the build stays on Woodpecker. A cold
+  build was not measured: the 86s `server-image` step ran with whatever the `ci` daemon
+  already had cached, so it is not an upper bound. The first build after a Dockerfile
+  or lockfile change is the one to watch.
+- Before the merge, root's credential helper on picklelab pulled the image with the same
+  `docker compose pull` that `compose-pull@` runs (picklelab has compose 5.1.1).
+- picklehome#240 swapped the service. The deploy passed `just brineworks-server-verify`:
+  `/health` reported sha `309b809`, alembic at head, no Gmail errors, and the container
+  runs the pulled image digest.
+- The base compose file lives in `/opt/brineworks/server`, and compose takes the project
+  directory from the first file, so the pull could not find the service's relative
+  `env_file`. `pull-images.sh` takes an optional `PULL_PROJECT_DIR` for that.
+- Dev hosts keep a `build:` in `compose.picklelab.yaml`, tagged `dev-<sha>`, the same
+  call as goplaces-node. That path is untested. It goes away with `ghcr-pr-images`. Then the rest, one service at a time
 (order in the sketch).
 
 ## Rollout order
@@ -422,14 +473,17 @@ tests inside the image about to ship, so CI tests exactly what gets deployed.
 - **GHCR terms.** GitHub's docs say container storage and bandwidth are free "currently",
   with at least a month's notice before that changes. If that changes, option C or
   GitLab.com's registry is the fallback.
-- **Token scope.** Machine user versus the personal account for the push token.
+- **Token scope.** Machine user versus the personal account for the push token. A test
+  PAT is in use. See "Auth" for the plan.
 - **Woodpecker pull policy.** Does it re-pull step images every run?
 - **Renovate.** Can it bump image digests in these compose files? For upstream images
   `docker:pinDigests` should cover it. Our own GHCR images are tagged by commit SHA, so
   the bump comes from the deploy rather than from Renovate.
 - **Builder for pickleclaw and nikke-roster-scanner.** Both are private and have no CI.
   Woodpecker reuses the brineworks pattern. Actions costs minutes but doesn't load the
-  J3455. Decide after the pilot's build timing is in.
+  J3455. The pilot's timing is in (see "Pilot: brineworks-server"), and Woodpecker kept
+  the brineworks image, so Woodpecker is the default for the others too, unless a repo's
+  suite is much heavier than brineworks'.
 - **Storage in the `ci` daemon.** Which graph driver, and how much does the cache
   grow between prunes. Needs someone with `sudo` on picklelab.
 - **Pending evidence.** If damage turns up in a registry-pulled image or in the `ci`

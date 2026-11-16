@@ -15,6 +15,9 @@ WorkingDirectory=/opt/homelab/homelab/services/openclaw
 # "required variable OPENCLAW_IMAGE is missing a value". Hit live 2026-09-02
 # during the 2026.8.1 upgrade deploy -- see docs/setup-notes.md in pickleclaw.
 EnvironmentFile=/opt/homelab/homelab/services/openclaw/openclaw.image.env
+# IMAGE_SHA (which published goplaces-node image to run), written by deploy.sh.
+# Separate from openclaw.image.env, which pins the gateway image and comes from pickleclaw.
+EnvironmentFile=/opt/homelab/homelab/services/openclaw/.env.image
 # openclaw draws secrets from both the picklehome and Brent Pickleclaw 1Password
 # vaults (see .env.template / deploy.sh's "Writing filtered op-run templates"
 # step), and op run only authenticates against one service-account token at a

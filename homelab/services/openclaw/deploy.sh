@@ -309,6 +309,39 @@ cd "$SERVICE_DIR"
 # up near its first use above -- see the note there for why it has to happen
 # before the workspace-git-auth block, not here.
 
+# goplaces-node's image: prod runs what CI published for this commit, a dev host
+# (unmerged branches, nothing published) builds it locally under a dev-<sha> tag.
+# .env.image is what openclaw.service and run-doctor-cli.sh load for compose's
+# ${IMAGE_SHA:?required}.
+if [ "$HOMELAB_HOST_KIND" = dev ]; then
+    IMAGE_SHA="dev-$(git rev-parse --short HEAD)"
+else
+    echo "==> Waiting for the published goplaces-node image"
+    # CI pushes the image tagged with the commit SHA after the tests pass, so a deploy
+    # can start before it exists. The package is public, so the deploy user can poll.
+    IMAGE_SHA=$(git rev-parse HEAD)
+    GOPLACES_REF="ghcr.io/technicalpickles/picklehome-openclaw-goplaces-node:$IMAGE_SHA"
+    for i in $(seq 1 40); do
+        if docker manifest inspect "$GOPLACES_REF" >/dev/null 2>&1; then
+            echo "    goplaces-node has ${IMAGE_SHA:0:7}"
+            break
+        fi
+        if [ "$i" -eq 40 ]; then
+            echo "ERROR: $GOPLACES_REF not found after 40 attempts (~10 min). CI may still be building, or failed: check the publish-images run for ${IMAGE_SHA:0:7}." >&2
+            exit 1
+        fi
+        echo "    Waiting for goplaces-node:${IMAGE_SHA:0:7} (attempt $i/40)..."
+        sleep 15
+    done
+fi
+# OPENCLAW_IMAGE and SEARCH_SHIM_IMAGE are repeated here because compose-pull@ below runs
+# as root with only this file loaded, and compose needs both to resolve the image refs.
+{
+    echo "IMAGE_SHA=$IMAGE_SHA"
+    echo "OPENCLAW_IMAGE=$OPENCLAW_IMAGE"
+    echo "SEARCH_SHIM_IMAGE=$SEARCH_SHIM_IMAGE"
+} > "$SERVICE_DIR/.env.image"
+
 echo "==> Pulling image"
 # compose.yaml's environment: entries use ${VAR:?required} for every service in
 # the file (openclaw, goplaces-node, gog-mcp) -- compose refuses to even parse
@@ -328,15 +361,20 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
     env_overrides+=("${line}=build-placeholder")
 done < "$SERVICE_DIR/.env.vars"
+env_overrides+=("IMAGE_SHA=$IMAGE_SHA")
 
-env "${env_overrides[@]}" $COMPOSE pull
-
-# goplaces-node is the only service in this stack built from source rather than
-# pulled -- 'pull' above skips build-only services, and 'up -d' won't rebuild an
-# existing image on its own even if the Dockerfile changed, so it needs this
-# explicit rebuild step to pick up Dockerfile/entrypoint edits.
-echo "==> Building goplaces-node"
-env "${env_overrides[@]}" $COMPOSE build goplaces-node
+if [ "$HOMELAB_HOST_KIND" = dev ]; then
+    env "${env_overrides[@]}" $COMPOSE pull --ignore-buildable
+    echo "==> Building goplaces-node (dev host, no published image for this branch)"
+    env "${env_overrides[@]}" $COMPOSE build goplaces-node
+else
+    # search-shim's package is private, so the pull runs as root (credential helper, see
+    # setup-ghcr-pull-auth.sh). compose-pull@ pulls every image in the stack, public ones
+    # included, and runs before the restart so the old container stays up.
+    sudo ln -sf "$REPO_DIR/homelab/config/compose-pull@.service" /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl start compose-pull@openclaw.service
+fi
 
 if [ -d "$PICKLECLAW_DIR/nodes/gog-mcp" ]; then
     echo "==> Building gog-mcp"
@@ -635,6 +673,18 @@ fi
 # (a non-empty or missing row would run gpt-oss:20b every 30m and DM tool errors).
 # device-pair publicUrl: the gateway is reached through `tailscale serve`, so `/pair`
 # must advertise the tailnet URL. allowLegacyAuth false: nothing is paired through it.
+# searxng search plugin (pickleclaw ADR 0006). The install has to land before the restart
+# below: a search plugin installed after the gateway started is invisible until the next
+# restart (pickleclaw docs/gotchas/web-search-disabled-after-installing-a-search-plugin-until-gateway-restart.md).
+# Pinned to the gateway's own version, which is what the dev VM runs. The list check keeps
+# a redeploy from reinstalling it. tools.web.search.provider itself comes from
+# openclaw.tools.json5 (pickleclaw), so flipping it there is the cutover.
+if $RUN_CLI plugins list 2>/dev/null | grep -q '@openclaw/searxng-plugin'; then
+    echo "==> searxng plugin already installed"
+else
+    echo "==> Installing the searxng plugin"
+    $RUN_CLI plugins install "@openclaw/searxng-plugin@${OPENCLAW_IMAGE##*:}"
+fi
 $RUN_CLI config set --batch-json '[
     {"path":"secrets.providers.team-store","value":{"source":"store"}},
     {"path":"gateway.bind","value":"lan"},
@@ -647,6 +697,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"channels.telegram.execApprovals.enabled","value":true},
     {"path":"plugins.load.paths","value":["/opt/openclaw-plugins/brineworks-approval"]},
     {"path":"plugins.entries.brineworks-approval.enabled","value":true},
+    {"path":"plugins.entries.searxng.config.webSearch.baseUrl","value":"http://search-shim:8080"},
     {"path":"plugins.entries.device-pair.config.publicUrl","value":"wss://'"${OPENCLAW_HOST:?required}"'"},
     {"path":"browser.extensionRelay.allowLegacyAuth","value":false},
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},

@@ -4,11 +4,15 @@ services:
       - /srv/data/brineworks-server/db:/var/lib/postgresql/data
 
   server:
+    # Prod runs the image CI publishes from brineworks (private package, pulled as root
+    # by compose-pull@). Dev hosts run unmerged brineworks branches that have no
+    # published image, so deploy.sh builds from `build:` and tags it dev-<sha>
+    # (HOMELAB_HOST_KIND). deploy.sh writes IMAGE_SHA to .env.image and the unit loads it.
+    image: ghcr.io/technicalpickles/brineworks-server:${IMAGE_SHA:?required}
     build:
       # Repo root, not server/: server/Dockerfile's COPY paths (pyproject.toml,
       # brineworks_cli/, server/web/...) assume a repo-root context since #27
-      # pulled brineworks_cli into the server image. Never caught before now
-      # because prod hasn't successfully rebuilt since #27 landed.
+      # pulled brineworks_cli into the server image.
       context: /opt/brineworks
       dockerfile: server/Dockerfile
       args:

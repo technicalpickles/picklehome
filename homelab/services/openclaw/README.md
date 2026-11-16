@@ -60,6 +60,16 @@ The workspace (`github.com/technicalpickles/openclaw-workspace` — `AGENTS.md`,
    ```
    Until the ref exists it's skipped silently and `deploy.sh` degrades to an empty workspace with a warning. Delete the local keypair once it's in 1Password and on GitHub.
 
+### Search shim
+
+The `search-shim` service is the SearXNG-shaped backend for the gateway's `searxng` web search provider (pickleclaw ADR 0006, `docs/reference/search-shim.md`). Prod pulls the image pickleclaw's Woodpecker CI publishes as `ghcr.io/technicalpickles/pickleclaw-search-shim:<pickleclaw commit sha>`. The package is private, so on prod `deploy.sh` pulls through `compose-pull@openclaw` (root, with the host pull token) instead of a direct `docker compose pull` as the deploy user.
+
+`SEARCH_SHIM_IMAGE` (full ref with tag) is pinned in pickleclaw's `openclaw-config/openclaw.env` beside `OPENCLAW_IMAGE`, and loads the same way. Compose refuses to parse without it, so merge this only after pickleclaw's `main` has it. To roll the shim forward, bump that pin and deploy.
+
+`deploy.sh` installs `@openclaw/searxng-plugin` at the gateway's version before the restart (a plugin installed after the gateway started stays invisible until a restart) and sets the plugin's `baseUrl` to `http://search-shim:8080`. The shim reads `OLLAMA_API_KEY` from the environment. Brave is not wired, so Ollama is the only backend until a Brave key reaches the service.
+
+Switching the gateway over is a separate step: set `tools.web.search.provider` to `searxng` in pickleclaw's `openclaw-config/tools.json5`. Rollback is that value back to `gemini` and a redeploy.
+
 ### Pickleclaw deploy key (one-time)
 
 `gog-mcp`'s source (`nodes/gog-mcp/` in the private `pickleclaw` repo) isn't open source like `goplaces-node`, so it can't be baked into this public repo's Dockerfile — instead `deploy.sh` clones/pulls `pickleclaw@main` directly on picklelab, host-side, using a scoped **read-only** deploy key.
