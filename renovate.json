@@ -30,7 +30,7 @@
       "enabled": false
     },
     {
-      "description": "The openclaw npm version is pinned in the goplaces-node Dockerfile and the compose build arg. Bump both in one PR so they stay in sync.",
+      "description": "The openclaw npm version is pinned in the goplaces-node Dockerfile only (compose has no build arg). Keep it in step with the OPENCLAW_IMAGE tag in pickleclaw.",
       "matchDepNames": [
         "openclaw"
       ],

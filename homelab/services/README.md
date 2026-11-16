@@ -254,7 +254,7 @@ Weekly docker prune (both roots) + a passwordless `disk-report` diagnostic. Keep
 | **Backup** | N/A |
 | **Restart** | N/A (runs on timer) |
 
-Prunes dangling images + build cache on the main dockerd and the rootless `ci` dockerd. Ships a root-owned `disk-report` at `/usr/local/sbin`, passwordless-sudo-able via a pinned `/etc/sudoers.d/docker-prune`.
+Prunes dangling images (not build cache) on the main dockerd and the rootless `ci` dockerd. Ships a root-owned `disk-report` at `/usr/local/sbin`, passwordless-sudo-able via a pinned `/etc/sudoers.d/docker-prune`.
 
 Commands: `just deploy-disk-hygiene`, `just docker-prune-now`, `just docker-prune-status`, `just docker-prune-logs`, `just disk-report`
 
