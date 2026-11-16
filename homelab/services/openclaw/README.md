@@ -62,7 +62,7 @@ The workspace (`github.com/technicalpickles/openclaw-workspace` — `AGENTS.md`,
 
 ### Search shim
 
-The `search-shim` service is the SearXNG-shaped backend for the gateway's `searxng` web search provider (pickleclaw ADR 0006, `docs/reference/search-shim.md`). Prod pulls the image pickleclaw's Woodpecker CI publishes as `ghcr.io/technicalpickles/pickleclaw-search-shim:<pickleclaw commit sha>`. The package is private, so the host pull token covers the pull.
+The `search-shim` service is the SearXNG-shaped backend for the gateway's `searxng` web search provider (pickleclaw ADR 0006, `docs/reference/search-shim.md`). Prod pulls the image pickleclaw's Woodpecker CI publishes as `ghcr.io/technicalpickles/pickleclaw-search-shim:<pickleclaw commit sha>`. The package is private, so on prod `deploy.sh` pulls through `compose-pull@openclaw` (root, with the host pull token) instead of a direct `docker compose pull` as the deploy user.
 
 `SEARCH_SHIM_IMAGE` (full ref with tag) is pinned in pickleclaw's `openclaw-config/openclaw.env` beside `OPENCLAW_IMAGE`, and loads the same way. Compose refuses to parse without it, so merge this only after pickleclaw's `main` has it. To roll the shim forward, bump that pin and deploy.
 
