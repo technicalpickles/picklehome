@@ -662,6 +662,18 @@ fi
 # (a non-empty or missing row would run gpt-oss:20b every 30m and DM tool errors).
 # device-pair publicUrl: the gateway is reached through `tailscale serve`, so `/pair`
 # must advertise the tailnet URL. allowLegacyAuth false: nothing is paired through it.
+# searxng search plugin (pickleclaw ADR 0006). The install has to land before the restart
+# below: a search plugin installed after the gateway started is invisible until the next
+# restart (pickleclaw docs/gotchas/web-search-disabled-after-installing-a-search-plugin-until-gateway-restart.md).
+# Pinned to the gateway's own version, which is what the dev VM runs. The list check keeps
+# a redeploy from reinstalling it. tools.web.search.provider itself comes from
+# openclaw.tools.json5 (pickleclaw), so flipping it there is the cutover.
+if $RUN_CLI plugins list 2>/dev/null | grep -q '@openclaw/searxng-plugin'; then
+    echo "==> searxng plugin already installed"
+else
+    echo "==> Installing the searxng plugin"
+    $RUN_CLI plugins install "@openclaw/searxng-plugin@${OPENCLAW_IMAGE##*:}"
+fi
 $RUN_CLI config set --batch-json '[
     {"path":"secrets.providers.team-store","value":{"source":"store"}},
     {"path":"gateway.bind","value":"lan"},
@@ -674,6 +686,7 @@ $RUN_CLI config set --batch-json '[
     {"path":"channels.telegram.execApprovals.enabled","value":true},
     {"path":"plugins.load.paths","value":["/opt/openclaw-plugins/brineworks-approval"]},
     {"path":"plugins.entries.brineworks-approval.enabled","value":true},
+    {"path":"plugins.entries.searxng.config.webSearch.baseUrl","value":"http://search-shim:8080"},
     {"path":"plugins.entries.device-pair.config.publicUrl","value":"wss://'"${OPENCLAW_HOST:?required}"'"},
     {"path":"browser.extensionRelay.allowLegacyAuth","value":false},
     {"path":"commands.ownerAllowFrom","value":'"$ALLOW_FROM_JSON"'},
