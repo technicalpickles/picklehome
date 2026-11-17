@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: discover <wrappers-dir>
 # Writes one tiny wrapper per check into <wrappers-dir>, replacing the directory.
-# Env: HOST_STATE_UNIT_DIR, HOST_STATE_LINK_PREFIX, HOST_STATE_SITES.
+# Env: HOST_STATE_UNIT_DIR, HOST_STATE_LINK_PREFIX, HOST_STATE_SITES, HOST_STATE_OPENCLAW_RO.
 set -euo pipefail
 
 dest=${1:?usage: discover <wrappers-dir>}
@@ -9,6 +9,7 @@ service_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 unit_dir=${HOST_STATE_UNIT_DIR:-/etc/systemd/system}
 prefix=${HOST_STATE_LINK_PREFIX:-/opt/homelab/}
 sites=${HOST_STATE_SITES:-$service_dir/sites.conf}
+openclaw_ro=${HOST_STATE_OPENCLAW_RO:-/opt/pickleclaw/scripts/openclaw-ro/openclaw-ro}
 
 new="$dest.new.$$"
 old="$dest.old.$$"
@@ -81,6 +82,9 @@ while read -r name url _ || [[ -n $name ]]; do
 done <"$sites"
 
 wrapper runtime docker "$service_dir/runtime-check"
+# Lives in pickleclaw (kept current at /opt/pickleclaw by deploy-openclaw). A missing or
+# older copy prints nothing on stdout, which collect reports as UNKNOWN.
+wrapper openclaw session-overrides "$openclaw_ro" session-overrides
 
 if [[ -e $dest ]]; then mv "$dest" "$old"; fi
 mv "$new" "$dest"

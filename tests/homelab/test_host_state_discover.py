@@ -57,8 +57,11 @@ def test_discovers(world):
     r = _discover(world)
     assert r.returncode == 0 and r.stdout == ""
     listing = _listing(world)
-    assert sorted(listing) == ["runtime-docker", "site-alpha", "site-beta", "timer-backup", "unit-openclaw"]
+    assert sorted(listing) == ["openclaw-session-overrides", "runtime-docker", "site-alpha", "site-beta",
+                               "timer-backup", "unit-openclaw"]
     assert f"exec {DIR}/runtime-check" in listing["runtime-docker"]
+    assert ("exec /opt/pickleclaw/scripts/openclaw-ro/openclaw-ro session-overrides"
+            in listing["openclaw-session-overrides"])
     assert f"exec {DIR}/timer-check backup.timer" in listing["timer-backup"]
     assert f"exec {DIR}/unit-check openclaw.service" in listing["unit-openclaw"]
     assert f"exec {DIR}/site-check https://alpha.example/health" in listing["site-alpha"]
@@ -117,8 +120,10 @@ printf 'Unit=backup.service\\n'
 printf 'MainPID=1\\nActiveEnterTimestampMonotonic=1\\n'
 """)
     _stub(bindir / "curl", "printf 200\n")
+    _stub(bindir / "openclaw-ro", 'echo "OPENCLAW session-overrides OK - stub $*"\n')
     checks = world["tmp"] / "checks"
-    assert _discover(world, PATH=f"{bindir}:{os.environ['PATH']}").returncode == 0
+    assert _discover(world, PATH=f"{bindir}:{os.environ['PATH']}",
+                     HOST_STATE_OPENCLAW_RO=str(bindir / "openclaw-ro")).returncode == 0
     world["wrappers"].rename(checks)
     out = world["tmp"] / "out" / "picklelab.json"
     env = {
@@ -134,8 +139,10 @@ printf 'MainPID=1\\nActiveEnterTimestampMonotonic=1\\n'
     assert report["host"] == "picklelab"
     assert report["interval_seconds"] == 300
     assert [c["name"] for c in report["checks"]] == sorted(p.name for p in checks.iterdir())
-    assert len(report["checks"]) == 5
+    assert len(report["checks"]) == 6
     assert all(c["status"] == 0 for c in report["checks"]), report
+    overrides = next(c for c in report["checks"] if c["name"] == "openclaw-session-overrides")
+    assert overrides["output"] == "OPENCLAW session-overrides OK - stub session-overrides"
 
 
 def test_collect_is_a_copy():
@@ -228,3 +235,32 @@ def test_dangling_service_link_kept(world):
     r = _discover(world)
     assert r.returncode == 0 and "gone" not in r.stderr
     assert "unit-gone" in _listing(world)
+
+
+def _collect_one(world, wrapper_name):
+    checks = world["tmp"] / "only"
+    checks.mkdir()
+    (world["wrappers"] / wrapper_name).rename(checks / wrapper_name)
+    out = world["tmp"] / "out.json"
+    env = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/"),
+           "HOST_STATE_OUT": str(out), "HOST_STATE_CHECK_DIR": str(checks)}
+    r = subprocess.run(["bash", str(DIR / "collect"), str(DIR / "picklelab.conf")],
+                       env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(out.read_text())["checks"][0]
+
+
+def test_session_overrides_warning_reaches_the_report(world):
+    stub = world["tmp"] / "openclaw-ro"
+    _stub(stub, 'echo "OPENCLAW session-overrides WARNING - 1 off defaults"; exit 1\n')
+    assert _discover(world, HOST_STATE_OPENCLAW_RO=str(stub)).returncode == 0
+    check = _collect_one(world, "openclaw-session-overrides")
+    assert check["status"] == 1
+    assert check["output"].startswith("OPENCLAW session-overrides WARNING")
+
+
+def test_session_overrides_missing_openclaw_ro_is_unknown(world):
+    missing = world["tmp"] / "no-such" / "openclaw-ro"
+    assert _discover(world, HOST_STATE_OPENCLAW_RO=str(missing)).returncode == 0
+    assert _collect_one(world, "openclaw-session-overrides")["status"] == 3
+
