@@ -624,6 +624,10 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # 272k-token prompt to a 262k window, and the overflow-recovery compaction then failed on
 # the same oversized prompt. compaction.model: summaries run on glm-5.3's 1M window even
 # when a session sits on a smaller model; it is in the models map below, so it resolves.
+# The trade: with compaction.model set, compaction makes one attempt on that model and
+# skips the fallback chain (vendor/openclaw src/agents/embedded-agent-runner/compact.ts),
+# so if glm-5.3 is down, compaction fails instead of trying glm-5.1. Sessions with
+# modelSelectionLocked ignore compaction.model and compact on their own model.
 # Both hot-reload. Verified on the dev gateway 2026-11-17; see pickleclaw
 # docs/reference/dev-vs-prod-config.md, "Compaction guards".
 #
