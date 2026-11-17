@@ -95,13 +95,14 @@ services:
   # openclaw-config/openclaw.env next to OPENCLAW_IMAGE and loaded the same way
   # (deploy.sh, openclaw.service, run-doctor-cli.sh). The gateway reaches it at
   # http://search-shim:8080 (deploy.sh sets the plugin's baseUrl).
-  # It reads OLLAMA_API_KEY from the environment and falls back to Brave only when
-  # BRAVE_API_KEY is also set; nothing wires that yet, so Ollama is the only backend.
+  # It reads OLLAMA_API_KEY and BRAVE_API_KEY from the environment: Ollama answers
+  # first, Brave takes over when Ollama fails (SEARCH_SHIM_BACKENDS order).
   search-shim:
     image: ${SEARCH_SHIM_IMAGE:?pin a ref, e.g. ghcr.io/technicalpickles/pickleclaw-search-shim:<pickleclaw sha>}
     restart: unless-stopped
     environment:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:?required}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:?required}
 
   gog-mcp:
     build:
