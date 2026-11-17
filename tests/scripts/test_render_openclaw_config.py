@@ -31,3 +31,16 @@ def test_device_pair_advertises_the_tailnet_url():
 
 def test_legacy_extension_relay_auth_is_off():
     assert _render()["browser.extensionRelay.allowLegacyAuth"] is False
+
+
+def test_compaction_guards_mid_turn_and_summarizes_on_the_big_window():
+    cfg = _render()
+    assert cfg["agents.defaults.compaction.midTurnPrecheck.enabled"] is True
+    assert cfg["agents.defaults.compaction.model"] == "ollama-cloud/glm-5.3"
+
+
+def test_compaction_model_is_registered():
+    # An unregistered model ref silently falls through to the provider default.
+    cfg = _render()
+    assert cfg["agents.defaults.compaction.model"] in cfg["agents.defaults.models"]
+

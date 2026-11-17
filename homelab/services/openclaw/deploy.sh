@@ -617,6 +617,16 @@ ALLOW_FROM_JSON=$(echo "${OPENCLAW_ALLOWED_CHAT_IDS:?required}" | tr ',' '\n' | 
 # Hot-reloadable, confirmed against vendor/openclaw's
 # src/gateway/config-reload.test.ts (restartGateway: false, restartHeartbeat:
 # false) -- no restart needed, unlike thinkingDefault above.
+# agents.defaults.compaction.midTurnPrecheck.enabled: OpenClaw's default is false. After
+# tool results are appended and before the next model call, it estimates the prompt
+# against the window and, when it won't fit, stops the call so the run truncates tool
+# results or compacts first. Without it, a kimi-k2.7-code tool loop on 2026-10-18 sent a
+# 272k-token prompt to a 262k window, and the overflow-recovery compaction then failed on
+# the same oversized prompt. compaction.model: summaries run on glm-5.3's 1M window even
+# when a session sits on a smaller model; it is in the models map below, so it resolves.
+# Both hot-reload. Verified on the dev gateway 2026-11-17; see pickleclaw
+# docs/reference/dev-vs-prod-config.md, "Compaction guards".
+#
 # tools.exec uses "mode" (not "security"/"ask") as of the 2026.8.1 upgrade
 # (2026-09-02) -- the old shape triggers "tools.exec.mode cannot be combined
 # with tools.exec.security or tools.exec.ask" once doctor has migrated the
@@ -716,6 +726,8 @@ $RUN_CLI config set --batch-json '[
     {"path":"agents.defaults.bootstrapMaxChars","value":25000},
     {"path":"agents.defaults.userTimezone","value":"America/New_York"},
     {"path":"agents.defaults.modelPolicy.allow","value":["ollama-cloud/*"]},
+    {"path":"agents.defaults.compaction.midTurnPrecheck.enabled","value":true},
+    {"path":"agents.defaults.compaction.model","value":"ollama-cloud/glm-5.3"},
     {"path":"memory.search","value":{
         "provider":"openai-compatible",
         "model":"qwen/qwen3-embedding-8b",
