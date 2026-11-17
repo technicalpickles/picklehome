@@ -39,11 +39,32 @@ fi
 NIKKE_SHA=$(git -C "$NIKKE_REPO" rev-parse --short HEAD)
 echo "    nikke-roster-scanner at $NIKKE_SHA"
 
-echo "==> Writing build metadata"
+echo "==> Writing container env"
+# .env.build is the container's env_file. The units also load it so compose's strict
+# ${NIKKE_PORT:?...} interpolation succeeds when systemd starts them with an empty env.
 {
     echo "NIKKE_GIT_SHA=$NIKKE_SHA"
     echo "NIKKE_PORT=$NIKKE_PORT"
 } > "$SERVICE_DIR/.env.build"
+
+echo "==> Getting the nikke image"
+# .env.image is what the units and compose-pull@ load. COMPOSE_FILE and the port are here
+# because compose-pull@ runs in this directory with no -f flags, and compose refuses to
+# parse the files without the port. PULL_PROJECT_DIR keeps compose's project directory
+# here, not in /opt/nikke-roster-scanner where the first file lives.
+IMAGE_SHA=$(git -C "$NIKKE_REPO" rev-parse HEAD)
+{
+    echo "IMAGE_SHA=$IMAGE_SHA"
+    echo "COMPOSE_FILE=$NIKKE_REPO/compose.yaml:$SERVICE_DIR/compose.picklelab.yaml"
+    echo "NIKKE_PORT=$NIKKE_PORT"
+    echo "PULL_PROJECT_DIR=$SERVICE_DIR"
+} > "$SERVICE_DIR/.env.image"
+# The package is private, so the pull runs as root (credential helper, see
+# setup-ghcr-pull-auth.sh). compose-pull@ retries until CI has pushed this commit's
+# image, and runs before the restart so the old container stays up.
+sudo ln -sf "$REPO_DIR/homelab/config/compose-pull@.service" /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start compose-pull@nikke.service
 
 echo "==> Creating data directory"
 # roster.db and .blablalink-session.json live here. Chown before compose up so
@@ -85,7 +106,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     if [ "$i" -eq 10 ]; then
         echo "    WARNING: local check failed after 10 attempts"
         echo "    Check container logs:"
-        echo "      cd $SERVICE_DIR && docker compose --project-directory $SERVICE_DIR --env-file .env.build -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml logs"
+        echo "      cd $SERVICE_DIR && docker compose --project-directory $SERVICE_DIR --env-file .env.build --env-file .env.image -f /opt/nikke-roster-scanner/compose.yaml -f compose.picklelab.yaml logs"
         exit 1
     fi
     echo "    Waiting for serve to start (attempt $i/10)..."

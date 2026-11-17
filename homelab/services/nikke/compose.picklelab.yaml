@@ -1,11 +1,9 @@
 services:
   serve:
-    build:
-      # deploy.sh clones/fast-forwards this checkout before the build runs.
-      context: /opt/nikke-roster-scanner
-      dockerfile: Dockerfile
-      args:
-        GIT_SHA: ${NIKKE_GIT_SHA:-unknown}
+    # The image nikke-roster-scanner's Woodpecker pipeline publishes for each main commit
+    # (private package, pulled as root by compose-pull@nikke). deploy.sh writes IMAGE_SHA
+    # to .env.image and the units load it. Nothing builds on the host.
+    image: ghcr.io/technicalpickles/nikke:${IMAGE_SHA:?required}
     env_file:
       - .env.build
     ports:
@@ -15,6 +13,9 @@ services:
       - /srv/data/nikke:/data
 
   sync:
+    # Same image as serve. The base compose file's `pull_policy: never` stays: serve's pull
+    # has already put the image on disk, so a timer run never needs the registry.
+    image: ghcr.io/technicalpickles/nikke:${IMAGE_SHA:?required}
     env_file:
       - .env.build
     volumes:

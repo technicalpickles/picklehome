@@ -71,7 +71,7 @@ main daemon only pull.** That means two builders:
 | open-webui | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
 | open-terminal | picklehome (public) | GitHub Actions | Already built by `scripts/check-images` |
 | openclaw-gog-mcp | pickleclaw (private) | Not decided | The repo has no CI today |
-| nikke | nikke-roster-scanner (private) | Not decided | The repo has no CI today |
+| nikke | nikke-roster-scanner (private) | Woodpecker, `ci` daemon | Publishing since 2026-11-16 (`publish-image` step, pipeline about 13 min cold). Deploy pulls it |
 
 ### Why Woodpecker works without a new plugin
 
@@ -479,8 +479,8 @@ tests inside the image about to ship, so CI tests exactly what gets deployed.
 - **Renovate.** Can it bump image digests in these compose files? For upstream images
   `docker:pinDigests` should cover it. Our own GHCR images are tagged by commit SHA, so
   the bump comes from the deploy rather than from Renovate.
-- **Builder for pickleclaw and nikke-roster-scanner.** Both are private and have no CI.
-  Woodpecker reuses the brineworks pattern. Actions costs minutes but doesn't load the
+- **Builder for pickleclaw and nikke-roster-scanner (decided 2026-11-16: Woodpecker).**
+  Both were private with no CI. Woodpecker reuses the brineworks pattern. Actions costs minutes but doesn't load the
   J3455. The pilot's timing is in (see "Pilot: brineworks-server"), and Woodpecker kept
   the brineworks image, so Woodpecker is the default for the others too, unless a repo's
   suite is much heavier than brineworks'.

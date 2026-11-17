@@ -421,7 +421,7 @@ Roster dashboard for NIKKE, backed by a SQLite store synced from blablalink.com 
 | **Env vars** | None (no secrets; no `.env.vars` file or op-run template needed) |
 | **Backup** | Yes, nightly (`/srv/data/nikke` picked up by the `/srv/data` restic job, no per-service registration) |
 | **Restart** | `serve`: `restart: unless-stopped`; `sync`: `run --rm` from `nikke-sync.timer` (every 6h) |
-| **Source** | `technicalpickles/nikke-roster-scanner` (private repo), cloned to `/opt/nikke-roster-scanner` on host |
+| **Source** | `technicalpickles/nikke-roster-scanner` (private repo), cloned to `/opt/nikke-roster-scanner` on host (for its `compose.yaml` and commit sha); the image is published to `ghcr.io/technicalpickles/nikke` by its Woodpecker pipeline and pulled as root |
 
 Commands: `just deploy-nikke`, `just nikke-logs`, `just nikke-logs-follow`, `just nikke-sync-now`, `just nikke-login`
 
