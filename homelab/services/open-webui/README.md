@@ -166,6 +166,13 @@ Things that bit or could bite:
   The valve alone is not enough: the slash-prompt ledger and lock ignore it and read
   the `OPENCLAW_BRIDGE_STATE_DIR` env var, which `compose.picklelab.yaml` sets to the
   same path. Without it they land in `/tmp` and the ledger is lost on recreate.
+- **Read-only for gated brineworks writes.** `triage_apply`, `email_rules_add`,
+  `email_rules_update` and `email_sender_classes_add` need an approval card, and the
+  pipe has no approval route, so they fail here with "Plugin approval unavailable (no
+  approval route)" (three `triage_apply` failures on 2026-10-31). Decided 2026-11-17:
+  approve those from Telegram for now. The brineworks-triage skill tells Brent not to
+  call them from an Open WebUI chat. Details in pickleclaw's
+  `docs/reference/mcp-servers.md` (approval gate section).
 - **Sessions are shared with Telegram**: session visibility is `agent`, so an Open
   WebUI chat can read and send into the Telegram session and the reverse.
 - `SYNC_SLASH_COMMANDS` is on: the gateway's slash commands and skills show up in
