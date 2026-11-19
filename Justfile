@@ -514,7 +514,16 @@ deploy-openclaw host="picklelab":
     ssh {{host}} "chmod -R go-w $PLUGIN_DIR/brineworks-approval"
     echo "==> Copying workspace-git-sync.sh (private pickleclaw repo, gitignored here) to {{host}}"
     scp homelab/services/openclaw/workspace-git-sync.sh {{host}}:/opt/homelab/homelab/services/openclaw/workspace-git-sync.sh
-    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 HOMELAB_DEPLOY_EVEN_IF_BUSY=${HOMELAB_DEPLOY_EVEN_IF_BUSY:-} homelab/services/openclaw/deploy.sh"
+    # Stamp each `==>` step header with elapsed seconds so a slow deploy shows where the
+    # time went. Done here, not in deploy.sh, so no output is lost to a buffered process
+    # substitution when ssh exits; pipefail keeps ssh's exit status.
+    ssh {{host}} "cd /opt/homelab && HOMELAB_DEPLOY_LOCK_HELD=1 HOMELAB_DEPLOY_EVEN_IF_BUSY=${HOMELAB_DEPLOY_EVEN_IF_BUSY:-} homelab/services/openclaw/deploy.sh" 2>&1 \
+        | while IFS= read -r line; do
+            case "$line" in
+                "==> "*) printf '%s [+%ss]\n' "$line" "$SECONDS" ;;
+                *) printf '%s\n' "$line" ;;
+            esac
+        done
 
 # Status doubles as a self-test: systemd, loopback health, tailscale routing, security audit
 openclaw-status host="picklelab":
