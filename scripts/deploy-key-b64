@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# scripts/deploy-key-b64: turn a 1Password SSH Key item into the one-line base64
+# that deploy.sh expects, and put it on the clipboard.
+#
+# Usage:
+#   scripts/deploy-key-b64 new  <item-title> [--vault picklehome]   # make the key pair in 1Password, show the public half
+#   scripts/deploy-key-b64 copy <item-title> [--vault picklehome]   # private key -> base64 (one line) -> clipboard
+#
+# Flow (docs/runbooks/rotate-github.md, "Deploy keys"):
+#   1. `new`: 1Password generates the ed25519 pair; the private half never touches disk.
+#      Paste the printed public key into the repo's Settings > Deploy keys
+#      (read-only for pickleclaw, write for openclaw-workspace).
+#   2. `copy`: paste the clipboard into the `*_deploy_key_b64` field in the 1Password app.
+#   3. just openclaw-quiet && just deploy-openclaw, then delete the old deploy key on GitHub.
+#
+# Needs the sandbox off and you at the laptop to approve the 1Password prompt.
+# The clipboard is cleared after CLEAR_AFTER seconds (default 60) if it still holds the key.
+
+set -euo pipefail
+
+CLEAR_AFTER="${CLEAR_AFTER:-60}"
+VAULT="picklehome"
+
+usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
+
+[[ $# -ge 2 ]] || usage
+CMD="$1"; ITEM="$2"; shift 2
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --vault) VAULT="${2:?--vault needs a value}"; shift 2 ;;
+        -h|--help) usage 0 ;;
+        *) echo "unknown argument: $1" >&2; usage ;;
+    esac
+done
+
+case "$CMD" in
+new)
+    if op item get "$ITEM" --vault "$VAULT" >/dev/null 2>&1; then
+        echo "ERROR: '$ITEM' already exists in vault '$VAULT'. Pick a new title (e.g. include the date)." >&2
+        exit 1
+    fi
+    op item create --category ssh --title "$ITEM" --vault "$VAULT" \
+        --ssh-generate-key ed25519 >/dev/null
+    echo "Created '$ITEM' in $VAULT. Public key (add to GitHub as a deploy key):"
+    echo
+    op read "op://$VAULT/$ITEM/public key"
+    echo
+    echo "Next: scripts/deploy-key-b64 copy \"$ITEM\" --vault $VAULT"
+    ;;
+copy)
+    # base64 -i - on macOS writes a single line by default; tr guards against GNU wrapping.
+    B64=$(op read "op://$VAULT/$ITEM/private key?ssh-format=openssh" | base64 | tr -d '\n')
+    [[ -n "$B64" ]] || { echo "ERROR: empty key from 1Password" >&2; exit 1; }
+    printf '%s' "$B64" | pbcopy
+    echo "Copied ${#B64} chars to the clipboard (one line). Paste into the *_deploy_key_b64 field."
+    echo "Clipboard clears in ${CLEAR_AFTER}s."
+    (
+        sleep "$CLEAR_AFTER"
+        [[ "$(pbpaste)" == "$B64" ]] && printf '' | pbcopy
+    ) >/dev/null 2>&1 &
+    disown
+    ;;
+*) usage ;;
+esac
