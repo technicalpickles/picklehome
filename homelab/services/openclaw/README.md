@@ -70,9 +70,17 @@ The `search-shim` service is the SearXNG-shaped backend for the gateway's `searx
 
 Switching the gateway over is a separate step: set `tools.web.search.provider` to `searxng` in pickleclaw's `openclaw-config/tools.json5`. Rollback is that value back to `gemini` and a redeploy.
 
+### gog-mcp image
+
+`gog-mcp` (Gmail/Calendar MCP server, source in the private `pickleclaw` repo's `nodes/gog-mcp/`) follows the search-shim pattern. Prod pulls the image pickleclaw's Woodpecker CI publishes as `ghcr.io/technicalpickles/pickleclaw-gog-mcp:<pickleclaw commit sha>` (private package, pulled through `compose-pull@openclaw`), and never builds on the host. `GOG_MCP_IMAGE` (full ref with tag) is pinned in pickleclaw's `openclaw-config/openclaw.env`. Compose and `deploy.sh` refuse to proceed without it, so merge this only after that pin exists on pickleclaw's `main`.
+
+To roll `gog-mcp` forward after a change under `nodes/gog-mcp/`: merge it to pickleclaw `main`, wait for that commit's `publish-gog-mcp-image` step to go green, then bump `GOG_MCP_IMAGE` to that commit's full SHA in `openclaw-config/openclaw.env` (a second pickleclaw commit; the pin can't name its own commit), merge, and `just deploy-openclaw`. Rollback is the pin set back to an earlier SHA.
+
+A dev host (`HOMELAB_HOST_KIND=dev`) has no published image for an unmerged branch, so `deploy.sh` builds `nodes/gog-mcp` from the `/opt/pickleclaw` clone and points `GOG_MCP_IMAGE` at a local `pickleclaw-gog-mcp:dev-<sha>` tag in `.env.image`.
+
 ### Pickleclaw deploy key (one-time)
 
-`gog-mcp`'s source (`nodes/gog-mcp/` in the private `pickleclaw` repo) isn't open source like `goplaces-node`, so it can't be baked into this public repo's Dockerfile — instead `deploy.sh` clones/pulls `pickleclaw@main` directly on picklelab, host-side, using a scoped **read-only** deploy key.
+`deploy.sh` clones/pulls `pickleclaw@main` to `/opt/pickleclaw` on picklelab, host-side, using a scoped **read-only** deploy key. Prod no longer builds `gog-mcp` from it (see "gog-mcp image" above), but `openclaw-ro` runs from that clone and a dev host builds `gog-mcp` there.
 
 1. Generate an ed25519 keypair (no passphrase):
    ```bash
@@ -84,7 +92,7 @@ Switching the gateway over is a separate step: set `tools.web.search.provider` t
    ```
    OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64={{ op://picklehome/OpenClaw Pickleclaw Deploy Key/deploy_key_b64 }}
    ```
-   Until the ref exists it's skipped silently and `deploy.sh` degrades to no-clone with a warning, and the guarded `gog-mcp` build step in `deploy.sh` skips the build rather than failing the deploy. Delete the local keypair once it's in 1Password and on GitHub.
+   Until the ref exists it's skipped silently and `deploy.sh` degrades to no-clone with a warning, and a dev host's guarded `gog-mcp` build step skips the build rather than failing the deploy. Delete the local keypair once it's in 1Password and on GitHub.
 
 ### Google Places API key (one-time, for the goplaces second node)
 
@@ -124,7 +132,7 @@ The plugin is loaded via `plugins.load.paths` (set in `deploy.sh`) from `/opt/op
 
 `deploy.sh` runs from the Mac, where `pickleclaw` is already cloned with your own GitHub access — `git pull` it before deploying, same as any other dependency.
 
-**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5`/`openclaw.env` from your local checkout here (`scripts/pickleclaw-guard` refuses unless it is clean and at `origin/main`, every include is a symlink rather than a copy, and nothing gitignored sits under a path the deploy copies), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself for gog-mcp's build context. If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
+**`pickleclaw` must be on a pushed `main`, not dirty, before `just deploy-openclaw`.** This deploy now pulls from `pickleclaw` in two independent places that have to agree: `just deploy-openclaw` symlinks `tools.json5`/`mcp.json5`/`openclaw.env` from your local checkout here (`scripts/pickleclaw-guard` refuses unless it is clean and at `origin/main`, every include is a symlink rather than a copy, and nothing gitignored sits under a path the deploy copies), while `deploy.sh` separately clones/pulls `pickleclaw@main` on picklelab itself (for `openclaw-ro`; prod's gog-mcp runs the image pinned in `openclaw.env`, not this clone). If your local checkout is on a feature branch or has uncommitted changes when you symlink from it, the config picklelab loads and the gog-mcp source picklelab builds can silently diverge. Push to `main` and make sure the local tree is clean before running the symlink setup or a deploy.
 
 ## First-time Setup
 
@@ -181,10 +189,11 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `OPENCLAW_ALLOWED_CHAT_IDS` | `.env` (1Password) | Comma-separated chat-ID allowlist — the front door |
 | `GOOGLE_PLACES_API_KEY` | `.env` (1Password) | Real key for the isolated `goplaces-node` service only — the `openclaw` service itself gets a hardcoded placeholder, never this value |
 | `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the one-time workspace clone |
-| `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 read-only deploy key; `deploy.sh` decodes it to `ssh/pickleclaw_deploy_key` to clone/pull `pickleclaw@main` (gog-mcp's build context) |
+| `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 read-only deploy key; `deploy.sh` decodes it to `ssh/pickleclaw_deploy_key` to clone/pull `pickleclaw@main` to `/opt/pickleclaw` (openclaw-ro, dev-host gog-mcp build) |
 | `BRINEWORKS_MCP_TOKEN` | `.env` (1Password) | Labelled `openclaw` API key for the brineworks MCP server (1Password item `Brineworks Server`, field `openclaw_mcp_key`); interpolated into `mcp.json5`'s Authorization header for the `brineworks` server |
 | `GOG_MCP_TOKEN` | `.env` (1Password) | Bearer token gog-mcp's HTTP endpoint requires; set on both the `openclaw` service (interpolated into `mcp.json5`'s Authorization header) and the `gog-mcp` service (to check incoming requests) |
 | `GOG_KEYRING_PASSWORD` | `.env` (1Password) | Decryption password for gog-mcp's file keyring (OAuth refresh tokens); set only on the `gog-mcp` service |
+| `GOG_MCP_IMAGE` | `openclaw.image.env` (pickleclaw, symlinked) | Pinned CI-published gog-mcp image ref (`ghcr.io/technicalpickles/pickleclaw-gog-mcp:<sha>`); a dev host overrides it with a local build tag in `.env.image` |
 | `OPENCLAW_IMAGE` | `openclaw.image.env` (pickleclaw, symlinked) | Pinned image ref, e.g. `ghcr.io/openclaw/openclaw:2026.8.1` -- shared source of truth with the dev VM, not this repo's `.env` |
 
 ## Widget sandbox host
