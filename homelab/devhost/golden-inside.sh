@@ -76,7 +76,7 @@ clone_private pickleclaw /opt/pickleclaw
 # placeholders for every name in .env.vars (same trick deploy.sh uses).
 echo "==> Building gog-mcp and goplaces-node"
 cd /opt/homelab/homelab/services/openclaw
-env_overrides=("OPENCLAW_IMAGE=$OPENCLAW_IMAGE" "IMAGE_SHA=golden")
+env_overrides=("OPENCLAW_IMAGE=$OPENCLAW_IMAGE" "IMAGE_SHA=golden" "GOG_MCP_IMAGE=pickleclaw-gog-mcp:golden")
 while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^#|^[[:space:]]*$ ]] && continue
     env_overrides+=("${line}=build-placeholder")

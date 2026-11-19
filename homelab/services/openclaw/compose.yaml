@@ -104,7 +104,14 @@ services:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:?required}
       BRAVE_API_KEY: ${BRAVE_API_KEY:?required}
 
+  # Prod pulls the image pickleclaw CI publishes from nodes/gog-mcp/Dockerfile, tagged
+  # with the pickleclaw commit SHA (private package, pulled as root by compose-pull@).
+  # GOG_MCP_IMAGE is the full ref incl. tag, pinned in pickleclaw's
+  # openclaw-config/openclaw.env next to SEARCH_SHIM_IMAGE. Dev hosts have no published
+  # image for an unmerged pickleclaw branch, so deploy.sh builds from `build:` and
+  # points GOG_MCP_IMAGE at the local tag (HOMELAB_HOST_KIND=dev). Prod never builds.
   gog-mcp:
+    image: ${GOG_MCP_IMAGE:?pin a ref, e.g. ghcr.io/technicalpickles/pickleclaw-gog-mcp:<pickleclaw sha>}
     build:
       context: /opt/pickleclaw/nodes/gog-mcp
     restart: unless-stopped
@@ -138,7 +145,7 @@ services:
       - /srv/data/openclaw/gog-keyring:/root/.local/share/gogcli
       # Also bind-mounted, not left in the container's writable layer: this holds
       # config.json's account_clients map (which email resolves to which gogcli
-      # client). Every deploy rebuilds this container from source (see deploy.sh),
+      # client). Every deploy recreates this container from the pinned image (see deploy.sh),
       # so anything not in a bind mount is wiped on the next deploy -- which is
       # exactly what happened to a hand-edited copy of this file on 2026-08-27,
       # breaking Gmail/Calendar until rediscovered on 2026-09-11. deploy.sh writes

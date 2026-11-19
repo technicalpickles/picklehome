@@ -96,7 +96,7 @@ echo "==> Creating data directories on the volume"
 # gog-keyring: gog-mcp's OAuth token file keyring, bind-mounted into that service --
 #              under $DATA_DIR (not a named volume) so it's covered by backup.sh
 # gog-config:  gog-mcp's account_clients mapping (config.json), written below --
-#              also bind-mounted so it survives the gog-mcp rebuild further down
+#              also bind-mounted so it survives gog-mcp being recreated
 sudo mkdir -p "$DATA_DIR/config" "$DATA_DIR/workspace" "$DATA_DIR/auth" "$DATA_DIR/bin" "$DATA_DIR/ssh" "$DATA_DIR/gog-keyring" "$DATA_DIR/gog-config"
 
 echo "==> Fixing data directory ownership"
@@ -133,7 +133,7 @@ echo "==> Writing gog-mcp's account_clients mapping (idempotent)"
 #
 # This file used to exist only as a hand-edit made directly on a running
 # container (2026-08-27, see docs/setup-notes.md in pickleclaw) and silently
-# disappeared on the next gog-mcp rebuild, since every deploy rebuilds gog-mcp
+# disappeared on the next gog-mcp rebuild, since every deploy then rebuilt gog-mcp
 # from source and nothing preserved the container's writable layer -- broke
 # Gmail/Calendar in production until it was rediscovered on 2026-09-11.
 # Re-written on every deploy so it self-heals from drift, same as the goplaces
@@ -212,8 +212,9 @@ fi
 
 echo "==> Installing the pickleclaw deploy key (if provided)"
 # Read-only SSH deploy key for github.com/technicalpickles/pickleclaw -- used only to
-# clone/pull gog-mcp's source (nodes/gog-mcp/), which lives in that private repo, not
-# this one (unlike goplaces-node, which is open source and checked in here directly).
+# clone/pull the /opt/pickleclaw checkout below. Prod no longer builds gog-mcp from it
+# (CI publishes the image, GOG_MCP_IMAGE pins it), but openclaw-ro runs from that clone
+# and a dev host builds gog-mcp from it.
 # See docs/superpowers/specs/2026-08-26-gog-mcp-picklelab-rollout-design.md in the
 # pickleclaw repo.
 PICKLECLAW_DEPLOY_KEY_FILE="$DATA_DIR/ssh/pickleclaw_deploy_key"
@@ -223,17 +224,16 @@ if [ -n "$PICKLECLAW_KEY_B64" ]; then
     echo "    Wrote $PICKLECLAW_DEPLOY_KEY_FILE (0600)"
 else
     echo "    WARNING: OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 didn't resolve via op run."
-    echo "    Can't clone/update pickleclaw, so gog-mcp won't build. Confirm the"
+    echo "    Can't clone/update pickleclaw (openclaw-ro, dev-host gog-mcp build). Confirm the"
     echo "    1Password item/field referenced by OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64"
     echo "    in .env.template exists and the host's op-token-picklehome token can"
     echo "    read it, then redeploy."
 fi
 
-echo "==> Cloning/updating pickleclaw (gog-mcp's build context)"
-# Tracks $PICKLECLAW_REF (main on picklelab), not pinned to a commit -- every deploy
-# rebuilds gog-mcp from whatever's on that ref at deploy time, same as the workspace
-# repo's ongoing sync above. See the design doc's "Deploy mechanics" section for why (no separate
-# picklelab-specific pin/bump step to maintain).
+echo "==> Cloning/updating pickleclaw (openclaw-ro's home, dev hosts' gog-mcp build context)"
+# Tracks $PICKLECLAW_REF (main on picklelab), not pinned to a commit. Prod's gog-mcp does
+# NOT come from this clone: it runs the CI-published image pinned by GOG_MCP_IMAGE. The
+# clone stays because scripts/openclaw-ro runs from it and a dev host builds gog-mcp here.
 PICKLECLAW_DIR=/opt/pickleclaw
 if [ -f "$PICKLECLAW_DEPLOY_KEY_FILE" ]; then
     PICKLECLAW_GIT_SSH="ssh -i $PICKLECLAW_DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
@@ -334,12 +334,23 @@ else
         sleep 15
     done
 fi
-# OPENCLAW_IMAGE and SEARCH_SHIM_IMAGE are repeated here because compose-pull@ below runs
-# as root with only this file loaded, and compose needs both to resolve the image refs.
+# gog-mcp's image: prod runs the pickleclaw-CI image pinned in openclaw.image.env, a dev
+# host builds nodes/gog-mcp from the /opt/pickleclaw clone under a local dev-<sha> tag.
+if [ "$HOMELAB_HOST_KIND" = dev ]; then
+    GOG_MCP_IMAGE="pickleclaw-gog-mcp:dev-$(git -C "$PICKLECLAW_DIR" rev-parse --short HEAD 2>/dev/null || echo local)"
+else
+    : "${GOG_MCP_IMAGE:?GOG_MCP_IMAGE missing from openclaw.image.env: pin the published pickleclaw gog-mcp image in the pickleclaw repo, openclaw-config/openclaw.env}"
+fi
+export GOG_MCP_IMAGE
+# OPENCLAW_IMAGE, SEARCH_SHIM_IMAGE and GOG_MCP_IMAGE are repeated here because compose-pull@
+# below runs as root with only this file loaded, and compose needs all three to resolve the
+# image refs. (.env.image comes after openclaw.image.env in openclaw.service, so a dev host's
+# local GOG_MCP_IMAGE tag wins over the pin.)
 {
     echo "IMAGE_SHA=$IMAGE_SHA"
     echo "OPENCLAW_IMAGE=$OPENCLAW_IMAGE"
     echo "SEARCH_SHIM_IMAGE=$SEARCH_SHIM_IMAGE"
+    echo "GOG_MCP_IMAGE=$GOG_MCP_IMAGE"
 } > "$SERVICE_DIR/.env.image"
 
 echo "==> Pulling image"
@@ -347,9 +358,8 @@ echo "==> Pulling image"
 # the file (openclaw, goplaces-node, gog-mcp) -- compose refuses to even parse
 # the file unless every one of those is set in the process environment,
 # regardless of which service/subcommand is actually being run. `pull` only
-# ever pulls the `openclaw` image (goplaces-node/gog-mcp are build-only, no
-# `image:` key), so placeholder values are enough here: this is a plain image
-# pull, not a `docker compose run` that executes openclaw itself (that's
+# ever pulls images (never runs them), so placeholder values are enough here: this is a
+# plain image pull, not a `docker compose run` that executes openclaw itself (that's
 # $RUN_CLI below, which goes through the real op-run-dual wrap instead -- see
 # that variable's definition up top for why). Derive placeholder assignments
 # from .env.vars so adding/removing a var propagates automatically; the same
@@ -367,20 +377,19 @@ if [ "$HOMELAB_HOST_KIND" = dev ]; then
     env "${env_overrides[@]}" $COMPOSE pull --ignore-buildable
     echo "==> Building goplaces-node (dev host, no published image for this branch)"
     env "${env_overrides[@]}" $COMPOSE build goplaces-node
+    if [ -d "$PICKLECLAW_DIR/nodes/gog-mcp" ]; then
+        echo "==> Building gog-mcp (dev host, tagged $GOG_MCP_IMAGE)"
+        env "${env_overrides[@]}" $COMPOSE build gog-mcp
+    else
+        echo "==> Skipping gog-mcp build (no $PICKLECLAW_DIR/nodes/gog-mcp)"
+    fi
 else
-    # search-shim's package is private, so the pull runs as root (credential helper, see
-    # setup-ghcr-pull-auth.sh). compose-pull@ pulls every image in the stack, public ones
-    # included, and runs before the restart so the old container stays up.
+    # search-shim's and gog-mcp's packages are private, so the pull runs as root
+    # (credential helper, see setup-ghcr-pull-auth.sh). compose-pull@ pulls every image in
+    # the stack, public ones included, and runs before the restart so the old container stays up.
     sudo ln -sf "$REPO_DIR/homelab/config/compose-pull@.service" /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl start compose-pull@openclaw.service
-fi
-
-if [ -d "$PICKLECLAW_DIR/nodes/gog-mcp" ]; then
-    echo "==> Building gog-mcp"
-    env "${env_overrides[@]}" $COMPOSE build gog-mcp
-else
-    echo "==> Skipping gog-mcp build (no $PICKLECLAW_DIR/nodes/gog-mcp)"
 fi
 
 echo "==> Onboarding (first deploy only)"
