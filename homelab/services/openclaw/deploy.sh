@@ -754,8 +754,10 @@ $RUN_CLI config set --replace --batch-json '[
     }}
 ]'
 
-echo "==> Doctor (catches config-schema migrations after an image bump)"
-$RUN_CLI doctor || echo "    WARNING: doctor reported an issue — check output above"
+# No separate `doctor` run here: the image entrypoint runs
+# `doctor --fix --non-interactive` on every container start (after the restart below),
+# a superset of a plain doctor, which only added ~60s here. Its output is in
+# `docker logs openclaw-openclaw-1`.
 
 echo "==> Configuring Tailscale serve for openclaw"
 sudo tailscale serve --service=svc:openclaw${HOMELAB_SERVICE_SUFFIX?} --https=443 http://127.0.0.1:18789
