@@ -6,7 +6,6 @@ Rotate these on a schedule, and whenever one leaks. See the [shared procedure](R
 |---|---|---|---|
 | `OPENCLAW_WORKSPACE_GITHUB_TOKEN` (PAT) | `picklehome/OpenClaw Workspace/github_pat` | openclaw, to reach the workspace repo | Replace the PAT, `just deploy-openclaw` |
 | `WOODPECKER_GITHUB_CLIENT` / `_SECRET` | `picklehome/Woodpecker CI/github_client`, `github_secret` | Woodpecker's GitHub OAuth app login | New client secret, `just deploy-woodpecker` |
-| `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `picklehome/OpenClaw Workspace/workspace_deploy_key_b64` | `deploy.sh`, one-time workspace clone | New key pair, `just deploy-openclaw` |
 | `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `picklehome/OpenClaw Pickleclaw Deploy Key/deploy_key_b64` | `deploy.sh`, clones `pickleclaw@main` (read-only) | New key pair, `just deploy-openclaw` |
 
 ## 1. Woodpecker OAuth app
@@ -40,27 +39,31 @@ the agent, so it is not part of this flow. Rotate it on its own: update
    ask him to touch it, or look at the container logs for a git auth error.
 6. Delete the old token.
 
-## 3. Deploy keys (workspace and pickleclaw)
+## 3. Pickleclaw deploy key
 
-Each is an ed25519 key pair. The private half goes into 1Password base64
-encoded; the public half goes on the repo as a deploy key.
+The workspace deploy key is gone: it only did a one-time clone, and sync uses the PAT
+(retired 2026-11-18, see the [openclaw README](../../homelab/services/openclaw/README.md#workspace-clone)).
+That leaves the read-only pickleclaw key. 1Password generates the pair, so the private
+half never touches disk.
 
-1. In a throwaway directory, generate the pair with no passphrase:
-   `ssh-keygen -t ed25519 -N "" -C "picklelab-<purpose>" -f ./key`
-2. Base64-encode the private key as a single line and paste it into the
-   `*_deploy_key_b64` field in the 1Password app. **Verify** the encoding
-   `deploy.sh` expects by reading how it decodes the field.
-3. On the repo, Settings, Deploy keys, Add deploy key with `key.pub`. Match the
-   old key's write-access setting: the pickleclaw key is read-only.
-4. Delete the throwaway directory (`rm -P key key.pub` on macOS) once both
-   halves are stored.
-5. `just deploy-openclaw`
-6. Check: the deploy's clone or pull step succeeds, or `ssh -T` with the new key
-   from the container says it authenticated.
-7. Remove the old deploy key from the repo.
+1. `scripts/deploy-key-b64 new "Pickleclaw Deploy Key <yyyy-mm>"` makes an SSH Key item
+   in the `picklehome` vault and prints the public key. It refuses to reuse a title.
+2. On `technicalpickles/pickleclaw`, Settings, Deploy keys, Add deploy key with that
+   public key. Leave "Allow write access" unchecked.
+3. `scripts/deploy-key-b64 copy "Pickleclaw Deploy Key <yyyy-mm>"` puts the one-line
+   base64 of the private key on the clipboard (cleared after 60 seconds). Paste it into
+   `deploy_key_b64` on `OpenClaw Pickleclaw Deploy Key` in the 1Password app. It must
+   stay one line, because `deploy.sh` decodes it with `echo "$KEY_B64" | base64 -d`.
+4. `just openclaw-quiet`, then `just deploy-openclaw`.
+5. Check: the deploy's "Cloning/updating pickleclaw" step succeeds, and on the repo's
+   deploy keys page the new key shows a recent "Last used". The old key's date stops
+   moving. The container has no ssh client, so there is no `ssh -T` check from there.
+6. Delete the old deploy key on GitHub.
+
+Both subcommands need the sandbox off and you at the laptop to approve 1Password.
 
 ## Done when
 
-- Old OAuth secret, PAT and both old deploy keys are deleted on GitHub.
+- Old OAuth secret, PAT and the old pickleclaw deploy key are deleted on GitHub.
 - Woodpecker login and a pipeline both work.
-- `just deploy-openclaw` finished cleanly with the new keys.
+- `just deploy-openclaw` finished cleanly with the new key.

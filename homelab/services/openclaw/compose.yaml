@@ -23,7 +23,7 @@ services:
       # Optional (not :?required): the workspace-git-sync cron job's GIT_ASKPASS
       # helper reads this to auth git-over-HTTPS in-container (no ssh client in
       # this image). Empty until provisioned -- deploy.sh degrades to no-sync-wiring
-      # with a warning if unset, same as OPENCLAW_WORKSPACE_DEPLOY_KEY_B64.
+      # with a warning if unset.
       OPENCLAW_WORKSPACE_GITHUB_TOKEN: ${OPENCLAW_WORKSPACE_GITHUB_TOKEN:-}
       # Placeholder only -- satisfies the bundled goplaces skill's env-presence gate,
       # which is evaluated gateway-host-only (see docs/setup-notes.md's "goplaces

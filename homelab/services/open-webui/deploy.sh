@@ -31,7 +31,7 @@ echo "==> Writing filtered op-run templates (dual vault)"
 # var whose name contains one from BOTH filtered templates, since the anchored
 # `^...=` match fails outright rather than matching a shorter prefix. No
 # open-webui var name currently contains a digit, but openclaw's deploy.sh hit
-# this for real (OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 et al) -- same script
+# this for real (OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 et al) -- same script
 # shape, so fixed here too rather than leaving a latent trap for the next var.
 "$REPO_DIR/scripts/service-env" "$SERVICE_DIR/.env.vars" --template "$REPO_DIR/.env.template" \
     | grep '^[A-Z0-9_]*=op://picklehome/' > "$SERVICE_DIR/.env.op.picklehome.template"
