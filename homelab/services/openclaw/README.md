@@ -40,25 +40,11 @@ TELEGRAM_BOT_TOKEN={{ op://<pickleclaw's existing Telegram bot item path> }}
 
 `OPENCLAW_IMAGE` isn't a secret and isn't set here at all — it lives in `pickleclaw`'s `openclaw-config/openclaw.env`, symlinked in as `openclaw.image.env` (see "Include-file setup" below) and sourced directly by `deploy.sh`, same as the dev VM. Single source of truth shared between environments.
 
-### Workspace deploy key (one-time)
+### Workspace clone
 
-The workspace (`github.com/technicalpickles/openclaw-workspace` — `AGENTS.md`, `SOUL.md`, `memory/*.md`, etc., already `pickleclaw`'s workspace repo) is cloned host-side by `deploy.sh` using a scoped **write** deploy key, same mechanism as `brineworks-agent`'s `WORKSPACE_DEPLOY_KEY_B64` — different var name since each service's key is scoped to a different repo.
+The workspace (`github.com/technicalpickles/openclaw-workspace`: `AGENTS.md`, `SOUL.md`, `memory/*.md`, etc., already `pickleclaw`'s workspace repo) lives at `/srv/data/openclaw/workspace`. `deploy.sh` no longer clones it. The SSH deploy key that did the one-time clone was retired 2026-11-18, because nothing used it after the first clone. Ongoing sync is the in-container `workspace-git-sync` cron job, over HTTPS with `OPENCLAW_WORKSPACE_GITHUB_TOKEN`.
 
-1. Generate an ed25519 keypair (no passphrase):
-   ```bash
-   ssh-keygen -t ed25519 -f openclaw-workspace-deploy -C "openclaw picklelab workspace deploy key" -N ""
-   ```
-2. Add the **public** key to `technicalpickles/openclaw-workspace` -> Settings -> Deploy keys, **with "Allow write access" checked**. Don't reuse `pickleclaw`'s Mac-side key material — this is picklelab's own key, same as every other per-service credential in this repo.
-3. Store the private key in the `picklehome` 1Password vault as an SSH-key item titled `OpenClaw Workspace`, with a **custom text field** `workspace_deploy_key_b64` holding the **single-line base64** of the private key. If created via `op item create` with a JSON template (fields array), the custom field lands top-level; if added afterward through the 1Password app UI (the only way to edit an existing SSH-key item's fields via the app, since the CLI can't), it nests under an "add more" section instead — check which with `op item get "OpenClaw Workspace" --vault picklehome` and adjust the ref path accordingly. To derive the base64 by hand:
-   ```bash
-   op read 'op://picklehome/OpenClaw Workspace/private key' | base64 | tr -d '\n' | pbcopy
-   ```
-   (`tr -d '\n'` matters — macOS `base64` wraps at 76 cols, and a multi-line value breaks `scripts/service-env`'s line-based filter.)
-4. Add to `.env.template`:
-   ```
-   OPENCLAW_WORKSPACE_DEPLOY_KEY_B64={{ op://picklehome/OpenClaw Workspace/workspace_deploy_key_b64 }}
-   ```
-   Until the ref exists it's skipped silently and `deploy.sh` degrades to an empty workspace with a warning. Delete the local keypair once it's in 1Password and on GitHub.
+`deploy.sh` warns when `workspace/.git` is missing. To rebuild from scratch, clone it by hand as the container user (uid 1000), using that same PAT over HTTPS (pull it from the `OpenClaw Workspace` item's `github_pat` field), then redeploy.
 
 ### Search shim
 
@@ -74,17 +60,23 @@ Switching the gateway over is a separate step: set `tools.web.search.provider` t
 
 `gog-mcp`'s source (`nodes/gog-mcp/` in the private `pickleclaw` repo) isn't open source like `goplaces-node`, so it can't be baked into this public repo's Dockerfile — instead `deploy.sh` clones/pulls `pickleclaw@main` directly on picklelab, host-side, using a scoped **read-only** deploy key.
 
-1. Generate an ed25519 keypair (no passphrase):
+1. Make the key pair inside 1Password and print the public half:
    ```bash
-   ssh-keygen -t ed25519 -f openclaw-pickleclaw-deploy -C "openclaw picklelab pickleclaw deploy key" -N ""
+   scripts/deploy-key-b64 new "Pickleclaw Deploy Key <yyyy-mm>"
    ```
-2. Add the **public** key to `technicalpickles/pickleclaw` -> Settings -> Deploy keys, **with "Allow write access" unchecked** — this key only needs to read.
-3. Store the private key in the `picklehome` 1Password vault as an SSH-key item titled `OpenClaw Pickleclaw Deploy Key`, with a custom text field `deploy_key_b64` holding the **single-line base64** of the private key (same convention as the workspace deploy key above — see step 3 there for the `op item get`/"add more" nesting caveat and the `base64 | tr -d '\n'` command).
-4. Add to `.env.template`:
+2. Add that **public** key to `technicalpickles/pickleclaw` -> Settings -> Deploy keys, **with "Allow write access" unchecked**. This key only needs to read.
+3. Put the one-line base64 of the private key on the clipboard, then paste it into the `deploy_key_b64` field of the 1Password item `OpenClaw Pickleclaw Deploy Key`:
+   ```bash
+   scripts/deploy-key-b64 copy "Pickleclaw Deploy Key <yyyy-mm>"
+   ```
+   Single line matters: a multi-line value breaks `scripts/service-env`'s line-based filter. Both subcommands need the sandbox off and Josh at the laptop.
+4. `.env.template` already carries the reference:
    ```
    OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64={{ op://picklehome/OpenClaw Pickleclaw Deploy Key/deploy_key_b64 }}
    ```
-   Until the ref exists it's skipped silently and `deploy.sh` degrades to no-clone with a warning, and the guarded `gog-mcp` build step in `deploy.sh` skips the build rather than failing the deploy. Delete the local keypair once it's in 1Password and on GitHub.
+   Until the field has a value it's skipped silently and `deploy.sh` degrades to no-clone with a warning, and the guarded `gog-mcp` build step in `deploy.sh` skips the build rather than failing the deploy.
+
+Rotating it later is the same flow, then `just deploy-openclaw`, then delete the old key on GitHub once its "Last used" stops moving. See [docs/runbooks/rotate-github.md](../../../docs/runbooks/rotate-github.md).
 
 ### Google Places API key (one-time, for the goplaces second node)
 
@@ -180,7 +172,6 @@ Non-secret config is set in `compose.yaml`; secrets come from the filtered `.env
 | `GEMINI_API_KEY` | `.env` (1Password) | `web_search` (gemini provider) — reused from `pickleclaw` |
 | `OPENCLAW_ALLOWED_CHAT_IDS` | `.env` (1Password) | Comma-separated chat-ID allowlist — the front door |
 | `GOOGLE_PLACES_API_KEY` | `.env` (1Password) | Real key for the isolated `goplaces-node` service only — the `openclaw` service itself gets a hardcoded placeholder, never this value |
-| `OPENCLAW_WORKSPACE_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 deploy key; `deploy.sh` decodes it to `ssh/workspace_deploy_key` for the one-time workspace clone |
 | `OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64` | `.env` (1Password) | Base64 ed25519 read-only deploy key; `deploy.sh` decodes it to `ssh/pickleclaw_deploy_key` to clone/pull `pickleclaw@main` (gog-mcp's build context) |
 | `BRINEWORKS_MCP_TOKEN` | `.env` (1Password) | Labelled `openclaw` API key for the brineworks MCP server (1Password item `Brineworks Server`, field `openclaw_mcp_key`); interpolated into `mcp.json5`'s Authorization header for the `brineworks` server |
 | `GOG_MCP_TOKEN` | `.env` (1Password) | Bearer token gog-mcp's HTTP endpoint requires; set on both the `openclaw` service (interpolated into `mcp.json5`'s Authorization header) and the `gog-mcp` service (to check incoming requests) |
@@ -212,7 +203,6 @@ Also confirm `show_widget` is actually allowlisted — it's `profiles: []` in Op
 /srv/data/openclaw/workspace/                # openclaw-workspace checkout (identity/memory)
 /srv/data/openclaw/auth/                     # OpenClaw's own auth-profile store
 /srv/data/openclaw/bin/                      # drop-in CLIs, mounted read-only to /opt/tools
-/srv/data/openclaw/ssh/workspace_deploy_key  # scoped openclaw-workspace deploy key (0600)
 /srv/data/openclaw/ssh/pickleclaw_deploy_key # scoped read-only pickleclaw deploy key (0600)
 /srv/data/openclaw/gog-keyring/              # gog-mcp's OAuth token file keyring, bind-mounted
                                               # into the gog-mcp container (moved off a named

@@ -19,7 +19,6 @@ if [ -n "${HOMELAB_ENV_OVERLAY?}" ]; then
     OVERLAY_ARGS=(--overlay "$REPO_DIR/homelab/hosts/overlays/${HOMELAB_ENV_OVERLAY}.env.template")
 fi
 DATA_DIR=/srv/data/openclaw
-WORKSPACE_REPO_URL="git@github.com:technicalpickles/openclaw-workspace.git"
 # Image default (node user) — see homelab/services/README.md "Container user model".
 CONTAINER_UID=1000
 CONTAINER_GID=1000
@@ -41,8 +40,8 @@ echo "==> Writing filtered op-run templates (dual vault)"
 # mechanism openclaw.service's ExecStart/ExecStop use for the long-running
 # gateway container.
 # [A-Z0-9_]*, not [A-Z_]*: a var-name class without digits silently drops any
-# var whose name contains one (e.g. OPENCLAW_WORKSPACE_DEPLOY_KEY_B64,
-# OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 -- the "B64" suffix) from BOTH filtered
+# var whose name contains one (e.g. OPENCLAW_PICKLECLAW_DEPLOY_KEY_B64 -- the
+# "B64" suffix) from BOTH filtered
 # templates, since the anchored `^...=` match fails outright rather than
 # matching a shorter prefix. Caught locally by diffing `service-env`'s full
 # (unfiltered) line count against picklehome+pickleclaw's combined count for
@@ -144,14 +143,6 @@ cat > "$DATA_DIR/gog-config/config.json" << EOF
 EOF
 echo "    Wrote $DATA_DIR/gog-config/config.json"
 
-echo "==> Installing the workspace-repo deploy key (if provided)"
-# The workspace (github.com/technicalpickles/openclaw-workspace) is cloned host-side,
-# once, using a scoped write deploy key. It resolves base64-encoded via
-# resolve_picklehome_var (single line, so op run's dotenv-style template keeps it
-# whole) and must land 0600: ssh refuses a private key with looser permissions.
-# Same pattern as brineworks-agent's WORKSPACE_DEPLOY_KEY_B64, different var name
-# (each service's deploy key is scoped to a different repo, so they can't share
-# one op-run var name).
 # Resolve OPENCLAW_WORKSPACE_GITHUB_TOKEN HERE, not further down. It used to
 # come from `source`-ing a real, scp'd .env file at this exact point -- not at
 # the compose step, ~37 lines *after* the workspace-git-auth block below tests
@@ -182,32 +173,18 @@ else
     exit 1
 fi
 
-DEPLOY_KEY_FILE="$DATA_DIR/ssh/workspace_deploy_key"
-KEY_B64=$(resolve_picklehome_var OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 2>/dev/null || true)
-if [ -n "$KEY_B64" ]; then
-    ( umask 077; echo "$KEY_B64" | base64 -d > "$DEPLOY_KEY_FILE" )
-    echo "    Wrote $DEPLOY_KEY_FILE (0600, uid $CONTAINER_UID)"
+echo "==> Checking the workspace repo is present"
+# deploy.sh no longer clones the workspace: the one-time clone used an SSH deploy
+# key that was retired 2026-11-18 (ongoing sync is the in-container cron job over
+# HTTPS with OPENCLAW_WORKSPACE_GITHUB_TOKEN). Rebuilding from scratch means
+# cloning it by hand, see the README's "Workspace clone".
+if [ -d "$DATA_DIR/workspace/.git" ]; then
+    echo "    Workspace present (ongoing sync: workspace-git-sync cron job below)"
 else
-    echo "    WARNING: OPENCLAW_WORKSPACE_DEPLOY_KEY_B64 didn't resolve via op run."
-    echo "    Can't clone openclaw-workspace, so the agent starts with an empty"
-    echo "    workspace instead of its migrated memory/identity. Confirm the"
-    echo "    1Password item/field referenced by OPENCLAW_WORKSPACE_DEPLOY_KEY_B64"
-    echo "    in .env.template exists and the host's op-token-picklehome token can"
-    echo "    read it, then redeploy."
-fi
-
-echo "==> Cloning the workspace repo (if not already present)"
-if [ -f "$DEPLOY_KEY_FILE" ] && [ ! -d "$DATA_DIR/workspace/.git" ]; then
-    # Migration from pickleclaw: this is meant to continue the existing workspace
-    # repo's history, not auto-init a fresh one — see docs/plans/2026-06-30-openclaw-deploy.md
-    # "Migration from pickleclaw" > "What carries over".
-    GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
-        git clone "$WORKSPACE_REPO_URL" "$DATA_DIR/workspace"
-    echo "    Cloned $WORKSPACE_REPO_URL"
-elif [ -d "$DATA_DIR/workspace/.git" ]; then
-    echo "    Workspace already cloned, leaving it alone (ongoing sync: workspace-git-sync cron job below)"
-else
-    echo "    Skipping clone (no deploy key)"
+    echo "    WARNING: $DATA_DIR/workspace is not a git checkout, so the agent starts with an"
+    echo "    empty workspace instead of its memory/identity. Clone"
+    echo "    technicalpickles/openclaw-workspace there by hand: see the README's"
+    echo "    \"Workspace clone\"."
 fi
 
 echo "==> Installing the pickleclaw deploy key (if provided)"
