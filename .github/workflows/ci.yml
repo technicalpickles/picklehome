@@ -12,11 +12,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Read uv version from .mise.toml
         id: uv
         run: echo "version=$(sed -n 's/^uv = { version = "\([^"]*\)".*/\1/p' .mise.toml)" >> "$GITHUB_OUTPUT"
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: ${{ steps.uv.outputs.version }}
           enable-cache: true
@@ -33,7 +33,7 @@ jobs:
       group: images-pr-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # A PR checks out a merge commit; depth 2 brings its first parent (the base),
           # so `HEAD^1` is the diff base for --changed-since.
@@ -54,9 +54,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Set up buildx (registry layer cache needs the docker-container driver)
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Log in to GHCR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
